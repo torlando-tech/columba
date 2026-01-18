@@ -294,17 +294,19 @@ class EventHandlerTest {
             val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
             coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns true
 
-            val eventHandlerWithPersistence = EventHandler(
-                state = state,
-                wrapperManager = wrapperManager,
-                broadcaster = broadcaster,
-                scope = testScope,
-                attachmentStorage = null,
-                persistenceManager = persistenceManager,
-            )
+            val eventHandlerWithPersistence =
+                EventHandler(
+                    state = state,
+                    wrapperManager = wrapperManager,
+                    broadcaster = broadcaster,
+                    scope = testScope,
+                    attachmentStorage = null,
+                    persistenceManager = persistenceManager,
+                )
 
             // Message JSON with full_message flag (truly event-driven path)
-            val messageJson = """
+            val messageJson =
+                """
                 {
                     "full_message": true,
                     "message_hash": "test_hash_123",
@@ -312,7 +314,7 @@ class EventHandlerTest {
                     "source_hash": "abcdef123456",
                     "timestamp": 1234567890
                 }
-            """.trimIndent()
+                """.trimIndent()
 
             // Act
             eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
@@ -329,17 +331,19 @@ class EventHandlerTest {
             val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
             coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns false
 
-            val eventHandlerWithPersistence = EventHandler(
-                state = state,
-                wrapperManager = wrapperManager,
-                broadcaster = broadcaster,
-                scope = testScope,
-                attachmentStorage = null,
-                persistenceManager = persistenceManager,
-            )
+            val eventHandlerWithPersistence =
+                EventHandler(
+                    state = state,
+                    wrapperManager = wrapperManager,
+                    broadcaster = broadcaster,
+                    scope = testScope,
+                    attachmentStorage = null,
+                    persistenceManager = persistenceManager,
+                )
 
             // Message JSON with full_message flag (truly event-driven path)
-            val messageJson = """
+            val messageJson =
+                """
                 {
                     "full_message": true,
                     "message_hash": "blocked_hash_123",
@@ -347,7 +351,7 @@ class EventHandlerTest {
                     "source_hash": "unknown_sender",
                     "timestamp": 1234567890
                 }
-            """.trimIndent()
+                """.trimIndent()
 
             // Act
             eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
@@ -364,17 +368,19 @@ class EventHandlerTest {
             val persistenceManager = mockk<ServicePersistenceManager>(relaxed = true)
             coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns true
 
-            val eventHandlerWithPersistence = EventHandler(
-                state = state,
-                wrapperManager = wrapperManager,
-                broadcaster = broadcaster,
-                scope = testScope,
-                attachmentStorage = null,
-                persistenceManager = persistenceManager,
-            )
+            val eventHandlerWithPersistence =
+                EventHandler(
+                    state = state,
+                    wrapperManager = wrapperManager,
+                    broadcaster = broadcaster,
+                    scope = testScope,
+                    attachmentStorage = null,
+                    persistenceManager = persistenceManager,
+                )
 
             // Message JSON with full_message flag
-            val messageJson = """
+            val messageJson =
+                """
                 {
                     "full_message": true,
                     "message_hash": "hash_abc",
@@ -382,7 +388,7 @@ class EventHandlerTest {
                     "source_hash": "sender_xyz",
                     "timestamp": 9876543210
                 }
-            """.trimIndent()
+                """.trimIndent()
 
             // Act
             eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
@@ -410,7 +416,8 @@ class EventHandlerTest {
     fun `handleMessageReceivedEvent broadcasts without persistence manager for backwards compatibility`() =
         runTest {
             // When there's no persistence manager (e.g., testing), messages should still broadcast
-            val messageJson = """
+            val messageJson =
+                """
                 {
                     "full_message": true,
                     "message_hash": "no_persistence_hash",
@@ -418,7 +425,7 @@ class EventHandlerTest {
                     "source_hash": "some_sender",
                     "timestamp": 1111111111
                 }
-            """.trimIndent()
+                """.trimIndent()
 
             // Act: Use the default eventHandler (no persistence manager)
             eventHandler.handleMessageReceivedEvent(messageJson)

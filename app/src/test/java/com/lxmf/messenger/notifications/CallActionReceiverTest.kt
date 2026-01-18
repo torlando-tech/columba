@@ -49,9 +49,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with ANSWER_CALL action starts MainActivity`() {
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -62,9 +63,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with ANSWER_CALL action sets correct intent action`() {
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123def456")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -76,9 +78,10 @@ class CallActionReceiverTest {
     @Test
     fun `onReceive with ANSWER_CALL action passes identity hash`() {
         val testHash = "abc123def456789012345678901234567890"
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, testHash)
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, testHash)
+            }
 
         receiver.onReceive(context, intent)
 
@@ -92,9 +95,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with ANSWER_CALL action sets auto answer flag`() {
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -108,9 +112,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with ANSWER_CALL action sets correct intent flags`() {
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -142,9 +147,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with DECLINE_CALL action does not start activity`() {
-        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -160,9 +166,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with DECLINE_CALL action calls goAsync for background work`() {
-        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -172,9 +179,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with DECLINE_CALL action finishes pending result when app unavailable`() {
-        val intent = Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_DECLINE_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -188,9 +196,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with END_CALL action does not start activity`() {
-        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -203,9 +212,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with END_CALL action calls goAsync for background work`() {
-        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -215,9 +225,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with END_CALL action finishes pending result when app unavailable`() {
-        val intent = Intent(CallNotificationHelper.ACTION_END_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_END_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -231,9 +242,10 @@ class CallActionReceiverTest {
 
     @Test
     fun `onReceive with unknown action does not start activity`() {
-        val intent = Intent("com.example.UNKNOWN_ACTION").apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
-        }
+        val intent =
+            Intent("com.example.UNKNOWN_ACTION").apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
+            }
 
         receiver.onReceive(context, intent)
 
@@ -266,9 +278,10 @@ class CallActionReceiverTest {
     @Test
     fun `answer action with full identity hash works correctly`() {
         val fullHash = "0102030405060708091011121314151617181920212223242526272829303132"
-        val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, fullHash)
-        }
+        val intent =
+            Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, fullHash)
+            }
 
         receiver.onReceive(context, intent)
 
@@ -284,9 +297,10 @@ class CallActionReceiverTest {
         val hashes = listOf("hash1", "hash2", "hash3")
 
         hashes.forEach { hash ->
-            val intent = Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
-                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, hash)
-            }
+            val intent =
+                Intent(CallNotificationHelper.ACTION_ANSWER_CALL).apply {
+                    putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, hash)
+                }
             receiver.onReceive(context, intent)
         }
 

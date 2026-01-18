@@ -261,19 +261,20 @@ class EventHandler(
             // Persist to database and only broadcast if successful
             // This ensures blocked messages don't trigger notifications in the app process
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
-                val persisted = persistenceManager.persistMessage(
-                    messageHash = messageHash,
-                    content = content,
-                    sourceHash = sourceHashHex,
-                    timestamp = timestamp,
-                    fieldsJson = fieldsJson?.toString(),
-                    publicKey = publicKey,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = null,
-                    hasFileAttachments = hasFileAttachments,
-                    receivedHopCount = receivedHopCount,
-                    receivedInterface = receivedInterface,
-                )
+                val persisted =
+                    persistenceManager.persistMessage(
+                        messageHash = messageHash,
+                        content = content,
+                        sourceHash = sourceHashHex,
+                        timestamp = timestamp,
+                        fieldsJson = fieldsJson?.toString(),
+                        publicKey = publicKey,
+                        replyToMessageId = replyToMessageId,
+                        deliveryMethod = null,
+                        hasFileAttachments = hasFileAttachments,
+                        receivedHopCount = receivedHopCount,
+                        receivedInterface = receivedInterface,
+                    )
                 if (persisted) {
                     Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
                     // Broadcast to app process for UI updates (only if persisted)
@@ -506,26 +507,34 @@ class EventHandler(
             val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
 
             // Build broadcast JSON (used whether or not we have persistence manager)
-            val messageJson = buildMessageBroadcastJson(
-                messageHash, content, sourceHash, destHash, timestamp, fieldsJson, publicKey
-            )
+            val messageJson =
+                buildMessageBroadcastJson(
+                    messageHash,
+                    content,
+                    sourceHash,
+                    destHash,
+                    timestamp,
+                    fieldsJson,
+                    publicKey,
+                )
 
             // Persist to database first (survives app process death)
             // Only broadcast if message was actually persisted (not blocked)
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
-                val persisted = persistenceManager.persistMessage(
-                    messageHash = messageHash,
-                    content = content,
-                    sourceHash = sourceHashHex,
-                    timestamp = timestamp,
-                    fieldsJson = fieldsJson?.toString(),
-                    publicKey = publicKey,
-                    replyToMessageId = replyToMessageId,
-                    deliveryMethod = deliveryMethod,
-                    hasFileAttachments = hasFileAttachments,
-                    receivedHopCount = receivedHopCount,
-                    receivedInterface = receivedInterface,
-                )
+                val persisted =
+                    persistenceManager.persistMessage(
+                        messageHash = messageHash,
+                        content = content,
+                        sourceHash = sourceHashHex,
+                        timestamp = timestamp,
+                        fieldsJson = fieldsJson?.toString(),
+                        publicKey = publicKey,
+                        replyToMessageId = replyToMessageId,
+                        deliveryMethod = deliveryMethod,
+                        hasFileAttachments = hasFileAttachments,
+                        receivedHopCount = receivedHopCount,
+                        receivedInterface = receivedInterface,
+                    )
 
                 if (persisted) {
                     Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
@@ -553,15 +562,16 @@ class EventHandler(
         timestamp: Long,
         fieldsJson: JSONObject?,
         publicKey: ByteArray?,
-    ): JSONObject = JSONObject().apply {
-        put("message_hash", messageHash)
-        put("content", content)
-        put("source_hash", sourceHash.toBase64())
-        put("destination_hash", destHash.toBase64())
-        put("timestamp", timestamp)
-        fieldsJson?.let { put("fields", it) }
-        publicKey?.let { put("public_key", it.toBase64()) }
-    }
+    ): JSONObject =
+        JSONObject().apply {
+            put("message_hash", messageHash)
+            put("content", content)
+            put("source_hash", sourceHash.toBase64())
+            put("destination_hash", destHash.toBase64())
+            put("timestamp", timestamp)
+            fieldsJson?.let { put("fields", it) }
+            publicKey?.let { put("public_key", it.toBase64()) }
+        }
 
     /**
      * Extract large attachments from fields and save to disk.

@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleOperationQueueTimeoutTest {
-
     @After
     fun tearDown() {
         clearAllMocks()
@@ -49,34 +48,35 @@ class BleOperationQueueTimeoutTest {
      * allowing subsequent operations to proceed.
      */
     @Test
-    fun `timeout signals completion channel - core fix verification`() = runTest {
-        // Simulate the queue's completion channel
-        val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
+    fun `timeout signals completion channel - core fix verification`() =
+        runTest {
+            // Simulate the queue's completion channel
+            val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // Track completion signals received
-        val completionCount = AtomicInteger(0)
+            // Track completion signals received
+            val completionCount = AtomicInteger(0)
 
-        // Simulate queue processor waiting for completion
-        launch {
-            repeat(2) {
-                operationCompletion.receive()
-                completionCount.incrementAndGet()
+            // Simulate queue processor waiting for completion
+            launch {
+                repeat(2) {
+                    operationCompletion.receive()
+                    completionCount.incrementAndGet()
+                }
             }
+
+            // Simulate two timeouts - each should signal completion
+            launch {
+                // First timeout signals
+                operationCompletion.send(Unit)
+                // Second timeout signals
+                operationCompletion.send(Unit)
+            }
+
+            // Let coroutines run
+            advanceUntilIdle()
+
+            assertEquals("Both completions should be received", 2, completionCount.get())
         }
-
-        // Simulate two timeouts - each should signal completion
-        launch {
-            // First timeout signals
-            operationCompletion.send(Unit)
-            // Second timeout signals
-            operationCompletion.send(Unit)
-        }
-
-        // Let coroutines run
-        advanceUntilIdle()
-
-        assertEquals("Both completions should be received", 2, completionCount.get())
-    }
 
     /**
      * Test that without the fix, the queue would deadlock.
@@ -85,29 +85,30 @@ class BleOperationQueueTimeoutTest {
      * after timeout, the queue processor stays blocked.
      */
     @Test
-    fun `demonstrates deadlock without completion signal`() = runTest {
-        val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
+    fun `demonstrates deadlock without completion signal`() =
+        runTest {
+            val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // Processor waiting
-        val processorBlocked = AtomicInteger(0)
-        launch {
-            processorBlocked.set(1)
-            operationCompletion.receive() // This would block forever without the fix
-            processorBlocked.set(2)
+            // Processor waiting
+            val processorBlocked = AtomicInteger(0)
+            launch {
+                processorBlocked.set(1)
+                operationCompletion.receive() // This would block forever without the fix
+                processorBlocked.set(2)
+            }
+
+            // Let the processor job start and block on receive
+            advanceUntilIdle()
+            assertEquals("Processor should be waiting on receive", 1, processorBlocked.get())
+
+            // Now send the completion signal (this is what the fix does)
+            operationCompletion.send(Unit)
+
+            // Let coroutines run
+            advanceUntilIdle()
+
+            assertEquals("Processor should complete after signal", 2, processorBlocked.get())
         }
-
-        // Let the processor job start and block on receive
-        advanceUntilIdle()
-        assertEquals("Processor should be waiting on receive", 1, processorBlocked.get())
-
-        // Now send the completion signal (this is what the fix does)
-        operationCompletion.send(Unit)
-
-        // Let coroutines run
-        advanceUntilIdle()
-
-        assertEquals("Processor should complete after signal", 2, processorBlocked.get())
-    }
 
     /**
      * Test that timeout handler code path correctly signals completion.
@@ -115,30 +116,31 @@ class BleOperationQueueTimeoutTest {
      * Simulates the timeout handler logic from BleOperationQueue.
      */
     @Test
-    fun `timeout handler signals completion correctly`() = runTest {
-        val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
-        val timeoutFired = AtomicInteger(0)
+    fun `timeout handler signals completion correctly`() =
+        runTest {
+            val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
+            val timeoutFired = AtomicInteger(0)
 
-        // Simulate the timeout handler (as it exists after the fix)
-        launch {
-            // This is the critical part - the fix ensures this runs:
-            // mutex.withLock { pendingOperations.remove(...)?.continuation.resumeWithException(...) }
-            // operationCompletion.trySend(Unit)  <-- THE FIX
+            // Simulate the timeout handler (as it exists after the fix)
+            launch {
+                // This is the critical part - the fix ensures this runs:
+                // mutex.withLock { pendingOperations.remove(...)?.continuation.resumeWithException(...) }
+                // operationCompletion.trySend(Unit)  <-- THE FIX
 
-            timeoutFired.incrementAndGet()
-            operationCompletion.send(Unit) // The fix
+                timeoutFired.incrementAndGet()
+                operationCompletion.send(Unit) // The fix
+            }
+
+            // Simulate queue processor waiting
+            launch {
+                operationCompletion.receive()
+            }
+
+            // Let coroutines run
+            advanceUntilIdle()
+
+            assertEquals("Timeout should have fired", 1, timeoutFired.get())
         }
-
-        // Simulate queue processor waiting
-        launch {
-            operationCompletion.receive()
-        }
-
-        // Let coroutines run
-        advanceUntilIdle()
-
-        assertEquals("Timeout should have fired", 1, timeoutFired.get())
-    }
 
     /**
      * Test sequential operations with timeouts.
@@ -147,59 +149,61 @@ class BleOperationQueueTimeoutTest {
      * After the fix, each operation can proceed even if previous ones timed out.
      */
     @Test
-    fun `sequential timeouts all complete - no deadlock`() = runTest {
-        val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
-        val completedOperations = AtomicInteger(0)
+    fun `sequential timeouts all complete - no deadlock`() =
+        runTest {
+            val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
+            val completedOperations = AtomicInteger(0)
 
-        // Simulate queue processor handling 5 operations
-        launch {
-            repeat(5) {
-                operationCompletion.receive()
-                completedOperations.incrementAndGet()
+            // Simulate queue processor handling 5 operations
+            launch {
+                repeat(5) {
+                    operationCompletion.receive()
+                    completedOperations.incrementAndGet()
+                }
             }
-        }
 
-        // Simulate 5 timeouts in sequence
-        launch {
-            repeat(5) {
-                operationCompletion.send(Unit) // The fix ensures this happens
+            // Simulate 5 timeouts in sequence
+            launch {
+                repeat(5) {
+                    operationCompletion.send(Unit) // The fix ensures this happens
+                }
             }
+
+            // Let coroutines run
+            advanceUntilIdle()
+
+            assertEquals("All 5 operations should complete", 5, completedOperations.get())
         }
-
-        // Let coroutines run
-        advanceUntilIdle()
-
-        assertEquals("All 5 operations should complete", 5, completedOperations.get())
-    }
 
     /**
      * Test concurrent timeout signals don't cause issues.
      */
     @Test
-    fun `concurrent timeout signals are handled correctly`() = runTest {
-        val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
-        val receivedCount = AtomicInteger(0)
+    fun `concurrent timeout signals are handled correctly`() =
+        runTest {
+            val operationCompletion = Channel<Unit>(Channel.RENDEZVOUS)
+            val receivedCount = AtomicInteger(0)
 
-        // Receiver
-        launch {
-            repeat(10) {
-                operationCompletion.receive()
-                receivedCount.incrementAndGet()
+            // Receiver
+            launch {
+                repeat(10) {
+                    operationCompletion.receive()
+                    receivedCount.incrementAndGet()
+                }
             }
-        }
 
-        // Sequential senders (RENDEZVOUS channel requires sequential for guaranteed delivery)
-        launch {
-            repeat(10) {
-                operationCompletion.send(Unit)
+            // Sequential senders (RENDEZVOUS channel requires sequential for guaranteed delivery)
+            launch {
+                repeat(10) {
+                    operationCompletion.send(Unit)
+                }
             }
+
+            // Let coroutines run
+            advanceUntilIdle()
+
+            assertEquals("All 10 signals should be received", 10, receivedCount.get())
         }
-
-        // Let coroutines run
-        advanceUntilIdle()
-
-        assertEquals("All 10 signals should be received", 10, receivedCount.get())
-    }
 
     /**
      * Test that the DEFAULT_TIMEOUT_MS constant is reasonable.
@@ -232,15 +236,15 @@ class BleOperationQueueTimeoutTest {
      * the timeout handler if no receiver is waiting.
      */
     @Test
-    fun `trySend does not block when no receiver`() = runTest {
-        val channel = Channel<Unit>(Channel.RENDEZVOUS)
+    fun `trySend does not block when no receiver`() =
+        runTest {
+            val channel = Channel<Unit>(Channel.RENDEZVOUS)
 
-        // trySend should return immediately even with no receiver
-        val startTime = System.currentTimeMillis()
-        channel.trySend(Unit) // Result intentionally ignored - we only care that it doesn't block
-        val elapsed = System.currentTimeMillis() - startTime
+            // trySend should return immediately even with no receiver
+            val startTime = System.currentTimeMillis()
+            channel.trySend(Unit) // Result intentionally ignored - we only care that it doesn't block
+            val elapsed = System.currentTimeMillis() - startTime
 
-        assertTrue("trySend should complete quickly (not block)", elapsed < 100)
-    }
+            assertTrue("trySend should complete quickly (not block)", elapsed < 100)
+        }
 }
-

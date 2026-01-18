@@ -161,6 +161,7 @@ class KotlinBLEBridge(
     // Identity tracking (Protocol v2.2)
     private val addressToIdentity = ConcurrentHashMap<String, String>() // address -> 32-char hex identity
     private val identityToAddress = ConcurrentHashMap<String, String>() // identity -> address
+
     // Stale address cache: maps recently-disconnected peripheral addresses to their identity
     // This allows send() to resolve old addresses when Python's peer_address hasn't updated yet
     private val staleAddressToIdentity = ConcurrentHashMap<String, String>() // disconnected address -> identity
@@ -193,6 +194,7 @@ class KotlinBLEBridge(
         val timestamp: Long,
         val closingCentral: Boolean, // true if closing central, false if closing peripheral
     )
+
     private val deduplicationInProgress = ConcurrentHashMap<String, DeduplicationTracker>()
 
     // Grace period after deduplication starts - ignore spurious disconnect events during this time
@@ -1802,19 +1804,21 @@ class KotlinBLEBridge(
             DedupeAction.CLOSE_CENTRAL -> {
                 // Track that deduplication is in progress for this address
                 // This prevents premature cleanup if Android fires spurious disconnect events
-                deduplicationInProgress[address] = DeduplicationTracker(
-                    timestamp = System.currentTimeMillis(),
-                    closingCentral = true,
-                )
+                deduplicationInProgress[address] =
+                    DeduplicationTracker(
+                        timestamp = System.currentTimeMillis(),
+                        closingCentral = true,
+                    )
                 Log.i(TAG, "Deduplication: disconnecting central connection to $address")
                 gattClient?.disconnect(address)
             }
             DedupeAction.CLOSE_PERIPHERAL -> {
                 // Track that deduplication is in progress for this address
-                deduplicationInProgress[address] = DeduplicationTracker(
-                    timestamp = System.currentTimeMillis(),
-                    closingCentral = false,
-                )
+                deduplicationInProgress[address] =
+                    DeduplicationTracker(
+                        timestamp = System.currentTimeMillis(),
+                        closingCentral = false,
+                    )
                 Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
                 gattServer?.disconnectCentral(address)
             }
@@ -1851,8 +1855,9 @@ class KotlinBLEBridge(
                 val elapsed = System.currentTimeMillis() - dedupeTracker.timestamp
                 if (elapsed < deduplicationGracePeriodMs) {
                     // Within grace period - check if this is the expected disconnect
-                    val isExpectedDisconnect = (isCentral && dedupeTracker.closingCentral) ||
-                        (!isCentral && !dedupeTracker.closingCentral)
+                    val isExpectedDisconnect =
+                        (isCentral && dedupeTracker.closingCentral) ||
+                            (!isCentral && !dedupeTracker.closingCentral)
 
                     if (!isExpectedDisconnect) {
                         // This disconnect is for the connection we're KEEPING, not closing
@@ -1937,15 +1942,16 @@ class KotlinBLEBridge(
                         // If identityToAddress points to the disconnecting address, update it to another active address
                         if (identityToAddress[identityHash] == address) {
                             // Prefer an address with a connected peer, especially one with central connection
-                            val bestAddress = otherAddresses.maxByOrNull { otherAddr ->
-                                val peer = connectedPeers[otherAddr]
-                                when {
-                                    peer == null -> 0
-                                    peer.isCentral -> 2
-                                    peer.isPeripheral -> 1
-                                    else -> 0
+                            val bestAddress =
+                                otherAddresses.maxByOrNull { otherAddr ->
+                                    val peer = connectedPeers[otherAddr]
+                                    when {
+                                        peer == null -> 0
+                                        peer.isCentral -> 2
+                                        peer.isPeripheral -> 1
+                                        else -> 0
+                                    }
                                 }
-                            }
                             if (bestAddress != null) {
                                 identityToAddress[identityHash] = bestAddress
                                 Log.d(TAG, "Updated identityToAddress[$identityHash] from disconnected $address to $bestAddress")
@@ -2165,9 +2171,10 @@ class KotlinBLEBridge(
 
                 // Verify actual GATT connection state - peer entry may be stale if disconnect
                 // notification was missed. This prevents keeping mappings to dead connections.
-                val existingActuallyHasCentral = existingAddress != null &&
-                    existingPeer?.isCentral == true &&
-                    gattClient?.isConnected(existingAddress) == true
+                val existingActuallyHasCentral =
+                    existingAddress != null &&
+                        existingPeer?.isCentral == true &&
+                        gattClient?.isConnected(existingAddress) == true
 
                 if (existingPeer?.isCentral == true && !existingActuallyHasCentral) {
                     Log.w(

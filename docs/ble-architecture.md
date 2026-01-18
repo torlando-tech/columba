@@ -712,15 +712,7 @@ Scan Response (31 bytes separate budget):
 - Reduce to 30 seconds when battery is not a concern
 - Add `BroadcastReceiver` for `ACTION_SCREEN_OFF` to trigger immediate refresh
 
-### 3. Identity Cache Coherence
-
-**Issue**: The 60-second identity cache in Python may become stale if not properly synchronized with Kotlin state.
-
-**Impact**: Race conditions during rapid reconnection cycles could cause identity mismatches.
-
-**Recommendation**: Add explicit cache invalidation when Kotlin detects MAC rotation or deduplication.
-
-### 4. Fragmenter Key Complexity
+### 3. Fragmenter Key Complexity
 
 **Issue**: Fragmenter keys use `_get_fragmenter_key(identity, address)` but the address parameter is unused.
 
@@ -733,7 +725,7 @@ def _get_fragmenter_key(self, peer_identity, address):
 
 **Recommendation**: Remove unused `address` parameter to avoid confusion.
 
-### 5. Grace Period Timing
+### 4. Grace Period Timing
 
 **Issue**: The 2-second detach grace period (`_pending_detach_grace_period`) is hardcoded.
 

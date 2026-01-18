@@ -461,4 +461,206 @@ class MessageCollectorTest {
                 conversationRepository.updatePeerName(any(), any())
             }
         }
+
+    // ========== Notification for Pre-Persisted Messages Tests ==========
+
+    @Test
+    fun `processMessage posts notification for message already in database`() =
+        runBlocking {
+            // Given: A message that was already persisted by ServicePersistenceManager
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "service_persisted_msg",
+                    content = "Already persisted by service",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Message already exists in database (persisted by service process)
+            coEvery { conversationRepository.getMessageById("service_persisted_msg") } returns mockk()
+
+            // When: Start collecting
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+
+            // Emit message
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should still be posted even though message is duplicate
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = any(),
+                )
+            }
+
+            // And: Message should NOT be saved again (it's a duplicate)
+            coVerify(exactly = 0) {
+                conversationRepository.saveMessage(
+                    peerHash = any(),
+                    peerName = any(),
+                    message = any(),
+                    peerPublicKey = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage uses favorite status from announce for notification`() =
+        runBlocking {
+            // Given: A pre-persisted message from a favorite peer
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "favorite_msg",
+                    content = "Message from favorite",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Message already in database
+            coEvery { conversationRepository.getMessageById("favorite_msg") } returns mockk()
+
+            // Peer is a favorite
+            coEvery { announceRepository.getAnnounce(testSourceHashHex) } returns
+                mockk {
+                    every { isFavorite } returns true
+                }
+
+            // When: Start collecting and emit
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should be posted with isFavorite = true
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = true,
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage handles announce lookup failure gracefully for notifications`() =
+        runBlocking {
+            // Given: A pre-persisted message where announce lookup fails
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "announce_error_msg",
+                    content = "Announce lookup will fail",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Message already in database
+            coEvery { conversationRepository.getMessageById("announce_error_msg") } returns mockk()
+
+            // Announce lookup throws exception
+            coEvery { announceRepository.getAnnounce(testSourceHashHex) } throws RuntimeException("DB error")
+
+            // When: Start collecting and emit
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should still be posted with isFavorite = false (fail-safe default)
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = false,
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage uses cached peer name for notification`() =
+        runBlocking {
+            // Given: Update peer name cache first
+            messageCollector.updatePeerName(testSourceHashHex, "Cached Peer Name")
+            kotlinx.coroutines.delay(100)
+
+            // Message already in database
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "cached_name_msg",
+                    content = "Test with cached name",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            coEvery { conversationRepository.getMessageById("cached_name_msg") } returns mockk()
+
+            // When: Start collecting and emit
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should use the cached peer name
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = "Cached Peer Name",
+                    messagePreview = any(),
+                    isFavorite = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage truncates long message preview for notification`() =
+        runBlocking {
+            // Given: A message with content longer than 100 characters
+            val longContent = "A".repeat(200)
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "long_content_msg",
+                    content = longContent,
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Message already in database
+            coEvery { conversationRepository.getMessageById("long_content_msg") } returns mockk()
+
+            // When: Start collecting and emit
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification preview should be truncated to 100 characters
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = "A".repeat(100),
+                    isFavorite = any(),
+                )
+            }
+        }
 }

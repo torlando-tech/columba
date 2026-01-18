@@ -974,4 +974,136 @@ class ServiceReticulumProtocolTest {
         assertTrue("Timestamp should use current time", result.timestamp >= beforeTime)
         assertTrue("Timestamp should use current time", result.timestamp <= afterTime)
     }
+
+    // ===========================================
+    // parseMessageJson Hex Hash Parsing Tests
+    // ===========================================
+
+    @Test
+    fun `parseMessageJson - correctly parses hex-encoded source_hash from Python`() {
+        // Given: Python sends hex strings (not Base64) for source_hash and destination_hash
+        // Example: "000102030405060708090a0b0c0d0e0f" represents bytes 0-15
+        val sourceHashHex = "000102030405060708090a0b0c0d0e0f"
+        val destHashHex = "101112131415161718191a1b1c1d1e1f"
+
+        val messageJson =
+            """
+            {
+                "message_hash": "hex_test",
+                "content": "Test hex parsing",
+                "source_hash": "$sourceHashHex",
+                "destination_hash": "$destHashHex",
+                "timestamp": 1234567890
+            }
+            """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - verify source hash was parsed correctly as hex
+        val expectedSourceHash = ByteArray(16) { it.toByte() }
+        assertTrue(
+            "Source hash should be correctly parsed from hex",
+            result.sourceHash.contentEquals(expectedSourceHash),
+        )
+
+        // And - verify destination hash was parsed correctly as hex
+        val expectedDestHash = ByteArray(16) { (it + 16).toByte() }
+        assertTrue(
+            "Destination hash should be correctly parsed from hex",
+            result.destinationHash.contentEquals(expectedDestHash),
+        )
+    }
+
+    @Test
+    fun `parseMessageJson - handles uppercase hex strings`() {
+        // Given: Hex strings may come in uppercase
+        val sourceHashHex = "AABBCCDDEEFF00112233445566778899"
+
+        val messageJson =
+            """
+            {
+                "message_hash": "uppercase_hex",
+                "content": "Uppercase hex test",
+                "source_hash": "$sourceHashHex",
+                "destination_hash": "000102030405060708090a0b0c0d0e0f",
+                "timestamp": 1234567890
+            }
+            """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - uppercase hex should parse correctly
+        assertEquals(16, result.sourceHash.size)
+        assertEquals(0xAA.toByte(), result.sourceHash[0])
+        assertEquals(0xBB.toByte(), result.sourceHash[1])
+    }
+
+    @Test
+    fun `parseMessageJson - handles empty source_hash gracefully`() {
+        // Given: Empty hash string
+        val messageJson =
+            """
+            {
+                "message_hash": "empty_hash",
+                "content": "Empty hash test",
+                "source_hash": "",
+                "destination_hash": "000102030405060708090a0b0c0d0e0f",
+                "timestamp": 1234567890
+            }
+            """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - empty string should produce empty byte array
+        assertEquals(0, result.sourceHash.size)
+    }
+
+    @Test
+    fun `parseMessageJson - handles missing source_hash gracefully`() {
+        // Given: No source_hash in JSON
+        val messageJson =
+            """
+            {
+                "message_hash": "no_source",
+                "content": "No source hash",
+                "destination_hash": "000102030405060708090a0b0c0d0e0f",
+                "timestamp": 1234567890
+            }
+            """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - missing field should produce empty byte array
+        assertEquals(0, result.sourceHash.size)
+    }
+
+    @Test
+    fun `parseMessageJson - real Python hash format example`() {
+        // Given: Real example from Python Reticulum (16-byte destination hash as 32 hex chars)
+        val realSourceHash = "db3ffd2575469a78" + "1234567890abcdef" // 32 hex chars = 16 bytes
+
+        val messageJson =
+            """
+            {
+                "message_hash": "real_example",
+                "content": "Real Python format",
+                "source_hash": "$realSourceHash",
+                "destination_hash": "abcdef1234567890abcdef1234567890",
+                "timestamp": 1234567890
+            }
+            """.trimIndent()
+
+        // When
+        val result = protocol.parseMessageJson(messageJson)
+
+        // Then - 32 hex characters should produce 16 bytes
+        assertEquals(16, result.sourceHash.size)
+        assertEquals(0xdb.toByte(), result.sourceHash[0])
+        assertEquals(0x3f.toByte(), result.sourceHash[1])
+        assertEquals(0xfd.toByte(), result.sourceHash[2])
+    }
 }

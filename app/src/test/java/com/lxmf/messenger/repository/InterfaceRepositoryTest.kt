@@ -99,6 +99,19 @@ class InterfaceRepositoryTest {
         displayOrder = 3,
     )
 
+    private fun createValidTcpServerEntity(
+        id: Long = 6,
+        name: String = "TCP Server",
+        enabled: Boolean = true,
+    ) = InterfaceEntity(
+        id = id,
+        name = name,
+        type = "TCPServer",
+        enabled = enabled,
+        configJson = """{"listen_ip":"0.0.0.0","listen_port":4242,"mode":"full"}""",
+        displayOrder = 5,
+    )
+
     // ========== Corruption Handling Tests ==========
 
     @Test
@@ -813,6 +826,119 @@ class InterfaceRepositoryTest {
                 // TCP RNode with invalid hostname format should be skipped
                 assertEquals(1, interfaces.size)
                 assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // ========== TCPServer Tests ==========
+
+    @Test
+    fun `enabledInterfaces correctly converts valid TCPServer`() =
+        runTest {
+            val entity = createValidTcpServerEntity()
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.TCPServer
+                assertEquals("TCP Server", config.name)
+                assertEquals("0.0.0.0", config.listenIp)
+                assertEquals(4242, config.listenPort)
+                assertEquals("full", config.mode)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips TCPServer with invalid listen port`() =
+        runTest {
+            val invalidPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid Port TCP Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson = """{"listen_ip":"0.0.0.0","listen_port":99999,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            val validAuto = createValidAutoInterfaceEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidPort, validAuto))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // TCPServer with invalid port should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.AutoInterface)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces skips TCPServer with invalid listen IP`() =
+        runTest {
+            val invalidIp =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Invalid IP TCP Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson = """{"listen_ip":"invalid host with spaces","listen_port":4242,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            val validTcp = createValidTcpClientEntity(id = 2)
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(invalidIp, validTcp))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                // TCPServer with invalid IP should be skipped
+                assertEquals(1, interfaces.size)
+                assertTrue(interfaces[0] is InterfaceConfig.TCPClient)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces converts TCPServer with custom port`() =
+        runTest {
+            val customPort =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Custom Port Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson = """{"listen_ip":"192.168.1.1","listen_port":8080,"mode":"gateway"}""",
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(customPort))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.TCPServer
+                assertEquals("Custom Port Server", config.name)
+                assertEquals("192.168.1.1", config.listenIp)
+                assertEquals(8080, config.listenPort)
+                assertEquals("gateway", config.mode)
 
                 cancelAndIgnoreRemainingEvents()
             }

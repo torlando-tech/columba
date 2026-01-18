@@ -13,6 +13,7 @@ import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
+import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -55,6 +56,7 @@ class ReticulumServiceBinderTest {
     private lateinit var networkChangeManager: NetworkChangeManager
     private lateinit var notificationManager: ServiceNotificationManager
     private lateinit var bleCoordinator: BleCoordinator
+    private lateinit var persistenceManager: ServicePersistenceManager
 
     private lateinit var networkStatusMock: AtomicReference<String>
     private lateinit var binder: ReticulumServiceBinder
@@ -79,6 +81,7 @@ class ReticulumServiceBinderTest {
         networkChangeManager = mockk(relaxed = true)
         notificationManager = mockk(relaxed = true)
         bleCoordinator = mockk(relaxed = true)
+        persistenceManager = mockk(relaxed = true)
 
         // Setup networkStatus as a real AtomicReference for verification
         networkStatusMock = mockk(relaxed = true)
@@ -103,6 +106,7 @@ class ReticulumServiceBinderTest {
                 networkChangeManager = networkChangeManager,
                 notificationManager = notificationManager,
                 bleCoordinator = bleCoordinator,
+                persistenceManager = persistenceManager,
                 scope = testScope,
                 onInitialized = {},
                 onShutdown = { onShutdownCalled = true },

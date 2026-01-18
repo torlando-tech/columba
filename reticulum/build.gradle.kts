@@ -16,8 +16,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // Chaquopy supports these architectures
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Python 3.11 supports 64-bit ABIs
+            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -40,6 +41,7 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
         }
     }
 }
@@ -71,6 +73,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.test.core)
     testImplementation("org.json:json:20240303")
 }
 

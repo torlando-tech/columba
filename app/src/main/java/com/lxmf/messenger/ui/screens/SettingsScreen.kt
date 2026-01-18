@@ -50,6 +50,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.MapSourcesCard
 import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
+import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
@@ -167,6 +168,13 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IDENTITY, it) },
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                )
+
+                PrivacyCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.PRIVACY.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.PRIVACY, it) },
+                    blockUnknownSenders = state.blockUnknownSenders,
+                    onBlockUnknownSendersChange = { viewModel.setBlockUnknownSenders(it) },
                 )
 
                 NotificationSettingsCard(

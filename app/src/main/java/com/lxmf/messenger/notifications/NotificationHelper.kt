@@ -130,17 +130,18 @@ class NotificationHelper
             isFavorite: Boolean,
         ) {
             // Check master notification toggle
-            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
-            if (!notificationsEnabled) return
+            if (!settingsRepository.notificationsEnabledFlow.first()) return
 
             // Check specific notification preference
+            val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
+            val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
+
             val messageNotificationsEnabled =
                 if (isFavorite) {
                     // If it's a favorite, check both general messages and favorite messages
-                    settingsRepository.notificationReceivedMessageFlow.first() ||
-                        settingsRepository.notificationReceivedMessageFavoriteFlow.first()
+                    generalMessageNotifications || favoriteMessageNotifications
                 } else {
-                    settingsRepository.notificationReceivedMessageFlow.first()
+                    generalMessageNotifications
                 }
 
             if (!messageNotificationsEnabled) return
@@ -149,15 +150,13 @@ class NotificationHelper
             if (!hasNotificationPermission()) return
 
             // Suppress notification if this conversation is currently active (visible on screen)
-            if (activeConversationManager.activeConversation.value == destinationHash) {
-                android.util.Log.d("NotificationHelper", "Suppressing notification for active conversation: $peerName")
-                return
-            }
+            if (activeConversationManager.activeConversation.value == destinationHash) return
 
             // Create intent to open the conversation
+            // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
             val openIntent =
                 Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     action = ACTION_OPEN_CONVERSATION
                     putExtra(EXTRA_DESTINATION_HASH, destinationHash)
                     putExtra(EXTRA_PEER_NAME, peerName)
@@ -168,7 +167,7 @@ class NotificationHelper
                     context,
                     destinationHash.hashCode(),
                     openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // Create notification
@@ -183,11 +182,9 @@ class NotificationHelper
                     .setContentIntent(openPendingIntent)
                     .build()
 
+            val notificationId = NOTIFICATION_ID_MESSAGE + destinationHash.hashCode()
             try {
-                notificationManager.notify(
-                    NOTIFICATION_ID_MESSAGE + destinationHash.hashCode(),
-                    notification,
-                )
+                notificationManager.notify(notificationId, notification)
             } catch (e: SecurityException) {
                 // Permission was revoked
             }
@@ -217,9 +214,10 @@ class NotificationHelper
             if (!hasNotificationPermission()) return
 
             // Create intent to open announce detail
+            // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
             val openIntent =
                 Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     action = ACTION_OPEN_ANNOUNCE
                     putExtra(EXTRA_DESTINATION_HASH, destinationHash)
                 }
@@ -229,7 +227,7 @@ class NotificationHelper
                     context,
                     destinationHash.hashCode(),
                     openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // Build notification text

@@ -120,7 +120,8 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("1 contact").assertIsDisplayed()
+        // Contact count is now displayed in the tab label
+        composeTestRule.onNodeWithText("My Contacts (1)").assertIsDisplayed()
     }
 
     @Test
@@ -141,7 +142,8 @@ class ContactsScreenTest {
             ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
         }
 
-        composeTestRule.onNodeWithText("3 contacts").assertIsDisplayed()
+        // Contact count is now displayed in the tab label
+        composeTestRule.onNodeWithText("My Contacts (3)").assertIsDisplayed()
     }
 
     @Test
@@ -1193,11 +1195,12 @@ class ContactsScreenTest {
         return mockViewModel
     }
 
-    private fun createMockAnnounceStreamViewModel(): AnnounceStreamViewModel {
+    private fun createMockAnnounceStreamViewModel(announceCount: Int = 0): AnnounceStreamViewModel {
         val mock = mockk<AnnounceStreamViewModel>(relaxed = true)
         every { mock.isAnnouncing } returns MutableStateFlow(false)
         every { mock.announceSuccess } returns MutableStateFlow(false)
         every { mock.announceError } returns MutableStateFlow(null)
+        every { mock.announceCount } returns MutableStateFlow(announceCount)
         return mock
     }
 }

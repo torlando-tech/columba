@@ -1,5 +1,10 @@
 # Python dependencies for Reticulum integration
 # These will be installed by Chaquopy when building the Android app
+# NOTE: pycodec2 is installed via build.gradle.kts pip block (pre-built Android wheel)
+# audioop is built-in on Python 3.11, no external package needed
+
+# numpy is required by LXST for audio processing
+numpy
 
 # RNS from fork with patched Link.py for shared instance RPC error handling
 # Patch: catch exceptions in __update_phy_stats() to prevent crashes when
@@ -15,3 +20,8 @@ cryptography>=42.0.0
 
 # msgpack for Sideband-compatible telemetry format
 u-msgpack-python
+
+# LXST for voice calls over Reticulum
+# NOTE: pycodec2 is removed from LXST's dependencies and installed via pre-built
+# wheel in build.gradle.kts. audioop is built-in on Python 3.11.
+lxst @ git+https://github.com/torlando-tech/LXST.git@chaquopy-compat

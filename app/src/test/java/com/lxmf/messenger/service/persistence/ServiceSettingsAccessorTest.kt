@@ -123,6 +123,18 @@ class ServiceSettingsAccessorTest {
         assertFalse(result)
     }
 
+    @Test
+    fun `getBlockUnknownSenders reflects changes between calls`() {
+        // First call returns false (default)
+        assertFalse(accessor.getBlockUnknownSenders())
+
+        // Simulate the app process changing the value
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS, true).apply()
+
+        // Second call should see the updated value
+        assertTrue(accessor.getBlockUnknownSenders())
+    }
+
     // ========== Cross-process key constants Tests ==========
 
     @Test

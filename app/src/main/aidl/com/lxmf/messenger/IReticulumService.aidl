@@ -470,4 +470,43 @@ interface IReticulumService {
      * @return Raw tile data bytes in RMSP format, or null on failure
      */
     byte[] fetchRmspTiles(String destinationHashHex, in byte[] publicKey, String geohash, int zoomMin, int zoomMax, long timeoutMs);
+
+    // ==================== VOICE CALLS (LXST) ====================
+
+    /**
+     * Initiate an outgoing voice call to a destination.
+     * @param destHash Destination hash hex string (32 chars)
+     * @param profileCode LXST codec profile code (0x10-0x80), or -1 to use default
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String initiateCall(String destHash, int profileCode);
+
+    /**
+     * Answer an incoming voice call.
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String answerCall();
+
+    /**
+     * End the current voice call (hangup).
+     */
+    void hangupCall();
+
+    /**
+     * Set microphone mute state during a call.
+     * @param muted true to mute, false to unmute
+     */
+    void setCallMuted(boolean muted);
+
+    /**
+     * Set speaker/earpiece mode during a call.
+     * @param speakerOn true for speaker, false for earpiece
+     */
+    void setCallSpeaker(boolean speakerOn);
+
+    /**
+     * Get current call state.
+     * @return JSON string with call state: {"status": "idle/connecting/ringing/active/ended", "remote_identity": "...", "is_muted": false}
+     */
+    String getCallState();
 }

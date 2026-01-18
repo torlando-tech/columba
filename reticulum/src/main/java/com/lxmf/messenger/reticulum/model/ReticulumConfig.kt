@@ -162,6 +162,24 @@ sealed class InterfaceConfig {
         val maxConnections: Int = 7,
         val mode: String = "roaming",
     ) : InterfaceConfig()
+
+    /**
+     * TCPServer - Accepts incoming TCP connections from other Reticulum nodes.
+     * Useful for Yggdrasil connectivity and scenarios where the phone acts as a server.
+     *
+     * @param name User-friendly name for this interface
+     * @param enabled Whether this interface should be initialized
+     * @param listenIp IP address to bind to (0.0.0.0 for all interfaces)
+     * @param listenPort TCP port to listen on
+     * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     */
+    data class TCPServer(
+        override val name: String = "TCP Server",
+        override val enabled: Boolean = true,
+        val listenIp: String = "0.0.0.0",
+        val listenPort: Int = 4242,
+        val mode: String = "full",
+    ) : InterfaceConfig()
 }
 
 enum class LogLevel {

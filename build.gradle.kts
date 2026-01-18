@@ -14,8 +14,11 @@ plugins {
     id("de.aaschmid.cpd") version "3.5"
 }
 
-// Apply JaCoCo, ktlint, and detekt to all subprojects
+// Apply JaCoCo, ktlint, and detekt to all subprojects (except detekt-rules)
 subprojects {
+    // Skip detekt-rules module - it's a pure JVM module for detekt custom rules
+    if (name == "detekt-rules") return@subprojects
+
     apply(plugin = "jacoco")
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     apply(plugin = "io.gitlab.arturbosch.detekt")
@@ -45,6 +48,11 @@ subprojects {
         // Baseline captures pre-existing issues. New code must pass all checks.
         // Run `./gradlew detektBaseline` to update after intentional changes.
         baseline = file("$projectDir/detekt-baseline.xml")
+    }
+
+    // Add custom Columba detekt rules
+    dependencies {
+        "detektPlugins"(project(":detekt-rules"))
     }
 }
 

@@ -11,6 +11,7 @@ import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.security.MessageDigest
 
 /**
  * Manages database persistence from the service process.
@@ -25,16 +26,45 @@ import org.json.JSONObject
 class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val settingsAccessor: ServiceSettingsAccessor,
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
     }
+
+    /**
+     * Check if a sender should be blocked based on privacy settings.
+     * Returns true if the message should be blocked, false if it should be allowed.
+     * Fails open: if checking contact status fails, the message is allowed through.
+     */
+    private suspend fun shouldBlockUnknownSender(
+        sourceHash: String,
+        identityHash: String,
+    ): Boolean =
+        try {
+            if (settingsAccessor.getBlockUnknownSenders()) {
+                val isKnownContact = contactDao.contactExists(sourceHash, identityHash)
+                if (!isKnownContact) {
+                    Log.d(TAG, "Blocking message from unknown sender: ${sourceHash.take(16)}")
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            // Fail open: if we can't check the contact list, allow the message through
+            Log.w(TAG, "Error checking contact status, allowing message: ${e.message}")
+            false
+        }
 
     private val database: ColumbaDatabase by lazy {
         ServiceDatabaseProvider.getDatabase(context)
     }
 
     private val announceDao by lazy { database.announceDao() }
+    private val contactDao by lazy { database.contactDao() }
     private val messageDao by lazy { database.messageDao() }
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
@@ -135,8 +165,11 @@ class ServicePersistenceManager(
      *
      * This is a suspend function that completes before returning, ensuring the message
      * is fully persisted before sync completion is reported to the UI.
+     *
+     * @return true if the message was persisted (or already exists), false if blocked or error.
+     *         The caller should only broadcast to the app process if this returns true.
      */
-    @Suppress("LongParameterList") // Parameters mirror MessageEntity fields for direct persistence
+    @Suppress("LongParameterList", "LongMethod", "ReturnCount") // Parameters mirror MessageEntity fields; early returns for clarity
     suspend fun persistMessage(
         messageHash: String,
         content: String,
@@ -149,20 +182,26 @@ class ServicePersistenceManager(
         hasFileAttachments: Boolean = false,
         receivedHopCount: Int? = null,
         receivedInterface: String? = null,
-    ) {
+    ): Boolean {
         try {
             // Get active identity to scope the message correctly
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             if (activeIdentity == null) {
                 Log.w(TAG, "No active identity - cannot persist message")
-                return
+                return false
+            }
+
+            // Check if we should block this sender
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) {
+                return false
             }
 
             // Check for duplicates (composite key is id + identityHash)
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
             if (existingMessage != null) {
                 Log.d(TAG, "Message already exists - skipping duplicate: $messageHash")
-                return
+                // Return true for duplicates - message exists, app should still show notification
+                return true
             }
 
             // Create/update conversation
@@ -237,8 +276,10 @@ class ServicePersistenceManager(
             }
 
             Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Error persisting message in service from $sourceHash", e)
+            return false
         }
     }
 
@@ -344,6 +385,90 @@ class ServicePersistenceManager(
             Log.w(TAG, "Failed to parse pending notification ${notification.id}: ${e.message}")
             null
         }
+    }
+
+    /**
+     * Look up display name for a peer with priority:
+     * 1. Contact's custom nickname (user-set)
+     * 2. Announce peer name (from network)
+     * 3. null (caller should use formatted hash as fallback)
+     */
+    @Suppress("ReturnCount") // Cascading lookup with early returns is clearer than alternatives
+    suspend fun lookupDisplayName(destinationHash: String): String? {
+        return try {
+            Log.d(TAG, "Looking up display name for: $destinationHash")
+
+            // Get active identity for contact lookup
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
+
+            // Check contact for custom nickname first (by destination hash)
+            if (activeIdentity != null) {
+                val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash)
+                Log.d(TAG, "Contact lookup: ${contact?.customNickname ?: "not found"}")
+                if (!contact?.customNickname.isNullOrBlank()) {
+                    return contact!!.customNickname
+                }
+            }
+
+            // Check announce for peer name (by destination hash)
+            val announce = announceDao.getAnnounce(destinationHash)
+            Log.d(TAG, "Announce lookup: ${announce?.peerName ?: "not found"}")
+            if (!announce?.peerName.isNullOrBlank()) {
+                return announce!!.peerName
+            }
+
+            // For LXST calls, the hash might be the identity hash, not the destination hash.
+            // Try to find an announce by matching identity hash (computed from public key).
+            Log.d(TAG, "Trying identity hash lookup...")
+            val announceByIdentity = findAnnounceByIdentityHash(destinationHash)
+            if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
+                Log.d(TAG, "Found by identity hash: ${announceByIdentity.peerName}")
+                return announceByIdentity.peerName
+            }
+
+            Log.d(TAG, "No display name found for $destinationHash")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error looking up display name for $destinationHash", e)
+            null
+        }
+    }
+
+    /**
+     * Find an announce by identity hash.
+     * Computes identity hash from each announce's public key and compares.
+     * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
+     */
+    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? {
+        return try {
+            val allAnnounces = announceDao.getAllAnnouncesSync()
+            Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
+            for (announce in allAnnounces) {
+                val computedHash = computeIdentityHash(announce.publicKey)
+                Log.d(TAG, "  Announce ${announce.peerName}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}")
+                if (computedHash.equals(identityHash, ignoreCase = true)) {
+                    Log.d(TAG, "  -> MATCHED!")
+                    return announce
+                }
+            }
+            Log.d(TAG, "No announce matched identity hash $identityHash")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding announce by identity hash", e)
+            null
+        }
+    }
+
+    /**
+     * Compute identity hash from public key.
+     * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
+     */
+    private fun computeIdentityHash(publicKey: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(publicKey)
+        // Take first 16 bytes and convert to hex
+        return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
     /**

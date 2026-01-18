@@ -239,6 +239,39 @@ class InterfaceConfigExtTest {
         assertEquals("", json.getString("device_name"))
     }
 
+    @Test
+    fun `TCPServer toJsonString contains all fields`() {
+        val config =
+            InterfaceConfig.TCPServer(
+                name = "Test Server",
+                enabled = true,
+                listenIp = "192.168.1.1",
+                listenPort = 5000,
+                mode = "full",
+            )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertEquals("192.168.1.1", json.getString("listen_ip"))
+        assertEquals(5000, json.getInt("listen_port"))
+        assertEquals("full", json.getString("mode"))
+    }
+
+    @Test
+    fun `TCPServer toJsonString uses default values correctly`() {
+        val config =
+            InterfaceConfig.TCPServer(
+                name = "Default Server",
+                enabled = true,
+            )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertEquals("0.0.0.0", json.getString("listen_ip"))
+        assertEquals(4242, json.getInt("listen_port"))
+        assertEquals("full", json.getString("mode"))
+    }
+
     // ========== typeName Tests ==========
 
     @Test
@@ -269,5 +302,11 @@ class InterfaceConfigExtTest {
     fun `typeName returns correct type for AndroidBLE`() {
         val config = InterfaceConfig.AndroidBLE()
         assertEquals("AndroidBLE", config.typeName)
+    }
+
+    @Test
+    fun `typeName returns correct type for TCPServer`() {
+        val config = InterfaceConfig.TCPServer()
+        assertEquals("TCPServer", config.typeName)
     }
 }

@@ -45,7 +45,7 @@ class BleOperationQueue(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleOperationQueue"
+        private const val TAG = "Columba:BLE:K:Queue"
         private const val DEFAULT_TIMEOUT_MS = BleConstants.OPERATION_TIMEOUT_MS
     }
 
@@ -203,6 +203,10 @@ class BleOperationQueue(
                             )
                         }
                     }
+                    // CRITICAL: Signal queue processor that operation completed (via timeout)
+                    // Without this, the queue stays blocked on operationCompletion.receive()
+                    // and ALL subsequent operations for ALL connections will timeout
+                    operationCompletion.trySend(Unit)
                 }
 
             scope.launch {

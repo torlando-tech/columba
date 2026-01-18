@@ -116,6 +116,7 @@ class AnnounceStreamViewModelTest {
         every { announceRepository.getAnnounces() } returns flowOf(emptyList())
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
         every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
+        every { announceRepository.getAnnounceCountFlow() } returns flowOf(0)
         coEvery { announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } just Runs
         coEvery { announceRepository.getAnnounceCount() } returns 0
         coEvery { announceRepository.countReachableAnnounces(any()) } returns 0
@@ -725,6 +726,60 @@ class AnnounceStreamViewModelTest {
             assertFalse(viewModel.isAnnouncing.value)
             assertFalse(viewModel.announceSuccess.value)
             assertNull(viewModel.announceError.value)
+        }
+
+    // ========== Announce Count Tests ==========
+
+    @Test
+    fun `announceCount starts with initial value of zero`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Verify initial count is 0 (from stateIn initialValue)
+            assertEquals(0, viewModel.announceCount.value)
+        }
+
+    @Test
+    fun `announceCount is wired to repository flow`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Verify repository method was called to set up the flow
+            verify { announceRepository.getAnnounceCountFlow() }
+        }
+
+    @Test
+    fun `announceCount updates reactively when repository emits`() =
+        runTest {
+            // Setup a mutable flow for count BEFORE creating ViewModel
+            val countFlow = MutableStateFlow(0)
+            every { announceRepository.getAnnounceCountFlow() } returns countFlow
+
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Subscribe to the StateFlow to trigger collection
+            viewModel.announceCount.test {
+                // Initial value
+                assertEquals(0, awaitItem())
+
+                // Update the count
+                countFlow.value = 42
+                advanceUntilIdle()
+
+                // Verify updated count
+                assertEquals(42, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     // ========== Network Status Check Tests ==========

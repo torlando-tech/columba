@@ -60,6 +60,13 @@ fun InterfaceConfig.toJsonString(): String {
                 put("max_connections", maxConnections)
                 put("mode", mode)
             }.toString()
+
+        is InterfaceConfig.TCPServer ->
+            JSONObject().apply {
+                put("listen_ip", listenIp)
+                put("listen_port", listenPort)
+                put("mode", mode)
+            }.toString()
     }
 }
 

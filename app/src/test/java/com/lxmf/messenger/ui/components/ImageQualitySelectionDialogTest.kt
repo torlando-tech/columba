@@ -3,6 +3,7 @@ package com.lxmf.messenger.ui.components
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.ImageCompressionPreset
@@ -115,7 +116,8 @@ class ImageQualitySelectionDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Recommended").assertIsDisplayed()
+        // RecommendedChip uses a star icon with content description instead of text
+        composeTestRule.onNodeWithContentDescription("Recommended").assertIsDisplayed()
     }
 
     @Test

@@ -71,7 +71,7 @@ class BleGattServer(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleGattServer"
+        private const val TAG = "Columba:BLE:K:Server"
     }
 
     private var gattServer: BluetoothGattServer? = null
@@ -472,6 +472,10 @@ class BleGattServer(
                     gattServer?.cancelConnection(device)
                     Log.d(TAG, "Connection cancelled for $address")
 
+                    // Stop keepalive BEFORE removing from connectedCentrals to prevent orphaned jobs
+                    // This is critical because cancelConnection() doesn't trigger onConnectionStateChange
+                    stopPeripheralKeepalive(address)
+
                     // Manually clean up since cancelConnection doesn't reliably trigger callback
                     centralsMutex.withLock {
                         connectedCentrals.remove(address)
@@ -714,6 +718,35 @@ class BleGattServer(
                     // RX characteristic write - data received from central
                     Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
 
+                    // DEFENSIVE FIX: Android's onConnectionStateChange is unreliable and sometimes
+                    // doesn't fire. If we receive data from a device that's not in connectedCentrals,
+                    // retroactively register it. This prevents orphaned connections where keepalives
+                    // flow but data can't be sent back (because the address isn't tracked).
+                    val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
+                    if (!isKnown) {
+                        Log.w(
+                            TAG,
+                            "DEFENSIVE RECOVERY: Data received from ${device.address} but " +
+                                "onConnectionStateChange was never called! Retroactively registering connection.",
+                        )
+
+                        // Simulate what onConnectionStateChange(STATE_CONNECTED) would have done
+                        centralsMutex.withLock {
+                            connectedCentrals[device.address] = device
+                        }
+                        mtuMutex.withLock {
+                            centralMtus[device.address] = BleConstants.MIN_MTU
+                        }
+
+                        // Fire the connection callback so the bridge can register the peer
+                        val mtu = BleConstants.MIN_MTU
+                        Log.i(
+                            TAG,
+                            "DEFENSIVE: Firing retroactive onCentralConnected for ${device.address}, MTU=$mtu",
+                        )
+                        onCentralConnected?.invoke(device.address, mtu)
+                    }
+
                     // Send response if needed
                     if (responseNeeded) {
                         gattServer?.sendResponse(
@@ -725,34 +758,41 @@ class BleGattServer(
                         )
                     }
 
-                    // Protocol v2.2: Check for identity handshake (16-byte identity)
-                    // NOTE: We still track identity here for Kotlin's send() address resolution,
-                    // but the handshake detection logic has moved to Python (BLEInterface).
-                    // All data is passed to onDataReceived; Python decides if it's a handshake.
-                    val existingIdentity =
-                        identityMutex.withLock {
-                            addressToIdentity[device.address]
-                        }
+                    // 2026-01-17: Simplified identity detection - Python handles it (like Linux)
+                    // Previously, Kotlin detected 16-byte identity handshakes and called
+                    // onIdentityReceived, but Python also detected them via _handle_identity_handshake.
+                    // This created "double identity callback processing" complexity.
+                    // Now: Kotlin just passes ALL data to Python, which handles identity detection
+                    // in a single code path (matching the Linux/Bleak architecture).
+                    //
+                    // COMMENTED OUT - Kotlin-side identity detection:
+                    // val existingIdentity =
+                    //     identityMutex.withLock {
+                    //         addressToIdentity[device.address]
+                    //     }
+                    //
+                    // if (existingIdentity == null && value.size == 16) {
+                    //     // Likely identity handshake - store for Kotlin's address resolution
+                    //     val identityHash = value.joinToString("") { "%02x".format(it) }
+                    //     Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
+                    //
+                    //     identityMutex.withLock {
+                    //         addressToIdentity[device.address] = value
+                    //         identityToAddress[identityHash] = device.address
+                    //     }
+                    //
+                    //     // Notify identity callback (Python will also detect via data callback)
+                    //     onIdentityReceived?.invoke(device.address, identityHash)
+                    // }
 
-                    if (existingIdentity == null && value.size == 16) {
-                        // Likely identity handshake - store for Kotlin's address resolution
-                        val identityHash = value.joinToString("") { "%02x".format(it) }
-                        Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
-
-                        identityMutex.withLock {
-                            addressToIdentity[device.address] = value
-                            identityToAddress[identityHash] = device.address
-                        }
-
-                        // Notify identity callback (Python will also detect via data callback)
-                        onIdentityReceived?.invoke(device.address, identityHash)
-
-                        // Start peripheral keepalive to prevent supervision timeout
+                    // Start keepalive on first data received (moved from identity detection)
+                    // This prevents supervision timeout regardless of whether it's identity or data
+                    val hasKeepalive = keepaliveMutex.withLock { peripheralKeepaliveJobs.containsKey(device.address) }
+                    if (!hasKeepalive) {
                         startPeripheralKeepalive(device.address)
                     }
 
-                    // ALWAYS pass data to callback - Python handles handshake detection
-                    // This is the key change: don't filter out handshake from data stream
+                    // Pass ALL data to Python - it handles identity detection
                     onDataReceived?.invoke(device.address, value)
                 }
                 else -> {
@@ -1001,6 +1041,11 @@ class BleGattServer(
                                 if (result.isSuccess) {
                                     Log.v(TAG, "Peripheral keepalive sent to $address")
                                 } else {
+                                    val error = result.exceptionOrNull()?.message ?: "unknown"
+                                    if (error.contains("No connected centrals")) {
+                                        Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
+                                        break // Exit loop, job ends naturally
+                                    }
                                     Log.w(TAG, "Peripheral keepalive failed for $address, connection may be dead")
                                 }
                             } catch (e: Exception) {

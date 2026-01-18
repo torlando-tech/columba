@@ -153,6 +153,7 @@ fun InterfaceConfigDialog(
                         when (configState.type) {
                             "AutoInterface" -> AutoInterfaceFields(configState, onConfigUpdate)
                             "TCPClient" -> TCPClientFields(configState, onConfigUpdate)
+                            "TCPServer" -> TCPServerFields(configState, onConfigUpdate)
                             "AndroidBLE" -> AndroidBLEFields(configState, onConfigUpdate)
                         }
 
@@ -193,6 +194,7 @@ fun InterfaceTypeSelector(
         listOf(
             "AutoInterface" to "Auto Discovery",
             "TCPClient" to "TCP Client",
+            "TCPServer" to "TCP Server",
             "AndroidBLE" to "Bluetooth LE",
         )
 
@@ -521,6 +523,67 @@ fun AndroidBLEFields(
                 configState.maxConnectionsError?.let { Text(it) }
                 Text(
                     "Maximum simultaneous BLE peers (recommended: 7)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+fun TCPServerFields(
+    configState: InterfaceConfigState,
+    onConfigUpdate: (InterfaceConfigState) -> Unit,
+) {
+    Text(
+        "TCP Server Configuration",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    Text(
+        "Allows other Reticulum nodes to connect to this device. " +
+            "Useful for Yggdrasil connectivity or when this device should act as a hub.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    OutlinedTextField(
+        value = configState.listenIp,
+        onValueChange = { ip ->
+            onConfigUpdate(configState.copy(listenIp = ip.trim()))
+        },
+        label = { Text("Listen IP") },
+        placeholder = { Text("0.0.0.0") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.listenIpError != null,
+        supportingText = {
+            Column {
+                configState.listenIpError?.let { Text(it) }
+                Text(
+                    "IP address to bind to. Use 0.0.0.0 to listen on all interfaces.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+
+    OutlinedTextField(
+        value = configState.listenPort,
+        onValueChange = { onConfigUpdate(configState.copy(listenPort = it)) },
+        label = { Text("Listen Port") },
+        placeholder = { Text("4242") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        isError = configState.listenPortError != null,
+        supportingText = {
+            Column {
+                configState.listenPortError?.let { Text(it) }
+                Text(
+                    "TCP port to listen on for incoming connections.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

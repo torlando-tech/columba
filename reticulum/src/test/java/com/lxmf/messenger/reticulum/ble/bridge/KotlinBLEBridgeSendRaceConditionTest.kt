@@ -368,12 +368,6 @@ class KotlinBLEBridgeSendRaceConditionTest {
         field.set(peer, stateEnum)
     }
 
-    private fun getDeduplicationState(peer: Any): String {
-        val field = peer::class.java.getDeclaredField("deduplicationState")
-        field.isAccessible = true
-        return field.get(peer).toString()
-    }
-
     private fun setTestDelayAfterStateRead(bridge: KotlinBLEBridge, delayMs: Long) {
         val field = KotlinBLEBridge::class.java.getDeclaredField("testDelayAfterStateReadMs")
         field.isAccessible = true

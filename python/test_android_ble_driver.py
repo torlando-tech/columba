@@ -2799,11 +2799,18 @@ class TestAndroidBLEDriverKotlinBridge(unittest.TestCase):
         self._original_log = self.abd_module.RNS.log
         self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
 
+        # Save original reticulum_wrapper module for restoration
+        self._original_reticulum_wrapper = sys.modules.get('reticulum_wrapper')
+
     def tearDown(self):
-        """Restore original RNS.log."""
+        """Restore original RNS.log and reticulum_wrapper module."""
         self.abd_module.RNS.log = self._original_log
-        # Clean up reticulum_wrapper mock
-        if 'reticulum_wrapper' in sys.modules:
+
+        # Restore original reticulum_wrapper module to prevent test isolation issues
+        if self._original_reticulum_wrapper is not None:
+            sys.modules['reticulum_wrapper'] = self._original_reticulum_wrapper
+        elif 'reticulum_wrapper' in sys.modules:
+            # If original was not present but something is now, remove it
             del sys.modules['reticulum_wrapper']
 
     def test_get_kotlin_bridge_success(self):

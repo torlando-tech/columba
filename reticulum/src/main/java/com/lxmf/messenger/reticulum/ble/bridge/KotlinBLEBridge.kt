@@ -186,6 +186,11 @@ class KotlinBLEBridge(
     // How long to prevent reconnection after deduplication (60 seconds)
     private val deduplicationCooldownMs = 60_000L
 
+    // TEST HOOK: Delay between reading deduplicationState and using it in send()
+    // This widens the TOCTOU race window for testing. Set to 0 in production.
+    @androidx.annotation.VisibleForTesting
+    internal var testDelayAfterStateReadMs: Long = 0
+
     /**
      * Data class for connections awaiting identity before Python notification.
      */
@@ -534,7 +539,11 @@ class KotlinBLEBridge(
         var rssi: Int = -100, // Last known RSSI, -100 = unknown
         var lastActivity: Long = System.currentTimeMillis(), // Last data exchange
         var deduplicationState: DeduplicationState = DeduplicationState.NONE,
-    )
+    ) {
+        // Mutex to protect deduplicationState access during send operations
+        // Ensures state reads and send path selection are atomic with state changes
+        val stateMutex: Mutex = Mutex()
+    }
 
     /**
      * Detailed information about a connected peer (for UI display).
@@ -1296,28 +1305,36 @@ class KotlinBLEBridge(
             // Data is now a pre-formatted fragment from the Python layer
             Log.d(TAG, "Sending ${data.size} byte fragment to $targetAddress")
 
-            // Prefer central connection (we write to their RX) - BUT skip if deduplication is closing it
-            // During deduplication, isCentral is still true until disconnect callback fires, but the
-            // GATT client is already disconnecting. Use deduplicationState to avoid sending via closing path.
-            val useCentral = peer.isCentral && peer.deduplicationState != DeduplicationState.CLOSING_CENTRAL
-            val usePeripheral = peer.isPeripheral && peer.deduplicationState != DeduplicationState.CLOSING_PERIPHERAL
+            // CRITICAL SECTION: Acquire per-peer mutex to ensure state read and send are atomic
+            // This prevents TOCTOU race condition where deduplicationState changes between
+            // computing useCentral/usePeripheral and actually using those values.
+            peer.stateMutex.withLock {
+                // TEST HOOK: Widen TOCTOU race window for testing (inside mutex)
+                if (testDelayAfterStateReadMs > 0) {
+                    kotlinx.coroutines.delay(testDelayAfterStateReadMs)
+                }
 
-            if (useCentral) {
-                gattClient?.sendData(targetAddress, data)?.fold(
-                    onSuccess = { Log.v(TAG, "Fragment sent via central to $targetAddress") },
-                    onFailure = { Log.e(TAG, "Failed to send fragment via central to $targetAddress", it) },
-                ) ?: Log.w(TAG, "Cannot send via central - Bluetooth not available")
-            }
-            // Otherwise use peripheral connection (notify their TX)
-            else if (usePeripheral) {
-                gattServer?.notifyCentrals(data, targetAddress)?.fold(
-                    onSuccess = { Log.v(TAG, "Fragment sent via peripheral to $targetAddress") },
-                    onFailure = { Log.e(TAG, "Failed to send fragment via peripheral to $targetAddress", it) },
-                ) ?: Log.w(TAG, "Cannot send via peripheral - Bluetooth not available")
-            }
-            // Both paths blocked during deduplication
-            else if (peer.deduplicationState != DeduplicationState.NONE) {
-                Log.w(TAG, "Cannot send to $targetAddress - deduplication in progress (state=${peer.deduplicationState})")
+                // Read state and make decision while holding mutex
+                val useCentral = peer.isCentral && peer.deduplicationState != DeduplicationState.CLOSING_CENTRAL
+                val usePeripheral = peer.isPeripheral && peer.deduplicationState != DeduplicationState.CLOSING_PERIPHERAL
+
+                if (useCentral) {
+                    gattClient?.sendData(targetAddress, data)?.fold(
+                        onSuccess = { Log.v(TAG, "Fragment sent via central to $targetAddress") },
+                        onFailure = { Log.e(TAG, "Failed to send fragment via central to $targetAddress", it) },
+                    ) ?: Log.w(TAG, "Cannot send via central - Bluetooth not available")
+                }
+                // Otherwise use peripheral connection (notify their TX)
+                else if (usePeripheral) {
+                    gattServer?.notifyCentrals(data, targetAddress)?.fold(
+                        onSuccess = { Log.v(TAG, "Fragment sent via peripheral to $targetAddress") },
+                        onFailure = { Log.e(TAG, "Failed to send fragment via peripheral to $targetAddress", it) },
+                    ) ?: Log.w(TAG, "Cannot send via peripheral - Bluetooth not available")
+                }
+                // Both paths blocked during deduplication
+                else if (peer.deduplicationState != DeduplicationState.NONE) {
+                    Log.w(TAG, "Cannot send to $targetAddress - deduplication in progress (state=${peer.deduplicationState})")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send data to $targetAddress (requested: $address)", e)
@@ -1707,15 +1724,19 @@ class KotlinBLEBridge(
                 val localIdentityBytes = transportIdentityHash
                 if (peerIdentity != null && localIdentityBytes != null) {
                     val localIdentityHex = localIdentityBytes.joinToString("") { "%02x".format(it) }
-                    // Lower identity hash keeps central role
-                    if (localIdentityHex < peerIdentity) {
-                        Log.i(TAG, "Deduplication: keeping central (local=$localIdentityHex < peer=$peerIdentity)")
-                        peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
-                        dedupeAction = DedupeAction.CLOSE_PERIPHERAL
-                    } else {
-                        Log.i(TAG, "Deduplication: keeping peripheral (local=$localIdentityHex > peer=$peerIdentity)")
-                        peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
-                        dedupeAction = DedupeAction.CLOSE_CENTRAL
+                    // Acquire per-peer mutex before changing deduplicationState
+                    // This ensures send() sees consistent state
+                    peer.stateMutex.withLock {
+                        // Lower identity hash keeps central role
+                        if (localIdentityHex < peerIdentity) {
+                            Log.i(TAG, "Deduplication: keeping central (local=$localIdentityHex < peer=$peerIdentity)")
+                            peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
+                            dedupeAction = DedupeAction.CLOSE_PERIPHERAL
+                        } else {
+                            Log.i(TAG, "Deduplication: keeping peripheral (local=$localIdentityHex > peer=$peerIdentity)")
+                            peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
+                            dedupeAction = DedupeAction.CLOSE_CENTRAL
+                        }
                     }
                     // Add deduplication cooldown to prevent immediate reconnection as central
                     // This prevents reconnection storms when one side keeps trying to reconnect
@@ -1797,16 +1818,22 @@ class KotlinBLEBridge(
                 // Also clean up pending central tracking
                 pendingCentralConnections.remove(address)
                 // Clear deduplication state if we were closing this connection
-                if (peer.deduplicationState == DeduplicationState.CLOSING_CENTRAL) {
-                    peer.deduplicationState = DeduplicationState.NONE
-                    Log.d(TAG, "Deduplication complete: central connection closed for $address")
+                // Acquire per-peer mutex to ensure send() sees consistent state
+                peer.stateMutex.withLock {
+                    if (peer.deduplicationState == DeduplicationState.CLOSING_CENTRAL) {
+                        peer.deduplicationState = DeduplicationState.NONE
+                        Log.d(TAG, "Deduplication complete: central connection closed for $address")
+                    }
                 }
             } else {
                 peer.isPeripheral = false
                 // Clear deduplication state if we were closing this connection
-                if (peer.deduplicationState == DeduplicationState.CLOSING_PERIPHERAL) {
-                    peer.deduplicationState = DeduplicationState.NONE
-                    Log.d(TAG, "Deduplication complete: peripheral connection closed for $address")
+                // Acquire per-peer mutex to ensure send() sees consistent state
+                peer.stateMutex.withLock {
+                    if (peer.deduplicationState == DeduplicationState.CLOSING_PERIPHERAL) {
+                        peer.deduplicationState = DeduplicationState.NONE
+                        Log.d(TAG, "Deduplication complete: peripheral connection closed for $address")
+                    }
                 }
             }
 

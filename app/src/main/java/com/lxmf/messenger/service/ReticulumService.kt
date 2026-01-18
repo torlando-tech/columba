@@ -63,7 +63,9 @@ class ReticulumService : Service() {
                 onNetworkChanged = {
                     // Trigger LXMF announce when network changes so peers can discover us
                     Log.d(TAG, "Network changed - triggering LXMF announce")
-                    if (::binder.isInitialized) {
+                    // Check both binder initialization AND wrapper readiness to prevent
+                    // TOCTOU race conditions when wrapper is shutting down
+                    if (::binder.isInitialized && binder.isInitialized()) {
                         try {
                             binder.announceLxmfDestination()
                             // Signal main app's AutoAnnounceManager to reset its timer
@@ -76,6 +78,8 @@ class ReticulumService : Service() {
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to announce on network change", e)
                         }
+                    } else {
+                        Log.d(TAG, "Skipping announce - service not fully initialized")
                     }
                 },
             )

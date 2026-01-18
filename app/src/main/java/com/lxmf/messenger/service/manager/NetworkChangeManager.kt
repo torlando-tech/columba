@@ -6,6 +6,10 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Monitors network connectivity changes and triggers lock reacquisition.
@@ -23,11 +27,15 @@ import android.util.Log
 class NetworkChangeManager(
     private val context: Context,
     private val lockManager: LockManager,
+    private val scope: CoroutineScope,
     private val onNetworkChanged: () -> Unit = {},
 ) {
     companion object {
         private const val TAG = "NetworkChangeManager"
+        internal const val DEBOUNCE_DELAY_MS = 500L
     }
+
+    private var debounceJob: Job? = null
 
     private val connectivityManager: ConnectivityManager by lazy {
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -95,6 +103,10 @@ class NetworkChangeManager(
      * Safe to call multiple times or when not monitoring.
      */
     fun stop() {
+        // Cancel any pending debounced callback
+        debounceJob?.cancel()
+        debounceJob = null
+
         networkCallback?.let { callback ->
             try {
                 connectivityManager.unregisterNetworkCallback(callback)
@@ -115,9 +127,13 @@ class NetworkChangeManager(
 
     /**
      * Handle network change by reacquiring locks and notifying listeners.
+     *
+     * Lock reacquisition happens immediately (locks need to be valid for the new network),
+     * but the callback is debounced to coalesce rapid network changes (e.g., when leaving
+     * WiFi range and Android searches for alternatives).
      */
     private fun handleNetworkChange() {
-        // Reacquire all locks to ensure they're valid on the new network
+        // Reacquire all locks immediately - these need to be valid on the new network
         try {
             lockManager.acquireAll()
             Log.d(TAG, "Locks reacquired after network change")
@@ -125,11 +141,17 @@ class NetworkChangeManager(
             Log.e(TAG, "Failed to reacquire locks after network change", e)
         }
 
-        // Trigger callback for additional handling (e.g., LXMF announce)
-        try {
-            onNetworkChanged()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in network change callback", e)
-        }
+        // Debounce callback to coalesce rapid network changes
+        // This prevents crashes from TOCTOU race conditions when wrapper is shutting down
+        debounceJob?.cancel()
+        debounceJob =
+            scope.launch {
+                delay(DEBOUNCE_DELAY_MS)
+                try {
+                    onNetworkChanged()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in network change callback", e)
+                }
+            }
     }
 }

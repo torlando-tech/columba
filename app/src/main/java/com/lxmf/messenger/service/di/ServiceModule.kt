@@ -94,9 +94,10 @@ object ServiceModule {
         // Started after initialization completes (see ReticulumServiceBinder)
         val healthCheckManager = HealthCheckManager(wrapperManager, scope, onStaleHeartbeat)
 
-        // Phase 4: Network change monitoring (depends on lockManager)
+        // Phase 4: Network change monitoring (depends on lockManager, scope)
         // Reacquires locks and triggers announce on network changes
-        val networkChangeManager = NetworkChangeManager(context, lockManager, onNetworkChanged)
+        // Uses scope for debounced callbacks to prevent race conditions
+        val networkChangeManager = NetworkChangeManager(context, lockManager, scope, onNetworkChanged)
 
         // Phase 5: Business logic (depends on wrapperManager)
         val identityManager = IdentityManager(wrapperManager)

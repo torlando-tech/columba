@@ -46,7 +46,7 @@ class BleAdvertiser(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleAdvertiser"
+        private const val TAG = "Columba:BLE:K:Adv"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val RETRY_BACKOFF_MS = 2000L // 2 seconds
         private const val ADVERTISING_REFRESH_INTERVAL_MS = 60_000L // 1 minute

@@ -71,7 +71,7 @@ class BleGattServer(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleGattServer"
+        private const val TAG = "Columba:BLE:K:Server"
     }
 
     private var gattServer: BluetoothGattServer? = null

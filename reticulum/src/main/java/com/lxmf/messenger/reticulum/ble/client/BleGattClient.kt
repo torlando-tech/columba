@@ -64,7 +64,7 @@ class BleGattClient(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
     companion object {
-        private const val TAG = "Columba:Kotlin:BleGattClient"
+        private const val TAG = "Columba:BLE:K:Client"
         private const val MAX_CONNECTION_RETRIES = 3
         private const val CONNECTION_TIMEOUT_MS = BleConstants.CONNECTION_TIMEOUT_MS
         private val CCCD_UUID = BleConstants.CCCD_UUID

@@ -60,6 +60,94 @@ flowchart TB
 
 ---
 
+## BLE Operation Queue
+
+Android's BLE stack does **not** queue operations internally. If you call multiple GATT operations in succession (e.g., `readCharacteristic()` then `writeDescriptor()`), the second operation fails silently. `BleOperationQueue` ensures serial execution with proper completion tracking.
+
+### Queue Architecture
+
+```mermaid
+flowchart LR
+    subgraph Callers["Multiple Callers"]
+        C1[GATT Client]
+        C2[Handshake]
+        C3[Data Send]
+    end
+
+    subgraph Queue["BleOperationQueue"]
+        Q[operationQueue<br/>Channel UNLIMITED]
+        P[Queue Processor<br/>Single coroutine]
+        Comp[operationCompletion<br/>Channel RENDEZVOUS]
+    end
+
+    subgraph BLE["Android BLE"]
+        BLE1[BluetoothGatt]
+    end
+
+    C1 --> Q
+    C2 --> Q
+    C3 --> Q
+    Q --> P
+    P --> BLE1
+    BLE1 -->|Callback| Comp
+    Comp -->|Unblock| P
+```
+
+### Operation Flow
+
+Operations follow one of two paths:
+
+1. **Synchronous operations** (e.g., `SetCharacteristicNotification`): Return `Success` or `Failure` immediately, queue processor moves to next operation.
+
+2. **Asynchronous operations** (e.g., `WriteCharacteristic`, `DiscoverServices`): Return `Pending`, queue processor blocks on `operationCompletion.receive()` until the GATT callback fires and calls `completeOperation()`.
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Queue as BleOperationQueue
+    participant BLE as Android BLE
+    participant Callback as GATT Callback
+
+    Caller->>Queue: enqueue(WriteCharacteristic)
+    Queue->>Queue: Create timeout job (5s)
+    Queue->>BLE: writeCharacteristic()
+    BLE-->>Queue: returns true (queued)
+    Queue->>Queue: Return Pending
+    Queue->>Queue: Block on operationCompletion.receive()
+
+    alt Success path
+        BLE-->>Callback: onCharacteristicWrite(SUCCESS)
+        Callback->>Queue: completeOperation(Success)
+        Queue->>Queue: Cancel timeout
+        Queue->>Queue: operationCompletion.trySend(Unit)
+        Queue-->>Caller: Resume with Success
+    else Timeout path
+        Note over Queue: 5 seconds pass
+        Queue->>Queue: Resume with TimeoutException
+        Queue->>Queue: operationCompletion.trySend(Unit)
+        Note over Queue: CRITICAL: Must signal completion<br/>or queue deadlocks forever
+    end
+
+    Queue->>Queue: Process next operation
+```
+
+### Completion Signaling (Critical)
+
+The queue processor blocks on `operationCompletion.receive()` for async operations. **Every code path that ends an async operation must signal completion**:
+
+| Code Path | Signal Location |
+|-----------|-----------------|
+| GATT callback success | `completeOperation()` line 272 |
+| GATT callback failure | `completeOperation()` line 272 |
+| Timeout | Timeout handler line 209 |
+| Exception during execution | Exception handler line 231 |
+
+**Failure to signal causes global queue deadlock**: All subsequent operations for ALL connections will timeout without executing, because the single queue processor is stuck waiting.
+
+**Key code reference**: `BleOperationQueue.kt` — queue processor (lines 158-180), enqueue (lines 189-244), completeOperation (lines 252-273)
+
+---
+
 ## GATT Service Structure
 
 The Reticulum BLE service follows Protocol v2.2 specification:
@@ -242,6 +330,8 @@ sequenceDiagram
 
 **Key log message**: `"DEFENSIVE RECOVERY: Data received from {address} but onConnectionStateChange was never called!"`
 
+**Key code reference**: `BleGattServer.handleCharacteristicWriteRequest()` lines 721-748
+
 ---
 
 ## Identity Protocol (v2.2)
@@ -348,10 +438,16 @@ flowchart TD
 flowchart TD
     A[MAC_NEW connects to us<br/>Writes 16-byte identity to RX] --> B{Python: _handle_identity_handshake<br/>Entry check: len=16 AND<br/>no address_to_identity‹MAC_NEW›}
     B -->|Check fails| Z[Return False: not a handshake<br/>Pass to normal data handler]
-    B -->|Check passes| C{Python: _check_duplicate_identity<br/>Returns: bool}
+    B -->|Check passes| C{Python: _check_duplicate_identity<br/>identity_to_address‹hash› = MAC_OLD?}
 
-    C -->|"Returns True<br/>(identity_to_address‹hash› = MAC_OLD<br/>AND MAC_OLD ≠ MAC_NEW)"| D[Reject: driver.disconnect‹MAC_NEW›<br/>Log: duplicate identity rejected<br/>Return True: handshake consumed]
-    C -->|"Returns False<br/>(new identity OR same MAC)"| E[Allow: continue processing]
+    C -->|"No MAC_OLD or<br/>MAC_OLD = MAC_NEW"| E[Allow: continue processing]
+    C -->|"MAC_OLD exists and<br/>MAC_OLD ≠ MAC_NEW"| C2{Is old connection alive?}
+
+    C2 -->|"pending_detach‹hash› exists<br/>(old connection gone)"| C3[Cleanup stale MAC_OLD<br/>Allow reconnection]
+    C2 -->|"MAC_OLD not in connected_peers<br/>AND not in peers"| C3
+    C2 -->|"MAC_OLD still connected"| D[Reject: driver.disconnect‹MAC_NEW›<br/>Log: duplicate identity rejected<br/>Return True: handshake consumed]
+
+    C3 --> E
 
     E --> F[Store mappings unconditionally:<br/>address_to_identity‹MAC_NEW› = identity<br/>identity_to_address‹hash› = MAC_NEW]
     F --> G{spawned_interfaces‹hash› exists?}
@@ -372,7 +468,7 @@ flowchart LR
 ```
 
 **Key behaviors:**
-- **Early rejection (both modes)**: `_check_duplicate_identity` rejects if identity already connected at different MAC — works in both central mode (via Kotlin callback) and peripheral mode (in `_handle_identity_handshake`)
+- **Early rejection (both modes)**: `_check_duplicate_identity` rejects if identity already connected at different MAC **AND the old connection is still alive** — works in both central mode (via Kotlin callback) and peripheral mode (in `_handle_identity_handshake`). Crucially, if the old connection has `pending_detach` scheduled or is no longer in `connected_peers`/`peers`, the reconnection is **allowed** (stale entry cleanup).
 - **Central preference**: Kotlin prefers mappings with live central connections (more reliable for sending)
 - **Stale cache**: On disconnect, `staleAddressToIdentity` caches old address → identity, allowing `send()` to resolve old addresses during transition
 - **Fragmenter/Reassembler unaffected**: Keyed by identity (32-char hex), not address — they continue working across MAC rotations without migration
@@ -641,11 +737,46 @@ sequenceDiagram
 | Max failures | 3 | `BleConstants.MAX_CONNECTION_FAILURES` |
 | Packet | `0x00` (1 byte) | Minimal overhead |
 
-**Key implementation details** (BleGattClient.kt lines 1081-1181, BleGattServer.kt lines 965-1035):
+**Key implementation details** (BleGattClient.kt lines 1081-1181, BleGattServer.kt lines 1000-1060):
 - Both sides send an **immediate first keepalive** on connection, then continue at 15s intervals
 - **Central (BleGattClient)**: Tracks `consecutiveKeepaliveFailures`, disconnects after 3 failures
 - **Peripheral (BleGattServer)**: Fire-and-forget notifications—no failure tracking or disconnect logic
 - This asymmetry is intentional: the central manages connection lifecycle, the peripheral just keeps it alive
+
+### Keepalive Job Lifecycle
+
+Keepalive jobs are coroutines that run independently from connection state. Proper cleanup is critical to prevent orphaned jobs.
+
+**Problem**: If `disconnectCentral()` removes an address from `connectedCentrals` without stopping the keepalive job, the job continues running forever. Each keepalive attempt fails with "No connected centrals" (since the address is gone), creating log spam and wasting resources.
+
+**Solution**:
+
+1. **Explicit cleanup in `disconnectCentral()`**: Call `stopPeripheralKeepalive(address)` **before** removing from `connectedCentrals`. This is critical because `cancelConnection()` doesn't reliably trigger `onConnectionStateChange`, so the normal disconnect handler may never run. See `BleGattServer.kt` line 477.
+
+2. **Defensive loop exit**: The keepalive loop checks for "No connected centrals" errors and breaks out if the target is no longer tracked. This is a safety net for cases where cleanup is missed. See `BleGattServer.kt` lines 1045-1048.
+
+```mermaid
+flowchart TD
+    A[disconnectCentral called] --> A2[gattServer.cancelConnection]
+    A2 --> B[stopPeripheralKeepalive]
+    B --> C[Cancel keepalive Job]
+    C --> D[Remove from peripheralKeepaliveJobs]
+    D --> E[Remove from connectedCentrals]
+    E --> E2[Remove from centralMtus, addressToIdentity]
+    E2 --> F[Fire onCentralDisconnected callback]
+
+    subgraph Defensive["Defensive Loop Exit (safety net)"]
+        G[Keepalive attempt] --> H{notifyCentrals result}
+        H -->|Success| I[Continue loop]
+        H -->|"No connected centrals"| J[Log warning, break loop]
+        H -->|Other error| K[Log warning, continue loop]
+    end
+```
+
+**Key code references**:
+- Cleanup: `BleGattServer.disconnectCentral()` line 477
+- Defensive exit: `BleGattServer.startPeripheralKeepalive()` lines 1045-1048
+- Stop function: `BleGattServer.stopPeripheralKeepalive()` lines 1067-1073
 
 ---
 
@@ -784,6 +915,8 @@ Scan Response (31 bytes separate budget):
 - During rapid connection/disconnection cycles
 
 **Recommendation**: Consider adaptive timeouts based on operation type and historical success rates.
+
+**Note on Queue Deadlock Prevention**: The queue processor waits on `operationCompletion.receive()` for async operations (those returning `Pending`). The timeout handler **must** signal `operationCompletion.trySend(Unit)` after resuming the continuation with `TimeoutException`. Without this signal, the queue processor stays blocked forever, causing all subsequent operations across ALL connections to fail. See `BleOperationQueue.kt` lines 206-209.
 
 ### 2. Fragmenter Key Complexity
 

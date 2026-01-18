@@ -32,8 +32,6 @@ class NotificationHelper
         private val activeConversationManager: com.lxmf.messenger.service.ActiveConversationManager,
     ) {
         companion object {
-            private const val TAG = "NotificationHelper"
-
             // Notification channel IDs
             private const val CHANNEL_ID_MESSAGES = "messages"
             private const val CHANNEL_ID_ANNOUNCES = "announces"
@@ -131,23 +129,12 @@ class NotificationHelper
             messagePreview: String,
             isFavorite: Boolean,
         ) {
-            android.util.Log.d(TAG, "notifyMessageReceived called: peer=$peerName, isFavorite=$isFavorite")
-
             // Check master notification toggle
-            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
-            android.util.Log.d(TAG, "Master toggle: notificationsEnabled=$notificationsEnabled")
-            if (!notificationsEnabled) {
-                android.util.Log.d(TAG, "BLOCKED: Master notifications toggle is OFF")
-                return
-            }
+            if (!settingsRepository.notificationsEnabledFlow.first()) return
 
             // Check specific notification preference
             val generalMessageNotifications = settingsRepository.notificationReceivedMessageFlow.first()
             val favoriteMessageNotifications = settingsRepository.notificationReceivedMessageFavoriteFlow.first()
-            android.util.Log.d(
-                TAG,
-                "Preferences: generalMsg=$generalMessageNotifications, favoriteMsg=$favoriteMessageNotifications",
-            )
 
             val messageNotificationsEnabled =
                 if (isFavorite) {
@@ -157,31 +144,13 @@ class NotificationHelper
                     generalMessageNotifications
                 }
 
-            if (!messageNotificationsEnabled) {
-                android.util.Log.d(
-                    TAG,
-                    "BLOCKED: Message notification disabled (isFavorite=$isFavorite, enabled=$messageNotificationsEnabled)",
-                )
-                return
-            }
+            if (!messageNotificationsEnabled) return
 
             // Check permission
-            val hasPermission = hasNotificationPermission()
-            android.util.Log.d(TAG, "Permission check: hasNotificationPermission=$hasPermission")
-            if (!hasPermission) {
-                android.util.Log.d(TAG, "BLOCKED: No POST_NOTIFICATIONS permission")
-                return
-            }
+            if (!hasNotificationPermission()) return
 
             // Suppress notification if this conversation is currently active (visible on screen)
-            val activeConversation = activeConversationManager.activeConversation.value
-            android.util.Log.d(TAG, "Active conversation: $activeConversation, this message: $destinationHash")
-            if (activeConversation == destinationHash) {
-                android.util.Log.d(TAG, "BLOCKED: Suppressing notification for active conversation: $peerName")
-                return
-            }
-
-            android.util.Log.d(TAG, "All checks passed - posting notification for $peerName")
+            if (activeConversationManager.activeConversation.value == destinationHash) return
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
@@ -214,14 +183,10 @@ class NotificationHelper
                     .build()
 
             val notificationId = NOTIFICATION_ID_MESSAGE + destinationHash.hashCode()
-            android.util.Log.d(TAG, "Posting notification with ID: $notificationId")
             try {
                 notificationManager.notify(notificationId, notification)
-                android.util.Log.d(TAG, "SUCCESS: Notification posted for $peerName (ID: $notificationId)")
             } catch (e: SecurityException) {
-                android.util.Log.e(TAG, "FAILED: SecurityException posting notification", e)
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "FAILED: Unexpected error posting notification", e)
+                // Permission was revoked
             }
         }
 

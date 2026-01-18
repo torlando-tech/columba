@@ -9,8 +9,10 @@ import com.lxmf.messenger.service.di.ServiceModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /**
  * Background service that hosts the Python Reticulum instance.
@@ -62,20 +64,32 @@ class ReticulumService : Service() {
                 },
                 onNetworkChanged = {
                     // Trigger LXMF announce when network changes so peers can discover us
+                    // CRITICAL: Run in coroutine scope to avoid blocking the ConnectivityManager
+                    // callback thread. Blocking that thread can cause Android's watchdog to kill
+                    // the service, leading to "Service not bound" errors.
                     Log.d(TAG, "Network changed - triggering LXMF announce")
-                    if (::binder.isInitialized) {
-                        try {
-                            binder.announceLxmfDestination()
-                            // Signal main app's AutoAnnounceManager to reset its timer
-                            // This uses DataStore for cross-process communication
-                            serviceScope.launch {
+                    // Guard: binder property must be initialized AND Reticulum must be ready
+                    // This prevents announces during service initialization, which can cause
+                    // DataStore race conditions and service crashes
+                    if (::binder.isInitialized && binder.isInitialized()) {
+                        serviceScope.launch {
+                            try {
+                                withTimeout(5000L) {
+                                    binder.announceLxmfDestination()
+                                }
+                                // Signal main app's AutoAnnounceManager to reset its timer
+                                // This uses DataStore for cross-process communication
                                 val now = System.currentTimeMillis()
                                 managers.settingsAccessor.saveNetworkChangeAnnounceTime(now)
                                 managers.settingsAccessor.saveLastAutoAnnounceTime(now)
+                            } catch (e: TimeoutCancellationException) {
+                                Log.w(TAG, "LXMF announce timed out on network change")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to announce on network change", e)
                             }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to announce on network change", e)
                         }
+                    } else {
+                        Log.d(TAG, "Skipping announce - Reticulum not yet initialized")
                     }
                 },
             )

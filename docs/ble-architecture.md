@@ -733,15 +733,7 @@ def _get_fragmenter_key(self, peer_identity, address):
 
 **Recommendation**: Remove unused `address` parameter to avoid confusion.
 
-### 5. Double Identity Callback Processing
-
-**Issue**: Both Kotlin (`onIdentityReceived`) and Python (`_handle_identity_handshake`) detect and process identity handshakes.
-
-**Impact**: Additional complexity and potential for desynchronization.
-
-**Recommendation**: Single point of identity detection (Kotlin) with Python purely as a consumer.
-
-### 6. Grace Period Timing
+### 5. Grace Period Timing
 
 **Issue**: The 2-second detach grace period (`_pending_detach_grace_period`) is hardcoded.
 

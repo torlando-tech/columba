@@ -133,9 +133,10 @@ class CrashReportManager @Inject constructor(
 
     /**
      * Capture recent logs for manual bug reports.
+     * Uses DEBUG level to capture more context than just warnings/errors.
      */
     suspend fun captureRecentLogs(): String {
-        return LogcatReader.readRecentLogs(MAX_LOG_LINES)
+        return LogcatReader.readAllRecentLogs(MAX_LOG_LINES)
     }
 
     /**

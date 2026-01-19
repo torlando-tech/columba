@@ -2017,6 +2017,159 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         self.assertFalse(hasattr(mock_message, '_columba_hops'))
 
 
+class TestOnLxmfDeliverySignalMetrics(unittest.TestCase):
+    """Tests for signal quality metrics capture during LXMF message delivery."""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch('reticulum_wrapper.extract_signal_metrics')
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_rssi_when_interface_has_rssi(self, mock_rns, mock_lxmf, mock_extract):
+        """Test that RSSI is captured when interface provides it."""
+        mock_extract.return_value = (-65, None)  # RSSI only, no SNR
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        # Create interface that provides RSSI
+        class RNodeInterface:
+            def get_rssi(self):
+                return -65
+        mock_interface = RNodeInterface()
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash12345rssi'
+        mock_message.receiving_interface = mock_interface
+        mock_message.receiving_hops = None
+
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify RSSI was captured
+        self.assertEqual(mock_message._columba_rssi, -65)
+
+    @patch('reticulum_wrapper.extract_signal_metrics')
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_snr_when_interface_has_snr(self, mock_rns, mock_lxmf, mock_extract):
+        """Test that SNR is captured when interface provides it."""
+        mock_extract.return_value = (None, 12.5)  # SNR only, no RSSI
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        # Create interface that provides SNR
+        class RNodeInterface:
+            def get_snr(self):
+                return 12.5
+        mock_interface = RNodeInterface()
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456snr'
+        mock_message.receiving_interface = mock_interface
+        mock_message.receiving_hops = None
+
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify SNR was captured
+        self.assertEqual(mock_message._columba_snr, 12.5)
+
+    @patch('reticulum_wrapper.extract_signal_metrics')
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_captures_both_rssi_and_snr(self, mock_rns, mock_lxmf, mock_extract):
+        """Test that both RSSI and SNR are captured when interface provides both."""
+        mock_extract.return_value = (-72, 8.3)  # Both RSSI and SNR
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_interface = Mock()
+
+        mock_message = Mock()
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash1234both'
+        mock_message.receiving_interface = mock_interface
+        mock_message.receiving_hops = None
+
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify both were captured
+        self.assertEqual(mock_message._columba_rssi, -72)
+        self.assertEqual(mock_message._columba_snr, 8.3)
+
+    @patch('reticulum_wrapper.extract_signal_metrics')
+    @patch('reticulum_wrapper.LXMF')
+    @patch('reticulum_wrapper.RNS')
+    def test_delivery_no_signal_metrics_when_both_none(self, mock_rns, mock_lxmf, mock_extract):
+        """Test that no attributes set when interface has no signal metrics."""
+        mock_extract.return_value = (None, None)  # No metrics
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.initialized = True
+        wrapper.router = Mock()
+        wrapper.router.pending_inbound = []
+
+        mock_message = Mock(spec=['source_hash', 'destination_hash', 'content',
+                                   'timestamp', 'fields', 'hash', 'receiving_interface',
+                                   'receiving_hops'])
+        mock_message.source_hash = b'source123source1'
+        mock_message.destination_hash = b'dest456dest45678'
+        mock_message.content = b'Test content'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash1234none'
+        mock_message.receiving_interface = Mock()
+        mock_message.receiving_hops = None
+
+        mock_rns.Transport.has_path.return_value = False
+        mock_rns.Transport.path_table = {}
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify neither attribute was set
+        self.assertFalse(hasattr(mock_message, '_columba_rssi'))
+        self.assertFalse(hasattr(mock_message, '_columba_snr'))
+
+
 class TestErrorHandling(unittest.TestCase):
     """Test error handling across messaging methods"""
 

@@ -15,6 +15,7 @@ import importlib
 import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
+from signal_quality import extract_signal_metrics, add_signal_to_message_event
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -2371,6 +2372,13 @@ class ReticulumWrapper:
                         log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                  f"📡 Got interface from LXMF message (opportunistic): {interface_type}")
 
+                        # Extract signal quality metrics from interface
+                        rssi, snr = extract_signal_metrics(receiving_interface)
+                        if rssi is not None:
+                            lxmf_message._columba_rssi = rssi
+                        if snr is not None:
+                            lxmf_message._columba_snr = snr
+
                     receiving_hops = getattr(lxmf_message, 'receiving_hops', None)
                     if isinstance(receiving_hops, int):
                         lxmf_message._columba_hops = receiving_hops
@@ -2405,6 +2413,13 @@ class ReticulumWrapper:
                                     captured_interface = True
                                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                              f"📡 Captured interface from path_table: {interface_type}")
+
+                                    # Extract signal quality metrics from interface
+                                    rssi, snr = extract_signal_metrics(interface_obj)
+                                    if rssi is not None:
+                                        lxmf_message._columba_rssi = rssi
+                                    if snr is not None:
+                                        lxmf_message._columba_snr = snr
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Could not capture hop count/interface: {e}")
@@ -2453,6 +2468,13 @@ class ReticulumWrapper:
                     columba_interface = getattr(lxmf_message, '_columba_interface', None)
                     if isinstance(columba_interface, str):
                         message_event['receiving_interface'] = columba_interface
+
+                    # Add signal quality metrics if captured
+                    add_signal_to_message_event(
+                        message_event,
+                        getattr(lxmf_message, '_columba_rssi', None),
+                        getattr(lxmf_message, '_columba_snr', None)
+                    )
 
                     # Get sender's public key from RNS identity cache
                     try:
@@ -5137,6 +5159,13 @@ class ReticulumWrapper:
                             message_event['receiving_interface'] = lxmf_message._columba_interface
                             log_debug("ReticulumWrapper", "poll_received_messages",
                                      f"📡 Receiving interface (captured at delivery): {lxmf_message._columba_interface}")
+
+                        # Add signal quality metrics if captured at delivery time
+                        add_signal_to_message_event(
+                            message_event,
+                            getattr(lxmf_message, '_columba_rssi', None),
+                            getattr(lxmf_message, '_columba_snr', None)
+                        )
 
                         # Try to get sender's public key from RNS identity cache
                         try:

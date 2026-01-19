@@ -1386,6 +1386,25 @@ class KotlinBLEBridge(
     }
 
     /**
+     * Get the last known RSSI for a connected peer.
+     *
+     * Called by Python's signal_quality module to get signal strength for messages.
+     *
+     * @param address BLE MAC address of the peer
+     * @return RSSI in dBm, or null if peer not found or RSSI unknown
+     */
+    fun getPeerRssi(address: String): Int? {
+        val peer = connectedPeers[address]
+        return if (peer != null && peer.rssi != -100) {
+            Log.d(TAG, "getPeerRssi($address) = ${peer.rssi} dBm")
+            peer.rssi
+        } else {
+            Log.d(TAG, "getPeerRssi($address) = null (peer not found or RSSI unknown)")
+            null
+        }
+    }
+
+    /**
      * Request identity resync for a peer.
      *
      * Called by Python when it receives data from a peer but has no identity mapping.

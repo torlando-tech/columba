@@ -74,6 +74,8 @@ fun Message.toMessageUi(): MessageUi {
         reactions = reactionsList,
         receivedHopCount = receivedHopCount,
         receivedInterface = receivedInterface,
+        receivedRssi = receivedRssi,
+        receivedSnr = receivedSnr,
     )
 }
 

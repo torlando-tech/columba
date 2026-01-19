@@ -2940,5 +2940,160 @@ class TestAndroidBLEDriverSetupKotlinCallbacks(unittest.TestCase):
         mock_bridge.setOnDuplicateIdentityDetected.assert_called_once()
 
 
+class TestAndroidBLEDriverRSSIMethods(unittest.TestCase):
+    """
+    Test RSSI-related methods on the REAL AndroidBLEDriver class.
+
+    These methods are used by signal_quality.py to extract BLE signal strength
+    for message delivery. Since BLE RSSI is only available for central connections
+    (the scanning device), these methods query the Kotlin bridge for the peer's
+    last known RSSI.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Import the real AndroidBLEDriver class with proper mock setup."""
+        if 'bluetooth_driver' in sys.modules:
+            del sys.modules['bluetooth_driver']
+        if 'android_ble_driver' in sys.modules:
+            del sys.modules['android_ble_driver']
+
+        class MockBLEDriverInterface:
+            """Mock base class for AndroidBLEDriver."""
+            pass
+
+        mock_bt_driver = MagicMock()
+        mock_bt_driver.BLEDriverInterface = MockBLEDriverInterface
+        mock_bt_driver.DriverState = MockDriverState
+        mock_bt_driver.BLEDevice = MagicMock()
+        sys.modules['bluetooth_driver'] = mock_bt_driver
+
+        ble_modules_dir = os.path.join(os.path.dirname(__file__), 'ble_modules')
+        if ble_modules_dir not in sys.path:
+            sys.path.insert(0, ble_modules_dir)
+
+        import android_ble_driver as abd_module
+        cls.AndroidBLEDriver = abd_module.AndroidBLEDriver
+        cls.abd_module = abd_module
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.driver = object.__new__(self.AndroidBLEDriver)
+        self.driver._connected_peers = []
+        self.driver._peer_roles = {}
+        self.driver._peer_mtus = {}
+        self.driver._pending_identities = {}
+        self.driver._identity_lock = threading.Lock()
+        self.driver._address_to_identity = {}
+        self.driver._identity_to_address = {}
+        self.driver._last_receive_address = None
+        self.driver.kotlin_bridge = None
+
+        self.log_calls = []
+        self._original_log = self.abd_module.RNS.log
+        self.abd_module.RNS.log = lambda msg, level=4: self.log_calls.append((msg, level))
+
+    def tearDown(self):
+        """Restore original RNS.log."""
+        self.abd_module.RNS.log = self._original_log
+
+    # ========== get_peer_rssi() Tests ==========
+
+    def test_get_peer_rssi_returns_none_when_no_bridge(self):
+        """get_peer_rssi should return None when Kotlin bridge is unavailable."""
+        self.driver.kotlin_bridge = None
+
+        result = self.driver.get_peer_rssi("AA:BB:CC:DD:EE:FF")
+
+        self.assertIsNone(result)
+
+    def test_get_peer_rssi_returns_rssi_from_bridge(self):
+        """get_peer_rssi should return RSSI value from Kotlin bridge."""
+        mock_bridge = MagicMock()
+        mock_bridge.getPeerRssi.return_value = -65
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.get_peer_rssi("AA:BB:CC:DD:EE:FF")
+
+        self.assertEqual(-65, result)
+        mock_bridge.getPeerRssi.assert_called_once_with("AA:BB:CC:DD:EE:FF")
+
+    def test_get_peer_rssi_returns_none_when_bridge_returns_none(self):
+        """get_peer_rssi should return None when bridge returns None (unknown RSSI)."""
+        mock_bridge = MagicMock()
+        mock_bridge.getPeerRssi.return_value = None
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.get_peer_rssi("AA:BB:CC:DD:EE:FF")
+
+        self.assertIsNone(result)
+
+    def test_get_peer_rssi_handles_exception(self):
+        """get_peer_rssi should return None and not raise when bridge throws."""
+        mock_bridge = MagicMock()
+        mock_bridge.getPeerRssi.side_effect = Exception("Bridge error")
+        self.driver.kotlin_bridge = mock_bridge
+
+        result = self.driver.get_peer_rssi("AA:BB:CC:DD:EE:FF")
+
+        self.assertIsNone(result)
+
+    # ========== get_last_receive_rssi() Tests ==========
+
+    def test_get_last_receive_rssi_returns_none_when_no_last_address(self):
+        """get_last_receive_rssi should return None when no data received yet."""
+        self.driver._last_receive_address = None
+
+        result = self.driver.get_last_receive_rssi()
+
+        self.assertIsNone(result)
+
+    def test_get_last_receive_rssi_queries_correct_peer(self):
+        """get_last_receive_rssi should query RSSI for the last receive address."""
+        mock_bridge = MagicMock()
+        mock_bridge.getPeerRssi.return_value = -72
+        self.driver.kotlin_bridge = mock_bridge
+        self.driver._last_receive_address = "AA:BB:CC:DD:EE:FF"
+
+        result = self.driver.get_last_receive_rssi()
+
+        self.assertEqual(-72, result)
+        mock_bridge.getPeerRssi.assert_called_once_with("AA:BB:CC:DD:EE:FF")
+
+    def test_get_last_receive_rssi_returns_none_when_peer_unknown(self):
+        """get_last_receive_rssi should return None when peer has no RSSI."""
+        mock_bridge = MagicMock()
+        mock_bridge.getPeerRssi.return_value = None
+        self.driver.kotlin_bridge = mock_bridge
+        self.driver._last_receive_address = "AA:BB:CC:DD:EE:FF"
+
+        result = self.driver.get_last_receive_rssi()
+
+        self.assertIsNone(result)
+
+    # ========== _handle_data_received() RSSI Tracking Tests ==========
+
+    def test_handle_data_received_tracks_last_receive_address(self):
+        """_handle_data_received should update _last_receive_address."""
+        self.driver._connected_peers = ["AA:BB:CC:DD:EE:FF"]
+        self.driver.on_data_received = MagicMock()
+
+        # Simulate receiving data
+        self.driver._handle_data_received("AA:BB:CC:DD:EE:FF", b"test data")
+
+        self.assertEqual("AA:BB:CC:DD:EE:FF", self.driver._last_receive_address)
+
+    def test_handle_data_received_updates_last_receive_address_on_each_call(self):
+        """_handle_data_received should update address for each new message."""
+        self.driver._connected_peers = ["PEER1", "PEER2"]
+        self.driver.on_data_received = MagicMock()
+
+        self.driver._handle_data_received("PEER1", b"data1")
+        self.assertEqual("PEER1", self.driver._last_receive_address)
+
+        self.driver._handle_data_received("PEER2", b"data2")
+        self.assertEqual("PEER2", self.driver._last_receive_address)
+
+
 if __name__ == '__main__':
     unittest.main()

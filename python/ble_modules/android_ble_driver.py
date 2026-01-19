@@ -110,6 +110,9 @@ class AndroidBLEDriver(BLEDriverInterface):
         self._identity_lock = threading.Lock()
         self._pending_identities = {}  # address -> identity bytes (cached before connection)
 
+        # Track last receive address for RSSI queries (signal_quality.py)
+        self._last_receive_address = None
+
         # Configuration (from kwargs or defaults)
         self._service_discovery_delay = kwargs.get('service_discovery_delay', 0.5)
         self._power_mode = "balanced"
@@ -421,6 +424,39 @@ class AndroidBLEDriver(BLEDriverInterface):
         """Get the connection role for a peer ('central' or 'peripheral')."""
         return self._peer_roles.get(address)
 
+    def get_peer_rssi(self, address: str) -> Optional[int]:
+        """Get the last known RSSI for a peer.
+
+        Queries the Kotlin bridge for the peer's signal strength.
+
+        Args:
+            address: BLE MAC address of the peer
+
+        Returns:
+            RSSI in dBm, or None if peer not found or RSSI unknown
+        """
+        try:
+            if not self.kotlin_bridge:
+                return None
+            rssi = self.kotlin_bridge.getPeerRssi(address)
+            # Kotlin returns null as Python None via Chaquopy
+            return rssi
+        except Exception as e:
+            RNS.log(f"{LOG_TAG}: Error getting RSSI for {address}: {e}", RNS.LOG_DEBUG)
+            return None
+
+    def get_last_receive_rssi(self) -> Optional[int]:
+        """Get the RSSI of the last peer that sent us data.
+
+        This is used by signal_quality.py to extract signal metrics at message delivery time.
+
+        Returns:
+            RSSI in dBm, or None if no recent data or RSSI unknown
+        """
+        if self._last_receive_address:
+            return self.get_peer_rssi(self._last_receive_address)
+        return None
+
     def set_service_discovery_delay(self, seconds: float):
         """Set delay between connection and service discovery (not needed on Android)."""
         self._service_discovery_delay = seconds
@@ -699,6 +735,9 @@ class AndroidBLEDriver(BLEDriverInterface):
             data = ensure_bytes(data)
 
             RNS.log(f"{LOG_TAG}: Received {len(data)} bytes from {address}", RNS.LOG_EXTREME)
+
+            # Track last receive address for RSSI queries
+            self._last_receive_address = address
 
             # Check if this address has a pending identity but never got onConnected
             # This handles the case where Android MAC randomization causes identity

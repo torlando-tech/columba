@@ -182,6 +182,8 @@ class ServicePersistenceManager(
         hasFileAttachments: Boolean = false,
         receivedHopCount: Int? = null,
         receivedInterface: String? = null,
+        receivedRssi: Int? = null,
+        receivedSnr: Float? = null,
     ): Boolean {
         try {
             // Get active identity to scope the message correctly
@@ -258,6 +260,8 @@ class ServicePersistenceManager(
                     errorMessage = null,
                     receivedHopCount = receivedHopCount,
                     receivedInterface = receivedInterface,
+                    receivedRssi = receivedRssi,
+                    receivedSnr = receivedSnr,
                 )
             messageDao.insertMessage(messageEntity)
 

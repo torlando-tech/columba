@@ -431,6 +431,9 @@ data class ReceivedMessage(
     // Received message routing info (hop count and receiving interface)
     val receivedHopCount: Int? = null,
     val receivedInterface: String? = null,
+    // Signal quality metrics (from RNode/BLE - null for TCP/AutoInterface)
+    val receivedRssi: Int? = null,
+    val receivedSnr: Float? = null,
 )
 
 /**

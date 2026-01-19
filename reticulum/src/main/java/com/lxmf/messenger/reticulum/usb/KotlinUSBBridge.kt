@@ -397,24 +397,61 @@ class KotlinUSBBridge(
                 if (driver != null) {
                     val driverType = getDriverTypeName(driver)
 
+                    // Check if we have permission before accessing protected attributes
+                    val hasPermission = usbManager.hasPermission(device)
+
+                    // These attributes require permission to access
+                    val manufacturerName =
+                        if (hasPermission) {
+                            try {
+                                device.manufacturerName
+                            } catch (e: SecurityException) {
+                                null
+                            }
+                        } else {
+                            null
+                        }
+
+                    val productName =
+                        if (hasPermission) {
+                            try {
+                                device.productName
+                            } catch (e: SecurityException) {
+                                null
+                            }
+                        } else {
+                            null
+                        }
+
+                    val serialNumber =
+                        if (hasPermission) {
+                            try {
+                                device.serialNumber
+                            } catch (e: SecurityException) {
+                                null
+                            }
+                        } else {
+                            null
+                        }
+
                     devices.add(
                         UsbDeviceInfo(
                             deviceId = device.deviceId,
                             vendorId = device.vendorId,
                             productId = device.productId,
                             deviceName = device.deviceName,
-                            manufacturerName = device.manufacturerName,
-                            productName = device.productName,
-                            serialNumber = device.serialNumber,
+                            manufacturerName = manufacturerName,
+                            productName = productName,
+                            serialNumber = serialNumber,
                             driverType = driverType,
                         ),
                     )
 
                     Log.d(
                         TAG,
-                        "Found USB device: ${device.productName ?: device.deviceName} " +
+                        "Found USB device: ${productName ?: device.deviceName} " +
                             "(VID=${device.vendorId.toHexString()}, PID=${device.productId.toHexString()}, " +
-                            "driver=$driverType)",
+                            "driver=$driverType, hasPermission=$hasPermission)",
                     )
                 }
             }
@@ -485,6 +522,12 @@ class KotlinUSBBridge(
         // Store callback and request permission
         pendingPermissionCallbacks[deviceId] = callback
 
+        // Create an explicit Intent to avoid Android 14+ restrictions
+        val intent =
+            Intent(ACTION_USB_PERMISSION).apply {
+                setPackage(context.packageName)
+            }
+
         val flags =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 PendingIntent.FLAG_MUTABLE
@@ -495,7 +538,7 @@ class KotlinUSBBridge(
             PendingIntent.getBroadcast(
                 context,
                 0,
-                Intent(ACTION_USB_PERMISSION),
+                intent,
                 flags,
             )
 

@@ -10,6 +10,7 @@ import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
+import com.lxmf.messenger.reticulum.usb.KotlinUSBBridge
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.EventHandler
@@ -226,6 +227,15 @@ class ReticulumServiceBinder(
             Log.d(TAG, "RNode bridge set before Python initialization")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set RNode bridge before init: ${e.message}", e)
+        }
+
+        // Setup USB bridge for USB RNode connections BEFORE Python initialization
+        try {
+            val usbBridge = KotlinUSBBridge.getInstance(context)
+            wrapper.callAttr("set_usb_bridge", usbBridge)
+            Log.d(TAG, "USB bridge set before Python initialization")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set USB bridge before init: ${e.message}", e)
         }
 
         // Setup delivery status callback BEFORE Python initialization

@@ -382,6 +382,18 @@ class ReticulumWrapper:
         self.kotlin_rnode_bridge = bridge
         log_info("ReticulumWrapper", "set_rnode_bridge", "KotlinRNodeBridge instance set")
 
+    def set_usb_bridge(self, bridge):
+        """
+        Set the KotlinUSBBridge instance for USB RNode operations.
+        Should be called from Kotlin before initialize().
+
+        Args:
+            bridge: KotlinUSBBridge instance from Kotlin
+        """
+        import usb_bridge
+        usb_bridge.set_usb_bridge(bridge)
+        log_info("ReticulumWrapper", "set_usb_bridge", "KotlinUSBBridge instance set")
+
     def set_audio_bridge(self, bridge):
         """
         Set the KotlinAudioBridge instance for voice call audio operations.
@@ -987,13 +999,14 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "_create_config_file",
                             f"RNode TCP config written: tcp_host={tcp_host}")
                 else:
-                    # Bluetooth RNode - handled specially via ColumbaRNodeInterface
+                    # Bluetooth/USB RNode - handled specially via ColumbaRNodeInterface
                     # Don't write to config file - standard RNodeInterface uses jnius which doesn't work with Chaquopy
                     # Store the config for later use by ColumbaRNodeInterface
                     self._pending_rnode_config = {
                         "name": iface.get("name", "RNode LoRa"),
                         "target_device_name": iface.get("target_device_name", iface.get("port", "")),
                         "connection_mode": connection_mode,
+                        "usb_device_id": iface.get("usb_device_id"),
                         "frequency": iface.get("frequency", 915000000),
                         "bandwidth": iface.get("bandwidth", 125000),
                         "tx_power": iface.get("tx_power", 7),
@@ -1005,8 +1018,8 @@ class ReticulumWrapper:
                         "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
                     }
                     log_info("ReticulumWrapper", "_create_config_file",
-                            f"RNode Bluetooth config stored for ColumbaRNodeInterface: {self._pending_rnode_config['target_device_name']}")
-                    continue  # Skip writing to config file for Bluetooth
+                            f"RNode config stored for ColumbaRNodeInterface: mode={connection_mode}, device={self._pending_rnode_config.get('target_device_name') or self._pending_rnode_config.get('usb_device_id')}")
+                    continue  # Skip writing to config file for Bluetooth/USB
 
             elif iface_type == "AndroidBLE":
                 config_lines.append("    type = AndroidBLE")

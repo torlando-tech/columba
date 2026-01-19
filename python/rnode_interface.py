@@ -401,8 +401,8 @@ class ColumbaRNodeInterface:
 
         RNS.log(f"Connecting to RNode via USB (device ID {self.usb_device_id})...", RNS.LOG_INFO)
 
-        # Connect via USB bridge
-        if not self.usb_bridge.connect(self.usb_device_id):
+        # Connect via USB bridge (baud rate 115200 is standard for RNode)
+        if not self.usb_bridge.connect(self.usb_device_id, 115200):
             RNS.log(f"Failed to connect to USB device {self.usb_device_id}", RNS.LOG_ERROR)
             return False
 

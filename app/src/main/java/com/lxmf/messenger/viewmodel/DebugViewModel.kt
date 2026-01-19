@@ -67,6 +67,7 @@ class DebugViewModel
         private val settingsRepository: SettingsRepository,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val interfaceConfigManager: com.lxmf.messenger.service.InterfaceConfigManager,
+        private val interfaceRepository: com.lxmf.messenger.repository.InterfaceRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DebugViewModel"
@@ -546,6 +547,29 @@ class DebugViewModel
                     _isRestarting.value = false
                 }
             }
+        }
+
+        /**
+         * Find the database ID for an interface by its name.
+         * Used to navigate to the interface stats screen from the network status page.
+         *
+         * The name from Python is in format "ColumbaRNodeInterface[RNode LoRa]"
+         * but the database stores just "RNode LoRa", so we need to extract it.
+         *
+         * @param name The interface name to look up (may be in Python format)
+         * @return The interface database ID, or null if not found
+         */
+        suspend fun findInterfaceIdByName(name: String): Long? {
+            // Extract the name from brackets if present (e.g., "ColumbaRNodeInterface[RNode LoRa]" -> "RNode LoRa")
+            val dbName = if (name.contains("[") && name.contains("]")) {
+                name.substringAfter("[").substringBefore("]")
+            } else {
+                name
+            }
+            Log.d(TAG, "Looking up interface by name: '$name' -> '$dbName'")
+            val entity = interfaceRepository.findInterfaceByName(dbName)
+            Log.d(TAG, "Found interface: ${entity?.id} (name='${entity?.name}')")
+            return entity?.id
         }
 
         override fun onCleared() {

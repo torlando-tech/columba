@@ -419,6 +419,14 @@ class InterfaceRepository
             return interfaceDao.getInterfaceByIdOnce(id)
         }
 
+        /**
+         * Find an interface by name.
+         * Used to look up the database ID when navigating from the network status screen.
+         */
+        suspend fun findInterfaceByName(name: String): InterfaceEntity? {
+            return interfaceDao.findInterfaceByName(name)
+        }
+
         companion object {
             private const val TAG = "InterfaceRepository"
         }

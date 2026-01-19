@@ -868,6 +868,9 @@ fun ColumbaNavigation(
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },
+                            onNavigateToInterfaceStats = { interfaceId ->
+                                navController.navigate("interface_stats/$interfaceId")
+                            },
                         )
                     }
 
@@ -1107,6 +1110,9 @@ fun ColumbaNavigation(
                             settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
+                            },
+                            onNavigateToInterfaceStats = { interfaceId ->
+                                navController.navigate("interface_stats/$interfaceId")
                             },
                         )
                     }

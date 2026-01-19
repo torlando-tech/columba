@@ -141,6 +141,16 @@ interface InterfaceDao {
      */
     @Query("SELECT * FROM interfaces WHERE id = :id")
     suspend fun getInterfaceByIdOnce(id: Long): InterfaceEntity?
+
+    /**
+     * Find an interface by name.
+     * Used to look up the database ID when navigating from the network status screen.
+     *
+     * @param name The interface name to search for
+     * @return The interface entity or null if not found
+     */
+    @Query("SELECT * FROM interfaces WHERE name = :name LIMIT 1")
+    suspend fun findInterfaceByName(name: String): InterfaceEntity?
 }
 
 /**

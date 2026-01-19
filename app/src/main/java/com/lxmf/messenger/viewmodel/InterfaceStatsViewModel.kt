@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.InterfaceReconnectSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,13 +77,30 @@ class InterfaceStatsViewModel
         // Track when we started showing "connecting" state
         private var connectingStartTime: Long = 0L
         private var hasEverBeenOnline: Boolean = false
+        private var lastReconnectSignal: Long = 0L
 
         init {
             if (interfaceId >= 0) {
                 loadInterface()
                 startStatsPolling()
+                observeReconnectSignal()
             } else {
                 _state.update { it.copy(isLoading = false, errorMessage = "Invalid interface ID") }
+            }
+        }
+
+        /**
+         * Observe the shared reconnect signal to reset connecting state when USB is reattached.
+         */
+        private fun observeReconnectSignal() {
+            viewModelScope.launch {
+                InterfaceReconnectSignal.reconnectTimestamp.collect { timestamp ->
+                    if (timestamp > lastReconnectSignal && lastReconnectSignal > 0) {
+                        // New reconnect signal received - reset connecting state
+                        signalReconnecting()
+                    }
+                    lastReconnectSignal = timestamp
+                }
             }
         }
 
@@ -184,6 +202,17 @@ class InterfaceStatsViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing stats", e)
             }
+        }
+
+        /**
+         * Signal that a reconnection attempt is starting.
+         * This resets the connecting state so the UI shows the spinner.
+         */
+        fun signalReconnecting() {
+            hasEverBeenOnline = false
+            connectingStartTime = 0L
+            _state.update { it.copy(isConnecting = true) }
+            Log.d(TAG, "Reconnection signaled - showing connecting spinner")
         }
 
         /**

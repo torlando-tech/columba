@@ -65,6 +65,7 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.CrashReportManager
+import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -345,6 +346,9 @@ class MainActivity : ComponentActivity() {
                     // Device is already configured - trigger reconnect and navigate to stats screen
                     Log.d(TAG, "🔌 USB device is configured interface: ${existingInterface.name} (id=${existingInterface.id})")
 
+                    // Signal that a reconnection is starting (ViewModel will show connecting spinner)
+                    InterfaceReconnectSignal.triggerReconnect()
+
                     // Navigate to stats screen immediately
                     pendingNavigation.value = PendingNavigation.InterfaceStats(existingInterface.id)
 
@@ -534,8 +538,17 @@ fun ColumbaNavigation(
                 }
                 is PendingNavigation.InterfaceStats -> {
                     // Navigate to interface stats screen
-                    navController.navigate("interface_stats/${navigation.interfaceId}")
-                    Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
+                    val targetRoute = "interface_stats/${navigation.interfaceId}"
+                    val currentRoute = navController.currentDestination?.route
+                    if (currentRoute?.startsWith("interface_stats/") == true) {
+                        // Already on stats screen - ViewModel will show connecting via signal
+                        Log.d("ColumbaNavigation", "Already on interface stats screen, skipping navigation")
+                    } else {
+                        navController.navigate(targetRoute) {
+                            launchSingleTop = true
+                        }
+                        Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
+                    }
                 }
                 is PendingNavigation.RNodeWizardWithUsb -> {
                     // Navigate to RNode wizard with USB pre-selected

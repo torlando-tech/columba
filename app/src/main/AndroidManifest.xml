@@ -94,6 +94,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="lxma" />
             </intent-filter>
+
+            <!-- USB device attached handler for RNode and compatible serial devices -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
 
         <!-- Reticulum Background Service -->

@@ -88,6 +88,13 @@ class KotlinUSBBridge(
         // Buffer sizes
         private const val WRITE_TIMEOUT_MS = 1000
 
+        // KISS protocol constants
+        private const val KISS_FEND: Byte = 0xC0.toByte()
+        private const val KISS_FESC: Byte = 0xDB.toByte()
+        private const val KISS_TFEND: Byte = 0xDC.toByte()
+        private const val KISS_TFESC: Byte = 0xDD.toByte()
+        private const val KISS_CMD_BT_PIN: Byte = 0x62.toByte()
+
         // Default serial parameters for RNode
         private const val DEFAULT_BAUD_RATE = 115200
         private const val DEFAULT_DATA_BITS = UsbSerialPort.DATABITS_8
@@ -113,6 +120,7 @@ class KotlinUSBBridge(
                 0x0525,
                 0x2E8A,
                 0x303A,
+                0x239A, // Adafruit/Heltec
             )
 
         // Custom prober to detect more devices
@@ -122,6 +130,7 @@ class KotlinUSBBridge(
                     // Add ESP32-S3 and NRF52840 CDC-ACM devices
                     addProduct(0x303A, 0x1001, CdcAcmSerialDriver::class.java) // ESP32-S3 CDC
                     addProduct(0x239A, 0x8029, CdcAcmSerialDriver::class.java) // Adafruit NRF52840
+                    addProduct(0x239A, 0x8071, CdcAcmSerialDriver::class.java) // Heltec HT-n5262
                     addProduct(0x1915, 0x520F, CdcAcmSerialDriver::class.java) // Nordic NRF52840
                 }
             UsbSerialProber(customTable)
@@ -154,6 +163,13 @@ class KotlinUSBBridge(
 
     // Read buffer for non-blocking reads
     private val readBuffer = ConcurrentLinkedQueue<Byte>()
+
+    // KISS frame parsing state (for detecting CMD_BT_PIN responses)
+    private var kissInFrame = false
+    private var kissEscape = false
+    private var kissHasCommand = false
+    private var kissCommand: Byte = 0
+    private val kissDataBuffer = mutableListOf<Byte>()
 
     // Executor for serial I/O
     private val ioExecutor = Executors.newSingleThreadExecutor()
@@ -721,6 +737,7 @@ class KotlinUSBBridge(
 
     /**
      * Callback from SerialInputOutputManager when new data arrives.
+     * Parses KISS frames to detect CMD_BT_PIN responses during pairing mode.
      */
     override fun onNewData(data: ByteArray) {
         if (data.isNotEmpty()) {
@@ -731,8 +748,69 @@ class KotlinUSBBridge(
                 readBuffer.offer(byte)
             }
 
+            // Parse KISS frames to detect CMD_BT_PIN
+            parseKissFrames(data)
+
             // Notify Python callback
             onDataReceived?.callAttr("__call__", data)
+        }
+    }
+
+    /**
+     * Parse incoming data for KISS frames, specifically looking for CMD_BT_PIN.
+     * This allows the Kotlin layer to detect Bluetooth PIN responses without
+     * requiring Python to be running the USB read loop.
+     */
+    private fun parseKissFrames(data: ByteArray) {
+        for (byte in data) {
+            if (byte == KISS_FEND) {
+                // FEND ends current frame (if any) and starts a new one
+                if (kissInFrame && kissHasCommand) {
+                    // End of frame - process it
+                    Log.d(TAG, "KISS frame end: cmd=0x${kissCommand.toInt().and(0xFF).toString(16)}, dataLen=${kissDataBuffer.size}")
+                    if (kissCommand == KISS_CMD_BT_PIN && kissDataBuffer.size >= 4) {
+                        // PIN is sent as 4 bytes (big-endian 32-bit integer)
+                        // Format: command_buffer[0] << 24 | [1] << 16 | [2] << 8 | [3]
+                        try {
+                            val b0 = kissDataBuffer[0].toInt() and 0xFF
+                            val b1 = kissDataBuffer[1].toInt() and 0xFF
+                            val b2 = kissDataBuffer[2].toInt() and 0xFF
+                            val b3 = kissDataBuffer[3].toInt() and 0xFF
+                            val pinInt = (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+                            val pin = String.format("%06d", pinInt)
+                            Log.i(TAG, "Parsed Bluetooth PIN from KISS frame: $pin (raw: ${kissDataBuffer.take(4).map { it.toInt() and 0xFF }})")
+                            notifyBluetoothPin(pin)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to decode PIN bytes", e)
+                        }
+                    }
+                }
+                // Start new frame (FEND always starts a frame for sync)
+                kissInFrame = true
+                kissEscape = false
+                kissHasCommand = false
+                kissCommand = 0
+                kissDataBuffer.clear()
+            } else if (kissInFrame) {
+                if (kissEscape) {
+                    // Handle escaped byte
+                    kissEscape = false
+                    val actualByte = when (byte) {
+                        KISS_TFEND -> KISS_FEND
+                        KISS_TFESC -> KISS_FESC
+                        else -> byte
+                    }
+                    kissDataBuffer.add(actualByte)
+                } else if (byte == KISS_FESC) {
+                    kissEscape = true
+                } else if (!kissHasCommand) {
+                    // First byte after FEND is the command
+                    kissCommand = byte
+                    kissHasCommand = true
+                } else {
+                    kissDataBuffer.add(byte)
+                }
+            }
         }
     }
 

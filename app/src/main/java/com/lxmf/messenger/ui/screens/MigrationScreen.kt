@@ -1,7 +1,9 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -55,6 +58,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.migration.ExportResult
 import com.lxmf.messenger.migration.MigrationPreview
@@ -83,8 +88,32 @@ fun MigrationScreen(
 
     var showImportConfirmDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
+    var pendingImportComplete by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Notification permission launcher for Android 13+
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            // Permission result received, now complete the import flow
+            showNotificationPermissionDialog = false
+            if (pendingImportComplete) {
+                pendingImportComplete = false
+                onImportComplete()
+            }
+        }
+
+    // Check if notification permission is needed (Android 13+ with notifications enabled in settings)
+    fun needsNotificationPermission(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PermissionChecker.PERMISSION_GRANTED
+    }
 
     // File picker for import
     val importLauncher =
@@ -167,7 +196,15 @@ fun MigrationScreen(
                 uiState = uiState,
                 importProgress = importProgress,
                 onSelectFile = { importLauncher.launch("*/*") },
-                onImportComplete = onImportComplete,
+                onImportComplete = {
+                    // After import, check if notification permission is needed
+                    if (needsNotificationPermission()) {
+                        pendingImportComplete = true
+                        showNotificationPermissionDialog = true
+                    } else {
+                        onImportComplete()
+                    }
+                },
             )
 
             // Bottom spacer for navigation bar
@@ -194,6 +231,24 @@ fun MigrationScreen(
     // Blocking dialog while service restarts after import
     if (uiState is MigrationUiState.RestartingService) {
         RestartingServiceDialog()
+    }
+
+    // Notification permission dialog after import (Android 13+)
+    if (showNotificationPermissionDialog) {
+        NotificationPermissionDialog(
+            onConfirm = {
+                showNotificationPermissionDialog = false
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            },
+            onDismiss = {
+                // User declined, proceed without notifications
+                showNotificationPermissionDialog = false
+                if (pendingImportComplete) {
+                    pendingImportComplete = false
+                    onImportComplete()
+                }
+            },
+        )
     }
 }
 
@@ -626,5 +681,54 @@ private fun RestartingServiceDialog() {
             }
         },
         confirmButton = { /* No buttons - blocking */ },
+    )
+}
+
+/**
+ * Dialog prompting for notification permission after backup restore.
+ * On Android 13+, notification permission isn't restored with backup data,
+ * so we need to request it explicitly.
+ */
+@Composable
+private fun NotificationPermissionDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Notifications,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp),
+            )
+        },
+        title = { Text("Enable Notifications?") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Your backup data has been restored, including your notification preferences.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "To receive notifications for new messages, you'll need to grant notification permission.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Enable")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Not Now")
+            }
+        },
     )
 }

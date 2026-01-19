@@ -10,6 +10,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  actions: write  # Required for fail-fast workflow cancellation
 
 jobs:
   validate-wrapper:
@@ -167,6 +168,12 @@ jobs:
           path: app/build/outputs/mapping/release/mapping.txt
           retention-days: 30
 
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   python-tests:
     name: Python Tests
     needs: [lint, validate-wrapper]
@@ -191,7 +198,7 @@ jobs:
 
       - name: Run Python unit tests with coverage
         run: |
-          cd python && python -m pytest -v -n auto \
+          cd python && python -m pytest -v -n auto --dist loadfile \
             --cov=. \
             --cov-report=term-missing \
             --cov-report=xml:coverage-python.xml
@@ -213,6 +220,12 @@ jobs:
           name: python-coverage-report
           path: python/coverage-python.xml
           retention-days: 7
+
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   kotlin-tests:
     name: Kotlin Tests
@@ -297,6 +310,12 @@ jobs:
           path: |
             **/build/reports/jacoco/
           retention-days: 7
+
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # instrumented-tests:
   #   name: Instrumented Tests

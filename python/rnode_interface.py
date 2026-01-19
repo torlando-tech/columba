@@ -423,7 +423,6 @@ class ColumbaRNodeInterface:
 
         # Configure device
         try:
-            time.sleep(0.5)  # USB connections stabilize faster than BLE
             self._configure_device()
             return True
         except Exception as e:

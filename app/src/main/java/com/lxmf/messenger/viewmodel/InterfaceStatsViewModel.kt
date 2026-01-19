@@ -1,5 +1,12 @@
 package com.lxmf.messenger.viewmodel
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -10,6 +17,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +57,8 @@ data class InterfaceStatsState(
     val txPower: Int? = null,
     val codingRate: Int? = null,
     val interfaceMode: String? = null,
+    // USB permission state
+    val needsUsbPermission: Boolean = false,
 )
 
 /**
@@ -62,12 +72,38 @@ class InterfaceStatsViewModel
         private val interfaceRepository: InterfaceRepository,
         private val reticulumProtocol: ReticulumProtocol,
         private val configManager: InterfaceConfigManager,
+        @ApplicationContext private val context: Context,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceStatsVM"
             private const val STATS_REFRESH_INTERVAL_MS = 1000L // Poll faster for responsive UI
             private const val CONNECTING_TIMEOUT_MS = 15000L // Stop showing "connecting" after 15s
+            private const val ACTION_USB_PERMISSION = "com.lxmf.messenger.USB_PERMISSION"
         }
+
+        private val usbManager: UsbManager by lazy {
+            context.getSystemService(Context.USB_SERVICE) as UsbManager
+        }
+
+        // Broadcast receiver for USB permission results
+        private val usbPermissionReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                if (intent.action == ACTION_USB_PERMISSION) {
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    Log.d(TAG, "USB permission result received: granted=$granted")
+                    if (granted) {
+                        // Permission granted - trigger reconnect
+                        viewModelScope.launch {
+                            Log.d(TAG, "Triggering RNode reconnect after permission granted")
+                            signalReconnecting()
+                            reticulumProtocol.reconnectRNodeInterface()
+                        }
+                    }
+                }
+            }
+        }
+
+        private var receiverRegistered = false
 
         private val interfaceId: Long = savedStateHandle["interfaceId"] ?: -1L
 
@@ -190,6 +226,18 @@ class InterfaceStatsViewModel
                     }
                 }
 
+                // Check USB permission for USB-mode RNode interfaces that are offline
+                val needsUsbPermission = if (!isOnline && _state.value.connectionMode == "usb") {
+                    val usbDeviceId = _state.value.usbDeviceId
+                    if (usbDeviceId != null) {
+                        checkNeedsUsbPermission(usbDeviceId)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+
                 _state.update {
                     it.copy(
                         isOnline = isOnline,
@@ -197,6 +245,7 @@ class InterfaceStatsViewModel
                         rxBytes = rxBytes,
                         txBytes = txBytes,
                         rssi = rssi,
+                        needsUsbPermission = needsUsbPermission,
                     )
                 }
             } catch (e: Exception) {
@@ -213,6 +262,70 @@ class InterfaceStatsViewModel
             connectingStartTime = 0L
             _state.update { it.copy(isConnecting = true) }
             Log.d(TAG, "Reconnection signaled - showing connecting spinner")
+        }
+
+        /**
+         * Check if a USB device exists but lacks permission.
+         * Returns true if the device is found but we don't have permission.
+         */
+        private fun checkNeedsUsbPermission(usbDeviceId: Int): Boolean {
+            val device = usbManager.deviceList.values.find { it.deviceId == usbDeviceId }
+            return if (device != null) {
+                val hasPermission = usbManager.hasPermission(device)
+                Log.d(TAG, "USB device $usbDeviceId found, hasPermission=$hasPermission")
+                !hasPermission
+            } else {
+                Log.d(TAG, "USB device $usbDeviceId not found in device list")
+                false
+            }
+        }
+
+        /**
+         * Request USB permission for the configured device.
+         * This will show the system permission dialog.
+         */
+        fun requestUsbPermission() {
+            val usbDeviceId = _state.value.usbDeviceId ?: return
+            val device = usbManager.deviceList.values.find { it.deviceId == usbDeviceId }
+            if (device == null) {
+                Log.w(TAG, "Cannot request permission - USB device $usbDeviceId not found")
+                return
+            }
+
+            if (usbManager.hasPermission(device)) {
+                Log.d(TAG, "Already have permission for USB device $usbDeviceId")
+                // Trigger reconnect since we have permission
+                viewModelScope.launch {
+                    signalReconnecting()
+                    reticulumProtocol.reconnectRNodeInterface()
+                }
+                return
+            }
+
+            // Register receiver to listen for permission result
+            if (!receiverRegistered) {
+                val filter = IntentFilter(ACTION_USB_PERMISSION)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    context.registerReceiver(usbPermissionReceiver, filter)
+                }
+                receiverRegistered = true
+                Log.d(TAG, "Registered USB permission receiver")
+            }
+
+            val intent = Intent(ACTION_USB_PERMISSION).apply {
+                setPackage(context.packageName)
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val permissionIntent = PendingIntent.getBroadcast(context, 0, intent, flags)
+
+            Log.d(TAG, "Requesting USB permission for device $usbDeviceId")
+            usbManager.requestPermission(device, permissionIntent)
         }
 
         /**
@@ -286,6 +399,20 @@ class InterfaceStatsViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing config JSON", e)
                 ParsedConfig()
+            }
+        }
+
+        override fun onCleared() {
+            super.onCleared()
+            // Unregister USB permission receiver if registered
+            if (receiverRegistered) {
+                try {
+                    context.unregisterReceiver(usbPermissionReceiver)
+                    Log.d(TAG, "Unregistered USB permission receiver")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error unregistering USB permission receiver", e)
+                }
+                receiverRegistered = false
             }
         }
     }

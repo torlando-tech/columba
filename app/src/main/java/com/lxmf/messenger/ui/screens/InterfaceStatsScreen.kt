@@ -105,6 +105,7 @@ fun InterfaceStatsScreen(
                         state = state,
                         onToggleEnabled = { viewModel.toggleEnabled() },
                         onEdit = { onNavigateToEdit(state.interfaceEntity!!.id) },
+                        onRequestUsbPermission = { viewModel.requestUsbPermission() },
                     )
                 }
             }
@@ -141,6 +142,7 @@ private fun StatsContent(
     state: com.lxmf.messenger.viewmodel.InterfaceStatsState,
     onToggleEnabled: () -> Unit,
     onEdit: () -> Unit,
+    onRequestUsbPermission: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
 
@@ -156,7 +158,9 @@ private fun StatsContent(
             isEnabled = state.interfaceEntity?.enabled ?: false,
             isOnline = state.isOnline,
             isConnecting = state.isConnecting,
+            needsUsbPermission = state.needsUsbPermission,
             onToggleEnabled = onToggleEnabled,
+            onRequestUsbPermission = onRequestUsbPermission,
         )
 
         // Connection Card
@@ -208,7 +212,9 @@ private fun StatusCard(
     isEnabled: Boolean,
     isOnline: Boolean,
     isConnecting: Boolean,
+    needsUsbPermission: Boolean,
     onToggleEnabled: () -> Unit,
+    onRequestUsbPermission: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -258,6 +264,47 @@ private fun StatusCard(
                     checked = isEnabled,
                     onCheckedChange = { onToggleEnabled() },
                 )
+            }
+
+            // USB Permission message and button
+            if (needsUsbPermission && isEnabled && !isOnline) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = "USB permission required",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Grant permission to connect to the USB device",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = onRequestUsbPermission,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Usb,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Grant USB Permission")
+                        }
+                    }
+                }
             }
         }
     }

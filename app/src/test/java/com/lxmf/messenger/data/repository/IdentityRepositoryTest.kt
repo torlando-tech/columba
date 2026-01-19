@@ -6,6 +6,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
 import app.cash.turbine.test
+import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
+import com.lxmf.messenger.data.crypto.IdentityKeyMigrator
+import com.lxmf.messenger.data.crypto.IdentityKeyProvider
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -38,6 +41,9 @@ class IdentityRepositoryTest {
     private lateinit var mockDao: LocalIdentityDao
     private lateinit var mockDatabase: ColumbaDatabase
     private lateinit var mockContext: Context
+    private lateinit var mockKeyEncryptor: IdentityKeyEncryptor
+    private lateinit var mockKeyMigrator: IdentityKeyMigrator
+    private lateinit var mockKeyProvider: IdentityKeyProvider
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -47,6 +53,9 @@ class IdentityRepositoryTest {
         mockDao = mockk(relaxed = true)
         mockDatabase = mockk(relaxed = true)
         mockContext = mockk(relaxed = true)
+        mockKeyEncryptor = mockk(relaxed = true)
+        mockKeyMigrator = mockk(relaxed = true)
+        mockKeyProvider = mockk(relaxed = true)
 
         // Set up default flows BEFORE constructing repository
         // This is critical because repository initializes flows at construction time
@@ -59,6 +68,9 @@ class IdentityRepositoryTest {
                 database = mockDatabase,
                 context = mockContext,
                 ioDispatcher = testDispatcher,
+                keyEncryptor = mockKeyEncryptor,
+                keyMigrator = mockKeyMigrator,
+                keyProvider = mockKeyProvider,
             )
     }
 
@@ -105,6 +117,9 @@ class IdentityRepositoryTest {
                     database = mockDatabase,
                     context = mockContext,
                     ioDispatcher = testDispatcher,
+                    keyEncryptor = mockKeyEncryptor,
+                    keyMigrator = mockKeyMigrator,
+                    keyProvider = mockKeyProvider,
                 )
 
             // When/Then
@@ -131,6 +146,9 @@ class IdentityRepositoryTest {
                     database = mockDatabase,
                     context = mockContext,
                     ioDispatcher = testDispatcher,
+                    keyEncryptor = mockKeyEncryptor,
+                    keyMigrator = mockKeyMigrator,
+                    keyProvider = mockKeyProvider,
                 )
 
             // When/Then

@@ -19,6 +19,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -115,6 +116,42 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
+
+        Spacer(Modifier.height(24.dp))
+
+        // Bootstrap interface toggle (RNS 1.1.x feature)
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Bootstrap Interface",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        "Auto-disconnect once better connections are discovered",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Switch(
+                    checked = state.bootstrapOnly,
+                    onCheckedChange = { viewModel.toggleBootstrapOnly(it) },
+                )
+            }
+        }
 
         // Bottom spacing for navigation bar
         Spacer(Modifier.height(100.dp))

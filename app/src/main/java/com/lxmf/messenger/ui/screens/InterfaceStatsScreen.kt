@@ -36,7 +36,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -60,6 +62,10 @@ fun InterfaceStatsScreen(
     viewModel: InterfaceStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+
+    SideEffect {
+        Log.d("InterfaceStatsScreen", "🖥️ InterfaceStatsScreen COMPOSING - interface: ${state.interfaceEntity?.name}")
+    }
 
     Scaffold(
         topBar = {

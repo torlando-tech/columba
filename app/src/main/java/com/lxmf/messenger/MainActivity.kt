@@ -453,12 +453,32 @@ fun ColumbaNavigation(
     val onboardingState by onboardingViewModel.state.collectAsState()
 
     // Determine start destination based on onboarding status
-    val startDestination =
+    // IMPORTANT: Use remember to compute this only once. Without remember,
+    // the startDestination would be recalculated when onboardingState loads
+    // asynchronously from DataStore, which causes NavHost to reset to the
+    // new startDestination and discard any pending navigation.
+    val startDestination = remember {
         if (onboardingState.hasCompletedOnboarding) {
             Screen.Chats.route
         } else {
             Screen.Welcome.route
         }
+    }
+
+    // Handle edge case: user completed onboarding but we started at Welcome
+    // because onboardingState was still loading when startDestination was computed
+    LaunchedEffect(onboardingState.hasCompletedOnboarding) {
+        val currentRoute = navController.currentDestination?.route
+        if (onboardingState.hasCompletedOnboarding &&
+            currentRoute == Screen.Welcome.route &&
+            pendingNavigation.value == null
+        ) {
+            Log.d("ColumbaNavigation", "Redirecting to Chats (onboarding already completed)")
+            navController.navigate(Screen.Chats.route) {
+                popUpTo(Screen.Welcome.route) { inclusive = true }
+            }
+        }
+    }
 
     // Notification permission is now handled in OnboardingPagerScreen
 
@@ -612,6 +632,7 @@ fun ColumbaNavigation(
 
     // Synchronize selectedTab with current route when navigating back
     LaunchedEffect(currentRoute) {
+        Log.d("ColumbaNavigation", "📍 currentRoute changed to: $currentRoute")
         selectedTab =
             when (currentRoute) {
                 Screen.Chats.route -> 0

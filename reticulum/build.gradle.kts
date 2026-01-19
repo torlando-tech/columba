@@ -61,6 +61,10 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
+    // USB Serial for Android (mik3y) - handles FTDI, CP210x, PL2303, CH340, CDC-ACM protocols
+    // Use api() so KotlinUSBBridge types are accessible to app module
+    api("com.github.mik3y:usb-serial-for-android:3.7.0")
+
     // MessagePack
     implementation(libs.msgpack)
 

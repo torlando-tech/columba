@@ -29,6 +29,7 @@ data class InterfaceStatsState(
     val errorMessage: String? = null,
     // Runtime status
     val isOnline: Boolean = false,
+    val isConnecting: Boolean = false,
     // RNode-specific stats (from live connection)
     val rssi: Int? = null,
     val snr: Float? = null,
@@ -63,13 +64,18 @@ class InterfaceStatsViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceStatsVM"
-            private const val STATS_REFRESH_INTERVAL_MS = 3000L
+            private const val STATS_REFRESH_INTERVAL_MS = 1000L // Poll faster for responsive UI
+            private const val CONNECTING_TIMEOUT_MS = 15000L // Stop showing "connecting" after 15s
         }
 
         private val interfaceId: Long = savedStateHandle["interfaceId"] ?: -1L
 
         private val _state = MutableStateFlow(InterfaceStatsState())
         val state: StateFlow<InterfaceStatsState> = _state.asStateFlow()
+
+        // Track when we started showing "connecting" state
+        private var connectingStartTime: Long = 0L
+        private var hasEverBeenOnline: Boolean = false
 
         init {
             if (interfaceId >= 0) {
@@ -137,6 +143,26 @@ class InterfaceStatsViewModel
                 val rxBytes = (interfaceStats?.get("rxb") as? Number)?.toLong() ?: 0L
                 val txBytes = (interfaceStats?.get("txb") as? Number)?.toLong() ?: 0L
 
+                // Track if interface has ever been online during this session
+                if (isOnline) {
+                    hasEverBeenOnline = true
+                }
+
+                // Determine connecting state:
+                // Show "connecting" only when:
+                // 1. Interface is enabled and offline
+                // 2. Interface hasn't been online yet during this session (so we're waiting for initial connection)
+                // 3. We haven't exceeded the timeout (avoid showing spinner forever)
+                val isConnecting = if (entity.enabled && !isOnline && !hasEverBeenOnline) {
+                    val now = System.currentTimeMillis()
+                    if (connectingStartTime == 0L) {
+                        connectingStartTime = now
+                    }
+                    (now - connectingStartTime) < CONNECTING_TIMEOUT_MS
+                } else {
+                    false
+                }
+
                 // For RNode interfaces, also get RSSI if available
                 var rssi: Int? = null
                 if (entity.type == "RNode" && isOnline) {
@@ -149,6 +175,7 @@ class InterfaceStatsViewModel
                 _state.update {
                     it.copy(
                         isOnline = isOnline,
+                        isConnecting = isConnecting,
                         rxBytes = rxBytes,
                         txBytes = txBytes,
                         rssi = rssi,

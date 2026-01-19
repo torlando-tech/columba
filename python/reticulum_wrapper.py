@@ -6073,6 +6073,9 @@ class ReticulumWrapper:
                         stats["spreading_factor"] = iface.r_sf
                     if hasattr(iface, 'r_tx_power'):
                         stats["tx_power"] = iface.r_tx_power
+                    # Add connecting state (true if reconnection is in progress)
+                    if hasattr(iface, '_reconnecting'):
+                        stats["connecting"] = iface._reconnecting
 
                     return json.dumps(stats)
 

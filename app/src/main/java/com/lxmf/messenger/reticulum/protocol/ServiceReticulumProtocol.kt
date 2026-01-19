@@ -2033,8 +2033,26 @@ class ServiceReticulumProtocol(
 
     override suspend fun reconnectRNodeInterface() {
         try {
-            service?.reconnectRNodeInterface()
-            Log.i(TAG, "Triggered RNode interface reconnection")
+            val svc = service
+            if (svc == null) {
+                // Service not bound yet - wait for it (up to 10 seconds)
+                Log.w(TAG, "Service not bound, waiting for connection before RNode reconnect...")
+                var attempts = 0
+                while (service == null && attempts < 100) {
+                    kotlinx.coroutines.delay(100)
+                    attempts++
+                }
+                val boundService = service
+                if (boundService == null) {
+                    Log.e(TAG, "Timeout waiting for service to bind - cannot reconnect RNode")
+                    return
+                }
+                boundService.reconnectRNodeInterface()
+                Log.i(TAG, "Triggered RNode interface reconnection (after waiting for service)")
+            } else {
+                svc.reconnectRNodeInterface()
+                Log.i(TAG, "Triggered RNode interface reconnection")
+            }
         } catch (e: RemoteException) {
             Log.e(TAG, "Error triggering RNode reconnection", e)
         } catch (e: Exception) {

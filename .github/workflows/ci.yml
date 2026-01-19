@@ -10,6 +10,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  actions: write  # Required for fail-fast workflow cancellation
 
 jobs:
   validate-wrapper:
@@ -167,11 +168,70 @@ jobs:
           path: app/build/outputs/mapping/release/mapping.txt
           retention-days: 30
 
-  unit-tests:
-    name: Unit Tests
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  python-tests:
+    name: Python Tests
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install build pytest pytest-cov pytest-xdist u-msgpack-python numpy
+
+      - name: Run Python unit tests with coverage
+        run: |
+          cd python && python -m pytest -v -n auto --dist loadfile \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-python.xml
+
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./python/coverage-python.xml
+          flags: python
+          name: codecov-python
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload Python coverage report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-coverage-report
+          path: python/coverage-python.xml
+          retention-days: 7
+
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  kotlin-tests:
+    name: Kotlin Tests
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -189,17 +249,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install Python build dependencies
-        run: pip install build pytest pytest-cov u-msgpack-python numpy
-
-      - name: Run Python unit tests with coverage
-        run: |
-          cd python && python -m pytest -v \
-            --cov=. \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage-python.xml
+        run: pip install build
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -220,13 +272,13 @@ jobs:
           rm -rf */build/reports/jacoco
 
       - name: Run unit tests and generate coverage report
-        run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=2 --no-build-cache
+        run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4 --no-build-cache
 
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: unit-test-results
+          name: kotlin-test-results
           path: |
             **/build/test-results/test*/*.xml
             **/build/test-results/test*/*.html
@@ -236,7 +288,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: unit-test-reports
+          name: kotlin-test-reports
           path: |
             **/build/reports/tests/
 
@@ -250,25 +302,20 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-      - name: Upload Python coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./python/coverage-python.xml
-          flags: python
-          name: codecov-python
-          fail_ci_if_error: false
-          verbose: true
-
-      - name: Upload coverage reports
+      - name: Upload Kotlin coverage reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: coverage-reports
+          name: kotlin-coverage-reports
           path: |
             **/build/reports/jacoco/
-            python/coverage-python.xml
           retention-days: 7
+
+      - name: Cancel workflow on failure (fail-fast)
+        if: failure()
+        run: gh run cancel ${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # instrumented-tests:
   #   name: Instrumented Tests

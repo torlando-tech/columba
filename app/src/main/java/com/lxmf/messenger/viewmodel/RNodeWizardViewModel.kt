@@ -2274,41 +2274,53 @@ class RNodeWizardViewModel
                     }
 
                     // Determine connection parameters based on connection type
-                    val isTcpMode = state.connectionType == RNodeConnectionType.TCP_WIFI
-
                     val deviceName: String
                     val connectionMode: String
                     val tcpHost: String?
                     val tcpPort: Int
+                    val usbDeviceId: Int?
 
-                    if (isTcpMode) {
-                        // TCP/WiFi mode
-                        deviceName = ""
-                        connectionMode = "tcp"
-                        tcpHost = state.tcpHost.trim()
-                        tcpPort = state.tcpPort.toIntOrNull() ?: 7633
-                    } else {
-                        // Bluetooth mode
-                        val (name, mode) =
-                            if (state.selectedDevice != null) {
-                                state.selectedDevice.name to
-                                    when (state.selectedDevice.type) {
-                                        BluetoothType.CLASSIC -> "classic"
-                                        BluetoothType.BLE -> "ble"
-                                        BluetoothType.UNKNOWN -> "classic"
-                                    }
-                            } else {
-                                state.manualDeviceName to
-                                    when (state.manualBluetoothType) {
-                                        BluetoothType.CLASSIC -> "classic"
-                                        BluetoothType.BLE -> "ble"
-                                        BluetoothType.UNKNOWN -> "classic"
-                                    }
-                            }
-                        deviceName = name
-                        connectionMode = mode
-                        tcpHost = null
-                        tcpPort = 7633
+                    when (state.connectionType) {
+                        RNodeConnectionType.TCP_WIFI -> {
+                            // TCP/WiFi mode
+                            deviceName = ""
+                            connectionMode = "tcp"
+                            tcpHost = state.tcpHost.trim()
+                            tcpPort = state.tcpPort.toIntOrNull() ?: 7633
+                            usbDeviceId = null
+                        }
+                        RNodeConnectionType.USB_SERIAL -> {
+                            // USB Serial mode
+                            deviceName = ""
+                            connectionMode = "usb"
+                            tcpHost = null
+                            tcpPort = 7633
+                            usbDeviceId = state.selectedUsbDevice?.deviceId
+                        }
+                        RNodeConnectionType.BLUETOOTH -> {
+                            // Bluetooth mode
+                            val (name, mode) =
+                                if (state.selectedDevice != null) {
+                                    state.selectedDevice.name to
+                                        when (state.selectedDevice.type) {
+                                            BluetoothType.CLASSIC -> "classic"
+                                            BluetoothType.BLE -> "ble"
+                                            BluetoothType.UNKNOWN -> "classic"
+                                        }
+                                } else {
+                                    state.manualDeviceName to
+                                        when (state.manualBluetoothType) {
+                                            BluetoothType.CLASSIC -> "classic"
+                                            BluetoothType.BLE -> "ble"
+                                            BluetoothType.UNKNOWN -> "classic"
+                                        }
+                                }
+                            deviceName = name
+                            connectionMode = mode
+                            tcpHost = null
+                            tcpPort = 7633
+                            usbDeviceId = null
+                        }
                     }
 
                     val config =
@@ -2319,6 +2331,7 @@ class RNodeWizardViewModel
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
+                            usbDeviceId = usbDeviceId,
                             frequency = state.frequency.toLongOrNull() ?: 915000000,
                             bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
                             txPower = state.txPower.toIntOrNull() ?: 7,
@@ -2362,33 +2375,62 @@ class RNodeWizardViewModel
 
         /**
          * Get the effective device name for display.
-         * For TCP mode, shows the host:port. For Bluetooth, shows device name.
+         * For TCP mode, shows the host:port. For USB, shows USB device name. For Bluetooth, shows device name.
          */
         fun getEffectiveDeviceName(): String {
             val state = _state.value
-            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
-                val port = state.tcpPort.toIntOrNull() ?: 7633
-                if (state.tcpHost.isNotBlank()) {
-                    if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
-                } else {
-                    "No host specified"
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> {
+                    val port = state.tcpPort.toIntOrNull() ?: 7633
+                    if (state.tcpHost.isNotBlank()) {
+                        if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
+                    } else {
+                        "No host specified"
+                    }
                 }
-            } else {
-                state.selectedDevice?.name
-                    ?: state.manualDeviceName.ifBlank { "No device selected" }
+                RNodeConnectionType.USB_SERIAL -> {
+                    state.selectedUsbDevice?.let { device ->
+                        // Prefer product name, fall back to manufacturer, then driver type
+                        device.productName
+                            ?: device.manufacturerName?.let { "$it Device" }
+                            ?: device.driverType
+                    } ?: "No USB device selected"
+                }
+                RNodeConnectionType.BLUETOOTH -> {
+                    state.selectedDevice?.name
+                        ?: state.manualDeviceName.ifBlank { "No device selected" }
+                }
             }
         }
 
         /**
          * Get the effective Bluetooth type for display.
-         * Returns null for TCP mode.
+         * Returns null for TCP mode or USB mode.
          */
         fun getEffectiveBluetoothType(): BluetoothType? {
             val state = _state.value
-            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
-                null
-            } else {
-                state.selectedDevice?.type ?: state.manualBluetoothType
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> null
+                RNodeConnectionType.USB_SERIAL -> null
+                RNodeConnectionType.BLUETOOTH -> state.selectedDevice?.type ?: state.manualBluetoothType
+            }
+        }
+
+        /**
+         * Get the connection type string for display.
+         */
+        fun getConnectionTypeString(): String {
+            val state = _state.value
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> "WiFi / TCP"
+                RNodeConnectionType.USB_SERIAL -> "USB Serial"
+                RNodeConnectionType.BLUETOOTH -> {
+                    when (state.selectedDevice?.type ?: state.manualBluetoothType) {
+                        BluetoothType.CLASSIC -> "Bluetooth Classic"
+                        BluetoothType.BLE -> "Bluetooth LE"
+                        BluetoothType.UNKNOWN -> "Bluetooth"
+                    }
+                }
             }
         }
 
@@ -2396,6 +2438,11 @@ class RNodeWizardViewModel
          * Check if currently in TCP/WiFi mode.
          */
         fun isTcpMode(): Boolean = _state.value.connectionType == RNodeConnectionType.TCP_WIFI
+
+        /**
+         * Check if currently in USB Serial mode.
+         */
+        fun isUsbMode(): Boolean = _state.value.connectionType == RNodeConnectionType.USB_SERIAL
 
         /**
          * Cleanup when ViewModel is cleared.

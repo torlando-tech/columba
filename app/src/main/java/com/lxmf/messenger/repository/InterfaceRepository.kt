@@ -235,32 +235,43 @@ class InterfaceRepository
                         val connectionMode = json.optString("connection_mode", "classic")
                         val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
                         val tcpPort = json.optInt("tcp_port", 7633)
+                        val usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null
 
                         // Validate based on connection mode
-                        if (connectionMode == "tcp") {
-                            // TCP mode requires host
-                            if (tcpHost.isNullOrBlank()) {
-                                Log.e(TAG, "Empty RNode TCP host in database")
-                                error("Empty RNode TCP host")
-                            }
-                            // Validate TCP host format
-                            when (val result = InputValidator.validateHostname(tcpHost)) {
-                                is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
-                                    error("Invalid RNode TCP host: $tcpHost")
+                        when (connectionMode) {
+                            "tcp" -> {
+                                // TCP mode requires host
+                                if (tcpHost.isNullOrBlank()) {
+                                    Log.e(TAG, "Empty RNode TCP host in database")
+                                    error("Empty RNode TCP host")
                                 }
-                                else -> {}
+                                // Validate TCP host format
+                                when (val result = InputValidator.validateHostname(tcpHost)) {
+                                    is ValidationResult.Error -> {
+                                        Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                        error("Invalid RNode TCP host: $tcpHost")
+                                    }
+                                    else -> {}
+                                }
+                                // Validate TCP port
+                                if (tcpPort !in 1..65535) {
+                                    Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
+                                    error("Invalid RNode TCP port: $tcpPort")
+                                }
                             }
-                            // Validate TCP port
-                            if (tcpPort !in 1..65535) {
-                                Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
-                                error("Invalid RNode TCP port: $tcpPort")
+                            "usb" -> {
+                                // USB mode requires device ID
+                                if (usbDeviceId == null) {
+                                    Log.e(TAG, "Missing RNode USB device ID in database")
+                                    error("Missing RNode USB device ID")
+                                }
                             }
-                        } else {
-                            // Bluetooth modes require device name
-                            if (targetDeviceName.isBlank()) {
-                                Log.e(TAG, "Empty RNode target device name in database")
-                                error("Empty RNode target device name")
+                            else -> {
+                                // Bluetooth modes (classic, ble) require device name
+                                if (targetDeviceName.isBlank()) {
+                                    Log.e(TAG, "Empty RNode target device name in database")
+                                    error("Empty RNode target device name")
+                                }
                             }
                         }
 
@@ -271,6 +282,7 @@ class InterfaceRepository
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
+                            usbDeviceId = usbDeviceId,
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),

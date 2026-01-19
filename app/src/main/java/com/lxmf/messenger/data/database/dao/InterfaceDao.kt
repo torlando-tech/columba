@@ -115,6 +115,32 @@ interface InterfaceDao {
 
     @Query("SELECT * FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode')")
     fun getEnabledBluetoothCandidates(): Flow<List<InterfaceEntity>>
+
+    /**
+     * Find an RNode interface by USB device ID.
+     * Used to check if a USB device is already configured when it's plugged in.
+     *
+     * @param usbDeviceId The Android USB device ID to search for
+     * @return The matching interface entity or null if not found
+     */
+    @Query(
+        """
+        SELECT * FROM interfaces
+        WHERE type = 'RNode'
+        AND configJson LIKE '%"usb_device_id":' || :usbDeviceId || '%'
+        LIMIT 1
+        """,
+    )
+    suspend fun findRNodeByUsbDeviceId(usbDeviceId: Int): InterfaceEntity?
+
+    /**
+     * Get an interface by ID (suspend version for one-shot queries).
+     *
+     * @param id The interface ID
+     * @return The interface entity or null if not found
+     */
+    @Query("SELECT * FROM interfaces WHERE id = :id")
+    suspend fun getInterfaceByIdOnce(id: Long): InterfaceEntity?
 }
 
 /**

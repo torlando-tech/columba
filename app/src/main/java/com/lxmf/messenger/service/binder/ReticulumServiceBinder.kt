@@ -625,6 +625,17 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun getInterfaceStats(interfaceName: String): String? {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_interface_stats", interfaceName)?.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting interface stats", e)
+            null
+        }
+    }
+
     // ===========================================
     // Propagation Node Support
     // ===========================================

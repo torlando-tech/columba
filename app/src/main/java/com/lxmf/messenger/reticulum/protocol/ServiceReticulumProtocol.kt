@@ -2004,6 +2004,22 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? {
+        return try {
+            val service = this.service ?: return null
+            val resultJson = service.getInterfaceStats(interfaceName) ?: return null
+            val json = JSONObject(resultJson)
+            val map = mutableMapOf<String, Any>()
+            json.keys().forEach { key ->
+                map[key] = json.get(key)
+            }
+            map
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting interface stats for $interfaceName", e)
+            null
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)

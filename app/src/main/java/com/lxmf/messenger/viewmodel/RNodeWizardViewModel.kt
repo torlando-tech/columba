@@ -1542,6 +1542,61 @@ class RNodeWizardViewModel
         }
 
         /**
+         * Pre-select a USB device from USB intent handling.
+         * This is called when a USB device is plugged in and the app is opened.
+         */
+        fun preselectUsbDevice(
+            deviceId: Int,
+            vendorId: Int,
+            productId: Int,
+            deviceName: String,
+        ) {
+            Log.d(TAG, "Pre-selecting USB device: $deviceId ($deviceName)")
+
+            // Switch to USB connection type
+            setConnectionType(RNodeConnectionType.USB_SERIAL)
+
+            // Scan for USB devices to get proper device info and permission status
+            scanUsbDevices()
+
+            // Try to find and select the device after scanning
+            viewModelScope.launch {
+                // Wait a bit for USB scan to complete
+                delay(500)
+
+                // Find the device in the scanned list
+                val scannedDevice = _state.value.usbDevices.find { it.deviceId == deviceId }
+                if (scannedDevice != null) {
+                    selectUsbDevice(scannedDevice)
+                    Log.d(TAG, "Found and selected USB device: ${scannedDevice.displayName}")
+                } else {
+                    // If not found in scan, create a placeholder device
+                    // (permission will be requested when selected)
+                    val placeholderDevice = com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                        deviceId = deviceId,
+                        vendorId = vendorId,
+                        productId = productId,
+                        deviceName = deviceName,
+                        manufacturerName = null,
+                        productName = "USB RNode",
+                        serialNumber = null,
+                        driverType = "Unknown",
+                        hasPermission = false,
+                    )
+                    _state.update {
+                        it.copy(
+                            usbDevices = listOf(placeholderDevice) + it.usbDevices,
+                            selectedUsbDevice = null,
+                        )
+                    }
+                    // Request permission for the device
+                    requestUsbPermission(placeholderDevice)
+                    Log.d(TAG, "Created placeholder USB device and requesting permission")
+                }
+            }
+        }
+
+        /**
          * Enter Bluetooth pairing mode via USB connection.
          * Sends CMD_BT_CTRL command to RNode to enter pairing mode.
          * RNode will respond with CMD_BT_PIN containing the 6-digit PIN.

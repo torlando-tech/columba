@@ -403,6 +403,22 @@ class InterfaceRepository
             }
         }
 
+        /**
+         * Find an RNode interface configured for a specific USB device ID.
+         * Used to check if a USB device is already configured when it's plugged in.
+         */
+        suspend fun findRNodeByUsbDeviceId(usbDeviceId: Int): InterfaceEntity? {
+            return interfaceDao.findRNodeByUsbDeviceId(usbDeviceId)
+        }
+
+        /**
+         * Get an interface by ID (one-shot query, not Flow).
+         * Useful for intent handling where we need immediate result.
+         */
+        suspend fun getInterfaceByIdOnce(id: Long): InterfaceEntity? {
+            return interfaceDao.getInterfaceByIdOnce(id)
+        }
+
         companion object {
             private const val TAG = "InterfaceRepository"
         }

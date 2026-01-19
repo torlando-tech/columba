@@ -6038,6 +6038,53 @@ class ReticulumWrapper:
         """
         return json.dumps(self.failed_interfaces if hasattr(self, 'failed_interfaces') else [])
 
+    def get_interface_stats(self, interface_name: str) -> Optional[str]:
+        """
+        Get statistics for a specific interface.
+
+        Args:
+            interface_name: The name of the interface to get stats for
+
+        Returns:
+            JSON string containing interface stats (online, rxb, txb) or None if not found
+        """
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return None
+
+        try:
+            for iface in RNS.Transport.interfaces:
+                if iface.name == interface_name:
+                    stats = {
+                        "name": iface.name,
+                        "online": iface.online if hasattr(iface, 'online') else True,
+                        "rxb": iface.rxb if hasattr(iface, 'rxb') else 0,
+                        "txb": iface.txb if hasattr(iface, 'txb') else 0,
+                    }
+                    # Add RNode-specific stats if available
+                    if hasattr(iface, 'r_stat_rssi'):
+                        stats["rssi"] = iface.r_stat_rssi
+                    if hasattr(iface, 'r_stat_snr'):
+                        stats["snr"] = iface.r_stat_snr
+                    if hasattr(iface, 'r_frequency'):
+                        stats["frequency"] = iface.r_frequency
+                    if hasattr(iface, 'r_bandwidth'):
+                        stats["bandwidth"] = iface.r_bandwidth
+                    if hasattr(iface, 'r_sf'):
+                        stats["spreading_factor"] = iface.r_sf
+                    if hasattr(iface, 'r_tx_power'):
+                        stats["tx_power"] = iface.r_tx_power
+
+                    return json.dumps(stats)
+
+            log_debug("ReticulumWrapper", "get_interface_stats",
+                     f"Interface '{interface_name}' not found")
+            return None
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_interface_stats",
+                     f"Error getting interface stats: {e}")
+            return None
+
     def get_path_table(self) -> List[str]:
         """
         Get list of destination hashes from the RNS path table.

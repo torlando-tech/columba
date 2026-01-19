@@ -32,6 +32,11 @@ import com.lxmf.messenger.viewmodel.WizardStep
 @Composable
 fun RNodeWizardScreen(
     editingInterfaceId: Long? = null,
+    preselectedConnectionType: String? = null,
+    preselectedUsbDeviceId: Int? = null,
+    preselectedUsbVendorId: Int? = null,
+    preselectedUsbProductId: Int? = null,
+    preselectedUsbDeviceName: String? = null,
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
     viewModel: RNodeWizardViewModel = hiltViewModel(),
@@ -51,6 +56,23 @@ fun RNodeWizardScreen(
     LaunchedEffect(editingInterfaceId) {
         if (editingInterfaceId != null && editingInterfaceId >= 0) {
             viewModel.loadExistingConfig(editingInterfaceId)
+        }
+    }
+
+    // Apply USB pre-selection if provided
+    LaunchedEffect(preselectedConnectionType, preselectedUsbDeviceId) {
+        if (preselectedConnectionType == "usb" &&
+            preselectedUsbDeviceId != null &&
+            preselectedUsbVendorId != null &&
+            preselectedUsbProductId != null &&
+            preselectedUsbDeviceName != null
+        ) {
+            viewModel.preselectUsbDevice(
+                deviceId = preselectedUsbDeviceId,
+                vendorId = preselectedUsbVendorId,
+                productId = preselectedUsbProductId,
+                deviceName = preselectedUsbDeviceName,
+            )
         }
     }
 

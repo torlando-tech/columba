@@ -80,6 +80,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenLayout|screenSize|uiMode|keyboard|keyboardHidden"
             android:windowSoftInputMode="adjustResize|stateUnchanged">
             <intent-filter>

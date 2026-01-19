@@ -54,6 +54,17 @@ class EventHandler(
                 if (str == "None") null else str.toIntOrNull()
             }
         }
+
+        /**
+         * Safely parse PyObject to Float, handling Python None and parse errors.
+         * Returns null if the value is None, not a number, or cannot be parsed.
+         */
+        private fun PyObject?.toFloatOrNull(): Float? {
+            return this?.let {
+                val str = it.toString()
+                if (str == "None") null else str.toFloatOrNull()
+            }
+        }
     }
 
     /**
@@ -225,6 +236,8 @@ class EventHandler(
             val timestamp = json.optLong("timestamp", System.currentTimeMillis())
             val receivedHopCount = json.optInt("hops", -1).takeIf { it >= 0 }
             val receivedInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
+            val receivedRssi = if (json.has("rssi") && !json.isNull("rssi")) json.optInt("rssi") else null
+            val receivedSnr = if (json.has("snr") && !json.isNull("snr")) json.optDouble("snr").toFloat() else null
 
             // Parse public key from hex string
             val publicKeyHex = json.optString("public_key", "")
@@ -274,6 +287,8 @@ class EventHandler(
                         hasFileAttachments = hasFileAttachments,
                         receivedHopCount = receivedHopCount,
                         receivedInterface = receivedInterface,
+                        receivedRssi = receivedRssi,
+                        receivedSnr = receivedSnr,
                     )
                 if (persisted) {
                     Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
@@ -505,6 +520,8 @@ class EventHandler(
             // Extract received message info (hop count and receiving interface)
             val receivedHopCount = event.getDictValue("hops").toIntOrNull()
             val receivedInterface = event.getDictValue("receiving_interface")?.toString()?.takeIf { it != "None" }
+            val receivedRssi = event.getDictValue("rssi").toIntOrNull()
+            val receivedSnr = event.getDictValue("snr").toFloatOrNull()
 
             // Build broadcast JSON (used whether or not we have persistence manager)
             val messageJson =
@@ -534,6 +551,8 @@ class EventHandler(
                         hasFileAttachments = hasFileAttachments,
                         receivedHopCount = receivedHopCount,
                         receivedInterface = receivedInterface,
+                        receivedRssi = receivedRssi,
+                        receivedSnr = receivedSnr,
                     )
 
                 if (persisted) {

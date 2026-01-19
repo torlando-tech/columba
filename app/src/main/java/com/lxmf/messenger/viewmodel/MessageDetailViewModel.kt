@@ -62,6 +62,8 @@ class MessageDetailViewModel
                                             errorMessage = entity.errorMessage,
                                             receivedHopCount = entity.receivedHopCount,
                                             receivedInterface = entity.receivedInterface,
+                                            receivedRssi = entity.receivedRssi,
+                                            receivedSnr = entity.receivedSnr,
                                         )
                                     Log.d(TAG, "Message updated: status=${entity.status}, method=${entity.deliveryMethod}")
                                     domainMessage.toMessageUi()

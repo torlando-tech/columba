@@ -75,6 +75,24 @@ class AndroidBLEInterface(BLEInterface):
             RNS.log(f"  Peripheral: {'Enabled' if self.enable_peripheral else 'Disabled'}", RNS.LOG_INFO)
         RNS.log(f"  Max Peers: {self.max_peers}", RNS.LOG_INFO)
 
+    def get_rssi(self):
+        """Get the RSSI of the most recently received message.
+
+        This method is called by signal_quality.py at message delivery time
+        to extract signal strength metrics.
+
+        Returns:
+            RSSI in dBm (negative integer), or None if unavailable
+
+        Note:
+            Android BLE does not provide per-packet RSSI like RNode hardware.
+            This returns the last known connection RSSI from the Kotlin bridge,
+            which is updated from the scanner cache during the connection.
+        """
+        if hasattr(self, 'driver') and self.driver is not None:
+            return self.driver.get_last_receive_rssi()
+        return None
+
 
 # Register this class as the interface entry point for Reticulum
 interface_class = AndroidBLEInterface

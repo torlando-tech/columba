@@ -2416,6 +2416,10 @@ class ServiceReticulumProtocol(
         val hops = json.optInt("hops", -1).takeIf { it >= 0 }
         val receivingInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
 
+        // Extract signal quality metrics (RSSI and SNR)
+        val rssi = if (json.has("rssi") && !json.isNull("rssi")) json.optInt("rssi") else null
+        val snr = if (json.has("snr") && !json.isNull("snr")) json.optDouble("snr").toFloat() else null
+
         return ReceivedMessage(
             messageHash = messageHash,
             content = content,
@@ -2427,6 +2431,8 @@ class ServiceReticulumProtocol(
             iconAppearance = iconAppearance,
             receivedHopCount = hops,
             receivedInterface = receivingInterface,
+            receivedRssi = rssi,
+            receivedSnr = snr,
         )
     }
 

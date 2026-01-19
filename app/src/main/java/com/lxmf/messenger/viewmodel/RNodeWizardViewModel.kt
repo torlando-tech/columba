@@ -13,7 +13,10 @@ import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
@@ -126,6 +129,7 @@ data class RNodeWizardState(
     // Bluetooth pairing via USB mode
     val isUsbPairingMode: Boolean = false,
     val usbBluetoothPin: String? = null,
+    val usbPairingStatus: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
@@ -1554,6 +1558,9 @@ class RNodeWizardViewModel
                         viewModelScope.launch {
                             Log.d(TAG, "Received Bluetooth PIN from RNode: $pin")
                             _state.update { it.copy(usbBluetoothPin = pin) }
+
+                            // Attempt auto-pairing with the received PIN
+                            initiateAutoPairingWithPin(pin)
                         }
                     }
 
@@ -1613,6 +1620,159 @@ class RNodeWizardViewModel
                 }
             }
         }
+
+        /**
+         * Initiate auto-pairing with an RNode using the PIN received via USB.
+         * This scans for RNode devices and attempts to pair automatically.
+         */
+        @SuppressLint("MissingPermission")
+        private suspend fun initiateAutoPairingWithPin(pin: String) {
+            Log.d(TAG, "Initiating auto-pairing with PIN: $pin")
+
+            // Unregister any existing pairing handler to avoid duplicate receivers
+            pairingHandler?.unregister()
+
+            // Create and register pairing handler with the PIN
+            val handler = BlePairingHandler(context).apply {
+                setAutoPairPin(pin)
+                register()
+            }
+            pairingHandler = handler
+
+            try {
+                // The RNode in pairing mode will be advertising via Classic Bluetooth
+                // We use discovery to find it since we don't know its MAC address from USB
+                // (We can't use findBondedRNode() because we might have other RNodes paired)
+                Log.d(TAG, "Starting Classic BT discovery to find RNode in pairing mode")
+                _state.update { it.copy(usbPairingStatus = "Scanning for RNode...") }
+
+                // Start a Classic Bluetooth discovery to find the RNode
+                startClassicBluetoothDiscovery(pin)
+            } catch (e: Exception) {
+                Log.e(TAG, "Auto-pairing failed", e)
+                _state.update { it.copy(usbPairingStatus = "Auto-pairing failed: ${e.message}") }
+            }
+        }
+
+        /**
+         * Start Classic Bluetooth discovery to find RNode devices.
+         */
+        @SuppressLint("MissingPermission")
+        private fun startClassicBluetoothDiscovery(pin: String) {
+            // Get the set of already-bonded device addresses to filter them out
+            val bondedAddresses =
+                bluetoothAdapter?.bondedDevices?.map { it.address }?.toSet() ?: emptySet()
+            Log.d(TAG, "Bonded device addresses to skip: $bondedAddresses")
+
+            val discoveryReceiver =
+                object : BroadcastReceiver() {
+                    override fun onReceive(
+                        ctx: Context,
+                        intent: Intent,
+                    ) {
+                        when (intent.action) {
+                            BluetoothDevice.ACTION_FOUND -> {
+                                val device: BluetoothDevice? =
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        intent.getParcelableExtra(
+                                            BluetoothDevice.EXTRA_DEVICE,
+                                            BluetoothDevice::class.java,
+                                        )
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                                    }
+
+                                device?.let {
+                                    val deviceName = it.name ?: return
+                                    val isAlreadyBonded = bondedAddresses.contains(it.address)
+
+                                    Log.d(
+                                        TAG,
+                                        "Discovery found: $deviceName (${it.address}), " +
+                                            "bondState=${it.bondState}, isAlreadyBonded=$isAlreadyBonded",
+                                    )
+
+                                    // Only pair with RNodes that are NOT already bonded
+                                    if (deviceName.startsWith("RNode", ignoreCase = true) && !isAlreadyBonded) {
+                                        Log.i(TAG, "Discovered unbonded RNode via Classic BT: $deviceName")
+                                        bluetoothAdapter?.cancelDiscovery()
+
+                                        // Set the target device for the pairing handler
+                                        pairingHandler?.setAutoPairPin(pin, it.address)
+
+                                        viewModelScope.launch {
+                                            _state.update {
+                                                it.copy(usbPairingStatus = "Found $deviceName, pairing...")
+                                            }
+
+                                            // Initiate bonding
+                                            it.createBond()
+                                        }
+
+                                        try {
+                                            context.unregisterReceiver(this)
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "Failed to unregister discovery receiver", e)
+                                        }
+                                    }
+                                }
+                            }
+
+                            BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                                Log.d(TAG, "Classic Bluetooth discovery finished")
+                                try {
+                                    context.unregisterReceiver(this)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister discovery receiver", e)
+                                }
+                            }
+                        }
+                    }
+                }
+
+            val filter =
+                IntentFilter().apply {
+                    addAction(BluetoothDevice.ACTION_FOUND)
+                    addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+                }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(discoveryReceiver, filter)
+            }
+
+            Log.d(TAG, "Starting Classic Bluetooth discovery for RNode")
+            bluetoothAdapter?.startDiscovery()
+        }
+
+        /**
+         * Wait for a device to reach a specific bond state.
+         */
+        @SuppressLint("MissingPermission")
+        private suspend fun waitForBondState(
+            device: BluetoothDevice,
+            targetState: Int,
+            timeoutMs: Long,
+        ): Boolean =
+            withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < timeoutMs) {
+                    if (device.bondState == targetState) {
+                        return@withContext true
+                    }
+                    if (device.bondState == BluetoothDevice.BOND_NONE &&
+                        System.currentTimeMillis() - startTime > 5000
+                    ) {
+                        // Bond was rejected or failed
+                        return@withContext false
+                    }
+                    delay(200)
+                }
+                false
+            }
 
         /**
          * Exit USB Bluetooth pairing mode.

@@ -52,6 +52,43 @@ class BlePairingHandler(private val context: Context) {
     @Volatile
     private var isRegistered = false
 
+    // PIN-based auto-pairing support
+    @Volatile
+    private var autoPairPin: String? = null
+
+    @Volatile
+    private var autoPairDeviceAddress: String? = null
+
+    /**
+     * Set the PIN to use for automatic pairing.
+     * When a pairing request arrives for a device matching the address (or any RNode if address is null),
+     * the PIN will be provided automatically.
+     *
+     * @param pin The 6-digit PIN from RNode
+     * @param deviceAddress Optional Bluetooth address to match (null = match any RNode)
+     */
+    fun setAutoPairPin(
+        pin: String?,
+        deviceAddress: String? = null,
+    ) {
+        autoPairPin = pin
+        autoPairDeviceAddress = deviceAddress
+        if (pin != null) {
+            Log.i(TAG, "Auto-pair PIN set: $pin for device: ${deviceAddress ?: "any RNode"}")
+        } else {
+            Log.i(TAG, "Auto-pair PIN cleared")
+        }
+    }
+
+    /**
+     * Clear the auto-pair PIN.
+     */
+    fun clearAutoPairPin() {
+        autoPairPin = null
+        autoPairDeviceAddress = null
+        Log.d(TAG, "Auto-pair PIN cleared")
+    }
+
     /**
      * BroadcastReceiver that intercepts pairing requests and auto-confirms them.
      */
@@ -112,13 +149,29 @@ class BlePairingHandler(private val context: Context) {
                         confirmPairing(device, deviceName)
                     }
 
-                    PAIRING_VARIANT_PIN,
-                    PAIRING_VARIANT_PASSKEY_CONFIRMATION,
-                    -> {
-                        // PIN or passkey required - let system dialog handle it
-                        // RNode displays a PIN that user must enter manually
-                        Log.i(TAG, "PIN/passkey pairing required for $deviceName - showing system dialog")
-                        // Don't abort broadcast - let system show the PIN entry dialog
+                    PAIRING_VARIANT_PIN -> {
+                        // PIN required - check if we have an auto-pair PIN
+                        val pin = autoPairPin
+                        val targetAddress = autoPairDeviceAddress
+
+                        // Check if this is the device we want to auto-pair with
+                        val isMatchingDevice =
+                            targetAddress == null || // Match any device
+                                targetAddress.equals(device.address, ignoreCase = true) || // Exact match
+                                deviceName.startsWith("RNode", ignoreCase = true) // RNode device
+
+                        if (pin != null && isMatchingDevice) {
+                            Log.i(TAG, "Auto-pairing with PIN for $deviceName")
+                            setPinAndConfirm(device, deviceName, pin)
+                        } else {
+                            Log.i(TAG, "PIN pairing required for $deviceName - showing system dialog")
+                            // Don't abort broadcast - let system show the PIN entry dialog
+                        }
+                    }
+
+                    PAIRING_VARIANT_PASSKEY_CONFIRMATION -> {
+                        // Passkey confirmation - let system dialog handle it
+                        Log.i(TAG, "Passkey confirmation required for $deviceName - showing system dialog")
                     }
 
                     else -> {
@@ -152,6 +205,43 @@ class BlePairingHandler(private val context: Context) {
             Log.e(TAG, "SecurityException during pairing confirmation", e)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to auto-confirm pairing for $deviceName", e)
+        }
+    }
+
+    /**
+     * Set the PIN for pairing and abort the broadcast to prevent system dialog.
+     */
+    @SuppressLint("MissingPermission")
+    private fun BroadcastReceiver.setPinAndConfirm(
+        device: BluetoothDevice,
+        deviceName: String,
+        pin: String,
+    ) {
+        try {
+            // Convert PIN string to UTF-8 byte array (standard Bluetooth PIN format)
+            val pinBytes = pin.toByteArray(Charsets.UTF_8)
+
+            Log.d(TAG, "Setting PIN for $deviceName: $pin (${pinBytes.size} bytes: ${pinBytes.joinToString()})")
+
+            // Set the PIN
+            val pinSet = device.setPin(pinBytes)
+            if (pinSet) {
+                Log.i(TAG, "PIN set successfully for $deviceName")
+            } else {
+                Log.w(TAG, "setPin returned false for $deviceName")
+            }
+
+            // Abort broadcast to prevent system dialog from appearing
+            abortBroadcast()
+            Log.d(TAG, "Aborted pairing broadcast after setting PIN")
+
+            // Clear the auto-pair PIN after use
+            autoPairPin = null
+            autoPairDeviceAddress = null
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException during PIN pairing", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set PIN for $deviceName", e)
         }
     }
 

@@ -68,6 +68,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -84,6 +85,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -100,6 +102,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -118,6 +121,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -134,11 +138,29 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithText("Copy System Info").assertExists()
+    }
+
+    @Test
+    fun `displays report bug button`() {
+        composeTestRule.setContent {
+            ColumbaTheme {
+                AboutCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    systemInfo = fullSystemInfo,
+                    onCopySystemInfo = {},
+                    onReportBug = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Report Bug").assertExists()
     }
 
     // Note: Button click tests are skipped in Robolectric due to framework limitations
@@ -153,6 +175,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -170,6 +193,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = minimalSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -195,6 +219,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = infoWithNullVersions,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -213,6 +238,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = infoWithNullIdentity,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -231,6 +257,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = customVersionInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -264,6 +291,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = edgeCaseInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -282,6 +310,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -303,6 +332,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -320,6 +350,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = minimalSystemInfo,
                     onCopySystemInfo = {},
+                    onReportBug = {},
                 )
             }
         }
@@ -339,6 +370,7 @@ class AboutCardTest {
                     onExpandedChange = {},
                     systemInfo = fullSystemInfo,
                     onCopySystemInfo = { callbackInvoked = true },
+                    onReportBug = {},
                 )
             }
         }

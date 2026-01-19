@@ -73,4 +73,40 @@ object DeviceInfoUtil {
             }
         }.trim()
     }
+
+    /**
+     * Format system information as Markdown for GitHub bug reports.
+     *
+     * Note: Identity hash is truncated to 8 characters for privacy.
+     */
+    fun formatForBugReport(info: SystemInfo): String {
+        return buildString {
+            appendLine("### System Information")
+            appendLine("- **Columba**: ${info.appVersion} (${info.appBuildCode})")
+            appendLine("- **Build**: ${info.gitCommitHash} (${info.buildDate})")
+            appendLine("- **Build Type**: ${info.buildType}")
+            appendLine("- **Android**: ${info.androidVersion} (API ${info.apiLevel})")
+            appendLine("- **Device**: ${info.deviceModel} by ${info.manufacturer}")
+            if (info.identityHash != null) {
+                // Truncate identity hash for privacy
+                val truncatedHash = if (info.identityHash.length > 8) {
+                    "${info.identityHash.take(8)}..."
+                } else {
+                    info.identityHash
+                }
+                appendLine("- **Identity**: $truncatedHash")
+            }
+            appendLine()
+            appendLine("### Protocol Versions")
+            if (info.reticulumVersion != null) {
+                appendLine("- **Reticulum**: ${info.reticulumVersion}")
+            }
+            if (info.lxmfVersion != null) {
+                appendLine("- **LXMF**: ${info.lxmfVersion}")
+            }
+            if (info.bleReticulumVersion != null) {
+                appendLine("- **BLE-Reticulum**: ${info.bleReticulumVersion}")
+            }
+        }.trim()
+    }
 }

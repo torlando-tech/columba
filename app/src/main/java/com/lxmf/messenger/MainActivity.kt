@@ -871,6 +871,9 @@ fun ColumbaNavigation(
                             onNavigateToInterfaceStats = { interfaceId ->
                                 navController.navigate("interface_stats/$interfaceId")
                             },
+                            onNavigateToInterfaceManagement = {
+                                navController.navigate("interface_management")
+                            },
                         )
                     }
 
@@ -1113,6 +1116,9 @@ fun ColumbaNavigation(
                             },
                             onNavigateToInterfaceStats = { interfaceId ->
                                 navController.navigate("interface_stats/$interfaceId")
+                            },
+                            onNavigateToInterfaceManagement = {
+                                navController.navigate("interface_management")
                             },
                         )
                     }

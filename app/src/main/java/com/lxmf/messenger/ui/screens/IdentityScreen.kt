@@ -98,6 +98,7 @@ fun IdentityScreen(
     bleConnectionsViewModel: com.lxmf.messenger.viewmodel.BleConnectionsViewModel = hiltViewModel(),
     onNavigateToBleStatus: () -> Unit = {},
     onNavigateToInterfaceStats: (Long) -> Unit = {},
+    onNavigateToInterfaceManagement: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val debugInfo by viewModel.debugInfo.collectAsState()
@@ -190,6 +191,7 @@ fun IdentityScreen(
                 interfaces = debugInfo.interfaces,
                 viewModel = viewModel,
                 onNavigateToInterfaceStats = onNavigateToInterfaceStats,
+                onNavigateToInterfaceManagement = onNavigateToInterfaceManagement,
             )
 
             // Test Actions Card
@@ -407,6 +409,7 @@ fun InterfacesCard(
     interfaces: List<InterfaceInfo>,
     viewModel: DebugViewModel? = null,
     onNavigateToInterfaceStats: (Long) -> Unit = {},
+    onNavigateToInterfaceManagement: () -> Unit = {},
 ) {
     var selectedInterface by remember { mutableStateOf<InterfaceInfo?>(null) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -422,11 +425,28 @@ fun InterfacesCard(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "Network Interfaces (${interfaces.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Network Interfaces (${interfaces.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(
+                    onClick = onNavigateToInterfaceManagement,
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Manage interfaces",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
 
             Divider()
 

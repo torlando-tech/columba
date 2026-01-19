@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
@@ -47,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.FrequencySlotCalculator
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
@@ -66,6 +66,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
     ) {
         // Device summary
         val isTcpMode = viewModel.isTcpMode()
+        val isUsbMode = viewModel.isUsbMode()
         Card(
             colors =
                 CardDefaults.cardColors(
@@ -78,14 +79,22 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    if (isTcpMode) Icons.Default.Wifi else Icons.Default.Bluetooth,
+                    when {
+                        isTcpMode -> Icons.Default.Wifi
+                        isUsbMode -> Icons.Default.Usb
+                        else -> Icons.Default.Bluetooth
+                    },
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        if (isTcpMode) "Connection" else "Device",
+                        when {
+                            isTcpMode -> "Connection"
+                            isUsbMode -> "USB Device"
+                            else -> "Device"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
@@ -95,15 +104,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Text(
-                        if (isTcpMode) {
-                            "WiFi / TCP"
-                        } else {
-                            when (viewModel.getEffectiveBluetoothType()) {
-                                BluetoothType.CLASSIC -> "Bluetooth Classic"
-                                BluetoothType.BLE -> "Bluetooth LE"
-                                else -> "Unknown"
-                            }
-                        },
+                        viewModel.getConnectionTypeString(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )

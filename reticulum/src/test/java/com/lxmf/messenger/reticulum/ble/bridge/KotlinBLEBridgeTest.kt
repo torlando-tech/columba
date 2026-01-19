@@ -95,6 +95,74 @@ class KotlinBLEBridgeTest {
             assertEquals(peerAddress, details[0].currentMac)
         }
 
+    // ========== getPeerRssi() Tests ==========
+
+    @Test
+    fun `getPeerRssi returns RSSI when peer exists with valid RSSI`() =
+        runTest {
+            // Given
+            val peerAddress = "AA:BB:CC:DD:EE:FF"
+            val expectedRssi = -65
+
+            val bridge = createBridgeWithMockScanner()
+            addMockPeer(bridge, peerAddress, "test123", rssi = expectedRssi)
+
+            // When
+            val rssi = bridge.getPeerRssi(peerAddress)
+
+            // Then
+            assertEquals(expectedRssi, rssi)
+        }
+
+    @Test
+    fun `getPeerRssi returns null when peer does not exist`() =
+        runTest {
+            // Given
+            val bridge = createBridgeWithMockScanner()
+            // No peers added
+
+            // When
+            val rssi = bridge.getPeerRssi("AA:BB:CC:DD:EE:FF")
+
+            // Then
+            assertEquals(null, rssi)
+        }
+
+    @Test
+    fun `getPeerRssi returns null when peer has unknown RSSI of -100`() =
+        runTest {
+            // Given
+            val peerAddress = "AA:BB:CC:DD:EE:FF"
+
+            val bridge = createBridgeWithMockScanner()
+            addMockPeer(bridge, peerAddress, "test123", rssi = -100)
+
+            // When
+            val rssi = bridge.getPeerRssi(peerAddress)
+
+            // Then: -100 means "unknown" so should return null
+            assertEquals(null, rssi)
+        }
+
+    @Test
+    fun `getPeerRssi returns correct RSSI for specific peer among multiple`() =
+        runTest {
+            // Given
+            val peer1 = "AA:BB:CC:DD:EE:01"
+            val peer2 = "AA:BB:CC:DD:EE:02"
+            val peer3 = "AA:BB:CC:DD:EE:03"
+
+            val bridge = createBridgeWithMockScanner()
+            addMockPeer(bridge, peer1, "id1", rssi = -45)
+            addMockPeer(bridge, peer2, "id2", rssi = -70)
+            addMockPeer(bridge, peer3, "id3", rssi = -85)
+
+            // When/Then
+            assertEquals(-45, bridge.getPeerRssi(peer1))
+            assertEquals(-70, bridge.getPeerRssi(peer2))
+            assertEquals(-85, bridge.getPeerRssi(peer3))
+        }
+
     @Test
     fun `getConnectionDetails returns different RSSI for multiple peers`() =
         runTest {
@@ -468,6 +536,7 @@ class KotlinBLEBridgeTest {
         isCentral: Boolean = true,
         isPeripheral: Boolean = false,
         mtu: Int = 512,
+        rssi: Int = -100,
     ) {
         // Get the PeerConnection inner class
         val peerConnectionClass =
@@ -504,7 +573,7 @@ class KotlinBLEBridgeTest {
                 isPeripheral,
                 identityHash,
                 System.currentTimeMillis(),
-                -100, // rssi
+                rssi,
                 System.currentTimeMillis(), // lastActivity
                 deduplicationStateNone,
             )

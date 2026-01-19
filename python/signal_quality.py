@@ -11,12 +11,61 @@ from typing import Optional, Tuple
 from logging_utils import log_debug
 
 
+def _extract_ble_peer_rssi(peer_interface) -> Optional[int]:
+    """
+    Extract RSSI from a BLEPeerInterface by querying its parent's driver.
+
+    BLEPeerInterface is a per-peer sub-interface created by BLEInterface.
+    It has peer_address and parent_interface attributes that let us
+    query the Kotlin bridge for this specific peer's RSSI.
+
+    Args:
+        peer_interface: A BLEPeerInterface instance
+
+    Returns:
+        RSSI in dBm, or None if unavailable
+    """
+    try:
+        # Get the peer's BLE address
+        peer_address = getattr(peer_interface, 'peer_address', None)
+        if not peer_address:
+            log_debug("SignalQuality", "_extract_ble_peer_rssi",
+                     "BLEPeerInterface has no peer_address")
+            return None
+
+        # Get the parent interface (AndroidBLEInterface)
+        parent = getattr(peer_interface, 'parent_interface', None)
+        if not parent:
+            log_debug("SignalQuality", "_extract_ble_peer_rssi",
+                     "BLEPeerInterface has no parent_interface")
+            return None
+
+        # Get the driver from parent
+        driver = getattr(parent, 'driver', None)
+        if not driver:
+            log_debug("SignalQuality", "_extract_ble_peer_rssi",
+                     "Parent interface has no driver")
+            return None
+
+        # Query RSSI for this peer
+        rssi = driver.get_peer_rssi(peer_address)
+        log_debug("SignalQuality", "_extract_ble_peer_rssi",
+                 f"Got RSSI {rssi} for peer {peer_address}")
+        return rssi
+
+    except Exception as e:
+        log_debug("SignalQuality", "_extract_ble_peer_rssi",
+                 f"Failed to get BLE peer RSSI: {e}")
+        return None
+
+
 def extract_signal_metrics(interface_obj) -> Tuple[Optional[int], Optional[float]]:
     """
     Extract RSSI and SNR from a Reticulum interface object.
 
     Args:
         interface_obj: A Reticulum interface (RNodeInterface, AndroidBLEInterface, etc.)
+                      Also handles BLEPeerInterface which has parent_interface.
 
     Returns:
         Tuple of (rssi_dbm: int or None, snr_db: float or None)
@@ -25,6 +74,17 @@ def extract_signal_metrics(interface_obj) -> Tuple[Optional[int], Optional[float
     snr = None
 
     if interface_obj is None:
+        return rssi, snr
+
+    # Handle BLEPeerInterface specially - it's a per-peer sub-interface
+    # that has parent_interface pointing to the main AndroidBLEInterface
+    interface_name = type(interface_obj).__name__
+    if interface_name == 'BLEPeerInterface':
+        rssi = _extract_ble_peer_rssi(interface_obj)
+        if rssi is not None:
+            log_debug("SignalQuality", "extract",
+                     f"Got RSSI {rssi} dBm from BLEPeerInterface")
+        # BLE doesn't have SNR
         return rssi, snr
 
     # Extract RSSI if interface supports it (RNode, BLE)

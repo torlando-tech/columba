@@ -219,3 +219,134 @@ class TestAddSignalToMessageEvent:
         assert event["timestamp"] == 1234567890
         assert event["rssi"] == -75
         assert event["snr"] == 10.0
+
+
+class TestBLEPeerInterfaceHandling:
+    """Tests for BLEPeerInterface special handling in extract_signal_metrics()
+
+    BLEPeerInterface is a per-peer sub-interface created by ble-reticulum's
+    BLEInterface. It has parent_interface pointing to the main AndroidBLEInterface,
+    and peer_address for the specific BLE peer.
+    """
+
+    def test_ble_peer_interface_extracts_rssi_from_parent_driver(self):
+        """BLEPeerInterface should get RSSI from parent's driver"""
+        from signal_quality import extract_signal_metrics
+
+        # Create mock BLEPeerInterface with parent structure
+        mock_driver = Mock()
+        mock_driver.get_peer_rssi.return_value = -68
+
+        mock_parent = Mock()
+        mock_parent.driver = mock_driver
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        mock_peer_interface.peer_address = "AA:BB:CC:DD:EE:FF"
+        mock_peer_interface.parent_interface = mock_parent
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi == -68
+        assert snr is None  # BLE doesn't have SNR
+        mock_driver.get_peer_rssi.assert_called_once_with("AA:BB:CC:DD:EE:FF")
+
+    def test_ble_peer_interface_returns_none_when_no_peer_address(self):
+        """BLEPeerInterface without peer_address should return None"""
+        from signal_quality import extract_signal_metrics
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        # No peer_address attribute
+        del mock_peer_interface.peer_address
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi is None
+        assert snr is None
+
+    def test_ble_peer_interface_returns_none_when_no_parent(self):
+        """BLEPeerInterface without parent_interface should return None"""
+        from signal_quality import extract_signal_metrics
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        mock_peer_interface.peer_address = "AA:BB:CC:DD:EE:FF"
+        # No parent_interface
+        del mock_peer_interface.parent_interface
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi is None
+        assert snr is None
+
+    def test_ble_peer_interface_returns_none_when_no_driver(self):
+        """BLEPeerInterface with parent but no driver should return None"""
+        from signal_quality import extract_signal_metrics
+
+        mock_parent = Mock()
+        del mock_parent.driver
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        mock_peer_interface.peer_address = "AA:BB:CC:DD:EE:FF"
+        mock_peer_interface.parent_interface = mock_parent
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi is None
+        assert snr is None
+
+    def test_ble_peer_interface_returns_none_when_driver_returns_none(self):
+        """BLEPeerInterface should return None when driver returns None"""
+        from signal_quality import extract_signal_metrics
+
+        mock_driver = Mock()
+        mock_driver.get_peer_rssi.return_value = None
+
+        mock_parent = Mock()
+        mock_parent.driver = mock_driver
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        mock_peer_interface.peer_address = "AA:BB:CC:DD:EE:FF"
+        mock_peer_interface.parent_interface = mock_parent
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi is None
+        assert snr is None
+
+    def test_ble_peer_interface_handles_exception(self):
+        """BLEPeerInterface should return None on exception"""
+        from signal_quality import extract_signal_metrics
+
+        mock_driver = Mock()
+        mock_driver.get_peer_rssi.side_effect = Exception("Bridge error")
+
+        mock_parent = Mock()
+        mock_parent.driver = mock_driver
+
+        mock_peer_interface = Mock()
+        mock_peer_interface.__class__.__name__ = 'BLEPeerInterface'
+        mock_peer_interface.peer_address = "AA:BB:CC:DD:EE:FF"
+        mock_peer_interface.parent_interface = mock_parent
+
+        rssi, snr = extract_signal_metrics(mock_peer_interface)
+
+        assert rssi is None
+        assert snr is None
+
+    def test_non_ble_peer_interface_uses_normal_path(self):
+        """Regular interface with get_rssi should use normal extraction"""
+        from signal_quality import extract_signal_metrics
+
+        mock_interface = Mock()
+        mock_interface.__class__.__name__ = 'RNodeInterface'
+        mock_interface.get_rssi.return_value = -75
+        mock_interface.get_snr.return_value = 8.5
+
+        rssi, snr = extract_signal_metrics(mock_interface)
+
+        assert rssi == -75
+        assert snr == 8.5

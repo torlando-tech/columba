@@ -155,6 +155,7 @@ private fun StatsContent(
         StatusCard(
             isEnabled = state.interfaceEntity?.enabled ?: false,
             isOnline = state.isOnline,
+            isConnecting = state.isConnecting,
             onToggleEnabled = onToggleEnabled,
         )
 
@@ -206,6 +207,7 @@ private fun StatsContent(
 private fun StatusCard(
     isEnabled: Boolean,
     isOnline: Boolean,
+    isConnecting: Boolean,
     onToggleEnabled: () -> Unit,
 ) {
     Card(
@@ -237,6 +239,7 @@ private fun StatusCard(
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         StatusBadge(
                             text = if (isEnabled) "ENABLED" else "DISABLED",
@@ -244,8 +247,9 @@ private fun StatusCard(
                         )
                         if (isEnabled) {
                             StatusBadge(
-                                text = if (isOnline) "ONLINE" else "OFFLINE",
+                                text = if (isOnline) "ONLINE" else if (isConnecting) "CONNECTING" else "OFFLINE",
                                 isPositive = isOnline,
+                                showSpinner = isConnecting && !isOnline,
                             )
                         }
                     }
@@ -263,25 +267,38 @@ private fun StatusCard(
 private fun StatusBadge(
     text: String,
     isPositive: Boolean,
+    showSpinner: Boolean = false,
 ) {
+    val badgeColor = if (isPositive) {
+        MaterialTheme.colorScheme.primary
+    } else if (showSpinner) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+
     Surface(
-        color = if (isPositive) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-        } else {
-            MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-        },
+        color = badgeColor.copy(alpha = 0.2f),
         shape = RoundedCornerShape(4.dp),
     ) {
-        Text(
-            text = text,
+        Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isPositive) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.error
-            },
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (showSpinner) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 2.dp,
+                    color = badgeColor,
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = badgeColor,
+            )
+        }
     }
 }
 

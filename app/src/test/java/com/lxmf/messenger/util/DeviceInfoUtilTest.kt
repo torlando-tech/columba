@@ -194,4 +194,172 @@ class DeviceInfoUtilTest {
         // Build date should match pattern YYYY-MM-DD HH:mm
         assertTrue(info.buildDate.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}")))
     }
+
+    // ========== formatForBugReport Tests ==========
+
+    @Test
+    fun `formatForBugReport returns Markdown format`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "debug",
+                gitCommitHash = "abc1234",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "14",
+                apiLevel = 34,
+                deviceModel = "Pixel 7",
+                manufacturer = "Google",
+                identityHash = "a1b2c3d4e5f6",
+                reticulumVersion = "0.8.5",
+                lxmfVersion = "0.5.4",
+                bleReticulumVersion = "0.2.2",
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        // Should contain Markdown headers
+        assertTrue(formatted.contains("### System Information"))
+        assertTrue(formatted.contains("### Protocol Versions"))
+
+        // Should contain Markdown bold syntax
+        assertTrue(formatted.contains("**Columba**"))
+        assertTrue(formatted.contains("**Android**"))
+        assertTrue(formatted.contains("**Device**"))
+    }
+
+    @Test
+    fun `formatForBugReport truncates long identity hash`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "debug",
+                gitCommitHash = "abc1234",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "14",
+                apiLevel = 34,
+                deviceModel = "Pixel 7",
+                manufacturer = "Google",
+                identityHash = "1234567890abcdef1234567890abcdef",
+                reticulumVersion = null,
+                lxmfVersion = null,
+                bleReticulumVersion = null,
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        // Identity hash should be truncated to 8 chars + "..."
+        assertTrue(formatted.contains("**Identity**: 12345678..."))
+        assertFalse(formatted.contains("1234567890abcdef1234567890abcdef"))
+    }
+
+    @Test
+    fun `formatForBugReport preserves short identity hash`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "debug",
+                gitCommitHash = "abc1234",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "14",
+                apiLevel = 34,
+                deviceModel = "Pixel 7",
+                manufacturer = "Google",
+                identityHash = "abc123",
+                reticulumVersion = null,
+                lxmfVersion = null,
+                bleReticulumVersion = null,
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        // Short identity hash should be preserved
+        assertTrue(formatted.contains("**Identity**: abc123"))
+    }
+
+    @Test
+    fun `formatForBugReport omits identity when null`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "debug",
+                gitCommitHash = "abc1234",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "14",
+                apiLevel = 34,
+                deviceModel = "Pixel 7",
+                manufacturer = "Google",
+                identityHash = null,
+                reticulumVersion = null,
+                lxmfVersion = null,
+                bleReticulumVersion = null,
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        assertFalse(formatted.contains("Identity"))
+    }
+
+    @Test
+    fun `formatForBugReport includes all system info fields`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "release",
+                gitCommitHash = "xyz9999",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "13",
+                apiLevel = 33,
+                deviceModel = "Galaxy S21",
+                manufacturer = "Samsung",
+                identityHash = "testHash",
+                reticulumVersion = "1.0.0",
+                lxmfVersion = "0.9.0",
+                bleReticulumVersion = "0.3.0",
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        assertTrue(formatted.contains("**Columba**: 3.0.7 (30007)"))
+        assertTrue(formatted.contains("**Build**: xyz9999 (2025-01-16 10:30)"))
+        assertTrue(formatted.contains("**Build Type**: release"))
+        assertTrue(formatted.contains("**Android**: 13 (API 33)"))
+        assertTrue(formatted.contains("**Device**: Galaxy S21 by Samsung"))
+        assertTrue(formatted.contains("**Reticulum**: 1.0.0"))
+        assertTrue(formatted.contains("**LXMF**: 0.9.0"))
+        assertTrue(formatted.contains("**BLE-Reticulum**: 0.3.0"))
+    }
+
+    @Test
+    fun `formatForBugReport handles null protocol versions`() {
+        val info =
+            SystemInfo(
+                appVersion = "3.0.7",
+                appBuildCode = 30007,
+                buildType = "debug",
+                gitCommitHash = "abc1234",
+                buildDate = "2025-01-16 10:30",
+                androidVersion = "14",
+                apiLevel = 34,
+                deviceModel = "Pixel 7",
+                manufacturer = "Google",
+                identityHash = null,
+                reticulumVersion = null,
+                lxmfVersion = null,
+                bleReticulumVersion = null,
+            )
+
+        val formatted = DeviceInfoUtil.formatForBugReport(info)
+
+        // Should still have Protocol Versions header
+        assertTrue(formatted.contains("### Protocol Versions"))
+        // But no protocol entries
+        assertFalse(formatted.contains("**Reticulum**"))
+        assertFalse(formatted.contains("**LXMF**"))
+        assertFalse(formatted.contains("**BLE-Reticulum**"))
+    }
 }

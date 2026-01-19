@@ -59,6 +59,7 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -110,6 +111,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var interfaceRepository: InterfaceRepository
 
+    @Inject
+    lateinit var crashReportManager: CrashReportManager
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
@@ -152,6 +156,7 @@ class MainActivity : ComponentActivity() {
             ColumbaNavigation(
                 pendingNavigation = pendingNavigation,
                 interfaceRepository = interfaceRepository,
+                crashReportManager = crashReportManager,
             )
         }
     }
@@ -254,6 +259,7 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 fun ColumbaNavigation(
     pendingNavigation: MutableState<PendingNavigation?>,
     interfaceRepository: InterfaceRepository,
+    crashReportManager: CrashReportManager,
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -645,6 +651,7 @@ fun ColumbaNavigation(
                     composable(Screen.Settings.route) {
                         SettingsScreen(
                             viewModel = settingsViewModel,
+                            crashReportManager = crashReportManager,
                             onNavigateToInterfaces = {
                                 navController.navigate("interface_management")
                             },

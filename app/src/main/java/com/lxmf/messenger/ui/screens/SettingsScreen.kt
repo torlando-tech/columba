@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,8 +33,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,7 +56,10 @@ import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
+import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
+import com.lxmf.messenger.util.CrashReport
+import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.DeviceInfoUtil
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
@@ -64,6 +70,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    crashReportManager: CrashReportManager,
     debugViewModel: DebugViewModel = hiltViewModel(),
     onNavigateToInterfaces: () -> Unit = {},
     onNavigateToIdentity: () -> Unit = {},
@@ -78,6 +85,19 @@ fun SettingsScreen(
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Crash report dialog state
+    var showCrashDialog by remember { mutableStateOf(false) }
+    var pendingCrashReport by remember { mutableStateOf<CrashReport?>(null) }
+
+    // Check for pending crash report on launch
+    LaunchedEffect(Unit) {
+        if (crashReportManager.hasPendingCrashReport()) {
+            pendingCrashReport = crashReportManager.getPendingCrashReport()
+            showCrashDialog = true
+        }
+    }
 
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
@@ -290,7 +310,6 @@ fun SettingsScreen(
                 )
 
                 // About section
-                val context = LocalContext.current
                 val systemInfo =
                     remember(
                         state.identityHash,
@@ -324,6 +343,26 @@ fun SettingsScreen(
                             )
                         }
                     },
+                    onReportBug = {
+                        coroutineScope.launch {
+                            val report = crashReportManager.generateBugReport(systemInfo)
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Bug Report", report)
+                            clipboard.setPrimaryClip(clip)
+
+                            // Open GitHub Issues in browser
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://github.com/torlando-tech/columba/issues/new"),
+                            )
+                            context.startActivity(intent)
+
+                            snackbarHostState.showSnackbar(
+                                message = "Bug report copied to clipboard",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    },
                 )
 
                 // Bottom spacing for navigation bar
@@ -333,8 +372,6 @@ fun SettingsScreen(
 
         // QR Code Dialog
         if (state.showQrDialog && state.identityHash != null) {
-            val context = LocalContext.current
-
             IdentityQrCodeDialog(
                 displayName = state.displayName,
                 identityHash = state.identityHash,
@@ -360,6 +397,49 @@ fun SettingsScreen(
         // Service Restart Dialog
         if (state.isRestarting) {
             ServiceRestartDialog()
+        }
+
+        // Crash Report Dialog
+        if (showCrashDialog && pendingCrashReport != null) {
+            CrashReportDialog(
+                crashReport = pendingCrashReport!!,
+                onDismiss = {
+                    crashReportManager.clearPendingCrashReport()
+                    showCrashDialog = false
+                    pendingCrashReport = null
+                },
+                onReportBug = {
+                    val systemInfo = DeviceInfoUtil.getSystemInfo(
+                        context = context,
+                        identityHash = state.identityHash,
+                        reticulumVersion = state.reticulumVersion,
+                        lxmfVersion = state.lxmfVersion,
+                        bleReticulumVersion = state.bleReticulumVersion,
+                    )
+                    coroutineScope.launch {
+                        val report = crashReportManager.generateBugReport(systemInfo, pendingCrashReport)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Bug Report", report)
+                        clipboard.setPrimaryClip(clip)
+
+                        // Open GitHub Issues in browser
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/torlando-tech/columba/issues/new"),
+                        )
+                        context.startActivity(intent)
+
+                        crashReportManager.clearPendingCrashReport()
+                        showCrashDialog = false
+                        pendingCrashReport = null
+
+                        snackbarHostState.showSnackbar(
+                            message = "Bug report copied to clipboard",
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                },
+            )
         }
     }
 }

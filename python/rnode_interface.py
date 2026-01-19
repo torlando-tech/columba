@@ -399,6 +399,12 @@ class ColumbaRNodeInterface:
             RNS.log("Cannot start USB mode - no USB device ID configured", RNS.LOG_ERROR)
             return False
 
+        # If we're reconnecting (interface offline but bridge thinks it's connected),
+        # disconnect first to clear any stale state from previous USB connection
+        if not self.online and self.usb_bridge.isConnected():
+            RNS.log("Clearing stale USB connection before reconnecting...", RNS.LOG_INFO)
+            self.usb_bridge.disconnect()
+
         RNS.log(f"Connecting to RNode via USB (device ID {self.usb_device_id})...", RNS.LOG_INFO)
 
         # Connect via USB bridge (baud rate 115200 is standard for RNode)

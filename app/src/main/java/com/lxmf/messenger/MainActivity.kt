@@ -63,6 +63,7 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
@@ -118,28 +119,52 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var crashReportManager: CrashReportManager
 
+    @Inject
+    lateinit var reticulumProtocol: ReticulumProtocol
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
     // Track last handled USB device to avoid double-processing
     private var lastHandledUsbDeviceId: Int = -1
     private var lastHandledUsbTimestamp: Long = 0
+    private var lastUsbReconnectAttempted: Boolean = false // Track if reconnect was actually attempted
     private val USB_DEBOUNCE_MS = 5000L // 5 second window to ignore duplicate USB events
 
-    // USB device attached receiver
+    // USB device attached/detached receiver
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             Log.d(TAG, "🔌 USB BroadcastReceiver onReceive: action=${intent.action}")
-            if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
-                @Suppress("DEPRECATION")
-                val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                } else {
-                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            when (intent.action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    @Suppress("DEPRECATION")
+                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    if (usbDevice != null) {
+                        Log.d(TAG, "🔌 USB device attached via receiver: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                        handleUsbDeviceAttached(usbDevice)
+                    }
                 }
-                if (usbDevice != null) {
-                    Log.d(TAG, "🔌 USB device attached via receiver: ${usbDevice.deviceName} (${usbDevice.deviceId})")
-                    handleUsbDeviceAttached(usbDevice)
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    @Suppress("DEPRECATION")
+                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    if (usbDevice != null) {
+                        Log.d(TAG, "🔌 USB device detached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                        // Clear debounce state for this device so re-plug will be handled
+                        if (usbDevice.deviceId == lastHandledUsbDeviceId) {
+                            Log.d(TAG, "🔌 Clearing debounce state for detached device")
+                            lastHandledUsbDeviceId = -1
+                            lastHandledUsbTimestamp = 0
+                            lastUsbReconnectAttempted = false
+                        }
+                    }
                 }
             }
         }
@@ -169,13 +194,16 @@ class MainActivity : ComponentActivity() {
         processIntent(intent)
 
         // Register USB receiver to catch USB device attachments while app is running
-        val usbFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+        val usbFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(usbReceiver, usbFilter)
         }
-        Log.d(TAG, "🔌 USB BroadcastReceiver registered")
+        Log.d(TAG, "🔌 USB BroadcastReceiver registered for attach/detach")
 
         setContent {
             // Signal splash screen dismissal once theme loads
@@ -292,17 +320,20 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "🔌 handleUsbDeviceAttached called for device: ${usbDevice.deviceName}")
 
         // Check if we've already handled this device recently (debounce)
+        // But allow retry if previous attempt didn't reconnect due to missing permission
         val now = System.currentTimeMillis()
         if (usbDevice.deviceId == lastHandledUsbDeviceId &&
-            (now - lastHandledUsbTimestamp) < USB_DEBOUNCE_MS
+            (now - lastHandledUsbTimestamp) < USB_DEBOUNCE_MS &&
+            lastUsbReconnectAttempted
         ) {
             Log.d(TAG, "🔌 Ignoring duplicate USB event for device ${usbDevice.deviceId} (debounce)")
             return
         }
 
-        // Mark this device as handled
+        // Mark this device as handled (reconnect attempt status will be set below)
         lastHandledUsbDeviceId = usbDevice.deviceId
         lastHandledUsbTimestamp = now
+        lastUsbReconnectAttempted = false // Will be set to true if reconnect is actually triggered
 
         lifecycleScope.launch {
             try {
@@ -311,9 +342,29 @@ class MainActivity : ComponentActivity() {
                 val existingInterface = interfaceRepository.findRNodeByUsbDeviceId(usbDevice.deviceId)
 
                 if (existingInterface != null) {
-                    // Device is already configured - navigate to stats screen
+                    // Device is already configured - trigger reconnect and navigate to stats screen
                     Log.d(TAG, "🔌 USB device is configured interface: ${existingInterface.name} (id=${existingInterface.id})")
+
+                    // Navigate to stats screen immediately
                     pendingNavigation.value = PendingNavigation.InterfaceStats(existingInterface.id)
+
+                    // Check if we have USB permission before attempting reconnect
+                    val usbManager = getSystemService(UsbManager::class.java)
+                    if (usbManager.hasPermission(usbDevice)) {
+                        // We have permission - reconnect immediately
+                        Log.d(TAG, "🔌 USB permission already granted, triggering reconnect")
+                        lastUsbReconnectAttempted = true
+                        try {
+                            reticulumProtocol.reconnectRNodeInterface()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "🔌 Error triggering RNode reconnect", e)
+                        }
+                    } else {
+                        // No permission yet - the Activity intent (via processIntent) will handle
+                        // reconnection after Android grants permission through UsbResolverActivity
+                        Log.d(TAG, "🔌 No USB permission yet, skipping reconnect (will retry via Activity intent)")
+                        // lastUsbReconnectAttempted stays false, allowing retry after permission granted
+                    }
                     Log.d(TAG, "🔌 pendingNavigation set to InterfaceStats(${existingInterface.id})")
                 } else {
                     // Device is not configured - navigate to RNode wizard with USB pre-selected

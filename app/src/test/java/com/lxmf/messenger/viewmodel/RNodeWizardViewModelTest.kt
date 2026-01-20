@@ -2424,7 +2424,7 @@ class RNodeWizardViewModelTest {
             // Given
             val mockUsbBridge = mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge>(relaxed = true)
             val mockDevice1 =
-                mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.UsbDeviceInfo> {
+                mockk<com.lxmf.messenger.reticulum.usb.UsbDeviceInfo> {
                     every { deviceId } returns 1001
                     every { vendorId } returns 0x0403
                     every { productId } returns 0x6001
@@ -2435,7 +2435,7 @@ class RNodeWizardViewModelTest {
                     every { driverType } returns "FTDI"
                 }
             val mockDevice2 =
-                mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.UsbDeviceInfo> {
+                mockk<com.lxmf.messenger.reticulum.usb.UsbDeviceInfo> {
                     every { deviceId } returns 1002
                     every { vendorId } returns 0x1A86
                     every { productId } returns 0x7523
@@ -2601,7 +2601,7 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             // Then
-            coVerify { mockUsbBridge.requestPermission(1001, any()) }
+            coVerify { mockUsbBridge.requestPermission(1001, any<(Boolean) -> Unit>()) }
 
             unmockkObject(com.lxmf.messenger.reticulum.usb.KotlinUSBBridge)
         }
@@ -2641,14 +2641,14 @@ class RNodeWizardViewModelTest {
             // Given
             val mockUsbBridge = mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge>(relaxed = true)
             val mockDevice =
-                mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.UsbDeviceInfo> {
+                mockk<com.lxmf.messenger.reticulum.usb.UsbDeviceInfo> {
                     every { deviceId } returns 1001
                     every { vendorId } returns 0x0403
                     every { productId } returns 0x6001
                     every { deviceName } returns "/dev/tty.usb"
-                    every { manufacturerName } returns "FTDI"
-                    every { productName } returns "RNode"
-                    every { serialNumber } returns "A123"
+                    every { manufacturerName } returns "FTDI" as String?
+                    every { productName } returns "RNode" as String?
+                    every { serialNumber } returns "A123" as String?
                     every { driverType } returns "FTDI"
                 }
 
@@ -2671,7 +2671,7 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             // Then - should request permission
-            coVerify { mockUsbBridge.requestPermission(1001, any()) }
+            coVerify { mockUsbBridge.requestPermission(1001, any<(Boolean) -> Unit>()) }
 
             // State should reflect permission denied
             viewModel.state.test {
@@ -2689,14 +2689,14 @@ class RNodeWizardViewModelTest {
             // Given
             val mockUsbBridge = mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge>(relaxed = true)
             val mockDevice =
-                mockk<com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.UsbDeviceInfo> {
+                mockk<com.lxmf.messenger.reticulum.usb.UsbDeviceInfo> {
                     every { deviceId } returns 1001
                     every { vendorId } returns 0x0403
                     every { productId } returns 0x6001
                     every { deviceName } returns "/dev/tty.usb"
-                    every { manufacturerName } returns "FTDI"
-                    every { productName } returns "RNode"
-                    every { serialNumber } returns "A123"
+                    every { manufacturerName } returns "FTDI" as String?
+                    every { productName } returns "RNode" as String?
+                    every { serialNumber } returns "A123" as String?
                     every { driverType } returns "FTDI"
                 }
 

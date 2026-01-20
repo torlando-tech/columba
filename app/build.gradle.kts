@@ -1,5 +1,31 @@
 import java.util.Base64
 
+// Helper function to find a compatible Python version for Chaquopy build
+fun findCompatiblePython(): String {
+    // Try compatible Python versions in order of preference
+    val compatibleVersions = listOf("python3.11", "python3.10", "python3.9", "python3.8")
+
+    for (pyCmd in compatibleVersions) {
+        try {
+            val result = Runtime.getRuntime().exec(arrayOf("which", pyCmd))
+            result.waitFor()
+            if (result.exitValue() == 0) {
+                val path = result.inputStream.bufferedReader().readText().trim()
+                if (path.isNotEmpty()) {
+                    println("Using $pyCmd for Chaquopy build: $path")
+                    return pyCmd
+                }
+            }
+        } catch (e: Exception) {
+            // Continue to next version
+        }
+    }
+
+    // Fall back to python3 (may fail if incompatible version)
+    println("Warning: No compatible Python 3.8-3.11 found, using default python3")
+    return "python3"
+}
+
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -248,7 +274,9 @@ chaquopy {
 
         // Include Python source files (needed for pkgutil.get_data() to deploy BLE interface)
         pyc {
-            src = true
+            // Temporarily disable for local builds with Python 3.14+
+            // Re-enable when Python 3.11 is available or Chaquopy supports 3.14
+            src = false // was: true
         }
 
         // Extract package files so .py sources are accessible at runtime

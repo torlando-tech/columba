@@ -606,3 +606,44 @@ private fun StatsInfoRow(
         )
     }
 }
+
+private fun getConnectionIcon(
+    interfaceType: String,
+    connectionMode: String?,
+): Pair<ImageVector, String> {
+    return when {
+        interfaceType == "RNode" && connectionMode == "tcp" -> Icons.Default.Wifi to "RNode (TCP/WiFi)"
+        interfaceType == "RNode" && connectionMode == "usb" -> Icons.Default.Usb to "RNode (USB)"
+        interfaceType == "RNode" && connectionMode == "ble" -> Icons.Default.Bluetooth to "RNode (BLE)"
+        interfaceType == "RNode" -> Icons.Default.Bluetooth to "RNode (Classic)"
+        interfaceType == "TCPClient" -> Icons.Default.Wifi to "TCP Client"
+        interfaceType == "TCPServer" -> Icons.Default.Wifi to "TCP Server"
+        interfaceType == "AndroidBLE" -> Icons.Default.Bluetooth to "Bluetooth LE"
+        interfaceType == "AutoInterface" -> Icons.Default.SignalCellularAlt to "Auto Discovery"
+        interfaceType == "UDP" -> Icons.Default.Wifi to "UDP"
+        else -> Icons.Default.SignalCellularAlt to interfaceType
+    }
+}
+
+private fun formatFrequency(hz: Long): String {
+    val mhz = hz / 1_000_000.0
+    return String.format(Locale.US, "%.3f MHz", mhz)
+}
+
+private fun formatBandwidth(hz: Int): String {
+    return when {
+        hz >= 1_000_000 -> String.format(Locale.US, "%.1f MHz", hz / 1_000_000.0)
+        hz >= 1_000 -> String.format(Locale.US, "%.1f kHz", hz / 1_000.0)
+        else -> "$hz Hz"
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return String.format(Locale.US, "%.1f MB", mb)
+    val gb = mb / 1024.0
+    return String.format(Locale.US, "%.2f GB", gb)
+}

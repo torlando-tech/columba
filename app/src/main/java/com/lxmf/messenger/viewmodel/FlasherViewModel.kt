@@ -249,12 +249,16 @@ class FlasherViewModel
                     val deviceInfo = flasher.detectDevice(device.deviceId)
                     if (deviceInfo != null) {
                         Log.i(TAG, "Detected device: ${deviceInfo.board.displayName}")
+                        // If board is unknown, enable manual selection mode
+                        val needsManualSelection = deviceInfo.board == RNodeBoard.UNKNOWN
                         _state.update {
                             it.copy(
                                 isDetecting = false,
                                 detectedInfo = deviceInfo,
-                                selectedBoard = deviceInfo.board,
+                                // Don't set selectedBoard if unknown - user must select manually
+                                selectedBoard = if (needsManualSelection) null else deviceInfo.board,
                                 selectedBand = FrequencyBand.fromModelCode(deviceInfo.model),
+                                useManualBoardSelection = needsManualSelection,
                             )
                         }
                     } else {

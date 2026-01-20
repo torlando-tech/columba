@@ -282,4 +282,27 @@ class NetworkChangeCallbackTest {
             // This test is ignored because mockk's coAnswers with delay() doesn't properly
             // integrate with kotlinx.coroutines.test virtual time
         }
+
+    @Test
+    fun `announce is called with coroutine scope`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } returns Unit
+
+            // Simulate the actual callback pattern from ReticulumService
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                } catch (_: Exception) {
+                    // Handle exception
+                }
+            }
+
+            advanceUntilIdle()
+
+            // Verify announce was called
+            coVerify { mockBinder.announceLxmfDestination() }
+        }
 }

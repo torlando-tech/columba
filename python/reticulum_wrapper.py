@@ -394,30 +394,6 @@ class ReticulumWrapper:
         usb_bridge.set_usb_bridge(bridge)
         log_info("ReticulumWrapper", "set_usb_bridge", "KotlinUSBBridge instance set")
 
-    def query_usb_device_hash(self, device_id: int) -> Dict:
-        """
-        Query the device hash from an RNode connected via USB.
-
-        This temporarily connects to the device, sends CMD_DEV_HASH,
-        receives the 16-byte response, and returns bytes 14-15 formatted
-        as a hex string (which matches the Bluetooth device name suffix,
-        e.g., "958F" for "RNode 958F").
-
-        Args:
-            device_id: Integer device ID from get_connected_usb_devices()
-
-        Returns:
-            Dict with 'success' bool and 'identifier' string (e.g., "958F")
-            On failure, 'error' contains the error message
-        """
-        import usb_bridge
-        if not usb_bridge.is_available():
-            return {'success': False, 'error': 'USB bridge not available'}
-        result = usb_bridge.query_device_hash(device_id)
-        log_info("ReticulumWrapper", "query_usb_device_hash",
-                f"device_id={device_id}, result={result}")
-        return result
-
     def set_audio_bridge(self, bridge):
         """
         Set the KotlinAudioBridge instance for voice call audio operations.

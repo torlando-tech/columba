@@ -1246,13 +1246,31 @@ class RNodeWizardViewModel
                                 Log.w(TAG, "Failed to start observing device presence", e)
                             }
 
-                            // Device is now associated - select it
+                            // Device is now associated - select it and update interface name
                             _state.update {
+                                // Auto-generate interface name if user hasn't customized it
+                                val newInterfaceName =
+                                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                                        // Extract identifier from device name (e.g., "RNode 958F" -> "958F")
+                                        val identifier =
+                                            if (device.name.startsWith("RNode ")) {
+                                                device.name.removePrefix("RNode ").trim()
+                                            } else {
+                                                device.name
+                                            }
+                                        // Add BLE/BT suffix based on device type
+                                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
+                                        "RNode $identifier $suffix"
+                                    } else {
+                                        it.interfaceName
+                                    }
+
                                 it.copy(
                                     selectedDevice = device,
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
                                     showManualEntry = false,
+                                    interfaceName = newInterfaceName,
                                 )
                             }
                             // Cache the device type since it's now confirmed

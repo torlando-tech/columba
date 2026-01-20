@@ -93,6 +93,7 @@ import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.VoiceCallScreen
 import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
+import com.lxmf.messenger.ui.screens.flasher.RNodeFlasherScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
@@ -781,6 +782,7 @@ fun ColumbaNavigation(
             "theme_editor",
             "rnode_wizard",
             "tcp_client_wizard",
+            "rnode_flasher",
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
@@ -1131,6 +1133,19 @@ fun ColumbaNavigation(
                                     launchSingleTop = true
                                     restoreState = false // Don't restore state so filter applies
                                 }
+                            },
+                            onNavigateToFlasher = {
+                                navController.navigate("rnode_flasher")
+                            },
+                        )
+                    }
+
+                    composable("rnode_flasher") {
+                        RNodeFlasherScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onComplete = { navController.popBackStack() },
+                            onNavigateToRNodeWizard = {
+                                navController.navigate("rnode_wizard")
                             },
                         )
                     }

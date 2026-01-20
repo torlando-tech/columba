@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
@@ -221,6 +222,9 @@ class RNodeWizardViewModel
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
             private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
             private const val TCP_CONNECTION_TIMEOUT_MS = 5000 // 5 second TCP connection timeout
+
+            // Test configuration flag - disable RSSI polling during tests
+            internal var enableRssiPolling = true
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -407,9 +411,12 @@ class RNodeWizardViewModel
          */
         private fun startRssiPolling() {
             rssiPollingJob?.cancel()
+            if (!enableRssiPolling) {
+                return  // Skip during tests
+            }
             rssiPollingJob =
                 viewModelScope.launch {
-                    while (true) {
+                    while (isActive) {
                         delay(RSSI_UPDATE_INTERVAL_MS)
                         val rssi = configManager.getRNodeRssi()
                         if (rssi > -100) {

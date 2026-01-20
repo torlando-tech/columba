@@ -77,6 +77,9 @@ class RNodeWizardViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        // Disable RSSI polling during tests
+        RNodeWizardViewModel.enableRssiPolling = false
+
         context = mockk(relaxed = true)
         interfaceRepository = mockk(relaxed = true)
         configManager = mockk(relaxed = true)
@@ -100,6 +103,9 @@ class RNodeWizardViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         clearAllMocks()
+
+        // Restore default
+        RNodeWizardViewModel.enableRssiPolling = true
     }
 
     // ========== State Transition Tests ==========

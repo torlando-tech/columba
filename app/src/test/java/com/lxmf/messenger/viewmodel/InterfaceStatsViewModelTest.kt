@@ -81,6 +81,10 @@ class InterfaceStatsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        // Disable background operations during tests
+        InterfaceStatsViewModel.enableStatsPolling = false
+        InterfaceStatsViewModel.enableReconnectSignalObserver = false
+
         interfaceRepository = mockk(relaxed = true)
         reticulumProtocol = mockk(relaxed = true)
         configManager = mockk(relaxed = true)
@@ -95,6 +99,10 @@ class InterfaceStatsViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         clearAllMocks()
+
+        // Restore defaults for other tests
+        InterfaceStatsViewModel.enableStatsPolling = true
+        InterfaceStatsViewModel.enableReconnectSignalObserver = true
     }
 
     private fun createViewModel(interfaceId: Long): InterfaceStatsViewModel {
@@ -262,7 +270,8 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
+        advanceTimeBy(1100) // Allow loadInterface to complete
+        viewModel.refreshStats() // Manually refresh stats since polling is disabled
 
         viewModel.state.test {
             val state = awaitItem()
@@ -283,7 +292,8 @@ class InterfaceStatsViewModelTest {
         every { configManager.getRNodeRssi() } returns -75
 
         val viewModel = createViewModel(1L)
-        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
+        advanceTimeBy(1100) // Allow loadInterface to complete
+        viewModel.refreshStats() // Manually refresh stats since polling is disabled
 
         viewModel.state.test {
             val state = awaitItem()
@@ -420,7 +430,8 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(3L)
-        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
+        advanceTimeBy(1100) // Allow loadInterface to complete
+        viewModel.refreshStats() // Manually refresh stats since polling is disabled
 
         viewModel.state.test {
             val state = awaitItem()
@@ -528,8 +539,8 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        // First refresh happens during init, but timeout hasn't passed
-        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
+        advanceTimeBy(1100) // Allow loadInterface to complete
+        viewModel.refreshStats() // Manually refresh stats since polling is disabled
 
         viewModel.state.test {
             val state = awaitItem()

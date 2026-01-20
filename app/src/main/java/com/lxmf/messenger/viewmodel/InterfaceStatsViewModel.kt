@@ -79,6 +79,10 @@ class InterfaceStatsViewModel
             private const val STATS_REFRESH_INTERVAL_MS = 1000L // Poll faster for responsive UI
             private const val CONNECTING_TIMEOUT_MS = 15000L // Stop showing "connecting" after 15s
             private const val ACTION_USB_PERMISSION = "com.lxmf.messenger.USB_PERMISSION"
+
+            // Test configuration flags - disable background operations during tests
+            internal var enableStatsPolling = true
+            internal var enableReconnectSignalObserver = true
         }
 
         private val usbManager: UsbManager by lazy {
@@ -118,8 +122,12 @@ class InterfaceStatsViewModel
         init {
             if (interfaceId >= 0) {
                 loadInterface()
-                startStatsPolling()
-                observeReconnectSignal()
+                if (enableStatsPolling) {
+                    startStatsPolling()
+                }
+                if (enableReconnectSignalObserver) {
+                    observeReconnectSignal()
+                }
             } else {
                 _state.update { it.copy(isLoading = false, errorMessage = "Invalid interface ID") }
             }
@@ -187,7 +195,7 @@ class InterfaceStatsViewModel
             }
         }
 
-        private suspend fun refreshStats() {
+        internal suspend fun refreshStats() {
             val entity = _state.value.interfaceEntity ?: return
 
             try {

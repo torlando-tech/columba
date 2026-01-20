@@ -1938,6 +1938,24 @@ class RNodeWizardViewModel
         fun exitUsbBluetoothPairingMode() {
             viewModelScope.launch {
                 withContext(Dispatchers.IO) {
+                    // Send command to exit pairing mode: stop BT (0x00), then start BT (0x01)
+                    // CMD_BT_CTRL = 0x46
+                    val stopPairingCmd = byteArrayOf(
+                        0xC0.toByte(),  // FEND
+                        0x46.toByte(),  // CMD_BT_CTRL
+                        0x00.toByte(),  // Stop Bluetooth (exits pairing mode)
+                        0xC0.toByte(),  // FEND
+                    )
+                    val restartBtCmd = byteArrayOf(
+                        0xC0.toByte(),  // FEND
+                        0x46.toByte(),  // CMD_BT_CTRL
+                        0x01.toByte(),  // Start Bluetooth
+                        0xC0.toByte(),  // FEND
+                    )
+                    usbBridge.write(stopPairingCmd)
+                    delay(100)  // Brief delay between commands
+                    usbBridge.write(restartBtCmd)
+                    delay(100)
                     usbBridge.disconnect()
                 }
                 _state.update {

@@ -93,6 +93,11 @@ class FirmwareDownloader {
 
     /**
      * Find firmware asset for a specific board and frequency band.
+     *
+     * Some firmware files are "unified" and support multiple frequency bands
+     * (configured at runtime), so they don't have a band suffix in the filename.
+     * This function first tries to find a band-specific file, then falls back
+     * to a unified firmware file.
      */
     fun findFirmwareAsset(
         release: GitHubRelease,
@@ -102,11 +107,24 @@ class FirmwareDownloader {
         val prefix = board.firmwarePrefix
         val bandSuffix = frequencyBand.modelSuffix
 
-        return release.assets.find { asset ->
+        // First, try to find a band-specific firmware file
+        val bandSpecific = release.assets.find { asset ->
             val name = asset.name.lowercase()
             name.startsWith(prefix.lowercase()) &&
-                (bandSuffix.isEmpty() || name.contains(bandSuffix.lowercase())) &&
+                bandSuffix.isNotEmpty() &&
+                name.contains(bandSuffix.lowercase()) &&
                 name.endsWith(".zip")
+        }
+
+        if (bandSpecific != null) {
+            return bandSpecific
+        }
+
+        // Fall back to unified firmware (no band suffix)
+        // Match exactly: {prefix}.zip (not {prefix}_something.zip)
+        return release.assets.find { asset ->
+            val name = asset.name.lowercase()
+            name == "${prefix.lowercase()}.zip"
         }
     }
 

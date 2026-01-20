@@ -2416,7 +2416,7 @@ class RNodeWizardViewModel
                             bondResult.await()
                         }
                     } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                        Log.w(TAG, "USB-assisted: Pairing timed out for ${device.name}")
+                        Log.w(TAG, "USB-assisted: Pairing timed out for ${device.name}", e)
                         false
                     }
 

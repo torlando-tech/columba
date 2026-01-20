@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
@@ -52,6 +53,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    private lateinit var context: Context
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var identityRepository: IdentityRepository
     private lateinit var reticulumProtocol: ReticulumProtocol
@@ -86,6 +88,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
 
+        context = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
         reticulumProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
@@ -120,6 +123,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.defaultSharingDurationFlow } returns MutableStateFlow("ONE_HOUR")
         every { settingsRepository.locationPrecisionRadiusFlow } returns MutableStateFlow(0)
         every { settingsRepository.imageCompressionPresetFlow } returns MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
+        every { settingsRepository.notificationsEnabledFlow } returns MutableStateFlow(false)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -147,6 +151,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
     private fun createViewModel(): SettingsViewModel {
         return SettingsViewModel(
+            context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,

@@ -1433,19 +1433,17 @@ class TestKISSBluetoothCommands:
 
     def test_bt_pin_response_frame_structure(self):
         """Test the expected structure of a Bluetooth PIN response frame."""
-        # A PIN response is: FEND CMD_BT_PIN <4 byte big-endian integer> FEND
-        # Example: PIN 123456 -> bytes [0x00, 0x01, 0xE2, 0x40] (123456 in big-endian)
-        pin_int = 123456
-        pin_bytes = bytes([
-            (pin_int >> 24) & 0xFF,
-            (pin_int >> 16) & 0xFF,
-            (pin_int >> 8) & 0xFF,
-            pin_int & 0xFF,
-        ])
+        # A PIN response is: FEND CMD_BT_PIN <4-byte big-endian integer> FEND
+        # Example: PIN 123456 -> bytes [0x00, 0x01, 0xE2, 0x40]
+        pin_value = 123456
+        pin_bytes = pin_value.to_bytes(4, byteorder='big')
         kiss_frame = bytes([KISS.FEND, KISS.CMD_BT_PIN]) + pin_bytes + bytes([KISS.FEND])
 
         assert len(kiss_frame) == 7  # 1 + 1 + 4 + 1
         assert kiss_frame[0] == KISS.FEND
         assert kiss_frame[1] == KISS.CMD_BT_PIN
-        assert kiss_frame[2:6] == bytes([0x00, 0x01, 0xE2, 0x40])
+        assert kiss_frame[2:6] == pin_bytes
         assert kiss_frame[6] == KISS.FEND
+        # Verify the PIN value can be decoded back
+        decoded_pin = int.from_bytes(kiss_frame[2:6], byteorder='big')
+        assert decoded_pin == 123456

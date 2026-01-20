@@ -375,6 +375,8 @@ class SettingsViewModel
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
                             bleReticulumVersion = _state.value.bleReticulumVersion,
+                            // Preserve card expansion states
+                            cardExpansionStates = _state.value.cardExpansionStates,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value

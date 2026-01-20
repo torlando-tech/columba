@@ -58,7 +58,6 @@ import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
-import com.lxmf.messenger.ui.screens.settings.cards.TelemetryCollectorCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
@@ -256,26 +255,13 @@ fun SettingsScreen(
                     onDefaultDurationChange = { viewModel.setDefaultSharingDuration(it) },
                     locationPrecisionRadius = state.locationPrecisionRadius,
                     onLocationPrecisionRadiusChange = { viewModel.setLocationPrecisionRadius(it) },
-                )
-
-                MapSourcesCard(
-                    isExpanded = state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] ?: false,
-                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.MAP_SOURCES, it) },
-                    httpEnabled = state.mapSourceHttpEnabled,
-                    onHttpEnabledChange = { viewModel.setMapSourceHttpEnabled(it) },
-                    rmspEnabled = state.mapSourceRmspEnabled,
-                    onRmspEnabledChange = { viewModel.setMapSourceRmspEnabled(it) },
-                    rmspServerCount = state.rmspServerCount,
-                    hasOfflineMaps = state.hasOfflineMaps,
-                )
-
-                TelemetryCollectorCard(
-                    enabled = state.telemetryCollectorEnabled,
-                    collectorAddress = state.telemetryCollectorAddress,
-                    sendIntervalSeconds = state.telemetrySendIntervalSeconds,
-                    lastSendTime = state.lastTelemetrySendTime,
-                    isSending = state.isSendingTelemetry,
-                    onEnabledChange = { enabled ->
+                    // Telemetry collector props
+                    telemetryCollectorEnabled = state.telemetryCollectorEnabled,
+                    telemetryCollectorAddress = state.telemetryCollectorAddress,
+                    telemetrySendIntervalSeconds = state.telemetrySendIntervalSeconds,
+                    lastTelemetrySendTime = state.lastTelemetrySendTime,
+                    isSendingTelemetry = state.isSendingTelemetry,
+                    onTelemetryEnabledChange = { enabled ->
                         if (enabled) {
                             // Check permission before enabling
                             if (LocationPermissionManager.hasPermission(context)) {
@@ -290,9 +276,9 @@ fun SettingsScreen(
                             viewModel.setTelemetryCollectorEnabled(false)
                         }
                     },
-                    onCollectorAddressChange = { viewModel.setTelemetryCollectorAddress(it) },
-                    onSendIntervalChange = { viewModel.setTelemetrySendInterval(it) },
-                    onSendNow = {
+                    onTelemetryCollectorAddressChange = { viewModel.setTelemetryCollectorAddress(it) },
+                    onTelemetrySendIntervalChange = { viewModel.setTelemetrySendInterval(it) },
+                    onTelemetrySendNow = {
                         // Check permission before sending
                         if (LocationPermissionManager.hasPermission(context)) {
                             viewModel.sendTelemetryNow()
@@ -301,6 +287,17 @@ fun SettingsScreen(
                             showTelemetryPermissionSheet = true
                         }
                     },
+                )
+
+                MapSourcesCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.MAP_SOURCES, it) },
+                    httpEnabled = state.mapSourceHttpEnabled,
+                    onHttpEnabledChange = { viewModel.setMapSourceHttpEnabled(it) },
+                    rmspEnabled = state.mapSourceRmspEnabled,
+                    onRmspEnabledChange = { viewModel.setMapSourceRmspEnabled(it) },
+                    rmspServerCount = state.rmspServerCount,
+                    hasOfflineMaps = state.hasOfflineMaps,
                 )
 
                 MessageDeliveryRetrievalCard(

@@ -1013,11 +1013,13 @@ class ColumbaRNodeInterface:
                                 RNS.log("RNode detected!", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_BT_PIN:
                             # Bluetooth PIN response during pairing mode
-                            # PIN is sent as 6 ASCII digits
-                            if len(data_buffer) < 6:
+                            # PIN is sent as 4 bytes (big-endian 32-bit integer)
+                            if len(data_buffer) < 4:
                                 data_buffer += bytes([byte])
-                                if len(data_buffer) == 6:
-                                    pin = data_buffer.decode('ascii')
+                                if len(data_buffer) == 4:
+                                    # Parse as big-endian 32-bit integer
+                                    pin_int = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
+                                    pin = f"{pin_int:06d}"
                                     RNS.log(f"RNode Bluetooth PIN: {pin}", RNS.LOG_INFO)
                                     # Notify USB bridge to surface PIN to UI
                                     if self.usb_bridge:

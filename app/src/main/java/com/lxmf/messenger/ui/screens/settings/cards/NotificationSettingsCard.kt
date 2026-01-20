@@ -1,5 +1,7 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -10,7 +12,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
+import com.lxmf.messenger.util.NotificationPermissionManager
 
 @Composable
 fun NotificationSettingsCard(
@@ -20,6 +24,18 @@ fun NotificationSettingsCard(
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onManageClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+
+    // Permission launcher for Android 13+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            // Call the callback with the permission result
+            // If denied, notifications stay disabled
+            onNotificationsEnabledChange(isGranted)
+        }
+
     CollapsibleSettingsCard(
         title = "Notifications",
         icon = Icons.Default.Notifications,
@@ -28,7 +44,17 @@ fun NotificationSettingsCard(
         headerAction = {
             Switch(
                 checked = notificationsEnabled,
-                onCheckedChange = onNotificationsEnabledChange,
+                onCheckedChange = { enabled ->
+                    if (enabled && NotificationPermissionManager.needsPermissionRequest(context)) {
+                        // Request permission before enabling on Android 13+
+                        NotificationPermissionManager.getRequiredPermission()?.let { permission ->
+                            permissionLauncher.launch(permission)
+                        }
+                    } else {
+                        // Permission already granted, not needed, or disabling
+                        onNotificationsEnabledChange(enabled)
+                    }
+                },
             )
         },
     ) {

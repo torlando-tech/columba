@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -14,11 +15,14 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.theme.PresetTheme
+import com.lxmf.messenger.util.NotificationPermissionManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +56,7 @@ class SettingsViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    private lateinit var context: Context
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var identityRepository: IdentityRepository
     private lateinit var reticulumProtocol: ReticulumProtocol
@@ -79,6 +84,7 @@ class SettingsViewModelTest {
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
     private val imageCompressionPresetFlow =
         MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
+    private val notificationsEnabledFlow = MutableStateFlow(true)
 
     @Before
     fun setup() {
@@ -87,6 +93,7 @@ class SettingsViewModelTest {
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
 
+        context = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         identityRepository = mockk(relaxed = true)
         reticulumProtocol = mockk(relaxed = true)
@@ -117,6 +124,7 @@ class SettingsViewModelTest {
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
+        every { settingsRepository.notificationsEnabledFlow } returns notificationsEnabledFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -144,6 +152,7 @@ class SettingsViewModelTest {
 
     private fun createViewModel(): SettingsViewModel {
         return SettingsViewModel(
+            context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
@@ -1440,6 +1449,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -1484,6 +1494,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -2074,6 +2085,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -2115,6 +2127,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -2732,6 +2745,80 @@ class SettingsViewModelTest {
 
                 cancelAndConsumeRemainingEvents()
             }
+        }
+
+    // endregion
+
+    // region Notification Permission Validation Tests
+
+    @Test
+    fun `validateNotificationPermission disables notifications when enabled but permission not granted`() =
+        runTest {
+            // Given: Notifications are enabled but permission is not granted
+            notificationsEnabledFlow.value = true
+            mockkObject(NotificationPermissionManager)
+            every { NotificationPermissionManager.hasPermission(any()) } returns false
+
+            // When: ViewModel is created (which loads notification settings)
+            viewModel = createViewModel()
+
+            // Then: Notifications should be disabled because permission is not granted
+            coVerify(timeout = 1000) { settingsRepository.saveNotificationsEnabled(false) }
+
+            unmockkObject(NotificationPermissionManager)
+        }
+
+    @Test
+    fun `validateNotificationPermission does nothing when permission is granted`() =
+        runTest {
+            // Given: Notifications are enabled and permission is granted
+            notificationsEnabledFlow.value = true
+            mockkObject(NotificationPermissionManager)
+            every { NotificationPermissionManager.hasPermission(any()) } returns true
+
+            // When: ViewModel is created
+            viewModel = createViewModel()
+
+            // Then: Notifications should NOT be disabled (saveNotificationsEnabled(false) should not be called)
+            coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(false) }
+
+            unmockkObject(NotificationPermissionManager)
+        }
+
+    @Test
+    fun `validateNotificationPermission does nothing when notifications already disabled`() =
+        runTest {
+            // Given: Notifications are already disabled
+            notificationsEnabledFlow.value = false
+            mockkObject(NotificationPermissionManager)
+            every { NotificationPermissionManager.hasPermission(any()) } returns false
+
+            // When: ViewModel is created
+            viewModel = createViewModel()
+
+            // Then: saveNotificationsEnabled should not be called to disable
+            // (notifications are already disabled, no need to save false again)
+            coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(false) }
+
+            unmockkObject(NotificationPermissionManager)
+        }
+
+    @Test
+    fun `validateNotificationPermission handles permission on Android 12 and below`() =
+        runTest {
+            // Given: Notifications are enabled and permission is always granted on Android 12-
+            notificationsEnabledFlow.value = true
+            mockkObject(NotificationPermissionManager)
+            // On Android 12 and below, hasPermission always returns true
+            every { NotificationPermissionManager.hasPermission(any()) } returns true
+
+            // When: ViewModel is created
+            viewModel = createViewModel()
+
+            // Then: Notifications should remain enabled (no saveNotificationsEnabled(false) call)
+            coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(false) }
+
+            unmockkObject(NotificationPermissionManager)
         }
 
     // endregion

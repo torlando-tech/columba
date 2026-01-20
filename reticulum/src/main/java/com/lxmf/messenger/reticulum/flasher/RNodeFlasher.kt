@@ -225,7 +225,7 @@ class RNodeFlasher(
                     flashNrf52Direct(deviceId, firmwareStream)
                 }
                 RNodePlatform.ESP32 -> {
-                    flashEsp32Direct(deviceId, firmwareStream, consoleImage)
+                    flashEsp32Direct(deviceId, firmwareStream, info.board, consoleImage)
                 }
                 else -> {
                     _flashState.value = FlashState.Error(
@@ -271,6 +271,7 @@ class RNodeFlasher(
         return espToolFlasher.flash(
             firmwarePackage.getInputStream(),
             deviceId,
+            firmwarePackage.board,
             consoleImage,
             createEspProgressCallback(),
         )
@@ -279,11 +280,13 @@ class RNodeFlasher(
     private suspend fun flashEsp32Direct(
         deviceId: Int,
         firmwareStream: InputStream,
+        board: RNodeBoard,
         consoleImage: InputStream?,
     ): Boolean {
         return espToolFlasher.flash(
             firmwareStream,
             deviceId,
+            board,
             consoleImage,
             createEspProgressCallback(),
         )

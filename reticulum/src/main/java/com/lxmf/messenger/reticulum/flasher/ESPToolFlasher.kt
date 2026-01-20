@@ -75,11 +75,33 @@ class ESPToolFlasher(
         private const val ESP_CHECKSUM_MAGIC: Byte = 0xEF.toByte()
 
         // Standard flash offsets for ESP32
-        const val OFFSET_BOOTLOADER = 0x1000
+        const val OFFSET_BOOTLOADER_ESP32 = 0x1000
+        const val OFFSET_BOOTLOADER_ESP32_S3 = 0x0 // ESP32-S3 bootloader is at 0x0!
         const val OFFSET_PARTITIONS = 0x8000
         const val OFFSET_BOOT_APP0 = 0xE000
         const val OFFSET_APPLICATION = 0x10000
         const val OFFSET_CONSOLE = 0x210000
+
+        /**
+         * Check if a board uses ESP32-S3 (different bootloader address).
+         */
+        fun isEsp32S3(board: RNodeBoard): Boolean {
+            return when (board) {
+                RNodeBoard.TBEAM_S,    // T-Beam Supreme
+                RNodeBoard.TDECK,      // T-Deck
+                RNodeBoard.HELTEC_V3,  // Heltec LoRa32 v3
+                RNodeBoard.HELTEC_V4,  // Heltec LoRa32 v4
+                -> true
+                else -> false
+            }
+        }
+
+        /**
+         * Get the bootloader offset for a board.
+         */
+        fun getBootloaderOffset(board: RNodeBoard): Int {
+            return if (isEsp32S3(board)) OFFSET_BOOTLOADER_ESP32_S3 else OFFSET_BOOTLOADER_ESP32
+        }
 
         // Bootloader entry timing
         private const val RESET_DELAY_MS = 100L
@@ -102,6 +124,7 @@ class ESPToolFlasher(
      *
      * @param firmwareZipStream Input stream of the firmware ZIP file
      * @param deviceId USB device ID to flash
+     * @param board The target board (used to determine ESP32 vs ESP32-S3)
      * @param consoleImageStream Optional console image (SPIFFS) stream
      * @param progressCallback Progress callback
      * @return true if flashing succeeded
@@ -109,9 +132,13 @@ class ESPToolFlasher(
     suspend fun flash(
         firmwareZipStream: InputStream,
         deviceId: Int,
+        board: RNodeBoard = RNodeBoard.UNKNOWN,
         consoleImageStream: InputStream? = null,
         progressCallback: ProgressCallback,
     ): Boolean = withContext(Dispatchers.IO) {
+        val bootloaderOffset = getBootloaderOffset(board)
+        val isS3 = isEsp32S3(board)
+        Log.d(TAG, "Flashing ${board.displayName}, ESP32-S3=$isS3, bootloader offset=0x${bootloaderOffset.toString(16)}")
         try {
             progressCallback.onProgress(0, "Parsing firmware package...")
 
@@ -170,7 +197,7 @@ class ESPToolFlasher(
             firmwareData.bootloader?.let { bootloader ->
                 success = flashRegion(
                     bootloader,
-                    OFFSET_BOOTLOADER,
+                    bootloaderOffset,
                     "bootloader",
                     currentProgress,
                     20,

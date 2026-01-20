@@ -284,8 +284,9 @@ class FlasherViewModel
 
         fun canProceedFromDetection(): Boolean {
             val currentState = _state.value
-            return currentState.detectedInfo != null ||
-                (currentState.useManualBoardSelection && currentState.selectedBoard != null)
+            // Can proceed if device detected OR manual board selection is enabled
+            // (board will be selected in the firmware selection step)
+            return currentState.detectedInfo != null || currentState.useManualBoardSelection
         }
 
         // ==================== Step 3: Firmware Selection ====================

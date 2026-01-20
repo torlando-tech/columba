@@ -761,6 +761,161 @@ class KotlinUSBBridge(
     fun getConnectedDeviceId(): Int? = if (isConnected.get()) connectedDeviceId else null
 
     /**
+     * Change the baud rate of the current connection.
+     * Used for DFU mode entry (1200 baud touch) and flashing protocols.
+     *
+     * @param baudRate New baud rate to set
+     * @return true if successful, false otherwise
+     */
+    fun setBaudRate(baudRate: Int): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set baud rate - not connected")
+            return false
+        }
+
+        val port = currentPort ?: run {
+            Log.e(TAG, "Port is null")
+            return false
+        }
+
+        return synchronized(this) {
+            try {
+                port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
+                Log.d(TAG, "Baud rate changed to $baudRate")
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to change baud rate to $baudRate", e)
+                false
+            }
+        }
+    }
+
+    /**
+     * Set DTR (Data Terminal Ready) line state.
+     * Used by ESP32 bootloader entry sequence.
+     *
+     * @param state true to assert DTR, false to deassert
+     * @return true if successful, false otherwise
+     */
+    fun setDtr(state: Boolean): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set DTR - not connected")
+            return false
+        }
+
+        val port = currentPort ?: return false
+
+        return try {
+            port.dtr = state
+            Log.v(TAG, "DTR set to $state")
+            true
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "DTR not supported: ${e.message}")
+            false
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to set DTR", e)
+            false
+        }
+    }
+
+    /**
+     * Set RTS (Request To Send) line state.
+     * Used by ESP32 bootloader entry sequence.
+     *
+     * @param state true to assert RTS, false to deassert
+     * @return true if successful, false otherwise
+     */
+    fun setRts(state: Boolean): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set RTS - not connected")
+            return false
+        }
+
+        val port = currentPort ?: return false
+
+        return try {
+            port.rts = state
+            Log.v(TAG, "RTS set to $state")
+            true
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "RTS not supported: ${e.message}")
+            false
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to set RTS", e)
+            false
+        }
+    }
+
+    /**
+     * Set both DTR and RTS simultaneously.
+     * Used for ESP32 bootloader entry timing.
+     *
+     * @param dtrState DTR line state
+     * @param rtsState RTS line state
+     */
+    fun setDtrRts(dtrState: Boolean, rtsState: Boolean) {
+        setDtr(dtrState)
+        setRts(rtsState)
+    }
+
+    /**
+     * Perform a blocking read with timeout.
+     * Used by flashing protocols that need synchronous communication.
+     *
+     * @param buffer Buffer to read into
+     * @param timeoutMs Read timeout in milliseconds
+     * @return Number of bytes read, or -1 on error
+     */
+    fun readBlocking(buffer: ByteArray, timeoutMs: Int): Int {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot read - not connected")
+            return -1
+        }
+
+        val port = currentPort ?: return -1
+
+        return try {
+            port.read(buffer, timeoutMs)
+        } catch (e: IOException) {
+            Log.e(TAG, "Blocking read failed", e)
+            -1
+        }
+    }
+
+    /**
+     * Clear the read buffer.
+     * Used before starting a flashing operation to ensure clean state.
+     */
+    fun clearReadBuffer() {
+        readBuffer.clear()
+        Log.d(TAG, "Read buffer cleared")
+    }
+
+    /**
+     * Drain any pending data from the serial port.
+     * Used to synchronize before flashing operations.
+     *
+     * @param timeoutMs Maximum time to wait for data
+     */
+    fun drain(timeoutMs: Int = 100) {
+        val tempBuffer = ByteArray(1024)
+        var totalDrained = 0
+        val startTime = System.currentTimeMillis()
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            val bytesRead = readBlocking(tempBuffer, 10)
+            if (bytesRead <= 0) break
+            totalDrained += bytesRead
+        }
+
+        readBuffer.clear()
+
+        if (totalDrained > 0) {
+            Log.d(TAG, "Drained $totalDrained bytes from serial port")
+        }
+    }
+
+    /**
      * Write data to the USB device.
      * Thread-safe - can be called from any thread.
      *

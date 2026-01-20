@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.reticulum.flasher.FrequencyBand
+import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 import com.lxmf.messenger.reticulum.flasher.RNodeDeviceInfo
 
 /**
@@ -68,7 +69,13 @@ fun DeviceDetectionStep(
 
         when {
             isDetecting -> DetectingState(message = detectionMessage)
-            detectedInfo != null -> DetectedState(deviceInfo = detectedInfo)
+            detectedInfo != null && detectedInfo.board != RNodeBoard.UNKNOWN ->
+                DetectedState(deviceInfo = detectedInfo)
+            detectedInfo != null && detectedInfo.board == RNodeBoard.UNKNOWN ->
+                UnknownBoardState(
+                    deviceInfo = detectedInfo,
+                    onManualSelection = onManualSelection,
+                )
             detectionError != null ->
                 ErrorState(
                     error = detectionError,
@@ -224,6 +231,131 @@ private fun DeviceInfoRow(
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )
+    }
+}
+
+@Composable
+private fun UnknownBoardState(
+    deviceInfo: RNodeDeviceInfo,
+    onManualSelection: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Warning card - device detected but board unknown
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeveloperBoard,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(32.dp),
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = "Device Detected",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        text = "Board type unknown (EEPROM may be wiped)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+        }
+
+        // Device details card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeveloperBoard,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Device Information",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                DeviceInfoRow("Platform", deviceInfo.platform.name)
+                DeviceInfoRow("MCU", deviceInfo.mcu.name)
+
+                deviceInfo.firmwareVersion?.let { version ->
+                    DeviceInfoRow("Firmware", "v$version")
+                }
+
+                DeviceInfoRow("Status", "Not Provisioned")
+            }
+        }
+
+        // Manual selection option
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Select Board Type",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Text(
+                    text = "Since the board type couldn't be determined automatically, please select it manually in the next step.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = onManualSelection,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Continue with Manual Selection")
+                }
+            }
+        }
     }
 }
 

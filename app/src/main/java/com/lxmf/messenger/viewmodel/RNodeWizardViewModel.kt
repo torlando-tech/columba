@@ -307,19 +307,51 @@ class RNodeWizardViewModel
 
                     val isTcp = config.connectionMode == "tcp"
                     val isBle = config.connectionMode == "ble"
+                    val isUsb = config.connectionMode == "usb"
+
+                    // Determine connection type
+                    val connectionType =
+                        when {
+                            isTcp -> RNodeConnectionType.TCP_WIFI
+                            isUsb -> RNodeConnectionType.USB_SERIAL
+                            else -> RNodeConnectionType.BLUETOOTH
+                        }
+
+                    // Create placeholder USB device for USB mode
+                    // Capture nullable values in local variables for smart cast
+                    val usbVendorId = config.usbVendorId
+                    val usbProductId = config.usbProductId
+                    val usbDevice =
+                        if (isUsb && usbVendorId != null && usbProductId != null) {
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = config.usbDeviceId ?: 0,
+                                vendorId = usbVendorId,
+                                productId = usbProductId,
+                                deviceName = "",
+                                manufacturerName = null,
+                                productName = "Configured USB RNode",
+                                serialNumber = null,
+                                driverType = "Unknown",
+                                hasPermission = true, // Assume permission since it was previously configured
+                            )
+                        } else {
+                            null
+                        }
 
                     _state.update { state ->
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
                             // Connection type
-                            connectionType = if (isTcp) RNodeConnectionType.TCP_WIFI else RNodeConnectionType.BLUETOOTH,
+                            connectionType = connectionType,
                             // Pre-populate TCP fields (for TCP mode)
                             tcpHost = config.tcpHost ?: "",
                             tcpPort = config.tcpPort.toString(),
-                            // Pre-populate device (for Bluetooth mode)
+                            // Pre-populate USB device (for USB mode)
+                            selectedUsbDevice = usbDevice,
+                            // Pre-populate Bluetooth device (for Bluetooth mode)
                             selectedDevice =
-                                if (isTcp) {
+                                if (isTcp || isUsb) {
                                     null
                                 } else {
                                     DiscoveredRNode(
@@ -2334,6 +2366,8 @@ class RNodeWizardViewModel
                     val tcpHost: String?
                     val tcpPort: Int
                     val usbDeviceId: Int?
+                    val usbVendorId: Int?
+                    val usbProductId: Int?
 
                     when (state.connectionType) {
                         RNodeConnectionType.TCP_WIFI -> {
@@ -2343,6 +2377,8 @@ class RNodeWizardViewModel
                             tcpHost = state.tcpHost.trim()
                             tcpPort = state.tcpPort.toIntOrNull() ?: 7633
                             usbDeviceId = null
+                            usbVendorId = null
+                            usbProductId = null
                         }
                         RNodeConnectionType.USB_SERIAL -> {
                             // USB Serial mode
@@ -2351,6 +2387,8 @@ class RNodeWizardViewModel
                             tcpHost = null
                             tcpPort = 7633
                             usbDeviceId = state.selectedUsbDevice?.deviceId
+                            usbVendorId = state.selectedUsbDevice?.vendorId
+                            usbProductId = state.selectedUsbDevice?.productId
                         }
                         RNodeConnectionType.BLUETOOTH -> {
                             // Bluetooth mode
@@ -2375,6 +2413,8 @@ class RNodeWizardViewModel
                             tcpHost = null
                             tcpPort = 7633
                             usbDeviceId = null
+                            usbVendorId = null
+                            usbProductId = null
                         }
                     }
 
@@ -2387,6 +2427,8 @@ class RNodeWizardViewModel
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
                             usbDeviceId = usbDeviceId,
+                            usbVendorId = usbVendorId,
+                            usbProductId = usbProductId,
                             frequency = state.frequency.toLongOrNull() ?: 915000000,
                             bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
                             txPower = state.txPower.toIntOrNull() ?: 7,

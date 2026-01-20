@@ -3,15 +3,34 @@ package com.lxmf.messenger.ui.screens
 import android.bluetooth.BluetoothAdapter
 import android.util.Log
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
+import org.json.JSONException
+import org.json.JSONObject
 
 // Interface Management UI helper utilities.
 
 /**
- * Check if this interface is a BLE (Bluetooth Low Energy) interface.
- * Both AndroidBLE and RNode interfaces use BLE for connectivity.
+ * Check if this interface requires Bluetooth to operate.
+ * - AndroidBLE interfaces always require Bluetooth
+ * - RNode interfaces require Bluetooth ONLY for classic or ble connection modes
+ *   (TCP and USB modes do not require Bluetooth)
  */
+@Suppress("SwallowedException")
 fun InterfaceEntity.isBleInterface(): Boolean {
-    return this.type == "AndroidBLE" || this.type == "RNode"
+    return when (type) {
+        "AndroidBLE" -> true
+        "RNode" -> {
+            try {
+                val json = JSONObject(configJson)
+                val connectionMode = json.optString("connection_mode", "classic")
+                // Only classic and ble modes require Bluetooth
+                connectionMode == "classic" || connectionMode == "ble"
+            } catch (e: JSONException) {
+                // Malformed JSON defaults to requiring Bluetooth (conservative fallback)
+                true
+            }
+        }
+        else -> false
+    }
 }
 
 /**

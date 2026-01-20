@@ -69,27 +69,39 @@ def get_connected_usb_devices():
         dict with 'success' bool and 'devices' list
     """
     if _usb_bridge_instance is None:
+        RNS.log("get_connected_usb_devices: USB bridge not initialized", RNS.LOG_ERROR)
         return {'success': False, 'devices': [], 'error': 'USB bridge not initialized'}
 
     try:
+        RNS.log(f"get_connected_usb_devices: calling getConnectedUsbDevices()", RNS.LOG_DEBUG)
         devices = _usb_bridge_instance.getConnectedUsbDevices()
+        # Chaquopy returns Java ArrayList - use size() method instead of len()
+        device_count = devices.size() if hasattr(devices, 'size') else len(devices)
+        RNS.log(f"get_connected_usb_devices: got {device_count} devices from bridge", RNS.LOG_DEBUG)
         device_list = []
 
-        for device in devices:
+        # Use index-based iteration because Chaquopy returns Kotlin List
+        # as Java ArrayList which isn't directly iterable in Python
+        for i in range(device_count):
+            device = devices.get(i) if hasattr(devices, 'get') else devices[i]
+            # Chaquopy maps Kotlin data class properties to getter methods
+            # Try getXxx() methods first, fall back to property access
             device_list.append({
-                'device_id': device.deviceId,
-                'vendor_id': device.vendorId,
-                'product_id': device.productId,
-                'device_name': device.deviceName,
-                'manufacturer_name': device.manufacturerName,
-                'product_name': device.productName,
-                'serial_number': device.serialNumber,
-                'driver_type': device.driverType,
+                'device_id': device.getDeviceId() if hasattr(device, 'getDeviceId') else device.deviceId,
+                'vendor_id': device.getVendorId() if hasattr(device, 'getVendorId') else device.vendorId,
+                'product_id': device.getProductId() if hasattr(device, 'getProductId') else device.productId,
+                'device_name': device.getDeviceName() if hasattr(device, 'getDeviceName') else device.deviceName,
+                'manufacturer_name': device.getManufacturerName() if hasattr(device, 'getManufacturerName') else device.manufacturerName,
+                'product_name': device.getProductName() if hasattr(device, 'getProductName') else device.productName,
+                'serial_number': device.getSerialNumber() if hasattr(device, 'getSerialNumber') else device.serialNumber,
+                'driver_type': device.getDriverType() if hasattr(device, 'getDriverType') else device.driverType,
             })
 
+        RNS.log(f"get_connected_usb_devices: returning {len(device_list)} devices", RNS.LOG_DEBUG)
         return {'success': True, 'devices': device_list}
     except Exception as e:
-        RNS.log(f"Error getting USB devices: {e}", RNS.LOG_ERROR)
+        import traceback
+        RNS.log(f"Error getting USB devices: {e}\n{traceback.format_exc()}", RNS.LOG_ERROR)
         return {'success': False, 'devices': [], 'error': str(e)}
 
 

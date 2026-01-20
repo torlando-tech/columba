@@ -236,6 +236,8 @@ class InterfaceRepository
                         val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
                         val tcpPort = json.optInt("tcp_port", 7633)
                         val usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null
+                        val usbVendorId = if (json.has("usb_vendor_id")) json.getInt("usb_vendor_id") else null
+                        val usbProductId = if (json.has("usb_product_id")) json.getInt("usb_product_id") else null
 
                         // Validate based on connection mode
                         when (connectionMode) {
@@ -283,6 +285,8 @@ class InterfaceRepository
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
                             usbDeviceId = usbDeviceId,
+                            usbVendorId = usbVendorId,
+                            usbProductId = usbProductId,
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
@@ -406,9 +410,26 @@ class InterfaceRepository
         /**
          * Find an RNode interface configured for a specific USB device ID.
          * Used to check if a USB device is already configured when it's plugged in.
+         * @deprecated Use findRNodeByUsbVidPid instead - device IDs are runtime IDs that change
          */
         suspend fun findRNodeByUsbDeviceId(usbDeviceId: Int): InterfaceEntity? {
             return interfaceDao.findRNodeByUsbDeviceId(usbDeviceId)
+        }
+
+        /**
+         * Find an RNode interface by USB Vendor ID and Product ID.
+         * This is the preferred method for matching USB devices since VID/PID are stable
+         * hardware identifiers, unlike device IDs which are runtime IDs that can change.
+         */
+        suspend fun findRNodeByUsbVidPid(vendorId: Int, productId: Int): InterfaceEntity? {
+            Log.d(TAG, "findRNodeByUsbVidPid: looking for VID=$vendorId (0x${vendorId.toString(16)}), PID=$productId (0x${productId.toString(16)})")
+            val result = interfaceDao.findRNodeByUsbVidPid(vendorId, productId)
+            if (result != null) {
+                Log.d(TAG, "findRNodeByUsbVidPid: FOUND '${result.name}' configJson=${result.configJson}")
+            } else {
+                Log.d(TAG, "findRNodeByUsbVidPid: NOT FOUND - no matching RNode interface in database")
+            }
+            return result
         }
 
         /**

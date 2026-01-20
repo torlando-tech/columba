@@ -94,6 +94,8 @@ class KotlinUSBBridge(
         private const val KISS_TFEND: Byte = 0xDC.toByte()
         private const val KISS_TFESC: Byte = 0xDD.toByte()
         private const val KISS_CMD_BT_PIN: Byte = 0x62.toByte()
+        private const val KISS_CMD_DEV_HASH: Byte = 0x56.toByte()
+        private const val DEV_HASH_LEN = 16
 
         // Default serial parameters for RNode
         private const val DEFAULT_BAUD_RATE = 115200
@@ -131,6 +133,7 @@ class KotlinUSBBridge(
                     addProduct(0x303A, 0x1001, CdcAcmSerialDriver::class.java) // ESP32-S3 CDC
                     addProduct(0x239A, 0x8029, CdcAcmSerialDriver::class.java) // Adafruit NRF52840
                     addProduct(0x239A, 0x8071, CdcAcmSerialDriver::class.java) // Heltec HT-n5262
+                    addProduct(0x239A, 0x80BA, CdcAcmSerialDriver::class.java) // LilyGO T-Echo
                     addProduct(0x1915, 0x520F, CdcAcmSerialDriver::class.java) // Nordic NRF52840
                 }
             UsbSerialProber(customTable)
@@ -254,10 +257,13 @@ class KotlinUSBBridge(
                                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                             }
                         device?.let { dev ->
-                            Log.d(TAG, "USB device detached: ${dev.deviceName}")
+                            Log.d(TAG, "USB device detached: ${dev.deviceName} (deviceId=${dev.deviceId}, connectedDeviceId=$connectedDeviceId)")
                             // If this was our connected device, handle disconnect
                             if (dev.deviceId == connectedDeviceId) {
+                                Log.d(TAG, "Device ID matches - calling handleDisconnect()")
                                 handleDisconnect()
+                            } else {
+                                Log.d(TAG, "Device ID mismatch - NOT calling handleDisconnect()")
                             }
                             notifyListeners { it.onUsbDisconnected(dev.deviceId) }
                         }
@@ -484,6 +490,198 @@ class KotlinUSBBridge(
     }
 
     /**
+     * Find a USB device by Vendor ID and Product ID.
+     * Returns the current device ID, or -1 if not found.
+     *
+     * This is useful because device IDs can change between plug/unplug cycles,
+     * but VID/PID are stable hardware identifiers.
+     *
+     * @param vendorId The USB Vendor ID
+     * @param productId The USB Product ID
+     * @return The current device ID if found, -1 otherwise
+     */
+    fun findDeviceByVidPid(
+        vendorId: Int,
+        productId: Int,
+    ): Int {
+        val device =
+            usbManager.deviceList.values.find {
+                it.vendorId == vendorId && it.productId == productId
+            }
+        if (device != null) {
+            Log.d(TAG, "Found device by VID/PID: VID=${vendorId.toHexString()}, PID=${productId.toHexString()} -> deviceId=${device.deviceId}")
+            return device.deviceId
+        }
+        Log.d(TAG, "Device not found by VID/PID: VID=${vendorId.toHexString()}, PID=${productId.toHexString()}")
+        return -1
+    }
+
+    /**
+     * Data class for device hash query result.
+     */
+    data class DeviceHashResult(
+        val success: Boolean,
+        val identifier: String? = null,
+        val error: String? = null,
+    )
+
+    /**
+     * Query the device hash from an RNode connected via USB.
+     *
+     * This temporarily connects to the device, sends CMD_DEV_HASH,
+     * receives the 16-byte response, and returns bytes 14-15 formatted
+     * as a hex string (which matches the Bluetooth device name suffix,
+     * e.g., "958F" for "RNode 958F").
+     *
+     * Note: This method blocks and should be called from a background thread/coroutine.
+     *
+     * @param deviceId The device ID to query
+     * @param timeoutMs Timeout in milliseconds (default: 3000ms)
+     * @return DeviceHashResult with success status and identifier or error
+     */
+    @Suppress("ReturnCount", "NestedBlockDepth")
+    fun queryDeviceHash(
+        deviceId: Int,
+        timeoutMs: Long = 3000L,
+    ): DeviceHashResult {
+        Log.d(TAG, "queryDeviceHash: starting for device $deviceId")
+
+        // If we're already connected to a different device, remember to restore
+        val wasConnected = isConnected.get()
+        val previousDeviceId = connectedDeviceId
+
+        // If already connected to this device, we can query directly
+        // Otherwise, we need to connect temporarily
+        val needToConnect = !wasConnected || previousDeviceId != deviceId
+
+        if (needToConnect) {
+            // Disconnect if connected to different device
+            if (wasConnected) {
+                Log.d(TAG, "queryDeviceHash: disconnecting from previous device $previousDeviceId")
+                disconnect()
+            }
+
+            // Connect to target device
+            if (!connect(deviceId)) {
+                return DeviceHashResult(success = false, error = "Failed to connect to device")
+            }
+        }
+
+        try {
+            // Clear read buffer to avoid stale data
+            readBuffer.clear()
+
+            // Give device time to initialize
+            Thread.sleep(300)
+
+            // Send CMD_DEV_HASH request (command with non-zero byte to request hash)
+            val kissCmd = byteArrayOf(KISS_FEND, KISS_CMD_DEV_HASH, 0x01, KISS_FEND)
+            Log.d(TAG, "queryDeviceHash: sending CMD_DEV_HASH")
+            val written = write(kissCmd)
+            if (written != kissCmd.size) {
+                return DeviceHashResult(success = false, error = "Write failed: wrote $written of ${kissCmd.size}")
+            }
+
+            // Read response with timeout
+            val startTime = System.currentTimeMillis()
+            val responseBuffer = mutableListOf<Byte>()
+
+            while ((System.currentTimeMillis() - startTime) < timeoutMs) {
+                // Check if new data is available
+                while (true) {
+                    val byte = readBuffer.poll() ?: break
+                    responseBuffer.add(byte)
+                }
+
+                if (responseBuffer.isNotEmpty()) {
+                    Log.d(TAG, "queryDeviceHash: received ${responseBuffer.size} bytes")
+
+                    // Try to parse the device hash from the response
+                    val identifier = parseDeviceHashResponse(responseBuffer)
+                    if (identifier != null) {
+                        Log.i(TAG, "queryDeviceHash: found identifier '$identifier'")
+                        return DeviceHashResult(success = true, identifier = identifier)
+                    }
+                }
+
+                Thread.sleep(50)
+            }
+
+            return DeviceHashResult(success = false, error = "Timeout waiting for device hash response")
+        } finally {
+            // Disconnect if we connected temporarily
+            if (needToConnect) {
+                Log.d(TAG, "queryDeviceHash: disconnecting after query")
+                disconnect()
+            }
+        }
+    }
+
+    /**
+     * Parse device hash response from KISS data.
+     *
+     * The response format is: FEND CMD_DEV_HASH <16 bytes hash> FEND
+     * The RNode firmware sends the device hash as 16 binary bytes.
+     * The Bluetooth name uses bytes at indices 14 and 15: "RNode %02X%02X"
+     * Returns the identifier string (bytes 14-15 as hex), or null if not found.
+     */
+    @Suppress("NestedBlockDepth", "MagicNumber")
+    private fun parseDeviceHashResponse(data: List<Byte>): String? {
+        var i = 0
+        while (i < data.size) {
+            if (data[i] == KISS_FEND) {
+                // Found potential start
+                i++
+                if (i >= data.size) return null
+
+                // Check if this is CMD_DEV_HASH response
+                if (data[i] == KISS_CMD_DEV_HASH) {
+                    i++
+                    // Parse the hash data (16 bytes, potentially escaped)
+                    val hashBytes = mutableListOf<Byte>()
+                    while (i < data.size && hashBytes.size < DEV_HASH_LEN) {
+                        val byte = data[i]
+                        when {
+                            byte == KISS_FEND -> break // End of frame
+                            byte == KISS_FESC -> {
+                                i++
+                                if (i >= data.size) return null
+                                val actualByte =
+                                    when (data[i]) {
+                                        KISS_TFEND -> KISS_FEND
+                                        KISS_TFESC -> KISS_FESC
+                                        else -> data[i]
+                                    }
+                                hashBytes.add(actualByte)
+                            }
+                            else -> hashBytes.add(byte)
+                        }
+                        i++
+                    }
+
+                    Log.d(TAG, "parseDeviceHashResponse: got ${hashBytes.size} bytes")
+
+                    if (hashBytes.size >= DEV_HASH_LEN) {
+                        // Log the full hash for debugging
+                        val hexDump = hashBytes.joinToString("") { String.format("%02X", it.toInt() and 0xFF) }
+                        Log.d(TAG, "parseDeviceHashResponse: full hash = $hexDump")
+
+                        // Extract bytes 14-15 and format as hex (matches firmware BT name generation)
+                        val b14 = hashBytes[14].toInt() and 0xFF
+                        val b15 = hashBytes[15].toInt() and 0xFF
+                        val identifier = String.format("%02X%02X", b14, b15)
+                        Log.d(TAG, "parseDeviceHashResponse: bytes[14]=0x${String.format("%02X", b14)}, bytes[15]=0x${String.format("%02X", b15)} -> identifier=$identifier")
+                        return identifier
+                    }
+                }
+            } else {
+                i++
+            }
+        }
+        return null
+    }
+
+    /**
      * Request permission to access a USB device.
      *
      * @param deviceId The device ID to request permission for
@@ -676,7 +874,9 @@ class KotlinUSBBridge(
      * Handle unexpected disconnect.
      */
     private fun handleDisconnect() {
-        if (isConnected.getAndSet(false)) {
+        val wasConnected = isConnected.getAndSet(false)
+        Log.d(TAG, "handleDisconnect() called - wasConnected=$wasConnected, hasCallback=${onConnectionStateChanged != null}")
+        if (wasConnected) {
             val deviceId = connectedDeviceId
             Log.w(TAG, "USB device disconnected unexpectedly: $deviceId")
 
@@ -697,7 +897,11 @@ class KotlinUSBBridge(
             readBuffer.clear()
 
             // Notify Python
+            Log.d(TAG, "Calling onConnectionStateChanged callback with connected=false, deviceId=$deviceId")
             onConnectionStateChanged?.callAttr("__call__", false, deviceId ?: -1)
+            Log.d(TAG, "onConnectionStateChanged callback completed")
+        } else {
+            Log.d(TAG, "handleDisconnect() skipped - was not connected")
         }
     }
 

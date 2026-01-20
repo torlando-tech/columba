@@ -200,13 +200,13 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
         self.wrapper = reticulum_wrapper.ReticulumWrapper('/tmp/test')
         self.wrapper.initialized = True
 
-        # Set up RNode config
-        self.wrapper._pending_rnode_config = {
+        # Set up RNode config (as list for multiple interface support)
+        self.wrapper._pending_rnode_configs = [{
             'name': 'rnode0',
             'target_device_name': 'RNode ABC123',
             'port': 'mock_port',
             'speed': 115200
-        }
+        }]
 
         # Set up mock Kotlin bridge
         self.wrapper.kotlin_rnode_bridge = Mock()
@@ -236,7 +236,7 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
 
         When no RNode config is set, returns success with message.
         """
-        self.wrapper._pending_rnode_config = None
+        self.wrapper._pending_rnode_configs = []
 
         result = self.wrapper.initialize_rnode_interface()
 
@@ -273,7 +273,7 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
         mock_rnode_interface_class.return_value = mock_rnode_interface
 
         # Save the config before it gets cleared
-        expected_config = self.wrapper._pending_rnode_config
+        expected_config = self.wrapper._pending_rnode_configs[0]
 
         result = self.wrapper.initialize_rnode_interface()
 
@@ -294,8 +294,11 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
         # Verify interface was registered with Transport
         self.assertIn(mock_rnode_interface, mock_rns.Transport.interfaces)
 
-        # Verify pending config was cleared
-        self.assertIsNone(self.wrapper._pending_rnode_config)
+        # Verify pending configs were cleared
+        self.assertEqual(self.wrapper._pending_rnode_configs, [])
+
+        # Verify interface stored in dict
+        self.assertIn('rnode0', self.wrapper.rnode_interfaces)
 
         # Verify success
         self.assertTrue(result['success'])
@@ -330,34 +333,39 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
 
         When interface exists but is offline, should call start() to reconnect.
         """
-        # Set up existing offline interface
+        # Set up existing offline interface in the interfaces dict
         mock_existing_interface = Mock()
         mock_existing_interface.online = False
         mock_existing_interface.start = Mock(return_value=True)
-        self.wrapper.rnode_interface = mock_existing_interface
+        self.wrapper.rnode_interfaces = {'rnode0': mock_existing_interface}
+        self.wrapper._pending_rnode_configs = []  # No new configs, just reconnect
 
         result = self.wrapper.initialize_rnode_interface()
 
         mock_existing_interface.start.assert_called_once()
         self.assertTrue(result['success'])
-        self.assertEqual(result['message'], 'RNode interface reconnected')
+        self.assertEqual(result['message'], 'Existing interfaces checked')
 
     def test_initialize_rnode_interface_reconnect_failure(self):
         """
         Test failure when reconnecting existing offline interface.
 
-        When start() fails on existing offline interface, should return error.
+        When start() fails on existing offline interface, the interface
+        remains registered for auto-reconnect and returns success.
         """
         # Set up existing offline interface that fails to reconnect
         mock_existing_interface = Mock()
         mock_existing_interface.online = False
         mock_existing_interface.start = Mock(return_value=False)
-        self.wrapper.rnode_interface = mock_existing_interface
+        self.wrapper.rnode_interfaces = {'rnode0': mock_existing_interface}
+        self.wrapper._pending_rnode_configs = []  # No new configs
 
         result = self.wrapper.initialize_rnode_interface()
 
-        self.assertFalse(result['success'])
-        self.assertEqual(result['error'], 'Failed to reconnect RNode interface')
+        # With multi-interface support, reconnect failure doesn't fail the whole operation
+        # The interface stays registered for auto-reconnect
+        self.assertTrue(result['success'])
+        self.assertEqual(result['message'], 'Existing interfaces checked')
 
     def test_initialize_rnode_interface_already_online(self):
         """
@@ -365,18 +373,19 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
 
         When interface exists and is already online, should skip initialization.
         """
-        # Set up existing online interface
+        # Set up existing online interface in the interfaces dict
         mock_existing_interface = Mock()
         mock_existing_interface.online = True
         mock_existing_interface.start = Mock()
-        self.wrapper.rnode_interface = mock_existing_interface
+        self.wrapper.rnode_interfaces = {'rnode0': mock_existing_interface}
+        self.wrapper._pending_rnode_configs = []  # No new configs
 
         result = self.wrapper.initialize_rnode_interface()
 
         # Should not call start()
         mock_existing_interface.start.assert_not_called()
         self.assertTrue(result['success'])
-        self.assertEqual(result['message'], 'RNode interface already online')
+        self.assertEqual(result['message'], 'Existing interfaces checked')
 
     def test_initialize_rnode_interface_concurrent_calls_prevented(self):
         """
@@ -621,10 +630,10 @@ class TestRNodeInterfaceEdgeCases(unittest.TestCase):
 
         self.wrapper = reticulum_wrapper.ReticulumWrapper('/tmp/test')
         self.wrapper.initialized = True
-        self.wrapper._pending_rnode_config = {
+        self.wrapper._pending_rnode_configs = [{
             'name': 'rnode0',
             'target_device_name': 'RNode ABC123'
-        }
+        }]
         self.wrapper.kotlin_rnode_bridge = Mock()
 
     def tearDown(self):

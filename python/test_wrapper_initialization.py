@@ -463,8 +463,8 @@ class TestCreateConfigFile(unittest.TestCase):
             "mode": "full"
         }]
 
-        # Verify _pending_rnode_config is None before test
-        self.assertIsNone(self.wrapper._pending_rnode_config)
+        # Verify _pending_rnode_configs is empty before test
+        self.assertEqual(self.wrapper._pending_rnode_configs, [])
 
         result = self.wrapper._create_config_file(interfaces, use_shared_instance=False)
 
@@ -481,10 +481,10 @@ class TestCreateConfigFile(unittest.TestCase):
         self.assertNotIn("type = RNode", content)
         self.assertNotIn("frequency", content)
 
-        # Config should be stored in _pending_rnode_config instead
-        self.assertIsNotNone(self.wrapper._pending_rnode_config)
-        self.assertEqual(self.wrapper._pending_rnode_config["name"], "RNode LoRa")
-        self.assertEqual(self.wrapper._pending_rnode_config["frequency"], 868000000)
+        # Config should be stored in _pending_rnode_configs instead
+        self.assertEqual(len(self.wrapper._pending_rnode_configs), 1)
+        self.assertEqual(self.wrapper._pending_rnode_configs[0]["name"], "RNode LoRa")
+        self.assertEqual(self.wrapper._pending_rnode_configs[0]["frequency"], 868000000)
 
     def test_create_config_file_shared_instance_mode(self):
         """Test creating config file in shared instance mode"""

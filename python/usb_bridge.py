@@ -321,3 +321,143 @@ def set_on_bluetooth_pin_received(callback):
         _usb_bridge_instance.setOnBluetoothPinReceived(callback)
     except Exception as e:
         RNS.log(f"Error setting USB Bluetooth PIN callback: {e}", RNS.LOG_ERROR)
+
+
+def query_device_hash(device_id, baud_rate=115200, timeout=3.0):
+    """
+    Query the device hash from an RNode connected via USB.
+
+    This temporarily connects to the device, sends CMD_DEV_HASH,
+    receives the 16-byte response, and returns bytes 14-15 formatted
+    as a hex string (which matches the Bluetooth device name suffix).
+
+    Args:
+        device_id: Integer device ID from get_connected_usb_devices()
+        baud_rate: Baud rate (default 115200 for RNode)
+        timeout: Timeout in seconds for the query
+
+    Returns:
+        dict with 'success' bool and 'identifier' string (e.g., "958F")
+        On failure, 'error' contains the error message
+    """
+    import time
+
+    if _usb_bridge_instance is None:
+        return {'success': False, 'error': 'USB bridge not initialized'}
+
+    # KISS protocol constants
+    FEND = 0xC0
+    CMD_DEV_HASH = 0x56
+
+    try:
+        # Connect to the device
+        RNS.log(f"query_device_hash: connecting to device {device_id}", RNS.LOG_DEBUG)
+        if not _usb_bridge_instance.connect(device_id, baud_rate):
+            return {'success': False, 'error': 'Failed to connect to device'}
+
+        # Give device time to initialize
+        time.sleep(0.3)
+
+        # Send CMD_DEV_HASH request (command with non-zero byte to request hash)
+        kiss_cmd = bytes([FEND, CMD_DEV_HASH, 0x01, FEND])
+        RNS.log(f"query_device_hash: sending CMD_DEV_HASH", RNS.LOG_DEBUG)
+        written = _usb_bridge_instance.write(kiss_cmd)
+        if written != len(kiss_cmd):
+            _usb_bridge_instance.disconnect()
+            return {'success': False, 'error': f'Write failed: wrote {written} of {len(kiss_cmd)}'}
+
+        # Read response with timeout
+        start_time = time.time()
+        response_buffer = bytearray()
+
+        while (time.time() - start_time) < timeout:
+            raw_data = _usb_bridge_instance.read()
+            if hasattr(raw_data, '__len__'):
+                data = bytes(raw_data)
+            else:
+                data = bytes(raw_data) if raw_data else b""
+
+            if len(data) > 0:
+                response_buffer.extend(data)
+                RNS.log(f"query_device_hash: received {len(data)} bytes, total {len(response_buffer)}", RNS.LOG_DEBUG)
+
+                # Parse the response to find device hash
+                # Format: FEND CMD_DEV_HASH <16 bytes hash> FEND
+                identifier = _parse_device_hash_response(response_buffer)
+                if identifier:
+                    RNS.log(f"query_device_hash: found identifier '{identifier}'", RNS.LOG_INFO)
+                    _usb_bridge_instance.disconnect()
+                    return {'success': True, 'identifier': identifier}
+
+            time.sleep(0.05)
+
+        # Timeout
+        _usb_bridge_instance.disconnect()
+        return {'success': False, 'error': 'Timeout waiting for device hash response'}
+
+    except Exception as e:
+        import traceback
+        RNS.log(f"query_device_hash error: {e}\n{traceback.format_exc()}", RNS.LOG_ERROR)
+        try:
+            _usb_bridge_instance.disconnect()
+        except Exception:
+            pass
+        return {'success': False, 'error': str(e)}
+
+
+def _parse_device_hash_response(data):
+    """
+    Parse device hash response from KISS data.
+
+    The response format is: FEND CMD_DEV_HASH <16 bytes hash> FEND
+    Returns the identifier string (bytes 14-15 as hex), or None if not found.
+    """
+    FEND = 0xC0
+    FESC = 0xDB
+    TFEND = 0xDC
+    TFESC = 0xDD
+    CMD_DEV_HASH = 0x56
+
+    # Find start of frame
+    i = 0
+    while i < len(data):
+        if data[i] == FEND:
+            # Found potential start
+            i += 1
+            if i >= len(data):
+                return None
+
+            # Check if this is CMD_DEV_HASH response
+            if data[i] == CMD_DEV_HASH:
+                i += 1
+                # Parse the hash data (16 bytes, potentially escaped)
+                hash_bytes = bytearray()
+                while i < len(data) and len(hash_bytes) < 16:
+                    if data[i] == FEND:
+                        # End of frame before we got 16 bytes
+                        break
+                    elif data[i] == FESC:
+                        i += 1
+                        if i >= len(data):
+                            return None
+                        if data[i] == TFEND:
+                            hash_bytes.append(FEND)
+                        elif data[i] == TFESC:
+                            hash_bytes.append(FESC)
+                        else:
+                            hash_bytes.append(data[i])
+                    else:
+                        hash_bytes.append(data[i])
+                    i += 1
+
+                if len(hash_bytes) >= 16:
+                    # Extract bytes 14-15 and format as hex
+                    identifier = f"{hash_bytes[14]:02X}{hash_bytes[15]:02X}"
+                    return identifier
+            else:
+                # Not CMD_DEV_HASH, continue searching
+                pass
+        else:
+            i += 1
+
+    return None

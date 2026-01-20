@@ -50,6 +50,7 @@ class KISS:
     CMD_RANDOM = 0x40
     CMD_BT_CTRL = 0x46
     CMD_BT_PIN = 0x62      # Bluetooth PIN response (6-digit)
+    CMD_DEV_HASH = 0x56    # Device hash (16 bytes, BT name suffix is bytes 14-15)
     CMD_PLATFORM = 0x48
     CMD_MCU = 0x49
     CMD_FW_VERSION = 0x50

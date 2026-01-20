@@ -85,8 +85,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns true
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "10.0.0.1"
         every { mockViewModel.getEffectiveBluetoothType() } returns null
+        every { mockViewModel.getConnectionTypeString() } returns "WiFi / TCP"
 
         // When
         composeTestRule.setContent {
@@ -109,8 +111,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
 
         // When
         composeTestRule.setContent {

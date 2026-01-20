@@ -1,6 +1,7 @@
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Destination
 import com.lxmf.messenger.reticulum.model.DestinationType
@@ -51,6 +52,7 @@ class DebugViewModelEventDrivenTest {
     private lateinit var mockSettingsRepo: SettingsRepository
     private lateinit var mockIdentityRepo: IdentityRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
+    private lateinit var mockInterfaceRepository: InterfaceRepository
 
     private val debugInfoFlow = MutableSharedFlow<String>(replay = 1)
 
@@ -62,6 +64,7 @@ class DebugViewModelEventDrivenTest {
         mockSettingsRepo = mockk(relaxed = true)
         mockIdentityRepo = mockk(relaxed = true)
         mockInterfaceConfigManager = mockk(relaxed = true)
+        mockInterfaceRepository = mockk(relaxed = true)
 
         // Setup debugInfoFlow
         every { mockProtocol.debugInfoFlow } returns debugInfoFlow
@@ -120,6 +123,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit to the flow
@@ -151,6 +155,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit invalid JSON
@@ -174,6 +179,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // Then - initial state (before any emissions)
@@ -194,6 +200,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit multiple updates rapidly
@@ -230,6 +237,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
             advanceUntilIdle()
 
@@ -249,6 +257,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit JSON with interfaces
@@ -286,6 +295,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit JSON
@@ -312,6 +322,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit JSON without explicit error
@@ -337,6 +348,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
             advanceUntilIdle()
 
@@ -363,6 +375,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
             advanceUntilIdle()
 
@@ -389,6 +402,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
             advanceUntilIdle()
 
@@ -412,6 +426,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
             advanceUntilIdle()
 
@@ -437,6 +452,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // Emit some debug info to set state
@@ -476,6 +492,7 @@ class DebugViewModelEventDrivenTest {
                     mockSettingsRepo,
                     mockIdentityRepo,
                     mockInterfaceConfigManager,
+                    mockInterfaceRepository,
                 )
 
             // When - emit debug info

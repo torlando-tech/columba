@@ -80,28 +80,6 @@ enum class RNodeConnectionType {
 private const val DEFAULT_INTERFACE_NAME = "RNode LoRa"
 
 /**
- * Generate a default interface name based on the device and connection type.
- * Format: "RNode {identifier} {connectionType}"
- * Examples: "RNode E16A BLE", "RNode 985F USB", "RNode 10.0.0.5 TCP"
- */
-private fun generateDefaultInterfaceName(
-    deviceIdentifier: String,
-    connectionType: RNodeConnectionType,
-): String {
-    val suffix =
-        when (connectionType) {
-            RNodeConnectionType.BLUETOOTH -> "" // BLE/BT suffix added based on device type
-            RNodeConnectionType.TCP_WIFI -> "TCP"
-            RNodeConnectionType.USB_SERIAL -> "USB"
-        }
-    return if (suffix.isNotEmpty()) {
-        "RNode $deviceIdentifier $suffix"
-    } else {
-        "RNode $deviceIdentifier"
-    }
-}
-
-/**
  * Regulatory limits for a frequency region.
  * Used to validate user input against regional regulations.
  */
@@ -307,6 +285,7 @@ class RNodeWizardViewModel
         /**
          * Initialize wizard for editing an existing RNode interface.
          */
+        @Suppress("LongMethod", "CyclomaticComplexMethod") // Complex config mapping is inherent
         fun loadExistingConfig(interfaceId: Long) {
             viewModelScope.launch {
                 try {
@@ -1935,32 +1914,6 @@ class RNodeWizardViewModel
             Log.d(TAG, "Starting Classic Bluetooth discovery for RNode")
             bluetoothAdapter?.startDiscovery()
         }
-
-        /**
-         * Wait for a device to reach a specific bond state.
-         */
-        @SuppressLint("MissingPermission")
-        private suspend fun waitForBondState(
-            device: BluetoothDevice,
-            targetState: Int,
-            timeoutMs: Long,
-        ): Boolean =
-            withContext(Dispatchers.IO) {
-                val startTime = System.currentTimeMillis()
-                while (System.currentTimeMillis() - startTime < timeoutMs) {
-                    if (device.bondState == targetState) {
-                        return@withContext true
-                    }
-                    if (device.bondState == BluetoothDevice.BOND_NONE &&
-                        System.currentTimeMillis() - startTime > 5000
-                    ) {
-                        // Bond was rejected or failed
-                        return@withContext false
-                    }
-                    delay(200)
-                }
-                false
-            }
 
         /**
          * Exit USB Bluetooth pairing mode.

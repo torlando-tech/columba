@@ -410,6 +410,7 @@ class KotlinUSBBridge(
                             try {
                                 device.manufacturerName
                             } catch (e: SecurityException) {
+                                Log.v(TAG, "Cannot read manufacturerName: ${e.message}")
                                 null
                             }
                         } else {
@@ -421,6 +422,7 @@ class KotlinUSBBridge(
                             try {
                                 device.productName
                             } catch (e: SecurityException) {
+                                Log.v(TAG, "Cannot read productName: ${e.message}")
                                 null
                             }
                         } else {
@@ -432,6 +434,7 @@ class KotlinUSBBridge(
                             try {
                                 device.serialNumber
                             } catch (e: SecurityException) {
+                                Log.v(TAG, "Cannot read serialNumber: ${e.message}")
                                 null
                             }
                         } else {
@@ -841,6 +844,7 @@ class KotlinUSBBridge(
      * This allows the Kotlin layer to detect Bluetooth PIN responses without
      * requiring Python to be running the USB read loop.
      */
+    @Suppress("NestedBlockDepth") // KISS protocol state machine requires nested conditions
     private fun parseKissFrames(data: ByteArray) {
         for (byte in data) {
             if (byte == KISS_FEND) {
@@ -857,7 +861,7 @@ class KotlinUSBBridge(
                             val b2 = kissDataBuffer[2].toInt() and 0xFF
                             val b3 = kissDataBuffer[3].toInt() and 0xFF
                             val pinInt = (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
-                            val pin = String.format("%06d", pinInt)
+                            val pin = String.format(java.util.Locale.US, "%06d", pinInt)
                             Log.i(TAG, "Parsed Bluetooth PIN from KISS frame: $pin (raw: ${kissDataBuffer.take(4).map { it.toInt() and 0xFF }})")
                             notifyBluetoothPin(pin)
                         } catch (e: Exception) {

@@ -66,14 +66,15 @@ class TestGetConnectedUsbDevices:
     def test_returns_devices_from_bridge(self):
         """Should return devices from Kotlin bridge."""
         mock_device = MagicMock()
-        mock_device.deviceId = 1
-        mock_device.vendorId = 0x0403
-        mock_device.productId = 0x6001
-        mock_device.deviceName = "/dev/bus/usb/001/002"
-        mock_device.manufacturerName = "FTDI"
-        mock_device.productName = "FT232R"
-        mock_device.serialNumber = "A12345"
-        mock_device.driverType = "FTDI"
+        # Configure getter methods (Chaquopy exposes Kotlin data class props as getters)
+        mock_device.getDeviceId.return_value = 1
+        mock_device.getVendorId.return_value = 0x0403
+        mock_device.getProductId.return_value = 0x6001
+        mock_device.getDeviceName.return_value = "/dev/bus/usb/001/002"
+        mock_device.getManufacturerName.return_value = "FTDI"
+        mock_device.getProductName.return_value = "FT232R"
+        mock_device.getSerialNumber.return_value = "A12345"
+        mock_device.getDriverType.return_value = "FTDI"
 
         mock_bridge = MagicMock()
         mock_bridge.getConnectedUsbDevices.return_value = [mock_device]

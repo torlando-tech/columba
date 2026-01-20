@@ -12,7 +12,6 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
 class DeviceClassifierTest {
-
     private lateinit var mockCache: DeviceTypeCache
     private lateinit var classifier: DeviceClassifier
     private lateinit var mockDevice: BluetoothDevice

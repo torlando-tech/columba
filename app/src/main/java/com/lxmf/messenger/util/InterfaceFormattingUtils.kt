@@ -13,7 +13,6 @@ import java.util.Locale
  * Extracted for testability and reusability.
  */
 object InterfaceFormattingUtils {
-
     /**
      * Formats a frequency value in Hz to a human-readable MHz string.
      *
@@ -66,7 +65,10 @@ object InterfaceFormattingUtils {
      * @param connectionMode Optional connection mode for RNode interfaces ("tcp", "usb", "ble")
      * @return Pair of icon and human-readable type label
      */
-    fun getConnectionIcon(interfaceType: String, connectionMode: String?): Pair<ImageVector, String> {
+    fun getConnectionIcon(
+        interfaceType: String,
+        connectionMode: String?,
+    ): Pair<ImageVector, String> {
         return when {
             interfaceType == "RNode" && connectionMode == "tcp" -> Icons.Default.Wifi to "RNode (TCP/WiFi)"
             interfaceType == "RNode" && connectionMode == "usb" -> Icons.Default.Usb to "RNode (USB)"

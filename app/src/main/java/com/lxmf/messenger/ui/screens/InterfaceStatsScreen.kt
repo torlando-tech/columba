@@ -47,8 +47,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.util.InterfaceFormattingUtils
 import com.lxmf.messenger.viewmodel.InterfaceStatsViewModel
-import java.text.DecimalFormat
 import java.util.Locale
 
 /**
@@ -372,7 +372,7 @@ private fun ConnectionCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Interface type with icon
-            val (icon, typeLabel) = getConnectionIcon(interfaceType, connectionMode)
+            val (icon, typeLabel) = InterfaceFormattingUtils.getConnectionIcon(interfaceType, connectionMode)
             StatsInfoRow(
                 icon = icon,
                 label = "Type",
@@ -439,10 +439,10 @@ private fun RNodeSettingsCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             frequency?.let {
-                StatsInfoRow(label = "Frequency", value = formatFrequency(it))
+                StatsInfoRow(label = "Frequency", value = InterfaceFormattingUtils.formatFrequency(it))
             }
             bandwidth?.let {
-                StatsInfoRow(label = "Bandwidth", value = formatBandwidth(it))
+                StatsInfoRow(label = "Bandwidth", value = InterfaceFormattingUtils.formatBandwidth(it))
             }
             spreadingFactor?.let {
                 StatsInfoRow(label = "Spreading Factor", value = "SF$it")
@@ -486,11 +486,11 @@ private fun TrafficStatsCard(
             ) {
                 StatBox(
                     label = "Received",
-                    value = formatBytes(rxBytes),
+                    value = InterfaceFormattingUtils.formatBytes(rxBytes),
                 )
                 StatBox(
                     label = "Transmitted",
-                    value = formatBytes(txBytes),
+                    value = InterfaceFormattingUtils.formatBytes(txBytes),
                 )
             }
 
@@ -579,41 +579,3 @@ private fun StatsInfoRow(
     }
 }
 
-private fun getConnectionIcon(interfaceType: String, connectionMode: String?): Pair<ImageVector, String> {
-    return when {
-        interfaceType == "RNode" && connectionMode == "tcp" -> Icons.Default.Wifi to "RNode (TCP/WiFi)"
-        interfaceType == "RNode" && connectionMode == "usb" -> Icons.Default.Usb to "RNode (USB)"
-        interfaceType == "RNode" && connectionMode == "ble" -> Icons.Default.Bluetooth to "RNode (BLE)"
-        interfaceType == "RNode" -> Icons.Default.Bluetooth to "RNode (Classic)"
-        interfaceType == "TCPClient" -> Icons.Default.Wifi to "TCP Client"
-        interfaceType == "TCPServer" -> Icons.Default.Wifi to "TCP Server"
-        interfaceType == "AndroidBLE" -> Icons.Default.Bluetooth to "Bluetooth LE"
-        interfaceType == "AutoInterface" -> Icons.Default.SignalCellularAlt to "Auto Discovery"
-        interfaceType == "UDP" -> Icons.Default.Wifi to "UDP"
-        else -> Icons.Default.SignalCellularAlt to interfaceType
-    }
-}
-
-private fun formatFrequency(hz: Long): String {
-    val mhz = hz / 1_000_000.0
-    return String.format(Locale.US, "%.3f MHz", mhz)
-}
-
-private fun formatBandwidth(hz: Int): String {
-    return when {
-        hz >= 1_000_000 -> String.format(Locale.US, "%.1f MHz", hz / 1_000_000.0)
-        hz >= 1_000 -> String.format(Locale.US, "%.1f kHz", hz / 1_000.0)
-        else -> "$hz Hz"
-    }
-}
-
-@Suppress("ReturnCount") // Early returns for each unit threshold improve readability
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format(Locale.US, "%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format(Locale.US, "%.2f GB", gb)
-}

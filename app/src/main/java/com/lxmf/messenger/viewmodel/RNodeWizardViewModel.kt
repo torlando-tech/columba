@@ -25,6 +25,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.CommunitySlots
+import com.lxmf.messenger.data.model.DeviceClassifier
+import com.lxmf.messenger.data.model.DeviceTypeCache
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegion
 import com.lxmf.messenger.data.model.FrequencyRegions
@@ -36,6 +38,8 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePairingHandler
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.RssiThrottler
+import com.lxmf.messenger.util.validation.DeviceNameValidator
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -220,7 +224,6 @@ class RNodeWizardViewModel
             private const val PIN_ENTRY_TIMEOUT_MS = 60_000L // 60s for user to enter PIN
             private const val RECONNECT_SCAN_TIMEOUT_MS = 15_000L // 15s to find device after reboot
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
-            private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
             private const val TCP_CONNECTION_TIMEOUT_MS = 5000 // 5 second TCP connection timeout
 
             // Test configuration flag - disable RSSI polling during tests
@@ -238,8 +241,8 @@ class RNodeWizardViewModel
             com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.getInstance(context)
         }
 
-        // RSSI update throttling - track last update time per device
-        private val lastRssiUpdate = mutableMapOf<String, Long>()
+        // RSSI update throttling - prevent excessive UI updates
+        private val rssiThrottler = RssiThrottler(intervalMs = RSSI_UPDATE_INTERVAL_MS)
 
         // RSSI polling for connected RNode (edit mode)
         private var rssiPollingJob: Job? = null
@@ -247,47 +250,43 @@ class RNodeWizardViewModel
         // Device type cache - persists detected BLE vs Classic types
         private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+        // Device classifier for determining BLE vs Classic device types
+        private val deviceClassifier = DeviceClassifier(
+            deviceTypeCache = object : DeviceTypeCache {
+                override fun getCachedType(address: String): BluetoothType? {
+                    val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                    return try {
+                        val jsonObj = org.json.JSONObject(json)
+                        if (!jsonObj.has(address)) return null
+                        when (jsonObj.optString(address)) {
+                            "CLASSIC" -> BluetoothType.CLASSIC
+                            "BLE" -> BluetoothType.BLE
+                            else -> null
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to read device type cache", e)
+                        null
+                    }
+                }
+
+                override fun cacheType(address: String, type: BluetoothType) {
+                    try {
+                        val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                        val obj = org.json.JSONObject(json)
+                        obj.put(address, type.name)
+                        deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
+                        Log.d(TAG, "Cached device type: $address -> $type")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to cache device type", e)
+                    }
+                }
+            },
+        )
+
         // Track user-modified fields to preserve state during navigation
         // When user explicitly modifies a field, we don't overwrite it with region defaults
         private val userModifiedFields = mutableSetOf<String>()
 
-        /**
-         * Get cached Bluetooth type for a device address.
-         */
-        private fun getCachedDeviceType(address: String): BluetoothType? {
-            val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-            return try {
-                val jsonObj = org.json.JSONObject(json)
-                if (!jsonObj.has(address)) return null
-                when (jsonObj.optString(address)) {
-                    "CLASSIC" -> BluetoothType.CLASSIC
-                    "BLE" -> BluetoothType.BLE
-                    else -> null
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to read device type cache", e)
-                null
-            }
-        }
-
-        /**
-         * Cache the Bluetooth type for a device address.
-         */
-        private fun cacheDeviceType(
-            address: String,
-            type: BluetoothType,
-        ) {
-            if (type == BluetoothType.UNKNOWN) return // Don't cache unknown
-            try {
-                val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-                val obj = org.json.JSONObject(json)
-                obj.put(address, type.name)
-                deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
-                Log.d(TAG, "Cached device type: $address -> $type")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to cache device type", e)
-            }
-        }
 
         // ========== INITIALIZATION ==========
 
@@ -794,7 +793,7 @@ class RNodeWizardViewModel
                 scanForBleRNodes { bleDevice ->
                     bleDeviceAddresses.add(bleDevice.address)
                     devices[bleDevice.address] = bleDevice
-                    cacheDeviceType(bleDevice.address, BluetoothType.BLE)
+                    deviceClassifier.cacheDeviceType(bleDevice.address, BluetoothType.BLE)
                     _state.update { it.copy(discoveredDevices = devices.values.toList()) }
                 }
             } catch (e: Exception) {
@@ -812,7 +811,7 @@ class RNodeWizardViewModel
         ) {
             try {
                 bluetoothAdapter?.bondedDevices?.forEach { device ->
-                    if (device.name?.startsWith("RNode ") == true) {
+                    if (deviceClassifier.shouldIncludeInDiscovery(device)) {
                         classifyBondedDevice(device, bleDeviceAddresses, devices)
                     }
                 }
@@ -833,29 +832,37 @@ class RNodeWizardViewModel
             val address = device.address
             val name = device.name ?: address
 
-            if (bleDeviceAddresses.contains(address)) {
-                // Found in BLE scan - definitely BLE, update paired status
-                devices[address]?.let { existing ->
-                    devices[address] = existing.copy(isPaired = true)
+            when (val result = deviceClassifier.classifyDevice(device, bleDeviceAddresses)) {
+                is DeviceClassifier.ClassificationResult.ConfirmedBle -> {
+                    // Found in BLE scan - update paired status
+                    devices[address]?.let { existing ->
+                        devices[address] = existing.copy(isPaired = true)
+                    }
                 }
-            } else {
-                // Use cached type or mark as unknown
-                val cachedType = getCachedDeviceType(address)
-                val deviceType = cachedType ?: BluetoothType.UNKNOWN
-
-                devices[address] =
-                    DiscoveredRNode(
-                        name = name,
-                        address = address,
-                        type = deviceType,
-                        rssi = null,
-                        isPaired = true,
-                        bluetoothDevice = device,
-                    )
-
-                if (cachedType != null) {
-                    Log.d(TAG, "Using cached type for $name: $cachedType")
-                } else {
+                is DeviceClassifier.ClassificationResult.Cached -> {
+                    // Use cached type
+                    devices[address] =
+                        DiscoveredRNode(
+                            name = name,
+                            address = address,
+                            type = result.type,
+                            rssi = null,
+                            isPaired = true,
+                            bluetoothDevice = device,
+                        )
+                    Log.d(TAG, "Using cached type for $name: ${result.type}")
+                }
+                is DeviceClassifier.ClassificationResult.Unknown -> {
+                    // Mark as unknown
+                    devices[address] =
+                        DiscoveredRNode(
+                            name = name,
+                            address = address,
+                            type = BluetoothType.UNKNOWN,
+                            rssi = null,
+                            isPaired = true,
+                            bluetoothDevice = device,
+                        )
                     Log.d(TAG, "Unknown type for bonded device $name (no cache)")
                 }
             }
@@ -906,7 +913,7 @@ class RNodeWizardViewModel
             device: DiscoveredRNode,
             type: BluetoothType,
         ) {
-            cacheDeviceType(device.address, type)
+            deviceClassifier.cacheDeviceType(device.address, type)
             val updatedDevice = device.copy(type = type)
             _state.update { state ->
                 val newSelected =
@@ -1134,11 +1141,8 @@ class RNodeWizardViewModel
             address: String,
             rssi: Int,
         ) {
-            val now = System.currentTimeMillis()
-            val lastUpdate = lastRssiUpdate[address] ?: 0L
-            if (now - lastUpdate < RSSI_UPDATE_INTERVAL_MS) return
+            if (!rssiThrottler.shouldUpdate(address)) return
 
-            lastRssiUpdate[address] = now
             _state.update { state ->
                 // Update RSSI in discovered devices list
                 val updatedDevices =
@@ -1265,7 +1269,7 @@ class RNodeWizardViewModel
                                 )
                             }
                             // Cache the device type since it's now confirmed
-                            cacheDeviceType(device.address, device.type)
+                            deviceClassifier.cacheDeviceType(device.address, device.type)
                         }
 
                         override fun onFailure(error: CharSequence?) {
@@ -1388,12 +1392,10 @@ class RNodeWizardViewModel
          * @return Pair of (error, warning) - error prevents proceeding, warning is informational
          */
         private fun validateManualDeviceName(name: String): Pair<String?, String?> {
-            return when {
-                name.length > MAX_DEVICE_NAME_LENGTH ->
-                    "Device name must be $MAX_DEVICE_NAME_LENGTH characters or less" to null
-                name.isNotBlank() && !name.startsWith("RNode", ignoreCase = true) ->
-                    null to "Device may not be an RNode. Proceed with caution."
-                else -> null to null
+            return when (val result = DeviceNameValidator.validate(name)) {
+                is DeviceNameValidator.ValidationResult.Valid -> null to null
+                is DeviceNameValidator.ValidationResult.Error -> result.message to null
+                is DeviceNameValidator.ValidationResult.Warning -> null to result.message
             }
         }
 

@@ -243,7 +243,9 @@ class ColumbaRNodeInterface:
 
         # Configuration
         self.target_device_name = config.get("target_device_name")
-        self.usb_device_id = config.get("usb_device_id")  # USB device ID for USB mode
+        self.usb_device_id = config.get("usb_device_id")  # USB device ID for USB mode (may be stale)
+        self.usb_vendor_id = config.get("usb_vendor_id")  # USB Vendor ID (stable identifier)
+        self.usb_product_id = config.get("usb_product_id")  # USB Product ID (stable identifier)
         self.connection_mode = config.get("connection_mode", self.MODE_CLASSIC)
         self.frequency = config.get("frequency", 915000000)
         self.bandwidth = config.get("bandwidth", 125000)
@@ -395,8 +397,19 @@ class ColumbaRNodeInterface:
             RNS.log("Cannot start USB mode - KotlinUSBBridge not available", RNS.LOG_ERROR)
             return False
 
+        # Try to find device by VID/PID first (stable identifiers)
+        # Device ID can change between plug/unplug cycles, so VID/PID is preferred
+        if self.usb_vendor_id is not None and self.usb_product_id is not None:
+            current_device_id = self.usb_bridge.findDeviceByVidPid(self.usb_vendor_id, self.usb_product_id)
+            if current_device_id >= 0:
+                RNS.log(f"Found USB device by VID/PID: VID={hex(self.usb_vendor_id)}, PID={hex(self.usb_product_id)} -> device ID {current_device_id}", RNS.LOG_INFO)
+                self.usb_device_id = current_device_id
+            else:
+                RNS.log(f"USB device not found by VID/PID: VID={hex(self.usb_vendor_id)}, PID={hex(self.usb_product_id)}", RNS.LOG_WARNING)
+                return False
+
         if self.usb_device_id is None:
-            RNS.log("Cannot start USB mode - no USB device ID configured", RNS.LOG_ERROR)
+            RNS.log("Cannot start USB mode - no USB device ID configured and no VID/PID to look up", RNS.LOG_ERROR)
             return False
 
         # If we're reconnecting (interface offline but bridge thinks it's connected),
@@ -416,6 +429,21 @@ class ColumbaRNodeInterface:
         self.usb_bridge.setOnDataReceived(self._on_data_received)
         self.usb_bridge.setOnConnectionStateChanged(self._on_usb_connection_state_changed)
 
+        # Stop any existing read thread before starting a new one
+        # This prevents thread leaks if the disconnect callback didn't fire properly
+        # (e.g., if callback was overwritten by another interface on shared USB bridge)
+        if self._read_thread is not None and self._read_thread.is_alive():
+            RNS.log(f"Stopping existing read loop thread before starting new one...", RNS.LOG_INFO)
+            self._running.clear()
+            self._read_thread.join(timeout=2.0)
+            if self._read_thread.is_alive():
+                RNS.log(f"Warning: old read thread did not stop within timeout", RNS.LOG_WARNING)
+
+        # Reset detection state for fresh configuration
+        self.detected = False
+        self.firmware_ok = False
+        self.interface_ready = False
+
         # Start read thread
         self._running.set()
         self._read_thread = threading.Thread(target=self._read_loop_usb, daemon=True)
@@ -432,12 +460,17 @@ class ColumbaRNodeInterface:
 
     def _on_usb_connection_state_changed(self, connected, device_id):
         """Callback when USB connection state changes."""
+        RNS.log(f"[{self.name}] _on_usb_connection_state_changed called: connected={connected}, device_id={device_id}, my_device_id={self.usb_device_id}", RNS.LOG_INFO)
         if connected:
-            RNS.log(f"USB device connected: {device_id}", RNS.LOG_INFO)
+            RNS.log(f"[{self.name}] USB device connected: {device_id}", RNS.LOG_INFO)
         else:
-            RNS.log(f"USB device disconnected: {device_id}", RNS.LOG_WARNING)
+            RNS.log(f"[{self.name}] USB device disconnected: {device_id}, setting online=False", RNS.LOG_WARNING)
             self._set_online(False)
             self.detected = False
+            # Stop the read loop to prevent thread leak and data races
+            # When the device is re-plugged, start() will create a fresh read loop
+            self._running.clear()
+            RNS.log(f"[{self.name}] After disconnect: online={self.online}, read loop stopped", RNS.LOG_INFO)
             # Note: USB doesn't auto-reconnect - user must re-plug or re-select device
 
     def stop(self):

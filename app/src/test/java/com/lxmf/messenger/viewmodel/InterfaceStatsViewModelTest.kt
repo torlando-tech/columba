@@ -18,8 +18,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -122,7 +123,7 @@ class InterfaceStatsViewModelTest {
     @Test
     fun `invalid interface ID sets error message`() = runTest {
         val viewModel = createViewModel(-1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -139,7 +140,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -155,7 +156,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(99L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -169,7 +170,7 @@ class InterfaceStatsViewModelTest {
         coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } throws RuntimeException("Database error")
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -186,7 +187,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -207,7 +208,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(2L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -223,7 +224,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(3L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -239,7 +240,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -261,7 +262,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -282,7 +283,7 @@ class InterfaceStatsViewModelTest {
         every { configManager.getRNodeRssi() } returns -75
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -301,7 +302,7 @@ class InterfaceStatsViewModelTest {
         every { configManager.getRNodeRssi() } returns -150 // Below -100 threshold
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -315,7 +316,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -334,14 +335,14 @@ class InterfaceStatsViewModelTest {
         coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } returns Unit
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         // Verify initial state
         assertTrue(viewModel.state.value.interfaceEntity?.enabled == true)
 
         // Toggle to disabled
         viewModel.toggleEnabled()
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         coVerify { interfaceRepository.toggleInterfaceEnabled(1L, false) }
 
@@ -357,10 +358,10 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(99L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.toggleEnabled()
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         // Should not call repository
         coVerify(exactly = 0) { interfaceRepository.toggleInterfaceEnabled(any(), any()) }
@@ -374,7 +375,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.signalReconnecting()
 
@@ -396,7 +397,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -419,7 +420,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(3L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -439,7 +440,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(3L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -456,10 +457,10 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(3L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.requestUsbPermission()
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         // Should not interact with USB manager for permission
         io.mockk.verify(exactly = 0) { usbManager.requestPermission(any<UsbDevice>(), any()) }
@@ -481,7 +482,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(4L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -507,7 +508,7 @@ class InterfaceStatsViewModelTest {
         coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
 
         val viewModel = createViewModel(5L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -528,7 +529,7 @@ class InterfaceStatsViewModelTest {
 
         val viewModel = createViewModel(1L)
         // First refresh happens during init, but timeout hasn't passed
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -548,7 +549,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()
@@ -566,7 +567,7 @@ class InterfaceStatsViewModelTest {
         )
 
         val viewModel = createViewModel(1L)
-        advanceUntilIdle()
+        advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
         viewModel.state.test {
             val state = awaitItem()

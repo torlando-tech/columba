@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,11 +60,13 @@ import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.TelemetryCollectorCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
+import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 import com.lxmf.messenger.util.CrashReport
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.DeviceInfoUtil
+import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
@@ -91,6 +96,24 @@ fun SettingsScreen(
     // Crash report dialog state
     var showCrashDialog by remember { mutableStateOf(false) }
     var pendingCrashReport by remember { mutableStateOf<CrashReport?>(null) }
+
+    // Location permission state for telemetry collector
+    var showTelemetryPermissionSheet by remember { mutableStateOf(false) }
+    val telemetryPermissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Track what action to take after permission is granted
+    var pendingTelemetryAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // Permission launcher for telemetry collector
+    val telemetryPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions.values.any { it }
+        if (granted) {
+            // Execute pending action (enable toggle or send now)
+            pendingTelemetryAction?.invoke()
+        }
+        pendingTelemetryAction = null
+    }
 
     // Check for pending crash report on launch
     LaunchedEffect(Unit) {
@@ -252,10 +275,32 @@ fun SettingsScreen(
                     sendIntervalSeconds = state.telemetrySendIntervalSeconds,
                     lastSendTime = state.lastTelemetrySendTime,
                     isSending = state.isSendingTelemetry,
-                    onEnabledChange = { viewModel.setTelemetryCollectorEnabled(it) },
+                    onEnabledChange = { enabled ->
+                        if (enabled) {
+                            // Check permission before enabling
+                            if (LocationPermissionManager.hasPermission(context)) {
+                                viewModel.setTelemetryCollectorEnabled(true)
+                            } else {
+                                // Show permission sheet, then enable after permission granted
+                                pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
+                                showTelemetryPermissionSheet = true
+                            }
+                        } else {
+                            // Disabling doesn't need permission
+                            viewModel.setTelemetryCollectorEnabled(false)
+                        }
+                    },
                     onCollectorAddressChange = { viewModel.setTelemetryCollectorAddress(it) },
                     onSendIntervalChange = { viewModel.setTelemetrySendInterval(it) },
-                    onSendNow = { viewModel.sendTelemetryNow() },
+                    onSendNow = {
+                        // Check permission before sending
+                        if (LocationPermissionManager.hasPermission(context)) {
+                            viewModel.sendTelemetryNow()
+                        } else {
+                            pendingTelemetryAction = { viewModel.sendTelemetryNow() }
+                            showTelemetryPermissionSheet = true
+                        }
+                    },
                 )
 
                 MessageDeliveryRetrievalCard(
@@ -452,6 +497,27 @@ fun SettingsScreen(
                         )
                     }
                 },
+            )
+        }
+
+        // Location Permission Bottom Sheet for Telemetry Collector
+        if (showTelemetryPermissionSheet) {
+            LocationPermissionBottomSheet(
+                onDismiss = {
+                    showTelemetryPermissionSheet = false
+                    pendingTelemetryAction = null
+                },
+                onRequestPermissions = {
+                    showTelemetryPermissionSheet = false
+                    telemetryPermissionLauncher.launch(
+                        LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                    )
+                },
+                sheetState = telemetryPermissionSheetState,
+                rationale = "Telemetry collector sends your location to a central collector " +
+                    "so you can share your position with multiple peers.\n\n" +
+                    "Your location is encrypted and only readable by the collector you configure.",
+                primaryActionLabel = "Grant Location Access",
             )
         }
     }

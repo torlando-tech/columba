@@ -61,6 +61,7 @@ fun RNodeWizardScreen(
 
     // Apply USB pre-selection if provided
     LaunchedEffect(preselectedConnectionType, preselectedUsbDeviceId) {
+        @Suppress("ComplexCondition") // All 5 parameters must be present for USB pre-selection
         if (preselectedConnectionType == "usb" &&
             preselectedUsbDeviceId != null &&
             preselectedUsbVendorId != null &&

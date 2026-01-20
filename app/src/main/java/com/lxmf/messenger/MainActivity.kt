@@ -130,6 +130,8 @@ class MainActivity : ComponentActivity() {
     private var lastHandledUsbDeviceId: Int = -1
     private var lastHandledUsbTimestamp: Long = 0
     private var lastUsbReconnectAttempted: Boolean = false // Track if reconnect was actually attempted
+
+    @Suppress("VariableNaming") // Constant value uses SCREAMING_SNAKE_CASE by convention
     private val USB_DEBOUNCE_MS = 5000L // 5 second window to ignore duplicate USB events
 
     // USB device attached/detached receiver

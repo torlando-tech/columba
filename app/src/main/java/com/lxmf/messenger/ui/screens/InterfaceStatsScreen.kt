@@ -607,6 +607,7 @@ private fun formatBandwidth(hz: Int): String {
     }
 }
 
+@Suppress("ReturnCount") // Early returns for each unit threshold improve readability
 private fun formatBytes(bytes: Long): String {
     if (bytes < 1024) return "$bytes B"
     val kb = bytes / 1024.0

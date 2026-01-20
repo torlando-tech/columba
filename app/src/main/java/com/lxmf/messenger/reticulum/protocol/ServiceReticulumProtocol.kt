@@ -1077,7 +1077,7 @@ class ServiceReticulumProtocol(
         }
     }
 
-    @Suppress("LongMethod") // Config serialization naturally grows with each interface type
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // Config serialization naturally grows with each interface type
     @androidx.annotation.VisibleForTesting
     internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()

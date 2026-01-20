@@ -49,7 +49,7 @@ class KISS:
     CMD_BLINK = 0x30
     CMD_RANDOM = 0x40
     CMD_BT_CTRL = 0x46
-    CMD_BT_PIN = 0x62      # Bluetooth PIN response (6-digit)
+    CMD_BT_PIN = 0x62      # Bluetooth PIN response (4-byte big-endian integer)
     CMD_PLATFORM = 0x48
     CMD_MCU = 0x49
     CMD_FW_VERSION = 0x50
@@ -1013,15 +1013,15 @@ class ColumbaRNodeInterface:
                                 RNS.log("RNode detected!", RNS.LOG_DEBUG)
                         elif command == KISS.CMD_BT_PIN:
                             # Bluetooth PIN response during pairing mode
-                            # PIN is sent as 4 bytes (big-endian 32-bit integer)
+                            # PIN is sent as 4-byte big-endian integer by RNode firmware
                             if len(data_buffer) < 4:
                                 data_buffer += bytes([byte])
                                 if len(data_buffer) == 4:
-                                    # Parse as big-endian 32-bit integer
-                                    pin_int = (data_buffer[0] << 24) | (data_buffer[1] << 16) | (data_buffer[2] << 8) | data_buffer[3]
-                                    pin = f"{pin_int:06d}"
+                                    pin_value = int.from_bytes(data_buffer, byteorder='big')
+                                    pin = f"{pin_value:06d}"
                                     RNS.log(f"RNode Bluetooth PIN: {pin}", RNS.LOG_INFO)
-                                    # Notify USB bridge to surface PIN to UI
+                                    # Note: Kotlin USB bridge also parses PIN and notifies UI
+                                    # This is a backup notification in case Kotlin missed it
                                     if self.usb_bridge:
                                         try:
                                             self.usb_bridge.notifyBluetoothPin(pin)

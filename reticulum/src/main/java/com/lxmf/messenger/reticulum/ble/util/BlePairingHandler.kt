@@ -240,8 +240,20 @@ class BlePairingHandler(private val context: Context) {
             autoPairDeviceAddress = null
         } catch (e: SecurityException) {
             Log.e(TAG, "SecurityException during PIN pairing", e)
+            // Still try to abort the broadcast
+            try {
+                abortBroadcast()
+            } catch (ignored: Exception) {
+                // Ignore
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set PIN for $deviceName", e)
+            // Still try to abort the broadcast
+            try {
+                abortBroadcast()
+            } catch (ignored: Exception) {
+                // Ignore
+            }
         }
     }
 

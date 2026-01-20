@@ -25,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -853,16 +854,19 @@ class KotlinUSBBridge(
                     // End of frame - process it
                     Log.d(TAG, "KISS frame end: cmd=0x${kissCommand.toInt().and(0xFF).toString(16)}, dataLen=${kissDataBuffer.size}")
                     if (kissCommand == KISS_CMD_BT_PIN && kissDataBuffer.size >= 4) {
-                        // PIN is sent as 4 bytes (big-endian 32-bit integer)
-                        // Format: command_buffer[0] << 24 | [1] << 16 | [2] << 8 | [3]
+                        // PIN is sent as 4-byte big-endian integer by RNode firmware
                         try {
-                            val b0 = kissDataBuffer[0].toInt() and 0xFF
-                            val b1 = kissDataBuffer[1].toInt() and 0xFF
-                            val b2 = kissDataBuffer[2].toInt() and 0xFF
-                            val b3 = kissDataBuffer[3].toInt() and 0xFF
-                            val pinInt = (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
-                            val pin = String.format(java.util.Locale.US, "%06d", pinInt)
-                            Log.i(TAG, "Parsed Bluetooth PIN from KISS frame: $pin (raw: ${kissDataBuffer.take(4).map { it.toInt() and 0xFF }})")
+                            val rawBytes = kissDataBuffer.take(4).map { it.toInt() and 0xFF }
+                            Log.d(TAG, "Raw PIN bytes: ${rawBytes.joinToString(", ") { "0x${it.toString(16).padStart(2, '0')}" }}")
+
+                            val pinValue = ((kissDataBuffer[0].toInt() and 0xFF) shl 24) or
+                                ((kissDataBuffer[1].toInt() and 0xFF) shl 16) or
+                                ((kissDataBuffer[2].toInt() and 0xFF) shl 8) or
+                                (kissDataBuffer[3].toInt() and 0xFF)
+                            Log.d(TAG, "PIN as integer: $pinValue (0x${pinValue.toString(16)})")
+
+                            val pin = String.format(Locale.US, "%06d", pinValue)
+                            Log.i(TAG, "Parsed Bluetooth PIN from KISS frame: $pin")
                             notifyBluetoothPin(pin)
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to decode PIN bytes", e)

@@ -1069,6 +1069,349 @@ class TestUSBModeInterface:
         assert actual_cmd == expected_cmd
 
 
+class TestUSBBridgeIntegration:
+    """Tests for USB bridge integration."""
+
+    def create_usb_interface(self):
+        """Create a test interface configured for USB mode."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = 915000000
+                iface.bandwidth = 125000
+                iface.txpower = 17
+                iface.sf = 8
+                iface.cr = 5
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode-usb"
+                iface.target_device_name = ""
+                iface.usb_device_id = 123
+                iface.usb_vendor_id = 0x0403
+                iface.usb_product_id = 0x6001
+                iface.connection_mode = ColumbaRNodeInterface.MODE_USB
+                iface.kotlin_bridge = None
+                iface.usb_bridge = None
+                iface.enable_framebuffer = False
+                iface.framebuffer_enabled = False
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface._reconnect_thread = None
+                iface._reconnecting = False
+                iface._max_reconnect_attempts = 30
+                iface._reconnect_interval = 10.0
+                iface._on_error_callback = None
+                iface._on_online_status_changed = None
+                iface.online = False
+                iface.detected = False
+                iface.firmware_ok = False
+                iface.interface_ready = False
+                iface.txb = 0
+                iface.r_stat_rssi = None
+                iface.r_stat_snr = None
+                return iface
+
+    def test_get_usb_bridge_success(self):
+        """_get_usb_bridge should get bridge from usb_bridge module."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+
+        with patch.dict('sys.modules', {'usb_bridge': MagicMock()}):
+            import sys
+            sys.modules['usb_bridge'].get_usb_bridge.return_value = mock_bridge
+            iface._get_usb_bridge()
+
+        assert iface.usb_bridge == mock_bridge
+
+    def test_get_usb_bridge_returns_none(self):
+        """_get_usb_bridge should handle None return gracefully."""
+        iface = self.create_usb_interface()
+
+        with patch.dict('sys.modules', {'usb_bridge': MagicMock()}):
+            import sys
+            sys.modules['usb_bridge'].get_usb_bridge.return_value = None
+            iface._get_usb_bridge()
+
+        assert iface.usb_bridge is None
+
+    def test_get_usb_bridge_handles_import_error(self):
+        """_get_usb_bridge should handle import errors gracefully."""
+        iface = self.create_usb_interface()
+
+        with patch.dict('sys.modules', {'usb_bridge': None}):
+            # This should not raise an exception
+            iface._get_usb_bridge()
+
+        assert iface.usb_bridge is None
+
+    def test_start_usb_no_bridge_returns_false(self):
+        """_start_usb should return False if bridge is not available."""
+        iface = self.create_usb_interface()
+
+        with patch.object(iface, '_get_usb_bridge'):
+            iface.usb_bridge = None
+            result = iface._start_usb()
+
+        assert result is False
+
+    def test_start_usb_finds_device_by_vid_pid(self):
+        """_start_usb should find device by VID/PID and update device ID."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = 456  # Different device ID
+        mock_bridge.isConnected.return_value = False
+        mock_bridge.connect.return_value = True
+
+        with patch.object(iface, '_get_usb_bridge'):
+            with patch.object(iface, '_configure_device'):
+                iface.usb_bridge = mock_bridge
+                result = iface._start_usb()
+
+        assert result is True
+        assert iface.usb_device_id == 456
+        mock_bridge.findDeviceByVidPid.assert_called_once_with(0x0403, 0x6001)
+
+    def test_start_usb_device_not_found_by_vid_pid(self):
+        """_start_usb should return False if device not found by VID/PID."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = -1  # Not found
+
+        with patch.object(iface, '_get_usb_bridge'):
+            iface.usb_bridge = mock_bridge
+            result = iface._start_usb()
+
+        assert result is False
+
+    def test_start_usb_no_device_id_or_vid_pid(self):
+        """_start_usb should return False if no device ID and no VID/PID."""
+        iface = self.create_usb_interface()
+        iface.usb_device_id = None
+        iface.usb_vendor_id = None
+        iface.usb_product_id = None
+        mock_bridge = MagicMock()
+
+        with patch.object(iface, '_get_usb_bridge'):
+            iface.usb_bridge = mock_bridge
+            result = iface._start_usb()
+
+        assert result is False
+
+    def test_start_usb_clears_stale_connection(self):
+        """_start_usb should disconnect if bridge thinks it's connected but interface is offline."""
+        iface = self.create_usb_interface()
+        iface.online = False
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = 123
+        mock_bridge.isConnected.return_value = True  # Bridge thinks it's connected
+        mock_bridge.connect.return_value = True
+
+        with patch.object(iface, '_get_usb_bridge'):
+            with patch.object(iface, '_configure_device'):
+                iface.usb_bridge = mock_bridge
+                iface._start_usb()
+
+        mock_bridge.disconnect.assert_called_once()
+
+    def test_start_usb_connect_failure(self):
+        """_start_usb should return False if connect fails."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = 123
+        mock_bridge.isConnected.return_value = False
+        mock_bridge.connect.return_value = False  # Connect fails
+
+        with patch.object(iface, '_get_usb_bridge'):
+            iface.usb_bridge = mock_bridge
+            result = iface._start_usb()
+
+        assert result is False
+
+    def test_start_usb_sets_up_callbacks(self):
+        """_start_usb should set up data and connection state callbacks."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = 123
+        mock_bridge.isConnected.return_value = False
+        mock_bridge.connect.return_value = True
+
+        with patch.object(iface, '_get_usb_bridge'):
+            with patch.object(iface, '_configure_device'):
+                iface.usb_bridge = mock_bridge
+                iface._start_usb()
+
+        mock_bridge.setOnDataReceived.assert_called_once()
+        mock_bridge.setOnConnectionStateChanged.assert_called_once()
+
+    def test_start_usb_configure_device_exception(self):
+        """_start_usb should return False and stop if configure_device raises."""
+        iface = self.create_usb_interface()
+        mock_bridge = MagicMock()
+        mock_bridge.findDeviceByVidPid.return_value = 123
+        mock_bridge.isConnected.return_value = False
+        mock_bridge.connect.return_value = True
+
+        with patch.object(iface, '_get_usb_bridge'):
+            with patch.object(iface, '_configure_device', side_effect=Exception("Config failed")):
+                with patch.object(iface, 'stop') as mock_stop:
+                    iface.usb_bridge = mock_bridge
+                    result = iface._start_usb()
+
+        assert result is False
+        mock_stop.assert_called_once()
+
+
+class TestUSBConnectionStateCallback:
+    """Tests for USB connection state change callback."""
+
+    def create_usb_interface(self):
+        """Create a test interface configured for USB mode."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.name = "test-rnode-usb"
+                iface.usb_device_id = 123
+                iface.connection_mode = ColumbaRNodeInterface.MODE_USB
+                iface._read_lock = threading.Lock()
+                iface._running = threading.Event()
+                iface.online = True
+                iface.detected = True
+                iface._on_online_status_changed = None
+                return iface
+
+    def test_on_usb_disconnected_sets_offline(self):
+        """Disconnection callback should set interface offline."""
+        iface = self.create_usb_interface()
+        iface.online = True
+        iface.detected = True
+
+        iface._on_usb_connection_state_changed(connected=False, device_id=123)
+
+        assert iface.online is False
+        assert iface.detected is False
+
+    def test_on_usb_connected_does_not_change_online(self):
+        """Connection callback should not automatically set online (config needed first)."""
+        iface = self.create_usb_interface()
+        iface.online = False
+
+        iface._on_usb_connection_state_changed(connected=True, device_id=123)
+
+        # online should still be False - configuration step sets it to True
+        assert iface.online is False
+
+    def test_on_usb_disconnected_calls_status_callback(self):
+        """Disconnection should call the online status changed callback."""
+        iface = self.create_usb_interface()
+        iface.online = True
+        mock_callback = MagicMock()
+        iface._on_online_status_changed = mock_callback
+
+        iface._on_usb_connection_state_changed(connected=False, device_id=123)
+
+        mock_callback.assert_called_once_with(False)
+
+
+class TestUSBVidPidConfig:
+    """Tests for USB VID/PID configuration attributes."""
+
+    def test_usb_vendor_id_attribute_exists(self):
+        """USB interface should have usb_vendor_id attribute."""
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                config = {
+                    'connection_mode': 'usb',
+                    'usb_device_id': 123,
+                    'usb_vendor_id': 0x0403,
+                    'usb_product_id': 0x6001,
+                    'frequency': 915000000,
+                    'bandwidth': 125000,
+                    'txpower': 17,
+                    'sf': 8,
+                    'cr': 5,
+                }
+                iface = ColumbaRNodeInterface(None, "test", config)
+
+        assert iface.usb_vendor_id == 0x0403
+        assert iface.usb_product_id == 0x6001
+
+    def test_usb_config_defaults_to_none(self):
+        """USB VID/PID should default to None if not provided."""
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                config = {
+                    'connection_mode': 'usb',
+                    'usb_device_id': 123,
+                    'frequency': 915000000,
+                    'bandwidth': 125000,
+                    'txpower': 17,
+                    'sf': 8,
+                    'cr': 5,
+                }
+                iface = ColumbaRNodeInterface(None, "test", config)
+
+        assert iface.usb_vendor_id is None
+        assert iface.usb_product_id is None
+
+
+class TestStartRouting:
+    """Tests for start() method routing to correct implementation."""
+
+    def create_interface(self, mode):
+        """Create interface with specified connection mode."""
+        import threading
+        with patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge'):
+            with patch.object(ColumbaRNodeInterface, '_validate_config'):
+                iface = ColumbaRNodeInterface.__new__(ColumbaRNodeInterface)
+                iface.frequency = 915000000
+                iface.bandwidth = 125000
+                iface.txpower = 17
+                iface.sf = 8
+                iface.cr = 5
+                iface.st_alock = None
+                iface.lt_alock = None
+                iface.name = "test-rnode"
+                iface.target_device_name = "TestRNode"
+                iface.usb_device_id = 123
+                iface.usb_vendor_id = 0x0403
+                iface.usb_product_id = 0x6001
+                iface.connection_mode = mode
+                iface.kotlin_bridge = MagicMock()
+                iface.usb_bridge = MagicMock()
+                iface._read_thread = None
+                iface._running = threading.Event()
+                iface._read_lock = threading.Lock()
+                iface.online = False
+                iface.detected = False
+                iface.firmware_ok = False
+                iface.interface_ready = False
+                return iface
+
+    def test_start_routes_to_usb_for_usb_mode(self):
+        """start() should call _start_usb() for USB mode."""
+        iface = self.create_interface(ColumbaRNodeInterface.MODE_USB)
+
+        with patch.object(iface, '_start_usb', return_value=True) as mock_start_usb:
+            result = iface.start()
+
+        mock_start_usb.assert_called_once()
+        assert result is True
+
+    def test_start_uses_bluetooth_for_classic_mode(self):
+        """start() should use Bluetooth path for classic mode."""
+        iface = self.create_interface(ColumbaRNodeInterface.MODE_CLASSIC)
+        iface.kotlin_bridge.connectSync.return_value = True
+
+        with patch.object(iface, '_start_usb') as mock_start_usb:
+            with patch.object(iface, '_configure_device'):
+                iface.start()
+
+        mock_start_usb.assert_not_called()
+
+
 class TestKISSBluetoothCommands:
     """Tests for Bluetooth-related KISS commands."""
 
@@ -1090,13 +1433,19 @@ class TestKISSBluetoothCommands:
 
     def test_bt_pin_response_frame_structure(self):
         """Test the expected structure of a Bluetooth PIN response frame."""
-        # A PIN response would be: FEND CMD_BT_PIN <6 digit PIN bytes> FEND
-        # Example: PIN "123456" -> bytes [0x31, 0x32, 0x33, 0x34, 0x35, 0x36]
-        pin = "123456"
-        kiss_frame = bytes([KISS.FEND, KISS.CMD_BT_PIN]) + pin.encode('ascii') + bytes([KISS.FEND])
+        # A PIN response is: FEND CMD_BT_PIN <4 byte big-endian integer> FEND
+        # Example: PIN 123456 -> bytes [0x00, 0x01, 0xE2, 0x40] (123456 in big-endian)
+        pin_int = 123456
+        pin_bytes = bytes([
+            (pin_int >> 24) & 0xFF,
+            (pin_int >> 16) & 0xFF,
+            (pin_int >> 8) & 0xFF,
+            pin_int & 0xFF,
+        ])
+        kiss_frame = bytes([KISS.FEND, KISS.CMD_BT_PIN]) + pin_bytes + bytes([KISS.FEND])
 
-        assert len(kiss_frame) == 9  # 1 + 1 + 6 + 1
+        assert len(kiss_frame) == 7  # 1 + 1 + 4 + 1
         assert kiss_frame[0] == KISS.FEND
         assert kiss_frame[1] == KISS.CMD_BT_PIN
-        assert kiss_frame[2:8] == b'123456'
-        assert kiss_frame[8] == KISS.FEND
+        assert kiss_frame[2:6] == bytes([0x00, 0x01, 0xE2, 0x40])
+        assert kiss_frame[6] == KISS.FEND

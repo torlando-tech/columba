@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,7 +16,9 @@ import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
+import com.lxmf.messenger.util.NotificationPermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,6 +136,7 @@ data class SettingsState(
 class SettingsViewModel
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: IdentityRepository,
         private val reticulumProtocol: ReticulumProtocol,
@@ -1309,11 +1313,37 @@ class SettingsViewModel
         /**
          * Load notifications settings from the repository.
          * Subscribes to flow updates so the card stays synced with the Notifications page.
+         * Also validates that notification permission is granted when notifications are enabled.
          */
         private fun loadNotificationsSettings() {
             viewModelScope.launch {
                 settingsRepository.notificationsEnabledFlow.collect { enabled ->
                     _state.update { it.copy(notificationsEnabled = enabled) }
+                    // Validate permission on initial load
+                    if (enabled) {
+                        validateNotificationPermission()
+                    }
+                }
+            }
+        }
+
+        /**
+         * Validates that notification permission is granted when notifications are enabled.
+         * If notifications are enabled in settings but Android permission is not granted,
+         * automatically disables the setting. This handles:
+         * - Backup restore with notifications_enabled=true but no permission
+         * - User revoking permission in Android settings
+         * - Any other edge cases where setting and permission are out of sync
+         */
+        private fun validateNotificationPermission() {
+            if (!NotificationPermissionManager.hasPermission(context)) {
+                Log.i(
+                    TAG,
+                    "Notifications enabled in settings but POST_NOTIFICATIONS permission not granted. " +
+                        "Disabling notifications setting.",
+                )
+                viewModelScope.launch {
+                    settingsRepository.saveNotificationsEnabled(false)
                 }
             }
         }

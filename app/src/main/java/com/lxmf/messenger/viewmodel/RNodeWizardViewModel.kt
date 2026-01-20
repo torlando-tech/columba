@@ -76,6 +76,31 @@ enum class RNodeConnectionType {
     USB_SERIAL, // USB Serial (CDC-ACM, FTDI, CP210x, CH340, etc.)
 }
 
+/** Default interface name - used to detect if user has customized it */
+private const val DEFAULT_INTERFACE_NAME = "RNode LoRa"
+
+/**
+ * Generate a default interface name based on the device and connection type.
+ * Format: "RNode {identifier} {connectionType}"
+ * Examples: "RNode E16A BLE", "RNode 985F USB", "RNode 10.0.0.5 TCP"
+ */
+private fun generateDefaultInterfaceName(
+    deviceIdentifier: String,
+    connectionType: RNodeConnectionType,
+): String {
+    val suffix =
+        when (connectionType) {
+            RNodeConnectionType.BLUETOOTH -> "" // BLE/BT suffix added based on device type
+            RNodeConnectionType.TCP_WIFI -> "TCP"
+            RNodeConnectionType.USB_SERIAL -> "USB"
+        }
+    return if (suffix.isNotEmpty()) {
+        "RNode $deviceIdentifier $suffix"
+    } else {
+        "RNode $deviceIdentifier"
+    }
+}
+
 /**
  * Regulatory limits for a frequency region.
  * Used to validate user input against regional regulations.
@@ -154,7 +179,7 @@ data class RNodeWizardState(
     // The preset selected on slot page
     val selectedSlotPreset: RNodeRegionalPreset? = null,
     // Step 5: Review & Configure
-    val interfaceName: String = "RNode LoRa",
+    val interfaceName: String = DEFAULT_INTERFACE_NAME,
     // US default
     val frequency: String = "914875000",
     // Long Fast default
@@ -1086,9 +1111,27 @@ class RNodeWizardViewModel
 
         fun selectDevice(device: DiscoveredRNode) {
             _state.update {
+                // Auto-generate interface name if user hasn't customized it
+                val newInterfaceName =
+                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                        // Extract identifier from device name (e.g., "RNode E16A" -> "E16A")
+                        val identifier =
+                            if (device.name.startsWith("RNode ")) {
+                                device.name.removePrefix("RNode ").trim()
+                            } else {
+                                device.name
+                            }
+                        // Add BLE/BT suffix based on device type
+                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
+                        "RNode $identifier $suffix"
+                    } else {
+                        it.interfaceName
+                    }
+
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
+                    interfaceName = newInterfaceName,
                 )
             }
         }
@@ -1531,7 +1574,19 @@ class RNodeWizardViewModel
          */
         fun selectUsbDevice(device: com.lxmf.messenger.data.model.DiscoveredUsbDevice) {
             if (device.hasPermission) {
-                _state.update { it.copy(selectedUsbDevice = device) }
+                _state.update {
+                    // Auto-generate interface name if user hasn't customized it
+                    val newInterfaceName =
+                        if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                            "RNode USB"
+                        } else {
+                            it.interfaceName
+                        }
+                    it.copy(
+                        selectedUsbDevice = device,
+                        interfaceName = newInterfaceName,
+                    )
+                }
             } else {
                 requestUsbPermission(device)
             }
@@ -1553,11 +1608,20 @@ class RNodeWizardViewModel
                                 if (it.deviceId == device.deviceId) it.copy(hasPermission = true) else it
                             }
                         val updatedDevice = device.copy(hasPermission = true)
+
                         _state.update {
+                            // Auto-generate interface name if user hasn't customized it
+                            val newInterfaceName =
+                                if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                                    "RNode USB"
+                                } else {
+                                    it.interfaceName
+                                }
                             it.copy(
                                 isRequestingUsbPermission = false,
                                 usbDevices = updatedDevices,
                                 selectedUsbDevice = updatedDevice,
+                                interfaceName = newInterfaceName,
                             )
                         }
                     } else {

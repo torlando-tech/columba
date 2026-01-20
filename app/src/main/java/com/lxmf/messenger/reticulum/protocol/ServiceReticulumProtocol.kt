@@ -1126,6 +1126,8 @@ class ServiceReticulumProtocol(
                     iface.tcpHost?.let { ifaceJson.put("tcp_host", it) }
                     ifaceJson.put("tcp_port", iface.tcpPort)
                     iface.usbDeviceId?.let { ifaceJson.put("usb_device_id", it) }
+                    iface.usbVendorId?.let { ifaceJson.put("usb_vendor_id", it) }
+                    iface.usbProductId?.let { ifaceJson.put("usb_product_id", it) }
                     ifaceJson.put("frequency", iface.frequency)
                     ifaceJson.put("bandwidth", iface.bandwidth)
                     ifaceJson.put("tx_power", iface.txPower)

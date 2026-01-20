@@ -35,6 +35,8 @@ fun InterfaceConfig.toJsonString(): String {
                 tcpHost?.let { put("tcp_host", it) }
                 put("tcp_port", tcpPort)
                 usbDeviceId?.let { put("usb_device_id", it) }
+                usbVendorId?.let { put("usb_vendor_id", it) }
+                usbProductId?.let { put("usb_product_id", it) }
                 put("frequency", frequency)
                 put("bandwidth", bandwidth)
                 put("tx_power", txPower)

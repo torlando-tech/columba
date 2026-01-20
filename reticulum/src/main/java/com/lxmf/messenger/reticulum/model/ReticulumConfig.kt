@@ -112,7 +112,9 @@ sealed class InterfaceConfig {
         val connectionMode: String = "classic", // "classic", "ble", "tcp", or "usb"
         val tcpHost: String? = null, // IP/hostname for TCP mode
         val tcpPort: Int = 7633, // RNode TCP port (default)
-        val usbDeviceId: Int? = null, // Android USB device ID for USB mode
+        val usbDeviceId: Int? = null, // Android USB device ID for USB mode (runtime, may change)
+        val usbVendorId: Int? = null, // USB Vendor ID for USB mode (stable identifier)
+        val usbProductId: Int? = null, // USB Product ID for USB mode (stable identifier)
         val frequency: Long = 915000000, // 915 MHz (US)
         val bandwidth: Int = 125000, // 125 KHz
         val txPower: Int = 7, // 7 dBm

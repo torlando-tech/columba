@@ -338,9 +338,11 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             try {
-                Log.d(TAG, "🔌 Checking if USB device ${usbDevice.deviceId} is already configured...")
+                Log.d(TAG, "🔌 Looking up USB device: VID=${usbDevice.vendorId} (0x${usbDevice.vendorId.toString(16)}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})")
                 // Check if this USB device is already configured as an RNode interface
-                val existingInterface = interfaceRepository.findRNodeByUsbDeviceId(usbDevice.deviceId)
+                // Use VID/PID matching since they are stable hardware identifiers (unlike device IDs which change)
+                val existingInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
+                Log.d(TAG, "🔌 findRNodeByUsbVidPid result: ${existingInterface?.name ?: "NOT FOUND"}")
 
                 if (existingInterface != null) {
                     // Device is already configured - trigger reconnect and navigate to stats screen
@@ -539,12 +541,20 @@ fun ColumbaNavigation(
                 is PendingNavigation.InterfaceStats -> {
                     // Navigate to interface stats screen
                     val targetRoute = "interface_stats/${navigation.interfaceId}"
-                    val currentRoute = navController.currentDestination?.route
-                    if (currentRoute?.startsWith("interface_stats/") == true) {
-                        // Already on stats screen - ViewModel will show connecting via signal
-                        Log.d("ColumbaNavigation", "Already on interface stats screen, skipping navigation")
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    val currentArgs = navController.currentBackStackEntry?.arguments
+                    val currentInterfaceId = currentArgs?.getLong("interfaceId")
+
+                    if (currentRoute == "interface_stats/{interfaceId}" && currentInterfaceId == navigation.interfaceId) {
+                        // Already on the SAME interface's stats screen - just signal reconnect
+                        Log.d("ColumbaNavigation", "Already on stats screen for interface ${navigation.interfaceId}, skipping navigation")
                     } else {
+                        // Navigate to the (different) interface's stats screen
                         navController.navigate(targetRoute) {
+                            // Pop the current stats screen if we're switching between interfaces
+                            if (currentRoute == "interface_stats/{interfaceId}") {
+                                popUpTo("interface_stats/{interfaceId}") { inclusive = true }
+                            }
                             launchSingleTop = true
                         }
                         Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")

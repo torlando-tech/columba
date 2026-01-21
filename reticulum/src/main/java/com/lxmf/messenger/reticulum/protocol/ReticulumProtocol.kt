@@ -549,15 +549,67 @@ data class FailedInterface(
 
 /**
  * Information about an interface discovered via RNS 1.1.x interface discovery.
+ *
+ * RNS 1.1.0+ interface discovery provides detailed information about interfaces
+ * announced by other nodes on the network, including TCP servers, RNodes, and
+ * other interface types.
  */
 data class DiscoveredInterface(
+    // Core identification
     val name: String,
-    val type: String,
-    val host: String?,
+    val type: String,  // "TCPServerInterface", "RNodeInterface", etc.
+    val transportId: String?,  // Transport identity hash
+    val networkId: String?,  // Network identity hash
+
+    // Status information
+    val status: String,  // "available", "unknown", "stale"
+    val statusCode: Int,  // 1000 = available, 100 = unknown, 0 = stale
+    val lastHeard: Long,  // Unix timestamp in seconds
+    val heardCount: Int,  // Number of times this interface has been discovered
+    val hops: Int,  // Distance in hops from discovery source
+    val stampValue: Int,  // Proof-of-work stamp value
+
+    // TCP-specific fields
+    val reachableOn: String?,  // Host/IP for TCP interfaces or b32 address for I2P
     val port: Int?,
-    val isOnline: Boolean,
+
+    // Radio-specific fields (RNode, Weave, KISS)
+    val frequency: Long?,  // Frequency in Hz
+    val bandwidth: Int?,  // Bandwidth in Hz
+    val spreadingFactor: Int?,  // LoRa spreading factor (5-12)
+    val codingRate: Int?,  // LoRa coding rate (5-8)
+    val modulation: String?,  // Modulation type
+    val channel: Int?,  // Channel number (for Weave)
+
+    // Location (optional, for interfaces that share location)
+    val latitude: Double?,
+    val longitude: Double?,
+    val height: Double?,  // Altitude in meters
 ) {
+    /**
+     * Returns true if this is a TCP-based interface.
+     */
+    val isTcpInterface: Boolean
+        get() = type in listOf("TCPServerInterface", "TCPClientInterface", "I2PInterface")
+
+    /**
+     * Returns true if this is a radio-based interface.
+     */
+    val isRadioInterface: Boolean
+        get() = type in listOf("RNodeInterface", "WeaveInterface", "KISSInterface")
+
+    /**
+     * Returns true if location information is available.
+     */
+    val hasLocation: Boolean
+        get() = latitude != null && longitude != null
+
     companion object {
+        // Status codes matching RNS
+        const val STATUS_AVAILABLE = 1000
+        const val STATUS_UNKNOWN = 100
+        const val STATUS_STALE = 0
+
         /**
          * Parse a JSON array string into a list of DiscoveredInterface objects.
          */
@@ -568,11 +620,36 @@ data class DiscoveredInterface(
                 val item = jsonArray.getJSONObject(i)
                 discovered.add(
                     DiscoveredInterface(
+                        // Core identification
                         name = item.optString("name", "Unknown"),
                         type = item.optString("type", "Unknown"),
-                        host = item.optString("host", null),
+                        transportId = item.optString("transport_id", "").ifEmpty { null },
+                        networkId = item.optString("network_id", "").ifEmpty { null },
+
+                        // Status information
+                        status = item.optString("status", "unknown"),
+                        statusCode = item.optInt("status_code", STATUS_UNKNOWN),
+                        lastHeard = item.optLong("last_heard", 0),
+                        heardCount = item.optInt("heard_count", 0),
+                        hops = item.optInt("hops", 0),
+                        stampValue = item.optInt("stamp_value", 0),
+
+                        // TCP-specific
+                        reachableOn = item.optString("reachable_on", "").ifEmpty { null },
                         port = if (item.has("port") && !item.isNull("port")) item.getInt("port") else null,
-                        isOnline = item.optBoolean("is_online", false),
+
+                        // Radio-specific
+                        frequency = if (item.has("frequency") && !item.isNull("frequency")) item.getLong("frequency") else null,
+                        bandwidth = if (item.has("bandwidth") && !item.isNull("bandwidth")) item.getInt("bandwidth") else null,
+                        spreadingFactor = if (item.has("spreading_factor") && !item.isNull("spreading_factor")) item.getInt("spreading_factor") else null,
+                        codingRate = if (item.has("coding_rate") && !item.isNull("coding_rate")) item.getInt("coding_rate") else null,
+                        modulation = item.optString("modulation", "").ifEmpty { null },
+                        channel = if (item.has("channel") && !item.isNull("channel")) item.getInt("channel") else null,
+
+                        // Location
+                        latitude = if (item.has("latitude") && !item.isNull("latitude")) item.getDouble("latitude") else null,
+                        longitude = if (item.has("longitude") && !item.isNull("longitude")) item.getDouble("longitude") else null,
+                        height = if (item.has("height") && !item.isNull("height")) item.getDouble("height") else null,
                     ),
                 )
             }

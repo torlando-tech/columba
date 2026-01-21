@@ -6746,26 +6746,68 @@ class ReticulumWrapper:
         Get list of discovered interfaces from RNS 1.1.x discovery system.
 
         Returns:
-            JSON string containing array of discovered interface info:
-            [{"name": "...", "type": "...", "host": "...", "port": ..., "is_online": true}]
+            JSON string containing array of discovered interface info with full details:
+            [{"name": "...", "type": "...", "transport_id": "...", "status": "available",
+              "status_code": 1000, "last_heard": 1234567890, ...}]
         """
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return json.dumps([])
 
         try:
-            # RNS 1.1.0+ provides discovered_interfaces() method
+            # RNS 1.1.0+ provides discovered_interfaces() which returns a dict
+            # keyed by transport identity hash with interface discovery info
             if hasattr(RNS.Reticulum, 'discovered_interfaces'):
-                discovered = RNS.Reticulum.discovered_interfaces()
+                discovered_dict = RNS.Reticulum.discovered_interfaces()
                 result = []
-                for iface in discovered:
-                    iface_info = {
-                        'name': getattr(iface, 'name', str(iface)),
-                        'type': type(iface).__name__,
-                        'host': getattr(iface, 'target_host', None),
-                        'port': getattr(iface, 'target_port', None),
-                        'is_online': getattr(iface, 'online', False),
-                    }
-                    result.append(iface_info)
+
+                for transport_id_bytes, iface_info in discovered_dict.items():
+                    try:
+                        # Extract interface details from discovery info
+                        iface_data = {
+                            # Core identification
+                            'name': iface_info.get('name', 'Unknown'),
+                            'type': iface_info.get('interface_type', iface_info.get('type', 'Unknown')),
+                            'transport_id': transport_id_bytes.hex() if isinstance(transport_id_bytes, bytes) else str(transport_id_bytes),
+                            'network_id': iface_info.get('network_id', b'').hex() if isinstance(iface_info.get('network_id'), bytes) else iface_info.get('network_id'),
+
+                            # Status information
+                            'status': self._get_discovery_status_name(iface_info.get('status', 100)),
+                            'status_code': iface_info.get('status', 100),
+                            'last_heard': iface_info.get('last_heard', 0),
+                            'heard_count': iface_info.get('heard_count', 0),
+                            'hops': iface_info.get('hops', 0),
+                            'stamp_value': iface_info.get('stamp_value', 0),
+
+                            # TCP-specific (TCPServerInterface, I2PInterface)
+                            'reachable_on': iface_info.get('reachable_on'),
+                            'port': iface_info.get('port'),
+
+                            # Radio-specific (RNodeInterface, WeaveInterface, KISSInterface)
+                            'frequency': iface_info.get('frequency'),
+                            'bandwidth': iface_info.get('bandwidth'),
+                            'spreading_factor': iface_info.get('sf'),
+                            'coding_rate': iface_info.get('cr'),
+                            'modulation': iface_info.get('modulation'),
+                            'channel': iface_info.get('channel'),
+
+                            # Location (optional)
+                            'latitude': iface_info.get('latitude'),
+                            'longitude': iface_info.get('longitude'),
+                            'height': iface_info.get('height'),
+                        }
+
+                        # Clean up None values to reduce JSON size
+                        iface_data = {k: v for k, v in iface_data.items() if v is not None}
+                        result.append(iface_data)
+
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "get_discovered_interfaces",
+                                   f"Error processing discovered interface: {e}")
+                        continue
+
+                # Sort by status (available first), then by stamp_value (higher first)
+                result.sort(key=lambda x: (-x.get('status_code', 0), -x.get('stamp_value', 0)))
+
                 log_debug("ReticulumWrapper", "get_discovered_interfaces",
                          f"Found {len(result)} discovered interfaces")
                 return json.dumps(result)
@@ -6780,6 +6822,15 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
             return json.dumps([])
+
+    def _get_discovery_status_name(self, status_code: int) -> str:
+        """Convert RNS discovery status code to human-readable name."""
+        if status_code >= 1000:
+            return "available"
+        elif status_code >= 100:
+            return "unknown"
+        else:
+            return "stale"
 
     def is_discovery_enabled(self) -> bool:
         """

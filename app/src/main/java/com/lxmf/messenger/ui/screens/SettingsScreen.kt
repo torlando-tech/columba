@@ -287,6 +287,14 @@ fun SettingsScreen(
                             showTelemetryPermissionSheet = true
                         }
                     },
+                    // Telemetry request props
+                    telemetryRequestEnabled = state.telemetryRequestEnabled,
+                    telemetryRequestIntervalSeconds = state.telemetryRequestIntervalSeconds,
+                    lastTelemetryRequestTime = state.lastTelemetryRequestTime,
+                    isRequestingTelemetry = state.isRequestingTelemetry,
+                    onTelemetryRequestEnabledChange = { viewModel.setTelemetryRequestEnabled(it) },
+                    onTelemetryRequestIntervalChange = { viewModel.setTelemetryRequestInterval(it) },
+                    onRequestTelemetryNow = { viewModel.requestTelemetryNow() },
                 )
 
                 MapSourcesCard(
@@ -511,9 +519,9 @@ fun SettingsScreen(
                     )
                 },
                 sheetState = telemetryPermissionSheetState,
-                rationale = "Telemetry collector sends your location to a central collector " +
-                    "so you can share your position with multiple peers.\n\n" +
-                    "Your location is encrypted and only readable by the collector you configure.",
+                rationale = "Group Tracker shares your location with a group host " +
+                    "so everyone can see where each other is.\n\n" +
+                    "Your location is encrypted and only readable by the group host you configure.",
                 primaryActionLabel = "Grant Location Access",
             )
         }

@@ -60,7 +60,7 @@ class TelemetryCollectorCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Telemetry Collector").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Group Tracker").assertIsDisplayed()
     }
 
     @Test
@@ -80,7 +80,7 @@ class TelemetryCollectorCardTest {
         }
 
         composeTestRule.onNodeWithText(
-            "Send your location to a telemetry collector",
+            "Share your location with a group",
             substring = true,
         ).assertIsDisplayed()
     }
@@ -120,7 +120,7 @@ class TelemetryCollectorCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Collector Address").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Group Host").assertIsDisplayed()
     }
 
     @Test

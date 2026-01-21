@@ -92,11 +92,11 @@ fun TelemetryCollectorCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.CloudUpload,
-                    contentDescription = "Telemetry Collector",
+                    contentDescription = "Group Tracker",
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "Telemetry Collector",
+                    text = "Group Tracker",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -104,7 +104,7 @@ fun TelemetryCollectorCard(
 
             // Description
             Text(
-                text = "Send your location to a telemetry collector and receive locations from multiple peers.",
+                text = "Share your location with a group and see where everyone is",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -262,7 +262,7 @@ private fun CollectorAddressInput(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Collector Address",
+            text = "Group Host",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )

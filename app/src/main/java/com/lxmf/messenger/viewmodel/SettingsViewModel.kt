@@ -134,6 +134,8 @@ data class SettingsState(
     val telemetryRequestIntervalSeconds: Int = 900,
     val lastTelemetryRequestTime: Long? = null,
     val isRequestingTelemetry: Boolean = false,
+    // Telemetry host mode (acting as collector for others)
+    val telemetryHostModeEnabled: Boolean = false,
     // Protocol versions (for About screen)
     val reticulumVersion: String? = null,
     val lxmfVersion: String? = null,
@@ -379,6 +381,8 @@ class SettingsViewModel
                             telemetryRequestIntervalSeconds = _state.value.telemetryRequestIntervalSeconds,
                             lastTelemetryRequestTime = _state.value.lastTelemetryRequestTime,
                             isRequestingTelemetry = _state.value.isRequestingTelemetry,
+                            // Preserve telemetry host mode state from loadTelemetryCollectorSettings()
+                            telemetryHostModeEnabled = _state.value.telemetryHostModeEnabled,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve protocol versions from fetchProtocolVersions()
@@ -1709,6 +1713,13 @@ class SettingsViewModel
                     _state.update { it.copy(lastTelemetryRequestTime = timestamp) }
                 }
             }
+
+            // Host mode
+            viewModelScope.launch {
+                settingsRepository.telemetryHostModeEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(telemetryHostModeEnabled = enabled) }
+                }
+            }
         }
 
         /**
@@ -1802,6 +1813,17 @@ class SettingsViewModel
             viewModelScope.launch {
                 Log.d(TAG, "User triggered manual telemetry request")
                 telemetryCollectorManager.requestTelemetryNow()
+            }
+        }
+
+        /**
+         * Set the telemetry host mode enabled state.
+         * When enabled, this device acts as a collector for others.
+         */
+        fun setTelemetryHostModeEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setHostModeEnabled(enabled)
+                Log.d(TAG, "Telemetry host mode set to: $enabled")
             }
         }
     }

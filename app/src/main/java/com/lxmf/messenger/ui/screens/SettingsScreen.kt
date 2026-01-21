@@ -295,6 +295,9 @@ fun SettingsScreen(
                     onTelemetryRequestEnabledChange = { viewModel.setTelemetryRequestEnabled(it) },
                     onTelemetryRequestIntervalChange = { viewModel.setTelemetryRequestInterval(it) },
                     onRequestTelemetryNow = { viewModel.requestTelemetryNow() },
+                    // Telemetry host mode props
+                    telemetryHostModeEnabled = state.telemetryHostModeEnabled,
+                    onTelemetryHostModeEnabledChange = { viewModel.setTelemetryHostModeEnabled(it) },
                 )
 
                 MapSourcesCard(

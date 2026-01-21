@@ -815,6 +815,19 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun setTelemetryCollectorMode(enabled: Boolean): String {
+        return try {
+            Log.d(TAG, "📡 Setting telemetry collector mode: $enabled")
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("set_telemetry_collector_enabled", enabled)
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting telemetry collector mode", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
     // ===========================================
     // Emoji Reactions
     // ===========================================

@@ -399,6 +399,18 @@ interface IReticulumService {
      */
     String sendTelemetryRequest(in byte[] destHash, in byte[] sourceIdentityPrivateKey, long timebaseMs, boolean isCollectorRequest);
 
+    /**
+     * Enable or disable telemetry collector (host) mode.
+     * When enabled, this device will:
+     * - Store incoming FIELD_TELEMETRY location data from peers
+     * - Handle FIELD_COMMANDS telemetry requests
+     * - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+     *
+     * @param enabled True to enable host mode, False to disable
+     * @return JSON string with result: {"success": true, "enabled": true/false}
+     */
+    String setTelemetryCollectorMode(boolean enabled);
+
     // ==================== EMOJI REACTIONS ====================
 
     /**

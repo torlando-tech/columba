@@ -2280,6 +2280,22 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.setTelemetryCollectorMode(enabled)
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            Log.d(TAG, "📡 Telemetry collector mode ${if (enabled) "enabled" else "disabled"}")
+        }
+    }
+
     override suspend fun sendReaction(
         destinationHash: ByteArray,
         targetMessageId: String,

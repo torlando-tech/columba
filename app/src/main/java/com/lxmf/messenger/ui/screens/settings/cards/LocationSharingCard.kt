@@ -92,6 +92,9 @@ fun LocationSharingCard(
     onTelemetryRequestEnabledChange: (Boolean) -> Unit,
     onTelemetryRequestIntervalChange: (Int) -> Unit,
     onRequestTelemetryNow: () -> Unit,
+    // Telemetry host mode props (acting as collector for others)
+    telemetryHostModeEnabled: Boolean,
+    onTelemetryHostModeEnabledChange: (Boolean) -> Unit,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -163,6 +166,9 @@ fun LocationSharingCard(
             onRequestEnabledChange = onTelemetryRequestEnabledChange,
             onRequestIntervalChange = onTelemetryRequestIntervalChange,
             onRequestNow = onRequestTelemetryNow,
+            // Host mode props
+            hostModeEnabled = telemetryHostModeEnabled,
+            onHostModeEnabledChange = onTelemetryHostModeEnabledChange,
         )
     }
 
@@ -486,6 +492,9 @@ private fun TelemetryCollectorSection(
     onRequestEnabledChange: (Boolean) -> Unit,
     onRequestIntervalChange: (Int) -> Unit,
     onRequestNow: () -> Unit,
+    // Host mode props (acting as collector for others)
+    hostModeEnabled: Boolean,
+    onHostModeEnabledChange: (Boolean) -> Unit,
 ) {
     var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
 
@@ -780,6 +789,41 @@ private fun TelemetryCollectorSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        // Divider between receive and host sections
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+
+        // Host mode toggle (act as collector for others)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = null,
+                    indication = null,
+                ) { onHostModeEnabledChange(!hostModeEnabled) },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Host Group",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "Let others use you as their group tracker",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = hostModeEnabled,
+                onCheckedChange = null,
+            )
         }
     }
 }

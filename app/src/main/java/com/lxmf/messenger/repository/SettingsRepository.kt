@@ -124,6 +124,9 @@ class SettingsRepository
             val TELEMETRY_REQUEST_INTERVAL_SECONDS = intPreferencesKey("telemetry_request_interval_seconds")
             val LAST_TELEMETRY_SEND_TIME = longPreferencesKey("last_telemetry_send_time")
             val LAST_TELEMETRY_REQUEST_TIME = longPreferencesKey("last_telemetry_request_time")
+
+            // Telemetry host mode (acting as collector for others)
+            val TELEMETRY_HOST_MODE_ENABLED = booleanPreferencesKey("telemetry_host_mode_enabled")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1366,6 +1369,40 @@ class SettingsRepository
         suspend fun saveLastTelemetryRequestTime(timestamp: Long) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME] = timestamp
+            }
+        }
+
+        // Telemetry host mode preferences (acting as collector for others)
+
+        /**
+         * Flow of the telemetry host mode enabled state.
+         * When enabled, this device acts as a telemetry collector for others.
+         * Defaults to false if not set.
+         */
+        val telemetryHostModeEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry host mode enabled state (non-flow).
+         */
+        suspend fun getTelemetryHostModeEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] ?: false
+            }.first()
+        }
+
+        /**
+         * Save the telemetry host mode enabled state.
+         *
+         * @param enabled Whether telemetry host mode is enabled
+         */
+        suspend fun saveTelemetryHostModeEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] = enabled
             }
         }
 

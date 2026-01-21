@@ -303,6 +303,19 @@ interface ReticulumProtocol {
     ): Result<MessageReceipt>
 
     /**
+     * Enable or disable telemetry collector (host) mode.
+     *
+     * When enabled, this device will:
+     * - Store incoming FIELD_TELEMETRY location data from peers
+     * - Handle FIELD_COMMANDS telemetry requests
+     * - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+     *
+     * @param enabled True to enable host mode, False to disable
+     * @return Result indicating success
+     */
+    suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit>
+
+    /**
      * Send an emoji reaction to a message via LXMF Field 16.
      *
      * The reaction is sent as a lightweight LXMF message with Field 16 containing

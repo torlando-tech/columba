@@ -182,6 +182,26 @@ def unpack_location_telemetry(packed_data: bytes) -> Optional[Dict]:
         return None
 
 
+def pack_telemetry_stream(entries: List) -> bytes:
+    """
+    Pack telemetry stream entries for FIELD_TELEMETRY_STREAM.
+
+    Args:
+        entries: List of [source_hash_bytes, timestamp, packed_telemetry, appearance]
+
+    Returns:
+        msgpack-encoded stream data
+    """
+    try:
+        # The stream is just a list of entries, msgpack encoded
+        # Use umsgpack which is bundled with RNS
+        return umsgpack.packb(entries)
+    except Exception as e:
+        log_error("TelemetryHelper", "pack_telemetry_stream",
+                  f"Failed to pack telemetry stream: {e}")
+        return b''
+
+
 def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
     """
     Unpack FIELD_TELEMETRY_STREAM entries to Columba location format.
@@ -457,6 +477,11 @@ class ReticulumWrapper:
         # Shared instance state
         self.is_shared_instance = False  # True if connected to external shared RNS instance
 
+        # Telemetry collector host state
+        self.telemetry_collector_enabled = False  # True when acting as host/collector
+        self.collected_telemetry = {}  # {source_hash_hex: {timestamp, packed_telemetry, appearance, received_at}}
+        self.telemetry_retention_seconds = 86400  # 24 hours TTL
+
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
 
@@ -503,6 +528,140 @@ class ReticulumWrapper:
         """
         self.kotlin_call_bridge = bridge
         log_info("ReticulumWrapper", "set_call_bridge", "CallBridge instance set")
+
+    def set_telemetry_collector_enabled(self, enabled: bool) -> Dict:
+        """
+        Enable or disable telemetry collector (host) mode.
+
+        When enabled, this device will:
+        - Store incoming FIELD_TELEMETRY location data from peers
+        - Handle FIELD_COMMANDS telemetry requests
+        - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+
+        Args:
+            enabled: True to enable host mode, False to disable
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            self.telemetry_collector_enabled = enabled
+            if not enabled:
+                # Clear collected telemetry when disabling
+                self.collected_telemetry.clear()
+            log_info("ReticulumWrapper", "set_telemetry_collector_enabled",
+                     f"Telemetry collector mode {'enabled' if enabled else 'disabled'}")
+            return {'success': True, 'enabled': enabled}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_telemetry_collector_enabled", str(e))
+            return {'success': False, 'error': str(e)}
+
+    def _cleanup_expired_telemetry(self):
+        """
+        Remove telemetry entries older than the retention period.
+        Called before sending telemetry stream or periodically.
+        """
+        import time
+        now = time.time()
+        expired_keys = []
+
+        for source_hash, entry in self.collected_telemetry.items():
+            if now - entry.get('received_at', 0) > self.telemetry_retention_seconds:
+                expired_keys.append(source_hash)
+
+        for key in expired_keys:
+            del self.collected_telemetry[key]
+
+        if expired_keys:
+            log_debug("ReticulumWrapper", "_cleanup_expired_telemetry",
+                      f"Removed {len(expired_keys)} expired entries")
+
+    def _send_telemetry_stream_response(self, requester_hash_bytes, requester_identity, timebase):
+        """
+        Send FIELD_TELEMETRY_STREAM response to a telemetry request.
+
+        Args:
+            requester_hash_bytes: The destination hash bytes of the requester
+            requester_identity: The Identity object of the requester
+            timebase: The timebase from the request (entries newer than this are sent)
+        """
+        import time
+        try:
+            # Cleanup expired entries first
+            self._cleanup_expired_telemetry()
+
+            # Filter entries based on timebase
+            entries_to_send = []
+            for source_hash_hex, entry in self.collected_telemetry.items():
+                entry_timestamp = entry.get('timestamp', 0)
+                received_at = entry.get('received_at', 0)
+                # Use received_at for filtering (when we got the data), not internal timestamp
+                # This handles cases where sender's clock is off or telemetry was generated earlier
+                # If timebase is None or 0, send all entries
+                if timebase is None or timebase == 0 or received_at >= timebase:
+                    # Format: [source_hash_bytes, timestamp, packed_telemetry, appearance]
+                    entries_to_send.append([
+                        bytes.fromhex(source_hash_hex),
+                        entry_timestamp,
+                        entry.get('packed_telemetry', b''),
+                        entry.get('appearance', None)
+                    ])
+
+            log_info("ReticulumWrapper", "_send_telemetry_stream_response",
+                     f"📡 Telemetry request received, sending stream with {len(entries_to_send)} entries (timebase={timebase})")
+
+            # Send the response message
+            # NOTE: Don't pre-pack the stream - LXMF handles msgpack encoding of fields
+            destination = RNS.Destination(
+                requester_identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                "lxmf",
+                "delivery"
+            )
+
+            # Pass raw list - LXMF will msgpack-encode it
+            fields = {FIELD_TELEMETRY_STREAM: entries_to_send}
+
+            lxmf_message = LXMF.LXMessage(
+                destination,
+                self.local_lxmf_destination,  # Our local LXMF destination
+                "",  # Empty content
+                fields=fields,
+                desired_method=LXMF.LXMessage.DIRECT
+            )
+
+            # Use router to send (handles delivery callbacks)
+            self.router.handle_outbound(lxmf_message)
+
+            log_info("ReticulumWrapper", "_send_telemetry_stream_response",
+                     f"✅ Telemetry stream response sent to {requester_hash_bytes.hex()[:16]}")
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_send_telemetry_stream_response",
+                      f"Failed to send telemetry stream: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _store_telemetry_for_collector(self, source_hash_hex, packed_telemetry, timestamp, appearance=None):
+        """
+        Store incoming telemetry data when acting as host/collector.
+
+        Args:
+            source_hash_hex: Hex string of the source's destination hash
+            packed_telemetry: The raw packed telemetry bytes
+            timestamp: Timestamp from the telemetry data
+            appearance: Optional appearance data (icon/color) from FIELD_ICON_APPEARANCE
+        """
+        import time
+        self.collected_telemetry[source_hash_hex] = {
+            'timestamp': timestamp,
+            'packed_telemetry': packed_telemetry,
+            'appearance': appearance,
+            'received_at': time.time()
+        }
+        log_debug("ReticulumWrapper", "_store_telemetry_for_collector",
+                  f"📦 Stored telemetry from {source_hash_hex[:16]}, total entries: {len(self.collected_telemetry)}")
 
     def initialize_call_manager(self) -> Dict:
         """
@@ -2293,6 +2452,25 @@ class ReticulumWrapper:
                         if location_event:
                             log_info("ReticulumWrapper", "_on_lxmf_delivery",
                                     f"📍 Sideband-compatible telemetry received in FIELD_TELEMETRY (0x02)")
+
+                            # ✅ TELEMETRY COLLECTOR HOST: Store incoming telemetry
+                            if self.telemetry_collector_enabled:
+                                # Extract appearance from FIELD_ICON_APPEARANCE if present
+                                appearance = None
+                                if FIELD_ICON_APPEARANCE in lxmf_message.fields:
+                                    appearance = lxmf_message.fields[FIELD_ICON_APPEARANCE]
+
+                                # Get timestamp from unpacked location event
+                                entry_timestamp = location_event.get('ts', 0)
+                                if entry_timestamp > 1e12:  # Milliseconds
+                                    entry_timestamp = entry_timestamp // 1000  # Convert to seconds
+
+                                self._store_telemetry_for_collector(
+                                    source_hash_hex=lxmf_message.source_hash.hex(),
+                                    packed_telemetry=packed_data,
+                                    timestamp=entry_timestamp,
+                                    appearance=appearance
+                                )
                     except Exception as e:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    f"Failed to unpack FIELD_TELEMETRY: {e}")
@@ -2403,6 +2581,65 @@ class ReticulumWrapper:
                                  f"⚠️ Error invoking location callback: {e}")
                         import traceback
                         traceback.print_exc()
+
+            # ✅ TELEMETRY COLLECTOR HOST: Handle FIELD_COMMANDS telemetry requests
+            if self.telemetry_collector_enabled and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+                if FIELD_COMMANDS in lxmf_message.fields:
+                    try:
+                        commands = lxmf_message.fields[FIELD_COMMANDS]
+                        # Format: [{command_id: [args...]}] - list of command dicts
+                        if isinstance(commands, list):
+                            for command_dict in commands:
+                                if isinstance(command_dict, dict):
+                                    # Check for telemetry request command (0x01)
+                                    if COMMAND_TELEMETRY_REQUEST in command_dict:
+                                        args = command_dict[COMMAND_TELEMETRY_REQUEST]
+                                        # Args: [timebase, is_collector_request]
+                                        timebase = args[0] if len(args) > 0 else 0
+                                        is_collector_request = args[1] if len(args) > 1 else True
+
+                                        if is_collector_request:
+                                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                                    f"📡 Telemetry request received from {lxmf_message.source_hash.hex()[:16]} (timebase={timebase})")
+
+                                            # Get the requester's identity - following Sideband's pattern
+                                            requester_identity = RNS.Identity.recall(lxmf_message.source_hash)
+
+                                            if requester_identity is None:
+                                                # Identity not cached - request path from network (Sideband pattern)
+                                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                                        f"Identity for {lxmf_message.source_hash.hex()[:16]} not recalled, requesting path...")
+                                                RNS.Transport.request_path(lxmf_message.source_hash)
+                                                # Queue for retry after path resolution
+                                                def retry_send():
+                                                    import time
+                                                    time.sleep(2)  # Wait for path resolution
+                                                    retry_identity = RNS.Identity.recall(lxmf_message.source_hash)
+                                                    if retry_identity:
+                                                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                                                f"Identity recalled on retry, sending telemetry stream")
+                                                        self._send_telemetry_stream_response(
+                                                            lxmf_message.source_hash,
+                                                            retry_identity,
+                                                            timebase
+                                                        )
+                                                    else:
+                                                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                                                   f"Still cannot recall identity for {lxmf_message.source_hash.hex()[:16]} after retry")
+                                                import threading
+                                                threading.Thread(target=retry_send, daemon=True).start()
+                                            else:
+                                                self._send_telemetry_stream_response(
+                                                    lxmf_message.source_hash,
+                                                    requester_identity,
+                                                    timebase
+                                                )
+
+                                            # Mark as handled (don't add to regular message queue)
+                                            is_location_only = True  # Reuse this flag to skip message queue
+                    except Exception as e:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   f"Failed to process FIELD_COMMANDS: {e}")
 
             # ✅ Check for emoji reaction (Field 16 with reaction_to key)
             # Reactions are lightweight messages with empty content and reaction data in Field 16

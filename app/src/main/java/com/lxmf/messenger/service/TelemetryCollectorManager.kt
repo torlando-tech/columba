@@ -122,6 +122,10 @@ class TelemetryCollectorManager
         private val _isRequesting = MutableStateFlow(false)
         val isRequesting: StateFlow<Boolean> = _isRequesting.asStateFlow()
 
+        // Host mode state (acting as collector for others)
+        private val _isHostModeEnabled = MutableStateFlow(false)
+        val isHostModeEnabled: StateFlow<Boolean> = _isHostModeEnabled.asStateFlow()
+
         // Jobs for periodic operations
         private var settingsObserverJob: Job? = null
         private var periodicSendJob: Job? = null
@@ -205,6 +209,18 @@ class TelemetryCollectorManager
                             _lastRequestTime.value = timestamp
                         }
                 }
+
+                // Host mode observer - sync with Python when setting changes
+                launch {
+                    settingsRepository.telemetryHostModeEnabledFlow
+                        .distinctUntilChanged()
+                        .collect { enabled ->
+                            _isHostModeEnabled.value = enabled
+                            Log.d(TAG, "Host mode: $enabled")
+                            // Sync with Python layer
+                            syncHostModeWithPython(enabled)
+                        }
+                }
             }
 
             // Start periodic sending and requesting
@@ -278,6 +294,42 @@ class TelemetryCollectorManager
          */
         suspend fun setRequestIntervalSeconds(seconds: Int) {
             settingsRepository.saveTelemetryRequestIntervalSeconds(seconds)
+        }
+
+        /**
+         * Enable or disable host mode (acting as a collector for others).
+         * When enabled, this device will:
+         * - Store incoming FIELD_TELEMETRY location data from peers
+         * - Handle FIELD_COMMANDS telemetry requests
+         * - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+         *
+         * @param enabled True to enable host mode, False to disable
+         */
+        suspend fun setHostModeEnabled(enabled: Boolean) {
+            settingsRepository.saveTelemetryHostModeEnabled(enabled)
+            // The observer will automatically sync with Python
+        }
+
+        /**
+         * Sync host mode state with Python layer.
+         * Called when the setting changes.
+         */
+        private suspend fun syncHostModeWithPython(enabled: Boolean) {
+            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+                Log.d(TAG, "Network not ready, will sync host mode when ready")
+                return
+            }
+
+            try {
+                val result = reticulumProtocol.setTelemetryCollectorMode(enabled)
+                if (result.isSuccess) {
+                    Log.i(TAG, "✅ Host mode synced with Python: $enabled")
+                } else {
+                    Log.e(TAG, "❌ Failed to sync host mode with Python: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing host mode with Python", e)
+            }
         }
 
         /**

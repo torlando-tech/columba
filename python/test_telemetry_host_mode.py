@@ -1116,6 +1116,9 @@ class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
         fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
         mock_message = self._create_mock_lxmf_message(fields=fields)
 
+        # Add requester to allowed list (source_hash is "a" * 32)
+        self.wrapper.telemetry_allowed_requesters = {"a" * 32}
+
         # Mock identity recall to return an identity immediately
         mock_identity = MagicMock()
         reticulum_wrapper.RNS.Identity.recall.return_value = mock_identity
@@ -1160,6 +1163,9 @@ class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
         fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
         mock_message = self._create_mock_lxmf_message(fields=fields)
 
+        # Add requester to allowed list (source_hash is "a" * 32)
+        self.wrapper.telemetry_allowed_requesters = {"a" * 32}
+
         # First recall returns None, then returns identity on retry
         mock_identity = MagicMock()
         reticulum_wrapper.RNS.Identity.recall.side_effect = [None, mock_identity]
@@ -1196,6 +1202,56 @@ class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
         self.wrapper._on_lxmf_delivery(mock_message)
 
         # Should not be called since is_collector_request is False
+        self.wrapper._send_telemetry_stream_response.assert_not_called()
+
+    def test_blocks_request_from_non_allowed_requester(self):
+        """Should block telemetry requests from requesters not in allowed list."""
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [0, True]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # Set allowed list to a different hash (not "a" * 32)
+        self.wrapper.telemetry_allowed_requesters = {"b" * 32}
+
+        # Store some telemetry to send
+        self.wrapper.collected_telemetry["c" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'test_data',
+            'appearance': None,
+            'received_at': time.time(),
+        }
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Should NOT be called since requester ("a" * 32) is not in allowed list
+        self.wrapper._send_telemetry_stream_response.assert_not_called()
+
+    def test_blocks_request_when_allowed_list_empty(self):
+        """Should block all telemetry requests when allowed list is empty."""
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [0, True]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # Empty allowed list = block all
+        self.wrapper.telemetry_allowed_requesters = set()
+
+        # Store some telemetry to send
+        self.wrapper.collected_telemetry["b" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'test_data',
+            'appearance': None,
+            'received_at': time.time(),
+        }
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Should NOT be called since allowed list is empty (blocks all)
         self.wrapper._send_telemetry_stream_response.assert_not_called()
 
 

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.model.SharingDuration
 import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.delay
@@ -521,6 +523,12 @@ private fun TelemetryCollectorSection(
 ) {
     var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
     var showAllowedRequestersDialog by remember { mutableStateOf(false) }
+    var showContactPicker by remember { mutableStateOf(false) }
+
+    // Find the selected contact name for display
+    val selectedContactName = contacts.find {
+        it.destinationHash.equals(collectorAddress, ignoreCase = true)
+    }?.displayName
 
     // Sync input with external state
     LaunchedEffect(collectorAddress) {
@@ -584,7 +592,40 @@ private fun TelemetryCollectorSection(
             )
         }
 
-        // Collector address input
+        // Select from contacts
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Group Host",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showContactPicker = true }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = selectedContactName ?: "Select from contacts...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selectedContactName != null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        // Manual address input (alternative)
         CollectorAddressInput(
             addressInput = addressInput,
             onAddressChange = { addressInput = it },
@@ -592,6 +633,20 @@ private fun TelemetryCollectorSection(
                 onCollectorAddressChange(normalizedHash)
             },
         )
+
+        // Contact picker dialog
+        if (showContactPicker) {
+            GroupHostPickerDialog(
+                contacts = contacts,
+                selectedHash = collectorAddress,
+                onContactSelected = { contact ->
+                    onCollectorAddressChange(contact.destinationHash.lowercase())
+                    addressInput = contact.destinationHash.lowercase()
+                    showContactPicker = false
+                },
+                onDismiss = { showContactPicker = false },
+            )
+        }
 
         // Send interval chips
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1176,5 +1231,92 @@ private fun formatTelemetryIntervalDisplay(seconds: Int): String {
         hours > 0 -> "${hours}h ${minutes}m"
         secs == 0 -> "${minutes}min"
         else -> "${minutes}m ${secs}s"
+    }
+}
+
+/**
+ * Dialog for selecting a contact as the group host/collector.
+ */
+@Composable
+private fun GroupHostPickerDialog(
+    contacts: List<EnrichedContact>,
+    selectedHash: String?,
+    onContactSelected: (EnrichedContact) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Group Host") },
+        text = {
+            if (contacts.isEmpty()) {
+                Text(
+                    text = "No contacts available. Add contacts first.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp),
+                ) {
+                    items(contacts.sortedBy { it.displayName.lowercase() }) { contact ->
+                        GroupHostContactRow(
+                            contact = contact,
+                            isSelected = contact.destinationHash.equals(selectedHash, ignoreCase = true),
+                            onClick = { onContactSelected(contact) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+/**
+ * A clickable row displaying a contact for single selection.
+ */
+@Composable
+private fun GroupHostContactRow(
+    contact: EnrichedContact,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+    ) {
+        val hashBytes = contact.destinationHash
+            .chunked(2)
+            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+            .toByteArray()
+
+        ProfileIcon(
+            iconName = contact.iconName,
+            foregroundColor = contact.iconForegroundColor,
+            backgroundColor = contact.iconBackgroundColor,
+            size = 40.dp,
+            fallbackHash = hashBytes,
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = contact.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

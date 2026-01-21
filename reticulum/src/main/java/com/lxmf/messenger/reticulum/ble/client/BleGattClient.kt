@@ -487,9 +487,10 @@ class BleGattClient(
                     }
 
                 // Check if this was a manual disconnect (callback will be fired by disconnect())
-                val isManualDisconnect = manualDisconnectsMutex.withLock {
-                    manualDisconnects.contains(address)
-                }
+                val isManualDisconnect =
+                    manualDisconnectsMutex.withLock {
+                        manualDisconnects.contains(address)
+                    }
 
                 if (isManualDisconnect) {
                     Log.d(TAG, "Disconnected from $address: $reason (manual, skipping callback)")

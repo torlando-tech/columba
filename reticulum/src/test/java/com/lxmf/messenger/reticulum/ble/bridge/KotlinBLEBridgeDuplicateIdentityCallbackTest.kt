@@ -11,11 +11,9 @@ import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -95,12 +93,15 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         val bridge = createBridgeWithMocks()
 
         // Try to get the onDuplicateIdentityDetected field
-        val field = try {
-            KotlinBLEBridge::class.java.getDeclaredField("onDuplicateIdentityDetected")
-        } catch (@Suppress("SwallowedException") e: NoSuchFieldException) {
-            // Expected when the field doesn't exist - this is what we're testing for
-            null
-        }
+        val field =
+            try {
+                KotlinBLEBridge::class.java.getDeclaredField("onDuplicateIdentityDetected")
+            } catch (
+                @Suppress("SwallowedException") e: NoSuchFieldException,
+            ) {
+                // Expected when the field doesn't exist - this is what we're testing for
+                null
+            }
 
         // BUG: This assertion fails because the field doesn't exist
         assertNotNull(
@@ -122,15 +123,18 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         val bridge = createBridgeWithMocks()
 
         // Try to get the setter method
-        val method = try {
-            KotlinBLEBridge::class.java.getDeclaredMethod(
-                "setOnDuplicateIdentityDetected",
-                PyObject::class.java,
-            )
-        } catch (@Suppress("SwallowedException") e: NoSuchMethodException) {
-            // Expected when the method doesn't exist - this is what we're testing for
-            null
-        }
+        val method =
+            try {
+                KotlinBLEBridge::class.java.getDeclaredMethod(
+                    "setOnDuplicateIdentityDetected",
+                    PyObject::class.java,
+                )
+            } catch (
+                @Suppress("SwallowedException") e: NoSuchMethodException,
+            ) {
+                // Expected when the method doesn't exist - this is what we're testing for
+                null
+            }
 
         // BUG: This assertion fails because the method doesn't exist
         assertNotNull(
@@ -204,24 +208,28 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         val bridge = createBridgeWithMocks()
 
         // All callbacks that should exist (including onDuplicateIdentityDetected)
-        val allCallbacks = listOf(
-            "onDeviceDiscovered",
-            "onConnected",
-            "onDisconnected",
-            "onDataReceived",
-            "onIdentityReceived",
-            "onMtuNegotiated",
-            "onAddressChanged",
-            "onDuplicateIdentityDetected", // Added for MAC rotation handling
-        )
+        val allCallbacks =
+            listOf(
+                "onDeviceDiscovered",
+                "onConnected",
+                "onDisconnected",
+                "onDataReceived",
+                "onIdentityReceived",
+                "onMtuNegotiated",
+                "onAddressChanged",
+                "onDuplicateIdentityDetected", // Added for MAC rotation handling
+            )
 
         for (callbackName in allCallbacks) {
-            val field = try {
-                KotlinBLEBridge::class.java.getDeclaredField(callbackName)
-            } catch (@Suppress("SwallowedException") e: NoSuchFieldException) {
-                // Expected for missing callbacks - this is what we're testing for
-                null
-            }
+            val field =
+                try {
+                    KotlinBLEBridge::class.java.getDeclaredField(callbackName)
+                } catch (
+                    @Suppress("SwallowedException") e: NoSuchFieldException,
+                ) {
+                    // Expected for missing callbacks - this is what we're testing for
+                    null
+                }
             assertNotNull("Callback $callbackName should exist", field)
         }
     }
@@ -251,23 +259,26 @@ class KotlinBLEBridgeDuplicateIdentityCallbackTest {
         val macNew = "AA:BB:CC:DD:EE:02"
 
         // The blacklist regex patterns that WILL trigger blacklist:
-        val blacklistPatterns = listOf(
-            "Connection failed to $macNew",
-            "Connection timeout to $macNew",
-        )
+        val blacklistPatterns =
+            listOf(
+                "Connection failed to $macNew",
+                "Connection timeout to $macNew",
+            )
 
         // Expected safe message formats that WON'T trigger blacklist:
-        val safeMessageFormats = listOf(
-            "Duplicate identity rejected for $macNew",
-            "Rejecting duplicate identity from $macNew",
-            "MAC rotation duplicate detected: $macNew",
-        )
+        val safeMessageFormats =
+            listOf(
+                "Duplicate identity rejected for $macNew",
+                "Rejecting duplicate identity from $macNew",
+                "MAC rotation duplicate detected: $macNew",
+            )
 
         // The blacklist regex from Python's _error_callback
-        val blacklistRegex = Regex(
-            """(?:Connection (?:failed|timeout) to|to) """ +
-                """([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})""",
-        )
+        val blacklistRegex =
+            Regex(
+                """(?:Connection (?:failed|timeout) to|to) """ +
+                    """([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})""",
+            )
 
         // Verify unsafe patterns match (would trigger blacklist)
         for (pattern in blacklistPatterns) {

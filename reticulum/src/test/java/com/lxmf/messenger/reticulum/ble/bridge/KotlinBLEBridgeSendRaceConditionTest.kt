@@ -12,19 +12,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Tests for TOCTOU race condition in KotlinBLEBridge.send().
@@ -348,7 +343,10 @@ class KotlinBLEBridgeSendRaceConditionTest {
         connectedPeers[address] = peer
     }
 
-    private fun getPeer(bridge: KotlinBLEBridge, address: String): Any? {
+    private fun getPeer(
+        bridge: KotlinBLEBridge,
+        address: String,
+    ): Any? {
         val connectedPeersField = KotlinBLEBridge::class.java.getDeclaredField("connectedPeers")
         connectedPeersField.isAccessible = true
         @Suppress("UNCHECKED_CAST")
@@ -356,7 +354,10 @@ class KotlinBLEBridgeSendRaceConditionTest {
         return connectedPeers[address]
     }
 
-    private fun setDeduplicationState(peer: Any, stateName: String) {
+    private fun setDeduplicationState(
+        peer: Any,
+        stateName: String,
+    ) {
         val deduplicationStateClass =
             Class.forName(
                 "com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge\$DeduplicationState",
@@ -368,7 +369,10 @@ class KotlinBLEBridgeSendRaceConditionTest {
         field.set(peer, stateEnum)
     }
 
-    private fun setTestDelayAfterStateRead(bridge: KotlinBLEBridge, delayMs: Long) {
+    private fun setTestDelayAfterStateRead(
+        bridge: KotlinBLEBridge,
+        delayMs: Long,
+    ) {
         val field = KotlinBLEBridge::class.java.getDeclaredField("testDelayAfterStateReadMs")
         field.isAccessible = true
         field.set(bridge, delayMs)

@@ -26,13 +26,14 @@ class CrashReportDialogTest {
 
     val composeTestRule get() = composeRule
 
-    private val testCrashReport = CrashReport(
-        timestamp = 1705591935000L,
-        exceptionClass = "java.lang.NullPointerException",
-        message = "Attempt to invoke method on null object",
-        stackTrace = "java.lang.NullPointerException\n\tat Test.method(Test.kt:42)",
-        logsAtCrash = null,
-    )
+    private val testCrashReport =
+        CrashReport(
+            timestamp = 1705591935000L,
+            exceptionClass = "java.lang.NullPointerException",
+            message = "Attempt to invoke method on null object",
+            stackTrace = "java.lang.NullPointerException\n\tat Test.method(Test.kt:42)",
+            logsAtCrash = null,
+        )
 
     @Test
     fun `displays crash dialog title`() {
@@ -84,9 +85,10 @@ class CrashReportDialogTest {
 
     @Test
     fun `displays truncated message when message is long`() {
-        val longMessageCrash = testCrashReport.copy(
-            message = "A".repeat(150),
-        )
+        val longMessageCrash =
+            testCrashReport.copy(
+                message = "A".repeat(150),
+            )
 
         composeTestRule.setContent {
             ColumbaTheme {
@@ -207,10 +209,11 @@ class CrashReportDialogTest {
 
     @Test
     fun `renders with different exception types`() {
-        val runtimeException = testCrashReport.copy(
-            exceptionClass = "java.lang.RuntimeException",
-            message = "Something went wrong",
-        )
+        val runtimeException =
+            testCrashReport.copy(
+                exceptionClass = "java.lang.RuntimeException",
+                message = "Something went wrong",
+            )
 
         composeTestRule.setContent {
             ColumbaTheme {

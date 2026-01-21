@@ -82,8 +82,9 @@ fun CrashReportDialog(
                 )
                 if (crashReport.message != null) {
                     Text(
-                        text = crashReport.message.take(100) +
-                            if (crashReport.message.length > 100) "..." else "",
+                        text =
+                            crashReport.message.take(100) +
+                                if (crashReport.message.length > 100) "..." else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -98,8 +99,9 @@ fun CrashReportDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Your bug report will include system info and recent logs. " +
-                        "Sensitive data like identity hashes and IP addresses are automatically redacted.",
+                    text =
+                        "Your bug report will include system info and recent logs. " +
+                            "Sensitive data like identity hashes and IP addresses are automatically redacted.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

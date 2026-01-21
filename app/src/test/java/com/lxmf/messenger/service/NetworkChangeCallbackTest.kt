@@ -52,304 +52,315 @@ class NetworkChangeCallbackTest {
     // ========== Non-blocking Callback Tests ==========
 
     @Test
-    fun `network change callback returns immediately when using coroutine`() = runTest {
-        var callbackReturned = false
-        var announceStarted = false
-        var announceCompleted = false
+    fun `network change callback returns immediately when using coroutine`() =
+        runTest {
+            var callbackReturned = false
+            var announceStarted = false
+            var announceCompleted = false
 
-        // Simulate slow announce
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            announceStarted = true
-            delay(1000) // Simulate slow announce
-            announceCompleted = true
+            // Simulate slow announce
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                announceStarted = true
+                delay(1000) // Simulate slow announce
+                announceCompleted = true
+            }
+            every { mockBinder.isInitialized() } returns true
+
+            // Simulate the callback pattern from ReticulumService
+            val callback: () -> Unit = {
+                launch {
+                    try {
+                        withTimeout(5000L) {
+                            mockBinder.announceLxmfDestination()
+                        }
+                    } catch (_: Exception) {
+                        // Handled
+                    }
+                }
+                callbackReturned = true
+            }
+
+            // When: Callback is invoked
+            callback()
+
+            // Then: Callback returns immediately (non-blocking)
+            assertTrue("Callback should return immediately", callbackReturned)
+
+            // And: Announce starts in background
+            advanceTimeBy(100)
+            assertTrue("Announce should have started", announceStarted)
+            assertFalse("Announce should not have completed yet", announceCompleted)
+
+            // And: Announce eventually completes
+            advanceUntilIdle()
+            assertTrue("Announce should complete", announceCompleted)
         }
-        every { mockBinder.isInitialized() } returns true
 
-        // Simulate the callback pattern from ReticulumService
-        val callback: () -> Unit = {
+    // ========== Timeout Protection Tests ==========
+
+    @Test
+    fun `network change callback times out after 5 seconds`() =
+        runTest {
+            var timeoutOccurred = false
+
+            // Simulate announce that hangs forever
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                delay(Long.MAX_VALUE) // Hang forever
+            }
+            every { mockBinder.isInitialized() } returns true
+
+            // Simulate the callback pattern with timeout
             launch {
                 try {
                     withTimeout(5000L) {
                         mockBinder.announceLxmfDestination()
                     }
-                } catch (e: Exception) {
-                    // Handled
+                } catch (_: TimeoutCancellationException) {
+                    timeoutOccurred = true
                 }
             }
-            callbackReturned = true
+
+            // Advance time past the timeout
+            advanceTimeBy(5001)
+
+            // Then: Timeout should have occurred
+            assertTrue("Timeout should occur after 5 seconds", timeoutOccurred)
         }
-
-        // When: Callback is invoked
-        callback()
-
-        // Then: Callback returns immediately (non-blocking)
-        assertTrue("Callback should return immediately", callbackReturned)
-
-        // And: Announce starts in background
-        advanceTimeBy(100)
-        assertTrue("Announce should have started", announceStarted)
-        assertFalse("Announce should not have completed yet", announceCompleted)
-
-        // And: Announce eventually completes
-        advanceUntilIdle()
-        assertTrue("Announce should complete", announceCompleted)
-    }
-
-    // ========== Timeout Protection Tests ==========
 
     @Test
-    fun `network change callback times out after 5 seconds`() = runTest {
-        var timeoutOccurred = false
+    fun `network change callback completes normally if announce is fast`() =
+        runTest {
+            var announceCompleted = false
+            var timeoutOccurred = false
 
-        // Simulate announce that hangs forever
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            delay(Long.MAX_VALUE) // Hang forever
-        }
-        every { mockBinder.isInitialized() } returns true
-
-        // Simulate the callback pattern with timeout
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
-                }
-            } catch (e: TimeoutCancellationException) {
-                timeoutOccurred = true
+            // Simulate fast announce
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                delay(100) // Fast announce
+                announceCompleted = true
             }
-        }
+            every { mockBinder.isInitialized() } returns true
 
-        // Advance time past the timeout
-        advanceTimeBy(5001)
-
-        // Then: Timeout should have occurred
-        assertTrue("Timeout should occur after 5 seconds", timeoutOccurred)
-    }
-
-    @Test
-    fun `network change callback completes normally if announce is fast`() = runTest {
-        var announceCompleted = false
-        var timeoutOccurred = false
-
-        // Simulate fast announce
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            delay(100) // Fast announce
-            announceCompleted = true
-        }
-        every { mockBinder.isInitialized() } returns true
-
-        // Simulate the callback pattern with timeout
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with timeout
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                } catch (_: TimeoutCancellationException) {
+                    timeoutOccurred = true
                 }
-            } catch (e: TimeoutCancellationException) {
-                timeoutOccurred = true
             }
+
+            advanceUntilIdle()
+
+            // Then: Announce should complete normally without timeout
+            assertTrue("Announce should complete", announceCompleted)
+            assertFalse("Timeout should not occur", timeoutOccurred)
         }
-
-        advanceUntilIdle()
-
-        // Then: Announce should complete normally without timeout
-        assertTrue("Announce should complete", announceCompleted)
-        assertFalse("Timeout should not occur", timeoutOccurred)
-    }
 
     // ========== Initialization Guard Tests ==========
 
     @Test
-    fun `network change callback skips announce when not initialized`() = runTest {
-        every { mockBinder.isInitialized() } returns false
+    fun `network change callback skips announce when not initialized`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns false
 
-        var announceAttempted = false
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            announceAttempted = true
-        }
+            var announceAttempted = false
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                announceAttempted = true
+            }
 
-        // Simulate the callback pattern with initialization guard
-        val callback: () -> Unit = {
-            if (mockBinder.isInitialized()) {
-                launch {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with initialization guard
+            val callback: () -> Unit = {
+                if (mockBinder.isInitialized()) {
+                    launch {
+                        mockBinder.announceLxmfDestination()
+                    }
                 }
             }
+
+            // When: Callback is invoked but not initialized
+            callback()
+            advanceUntilIdle()
+
+            // Then: Announce should NOT be attempted
+            assertFalse("Announce should not be attempted when not initialized", announceAttempted)
         }
-
-        // When: Callback is invoked but not initialized
-        callback()
-        advanceUntilIdle()
-
-        // Then: Announce should NOT be attempted
-        assertFalse("Announce should not be attempted when not initialized", announceAttempted)
-    }
 
     @Test
-    fun `network change callback proceeds when initialized`() = runTest {
-        every { mockBinder.isInitialized() } returns true
+    fun `network change callback proceeds when initialized`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
 
-        var announceAttempted = false
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            announceAttempted = true
-        }
+            var announceAttempted = false
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                announceAttempted = true
+            }
 
-        // Simulate the callback pattern with initialization guard
-        val callback: () -> Unit = {
-            if (mockBinder.isInitialized()) {
-                launch {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with initialization guard
+            val callback: () -> Unit = {
+                if (mockBinder.isInitialized()) {
+                    launch {
+                        mockBinder.announceLxmfDestination()
+                    }
                 }
             }
+
+            // When: Callback is invoked and initialized
+            callback()
+            advanceUntilIdle()
+
+            // Then: Announce should be attempted
+            assertTrue("Announce should be attempted when initialized", announceAttempted)
         }
-
-        // When: Callback is invoked and initialized
-        callback()
-        advanceUntilIdle()
-
-        // Then: Announce should be attempted
-        assertTrue("Announce should be attempted when initialized", announceAttempted)
-    }
 
     // ========== Exception Handling Tests ==========
 
     @Test
-    fun `network change callback catches and handles exceptions`() = runTest {
-        every { mockBinder.isInitialized() } returns true
-        coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Test error")
+    fun `network change callback catches and handles exceptions`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Test error")
 
-        var exceptionHandled = false
+            var exceptionHandled = false
 
-        // Simulate the callback pattern with exception handling
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with exception handling
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                } catch (_: TimeoutCancellationException) {
+                    // Timeout handling
+                } catch (_: Exception) {
+                    exceptionHandled = true
                 }
-            } catch (e: TimeoutCancellationException) {
-                // Timeout handling
-            } catch (e: Exception) {
-                exceptionHandled = true
             }
+
+            advanceUntilIdle()
+
+            // Then: Exception should be caught and handled
+            assertTrue("Exception should be handled", exceptionHandled)
         }
-
-        advanceUntilIdle()
-
-        // Then: Exception should be caught and handled
-        assertTrue("Exception should be handled", exceptionHandled)
-    }
 
     @Test
-    fun `network change callback does not crash on exception`() = runTest {
-        every { mockBinder.isInitialized() } returns true
-        coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Crash test")
+    fun `network change callback does not crash on exception`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Crash test")
 
-        var callbackCompletedNormally = false
+            var callbackCompletedNormally = false
 
-        // Simulate the callback pattern
-        val job = launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern
+            val job =
+                launch {
+                    try {
+                        withTimeout(5000L) {
+                            mockBinder.announceLxmfDestination()
+                        }
+                    } catch (_: Exception) {
+                        // Exception caught - this is expected
+                    }
+                    callbackCompletedNormally = true
                 }
-            } catch (e: Exception) {
-                // Exception caught - this is expected
-            }
-            callbackCompletedNormally = true
+
+            advanceUntilIdle()
+
+            // Then: Job should complete without crashing
+            assertTrue("Job should complete", job.isCompleted)
+            assertFalse("Job should not be cancelled", job.isCancelled)
+            assertTrue("Callback should complete normally after exception", callbackCompletedNormally)
         }
-
-        advanceUntilIdle()
-
-        // Then: Job should complete without crashing
-        assertTrue("Job should complete", job.isCompleted)
-        assertFalse("Job should not be cancelled", job.isCancelled)
-        assertTrue("Callback should complete normally after exception", callbackCompletedNormally)
-    }
 
     // ========== Settings Persistence Tests ==========
 
     @Test
-    fun `network change callback saves timestamps after successful announce`() = runTest {
-        every { mockBinder.isInitialized() } returns true
-        coEvery { mockBinder.announceLxmfDestination() } returns Unit
+    fun `network change callback saves timestamps after successful announce`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } returns Unit
 
-        var timestampsSaved = false
+            var timestampsSaved = false
 
-        // Simulate the callback pattern with settings persistence
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with settings persistence
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                    // Save timestamps after successful announce
+                    mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
+                    mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
+                    timestampsSaved = true
+                } catch (_: Exception) {
+                    // Don't save on failure
                 }
-                // Save timestamps after successful announce
-                mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
-                mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
-                timestampsSaved = true
-            } catch (e: Exception) {
-                // Don't save on failure
             }
+
+            advanceUntilIdle()
+
+            // Then: Timestamps should be saved
+            assertTrue("Timestamps should be saved after successful announce", timestampsSaved)
+            verify { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
+            verify { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
         }
-
-        advanceUntilIdle()
-
-        // Then: Timestamps should be saved
-        assertTrue("Timestamps should be saved after successful announce", timestampsSaved)
-        verify { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
-        verify { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
-    }
 
     @Test
-    fun `network change callback does not save timestamps on announce failure`() = runTest {
-        every { mockBinder.isInitialized() } returns true
-        coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Announce failed")
+    fun `network change callback does not save timestamps on announce failure`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Announce failed")
 
-        // Simulate the callback pattern with settings persistence
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
+            // Simulate the callback pattern with settings persistence
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                    // Save timestamps after successful announce
+                    mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
+                    mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
+                } catch (_: Exception) {
+                    // Don't save on failure
                 }
-                // Save timestamps after successful announce
-                mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
-                mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
-            } catch (e: Exception) {
-                // Don't save on failure
             }
+
+            advanceUntilIdle()
+
+            // Then: Timestamps should NOT be saved
+            verify(exactly = 0) { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
+            verify(exactly = 0) { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
         }
-
-        advanceUntilIdle()
-
-        // Then: Timestamps should NOT be saved
-        verify(exactly = 0) { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
-        verify(exactly = 0) { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
-    }
 
     @Test
-    fun `network change callback does not save timestamps on timeout`() = runTest {
-        every { mockBinder.isInitialized() } returns true
-        coEvery { mockBinder.announceLxmfDestination() } coAnswers {
-            delay(Long.MAX_VALUE) // Hang forever
-        }
-
-        // Simulate the callback pattern with settings persistence
-        launch {
-            try {
-                withTimeout(5000L) {
-                    mockBinder.announceLxmfDestination()
-                }
-                // Save timestamps after successful announce
-                mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
-                mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
-            } catch (e: TimeoutCancellationException) {
-                // Don't save on timeout
-            } catch (e: Exception) {
-                // Don't save on failure
+    fun `network change callback does not save timestamps on timeout`() =
+        runTest {
+            every { mockBinder.isInitialized() } returns true
+            coEvery { mockBinder.announceLxmfDestination() } coAnswers {
+                delay(Long.MAX_VALUE) // Hang forever
             }
+
+            // Simulate the callback pattern with settings persistence
+            launch {
+                try {
+                    withTimeout(5000L) {
+                        mockBinder.announceLxmfDestination()
+                    }
+                    // Save timestamps after successful announce
+                    mockSettingsAccessor.saveNetworkChangeAnnounceTime(System.currentTimeMillis())
+                    mockSettingsAccessor.saveLastAutoAnnounceTime(System.currentTimeMillis())
+                } catch (_: TimeoutCancellationException) {
+                    // Don't save on timeout
+                } catch (_: Exception) {
+                    // Don't save on failure
+                }
+            }
+
+            // Advance past timeout
+            advanceTimeBy(5001)
+
+            // Then: Timestamps should NOT be saved
+            verify(exactly = 0) { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
+            verify(exactly = 0) { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
         }
-
-        // Advance past timeout
-        advanceTimeBy(5001)
-
-        // Then: Timestamps should NOT be saved
-        verify(exactly = 0) { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
-        verify(exactly = 0) { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
-    }
 }

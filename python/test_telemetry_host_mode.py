@@ -382,6 +382,60 @@ class TestSetTelemetryCollectorEnabled(unittest.TestCase):
         self.assertEqual(len(self.wrapper.collected_telemetry), 1)
 
 
+class TestSetTelemetryAllowedRequesters(unittest.TestCase):
+    """Test set_telemetry_allowed_requesters method."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_set_allowed_requesters_returns_success(self):
+        """Setting allowed requesters should return success with count."""
+        result = self.wrapper.set_telemetry_allowed_requesters(["a" * 32, "b" * 32])
+        self.assertTrue(result['success'])
+        self.assertEqual(result['count'], 2)
+
+    def test_set_empty_list_returns_zero_count(self):
+        """Setting empty list should return success with zero count."""
+        result = self.wrapper.set_telemetry_allowed_requesters([])
+        self.assertTrue(result['success'])
+        self.assertEqual(result['count'], 0)
+
+    def test_normalizes_to_lowercase(self):
+        """Should normalize hashes to lowercase."""
+        self.wrapper.set_telemetry_allowed_requesters(["AABBCCDD" * 4])
+        self.assertIn("aabbccdd" * 4, self.wrapper.telemetry_allowed_requesters)
+
+    def test_filters_empty_strings(self):
+        """Should filter out empty strings from the list."""
+        result = self.wrapper.set_telemetry_allowed_requesters(["a" * 32, "", "b" * 32, ""])
+        self.assertEqual(result['count'], 2)
+        self.assertEqual(len(self.wrapper.telemetry_allowed_requesters), 2)
+
+    def test_stores_as_set(self):
+        """Should store allowed requesters as a set for O(1) lookup."""
+        self.wrapper.set_telemetry_allowed_requesters(["a" * 32, "b" * 32])
+        self.assertIsInstance(self.wrapper.telemetry_allowed_requesters, set)
+
+    def test_deduplicates_entries(self):
+        """Should deduplicate entries when same hash appears multiple times."""
+        result = self.wrapper.set_telemetry_allowed_requesters(["a" * 32, "a" * 32, "a" * 32])
+        self.assertEqual(result['count'], 1)
+
+    def test_replaces_previous_list(self):
+        """Setting new list should replace previous list entirely."""
+        self.wrapper.set_telemetry_allowed_requesters(["a" * 32, "b" * 32])
+        self.wrapper.set_telemetry_allowed_requesters(["c" * 32])
+        self.assertEqual(len(self.wrapper.telemetry_allowed_requesters), 1)
+        self.assertIn("c" * 32, self.wrapper.telemetry_allowed_requesters)
+        self.assertNotIn("a" * 32, self.wrapper.telemetry_allowed_requesters)
+
+
 class TestStoreTelemetryForCollector(unittest.TestCase):
     """Test _store_telemetry_for_collector method."""
 

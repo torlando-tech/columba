@@ -50,6 +50,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -119,6 +122,7 @@ fun MapScreen(
     onNavigateToOfflineMaps: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
@@ -222,16 +226,31 @@ fun MapScreen(
         map.setStyle(styleBuilder)
     }
 
-    // Cleanup when leaving screen
-    DisposableEffect(Unit) {
-        onDispose {
-            // Disable location component before destroying map to prevent crashes
-            mapLibreMap?.locationComponent?.let { locationComponent ->
-                if (locationComponent.isLocationComponentActivated) {
-                    locationComponent.isLocationComponentEnabled = false
+    // Proper MapView lifecycle management
+    // This ensures the map survives tab switches while properly handling lifecycle events
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            val view = mapView ?: return@LifecycleEventObserver
+            when (event) {
+                Lifecycle.Event.ON_START -> view.onStart()
+                Lifecycle.Event.ON_RESUME -> view.onResume()
+                Lifecycle.Event.ON_PAUSE -> view.onPause()
+                Lifecycle.Event.ON_STOP -> view.onStop()
+                Lifecycle.Event.ON_DESTROY -> {
+                    // Disable location component before destroying map to prevent crashes
+                    mapLibreMap?.locationComponent?.let { locationComponent ->
+                        if (locationComponent.isLocationComponentActivated) {
+                            locationComponent.isLocationComponentEnabled = false
+                        }
+                    }
+                    view.onDestroy()
                 }
+                else -> {}
             }
-            mapView?.onDestroy()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

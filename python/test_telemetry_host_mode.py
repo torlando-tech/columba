@@ -635,6 +635,203 @@ class TestSendTelemetryRequest(unittest.TestCase):
         self.assertFalse(result.get('success', True))
 
 
+class TestSendTelemetryRequestSuccess(unittest.TestCase):
+    """Test send_telemetry_request success paths."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+        self.wrapper.initialized = True
+        self.wrapper.router = MagicMock()
+        self.wrapper.local_lxmf_destination = MagicMock()
+        self.wrapper.local_lxmf_destination.hexhash = "a" * 32
+        self.wrapper.identities = {}
+
+        # Set up RNS mock
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+        reticulum_wrapper.RETICULUM_AVAILABLE = True
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_successful_send_with_immediate_identity_recall(self):
+        """Should successfully send when identity is immediately recalled."""
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        # Mock identity recall to return identity immediately
+        mock_recipient_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.return_value = mock_recipient_identity
+
+        # Mock destination and message creation
+        mock_destination = MagicMock()
+        mock_destination.hash = bytes.fromhex("d" * 32)
+        reticulum_wrapper.RNS.Destination.return_value = mock_destination
+
+        mock_message = MagicMock()
+        mock_message.hash = bytes.fromhex("e" * 32)
+        reticulum_wrapper.LXMF.LXMessage.return_value = mock_message
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=1234567890.0,
+            is_collector_request=True,
+        )
+
+        self.assertTrue(result.get('success'))
+        self.assertIn('message_hash', result)
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+    def test_successful_send_with_cached_identity(self):
+        """Should use cached identity from self.identities if recall fails."""
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        # Mock identity recall to return None (not found)
+        reticulum_wrapper.RNS.Identity.recall.return_value = None
+
+        # Add identity to cache
+        mock_cached_identity = MagicMock()
+        self.wrapper.identities["b" * 32] = mock_cached_identity
+
+        # Mock destination and message
+        mock_destination = MagicMock()
+        mock_destination.hash = bytes.fromhex("d" * 32)
+        reticulum_wrapper.RNS.Destination.return_value = mock_destination
+
+        mock_message = MagicMock()
+        mock_message.hash = bytes.fromhex("e" * 32)
+        reticulum_wrapper.LXMF.LXMessage.return_value = mock_message
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=None,
+            is_collector_request=True,
+        )
+
+        self.assertTrue(result.get('success'))
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+    def test_returns_error_when_local_destination_missing(self):
+        """Should raise error when local_lxmf_destination is None."""
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        self.wrapper.local_lxmf_destination = None
+
+        # Mock identity recall to return identity
+        mock_recipient_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.return_value = mock_recipient_identity
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=None,
+            is_collector_request=True,
+        )
+
+        self.assertFalse(result.get('success'))
+        self.assertIn('error', result)
+
+    def test_returns_error_when_identity_not_resolved(self):
+        """Should return error when identity cannot be resolved after path request."""
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        # Mock identity recall to always return None
+        reticulum_wrapper.RNS.Identity.recall.return_value = None
+
+        # Mock time.sleep to avoid actual delay
+        with unittest.mock.patch('time.sleep'):
+            result = self.wrapper.send_telemetry_request(
+                dest_hash=dest_hash,
+                source_identity_private_key=source_key,
+                timebase=None,
+                is_collector_request=True,
+            )
+
+        self.assertFalse(result.get('success'))
+        self.assertIn('error', result)
+        self.assertIn('not known', result['error'])
+
+    def test_handles_jarray_conversion(self):
+        """Should convert jarray-like iterables to bytes."""
+        # Simulate jarray (list of ints)
+        dest_hash_list = list(bytes.fromhex("b" * 32))
+        source_key_list = list(bytes.fromhex("c" * 64))
+
+        # Mock identity recall
+        mock_recipient_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.return_value = mock_recipient_identity
+
+        # Mock destination and message
+        mock_destination = MagicMock()
+        mock_destination.hash = bytes.fromhex("d" * 32)
+        reticulum_wrapper.RNS.Destination.return_value = mock_destination
+
+        mock_message = MagicMock()
+        mock_message.hash = bytes.fromhex("e" * 32)
+        reticulum_wrapper.LXMF.LXMessage.return_value = mock_message
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash_list,
+            source_identity_private_key=source_key_list,
+            timebase=None,
+            is_collector_request=True,
+        )
+
+        self.assertTrue(result.get('success'))
+
+    def test_builds_correct_field_commands_structure(self):
+        """Should build FIELD_COMMANDS with correct format."""
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        # Mock identity recall
+        mock_recipient_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.return_value = mock_recipient_identity
+
+        # Mock destination
+        mock_destination = MagicMock()
+        mock_destination.hash = bytes.fromhex("d" * 32)
+        reticulum_wrapper.RNS.Destination.return_value = mock_destination
+
+        # Capture fields passed to LXMessage
+        captured_fields = {}
+        mock_message = MagicMock()
+        mock_message.hash = bytes.fromhex("e" * 32)
+
+        def capture_lxmessage(*args, **kwargs):
+            captured_fields.update(kwargs.get('fields', {}))
+            return mock_message
+
+        reticulum_wrapper.LXMF.LXMessage.side_effect = capture_lxmessage
+
+        timebase = 1234567890.0
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=timebase,
+            is_collector_request=True,
+        )
+
+        self.assertTrue(result.get('success'))
+        # Verify FIELD_COMMANDS structure
+        self.assertIn(reticulum_wrapper.FIELD_COMMANDS, captured_fields)
+        commands = captured_fields[reticulum_wrapper.FIELD_COMMANDS]
+        # Should be list of dicts: [{0x01: [timebase, is_collector_request]}]
+        self.assertEqual(len(commands), 1)
+        self.assertIn(reticulum_wrapper.COMMAND_TELEMETRY_REQUEST, commands[0])
+        args = commands[0][reticulum_wrapper.COMMAND_TELEMETRY_REQUEST]
+        self.assertEqual(args[0], timebase)
+        self.assertEqual(args[1], True)
+
+
 class TestFieldCommandsConstants(unittest.TestCase):
     """Test FIELD_COMMANDS related constants are defined."""
 
@@ -657,6 +854,130 @@ class TestFieldCommandsConstants(unittest.TestCase):
         """FIELD_TELEMETRY constant should be defined."""
         self.assertTrue(hasattr(reticulum_wrapper, 'FIELD_TELEMETRY'))
         self.assertEqual(reticulum_wrapper.FIELD_TELEMETRY, 0x02)
+
+
+class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
+    """Test _on_lxmf_delivery handling of FIELD_COMMANDS."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+        self.wrapper.telemetry_collector_enabled = True
+        self.wrapper.telemetry_retention_seconds = 86400
+        self.wrapper.router = MagicMock()
+        self.wrapper.local_lxmf_destination = MagicMock()
+        self.wrapper.collected_telemetry = {}
+        self.wrapper.kotlin_message_callback = None
+
+        # Set up RNS mock
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _create_mock_lxmf_message(self, fields=None, source_hash=None):
+        """Create a mock LXMF message for testing."""
+        mock_message = MagicMock()
+        mock_message.fields = fields or {}
+        mock_message.source_hash = source_hash or bytes.fromhex("a" * 32)
+        mock_message.content = b""
+        mock_message.title = ""
+        mock_message.timestamp = time.time()
+        mock_message.signature_validated = True
+        mock_message.unverified_reason = None
+        return mock_message
+
+    def test_handles_field_commands_with_telemetry_request(self):
+        """Should handle FIELD_COMMANDS with telemetry request when collector enabled."""
+        # Create mock message with FIELD_COMMANDS
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [1234567890.0, True]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # Mock identity recall to return an identity immediately
+        mock_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.return_value = mock_identity
+
+        # Store some telemetry to send
+        self.wrapper.collected_telemetry["b" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'test_data',
+            'appearance': None,
+            'received_at': time.time(),
+        }
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        # Call delivery handler
+        self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify _send_telemetry_stream_response was called
+        self.wrapper._send_telemetry_stream_response.assert_called_once()
+
+    def test_skips_field_commands_when_collector_disabled(self):
+        """Should not handle FIELD_COMMANDS when collector is disabled."""
+        self.wrapper.telemetry_collector_enabled = False
+
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [None, True]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        # Call delivery handler
+        self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify _send_telemetry_stream_response was NOT called
+        self.wrapper._send_telemetry_stream_response.assert_not_called()
+
+    def test_handles_field_commands_with_identity_retry(self):
+        """Should retry sending when identity is not immediately recalled."""
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [0, True]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # First recall returns None, then returns identity on retry
+        mock_identity = MagicMock()
+        reticulum_wrapper.RNS.Identity.recall.side_effect = [None, mock_identity]
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        # Patch threading and time.sleep to execute immediately
+        with unittest.mock.patch('threading.Thread') as mock_thread:
+            # Capture and execute the thread target immediately
+            def run_target(*args, **kwargs):
+                target = kwargs.get('target')
+                if target:
+                    # Patch time.sleep inside the target
+                    with unittest.mock.patch('time.sleep'):
+                        target()
+                return MagicMock()
+            mock_thread.side_effect = run_target
+
+            self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Verify _send_telemetry_stream_response was called after retry
+        self.wrapper._send_telemetry_stream_response.assert_called()
+
+    def test_ignores_non_collector_request(self):
+        """Should ignore telemetry requests with is_collector_request=False."""
+        commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [0, False]}]
+        fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
+        mock_message = self._create_mock_lxmf_message(fields=fields)
+
+        # Spy on _send_telemetry_stream_response
+        self.wrapper._send_telemetry_stream_response = MagicMock()
+
+        self.wrapper._on_lxmf_delivery(mock_message)
+
+        # Should not be called since is_collector_request is False
+        self.wrapper._send_telemetry_stream_response.assert_not_called()
 
 
 class TestTelemetryStreamFiltering(unittest.TestCase):

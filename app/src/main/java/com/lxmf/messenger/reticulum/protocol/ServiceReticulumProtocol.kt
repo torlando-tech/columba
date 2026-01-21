@@ -1077,7 +1077,7 @@ class ServiceReticulumProtocol(
         }
     }
 
-    @Suppress("LongMethod") // Config serialization naturally grows with each interface type
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // Config serialization naturally grows with each interface type
     @androidx.annotation.VisibleForTesting
     internal fun buildConfigJson(config: ReticulumConfig): String {
         val json = JSONObject()
@@ -1125,6 +1125,9 @@ class ServiceReticulumProtocol(
                     ifaceJson.put("connection_mode", iface.connectionMode)
                     iface.tcpHost?.let { ifaceJson.put("tcp_host", it) }
                     ifaceJson.put("tcp_port", iface.tcpPort)
+                    iface.usbDeviceId?.let { ifaceJson.put("usb_device_id", it) }
+                    iface.usbVendorId?.let { ifaceJson.put("usb_vendor_id", it) }
+                    iface.usbProductId?.let { ifaceJson.put("usb_product_id", it) }
                     ifaceJson.put("frequency", iface.frequency)
                     ifaceJson.put("bandwidth", iface.bandwidth)
                     ifaceJson.put("tx_power", iface.txPower)
@@ -2003,6 +2006,22 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? {
+        return try {
+            val service = this.service ?: return null
+            val resultJson = service.getInterfaceStats(interfaceName) ?: return null
+            val json = JSONObject(resultJson)
+            val map = mutableMapOf<String, Any>()
+            json.keys().forEach { key ->
+                map[key] = json.get(key)
+            }
+            map
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting interface stats for $interfaceName", e)
+            null
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)
@@ -2016,8 +2035,26 @@ class ServiceReticulumProtocol(
 
     override suspend fun reconnectRNodeInterface() {
         try {
-            service?.reconnectRNodeInterface()
-            Log.i(TAG, "Triggered RNode interface reconnection")
+            val svc = service
+            if (svc == null) {
+                // Service not bound yet - wait for it (up to 10 seconds)
+                Log.w(TAG, "Service not bound, waiting for connection before RNode reconnect...")
+                var attempts = 0
+                while (service == null && attempts < 100) {
+                    kotlinx.coroutines.delay(100)
+                    attempts++
+                }
+                val boundService = service
+                if (boundService == null) {
+                    Log.e(TAG, "Timeout waiting for service to bind - cannot reconnect RNode")
+                    return
+                }
+                boundService.reconnectRNodeInterface()
+                Log.i(TAG, "Triggered RNode interface reconnection (after waiting for service)")
+            } else {
+                svc.reconnectRNodeInterface()
+                Log.i(TAG, "Triggered RNode interface reconnection")
+            }
         } catch (e: RemoteException) {
             Log.e(TAG, "Error triggering RNode reconnection", e)
         } catch (e: Exception) {

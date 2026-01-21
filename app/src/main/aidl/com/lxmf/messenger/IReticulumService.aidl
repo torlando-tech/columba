@@ -303,6 +303,14 @@ interface IReticulumService {
      */
     String getFailedInterfaces();
 
+    /**
+     * Get statistics for a specific interface.
+     *
+     * @param interfaceName The name of the interface
+     * @return JSON string containing interface stats (online, rxb, txb) or null if not found
+     */
+    String getInterfaceStats(String interfaceName);
+
     // ==================== PROPAGATION NODE SUPPORT ====================
 
     /**

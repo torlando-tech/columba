@@ -283,7 +283,9 @@ class KotlinAudioBridge(
             if (written < 0) {
                 Log.w(
                     TAG,
-                    "📞 AudioTrack write error: $written (ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})",
+                    "📞 AudioTrack write error: $written " +
+                        "(ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, " +
+                        "ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})",
                 )
             } else if (writeAudioCount % 100L == 1L) {
                 Log.d(TAG, "📞 writeAudio #$writeAudioCount: wrote $written bytes successfully")

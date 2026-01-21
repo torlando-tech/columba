@@ -316,6 +316,16 @@ class MockReticulumProtocol : ReticulumProtocol {
         return emptyList()
     }
 
+    override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? {
+        // Mock implementation - return basic stats
+        return mapOf(
+            "name" to interfaceName,
+            "online" to true,
+            "rxb" to 0L,
+            "txb" to 0L,
+        )
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
     }

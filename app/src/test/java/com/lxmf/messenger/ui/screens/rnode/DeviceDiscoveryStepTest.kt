@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
+import com.lxmf.messenger.data.model.DiscoveredUsbDevice
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.RNodeConnectionType
 import com.lxmf.messenger.viewmodel.RNodeWizardState
@@ -685,4 +686,5 @@ class DeviceDiscoveryStepTest {
         composeTestRule.onNodeWithText("RNode 1234").assertIsDisplayed()
         // The current device (RNode 5678) should not be in the list below, only in "Current Device" section
     }
+
 }

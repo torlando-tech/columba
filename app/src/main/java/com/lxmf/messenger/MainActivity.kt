@@ -1,8 +1,12 @@
 package com.lxmf.messenger
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -59,7 +63,9 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.CrashReportManager
+import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
@@ -114,8 +120,58 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var crashReportManager: CrashReportManager
 
+    @Inject
+    lateinit var reticulumProtocol: ReticulumProtocol
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
+
+    // Track last handled USB device to avoid double-processing
+    private var lastHandledUsbDeviceId: Int = -1
+    private var lastHandledUsbTimestamp: Long = 0
+    private var lastUsbReconnectAttempted: Boolean = false // Track if reconnect was actually attempted
+
+    @Suppress("VariableNaming") // Constant value uses SCREAMING_SNAKE_CASE by convention
+    private val USB_DEBOUNCE_MS = 5000L // 5 second window to ignore duplicate USB events
+
+    // USB device attached/detached receiver
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Log.d(TAG, "🔌 USB BroadcastReceiver onReceive: action=${intent.action}")
+            when (intent.action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    @Suppress("DEPRECATION")
+                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    if (usbDevice != null) {
+                        Log.d(TAG, "🔌 USB device attached via receiver: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                        handleUsbDeviceAttached(usbDevice)
+                    }
+                }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    @Suppress("DEPRECATION")
+                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    if (usbDevice != null) {
+                        Log.d(TAG, "🔌 USB device detached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                        // Clear debounce state for this device so re-plug will be handled
+                        if (usbDevice.deviceId == lastHandledUsbDeviceId) {
+                            Log.d(TAG, "🔌 Clearing debounce state for detached device")
+                            lastHandledUsbDeviceId = -1
+                            lastHandledUsbTimestamp = 0
+                            lastUsbReconnectAttempted = false
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()
@@ -139,6 +195,18 @@ class MainActivity : ComponentActivity() {
 
         // Process the intent that launched the activity
         processIntent(intent)
+
+        // Register USB receiver to catch USB device attachments while app is running
+        val usbFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(usbReceiver, usbFilter)
+        }
+        Log.d(TAG, "🔌 USB BroadcastReceiver registered for attach/detach")
 
         setContent {
             // Signal splash screen dismissal once theme loads
@@ -167,10 +235,21 @@ class MainActivity : ComponentActivity() {
         processIntent(intent)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(usbReceiver)
+            Log.d(TAG, "🔌 USB BroadcastReceiver unregistered")
+        } catch (e: Exception) {
+            Log.w(TAG, "🔌 Failed to unregister USB receiver", e)
+        }
+    }
+
     private fun processIntent(intent: Intent?) {
         if (intent == null) return
 
         Log.w(TAG, "📞 processIntent() - action=${intent.action}, extras=${intent.extras?.keySet()}")
+        Log.d(TAG, "🔌 USB action check: action='${intent.action}' vs expected='${UsbManager.ACTION_USB_DEVICE_ATTACHED}'")
 
         when (intent.action) {
             NotificationHelper.ACTION_OPEN_ANNOUNCE -> {
@@ -219,6 +298,97 @@ class MainActivity : ComponentActivity() {
                     Log.e(TAG, "📞 identityHash is NULL! Cannot navigate to call")
                 }
             }
+            UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                Log.d(TAG, "🔌 USB_DEVICE_ATTACHED action matched!")
+                @Suppress("DEPRECATION")
+                val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                } else {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                }
+                if (usbDevice != null) {
+                    Log.d(TAG, "🔌 USB device attached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                    handleUsbDeviceAttached(usbDevice)
+                } else {
+                    Log.e(TAG, "🔌 USB device is null in intent extras!")
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle USB device attachment - check if it's already configured as an RNode interface.
+     */
+    private fun handleUsbDeviceAttached(usbDevice: UsbDevice) {
+        Log.d(TAG, "🔌 handleUsbDeviceAttached called for device: ${usbDevice.deviceName}")
+
+        // Check if we've already handled this device recently (debounce)
+        // But allow retry if previous attempt didn't reconnect due to missing permission
+        val now = System.currentTimeMillis()
+        if (usbDevice.deviceId == lastHandledUsbDeviceId &&
+            (now - lastHandledUsbTimestamp) < USB_DEBOUNCE_MS &&
+            lastUsbReconnectAttempted
+        ) {
+            Log.d(TAG, "🔌 Ignoring duplicate USB event for device ${usbDevice.deviceId} (debounce)")
+            return
+        }
+
+        // Mark this device as handled (reconnect attempt status will be set below)
+        lastHandledUsbDeviceId = usbDevice.deviceId
+        lastHandledUsbTimestamp = now
+        lastUsbReconnectAttempted = false // Will be set to true if reconnect is actually triggered
+
+        lifecycleScope.launch {
+            try {
+                Log.d(TAG, "🔌 Looking up USB device: VID=${usbDevice.vendorId} (0x${usbDevice.vendorId.toString(16)}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})")
+                // Check if this USB device is already configured as an RNode interface
+                // Use VID/PID matching since they are stable hardware identifiers (unlike device IDs which change)
+                val existingInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
+                Log.d(TAG, "🔌 findRNodeByUsbVidPid result: ${existingInterface?.name ?: "NOT FOUND"}")
+
+                if (existingInterface != null) {
+                    // Device is already configured - trigger reconnect and navigate to stats screen
+                    Log.d(TAG, "🔌 USB device is configured interface: ${existingInterface.name} (id=${existingInterface.id})")
+
+                    // Signal that a reconnection is starting (ViewModel will show connecting spinner)
+                    InterfaceReconnectSignal.triggerReconnect()
+
+                    // Navigate to stats screen immediately
+                    pendingNavigation.value = PendingNavigation.InterfaceStats(existingInterface.id)
+
+                    // Check if we have USB permission before attempting reconnect
+                    val usbManager = getSystemService(UsbManager::class.java)
+                    if (usbManager.hasPermission(usbDevice)) {
+                        // We have permission - reconnect immediately
+                        Log.d(TAG, "🔌 USB permission already granted, triggering reconnect")
+                        lastUsbReconnectAttempted = true
+                        try {
+                            reticulumProtocol.reconnectRNodeInterface()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "🔌 Error triggering RNode reconnect", e)
+                        }
+                    } else {
+                        // No permission yet - the Activity intent (via processIntent) will handle
+                        // reconnection after Android grants permission through UsbResolverActivity
+                        Log.d(TAG, "🔌 No USB permission yet, skipping reconnect (will retry via Activity intent)")
+                        // lastUsbReconnectAttempted stays false, allowing retry after permission granted
+                    }
+                    Log.d(TAG, "🔌 pendingNavigation set to InterfaceStats(${existingInterface.id})")
+                } else {
+                    // Device is not configured - navigate to RNode wizard with USB pre-selected
+                    Log.d(TAG, "🔌 USB device is not configured - launching RNode wizard")
+                    pendingNavigation.value = PendingNavigation.RNodeWizardWithUsb(
+                        usbDeviceId = usbDevice.deviceId,
+                        vendorId = usbDevice.vendorId,
+                        productId = usbDevice.productId,
+                        deviceName = usbDevice.deviceName,
+                    )
+                    Log.d(TAG, "🔌 pendingNavigation set to RNodeWizardWithUsb")
+                }
+                Log.d(TAG, "🔌 pendingNavigation.value is now: ${pendingNavigation.value}")
+            } catch (e: Exception) {
+                Log.e(TAG, "🔌 Error handling USB device attachment", e)
+            }
         }
     }
 }
@@ -236,6 +406,17 @@ sealed class PendingNavigation {
     data class IncomingCall(val identityHash: String) : PendingNavigation()
 
     data class AnswerCall(val identityHash: String) : PendingNavigation()
+
+    /** Navigate to interface stats screen for an existing configured interface */
+    data class InterfaceStats(val interfaceId: Long) : PendingNavigation()
+
+    /** Navigate to RNode wizard with USB device pre-selected */
+    data class RNodeWizardWithUsb(
+        val usbDeviceId: Int,
+        val vendorId: Int,
+        val productId: Int,
+        val deviceName: String,
+    ) : PendingNavigation()
 }
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -280,12 +461,32 @@ fun ColumbaNavigation(
     val onboardingState by onboardingViewModel.state.collectAsState()
 
     // Determine start destination based on onboarding status
-    val startDestination =
+    // IMPORTANT: Use remember to compute this only once. Without remember,
+    // the startDestination would be recalculated when onboardingState loads
+    // asynchronously from DataStore, which causes NavHost to reset to the
+    // new startDestination and discard any pending navigation.
+    val startDestination = remember {
         if (onboardingState.hasCompletedOnboarding) {
             Screen.Chats.route
         } else {
             Screen.Welcome.route
         }
+    }
+
+    // Handle edge case: user completed onboarding but we started at Welcome
+    // because onboardingState was still loading when startDestination was computed
+    LaunchedEffect(onboardingState.hasCompletedOnboarding) {
+        val currentRoute = navController.currentDestination?.route
+        if (onboardingState.hasCompletedOnboarding &&
+            currentRoute == Screen.Welcome.route &&
+            pendingNavigation.value == null
+        ) {
+            Log.d("ColumbaNavigation", "Redirecting to Chats (onboarding already completed)")
+            navController.navigate(Screen.Chats.route) {
+                popUpTo(Screen.Welcome.route) { inclusive = true }
+            }
+        }
+    }
 
     // Notification permission is now handled in OnboardingPagerScreen
 
@@ -338,6 +539,38 @@ fun ColumbaNavigation(
                         launchSingleTop = true
                     }
                     Log.w("ColumbaNavigation", "📞 After navigation, current: ${navController.currentBackStackEntry?.destination?.route}")
+                }
+                is PendingNavigation.InterfaceStats -> {
+                    // Navigate to interface stats screen
+                    val targetRoute = "interface_stats/${navigation.interfaceId}"
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    val currentArgs = navController.currentBackStackEntry?.arguments
+                    val currentInterfaceId = currentArgs?.getLong("interfaceId")
+
+                    if (currentRoute == "interface_stats/{interfaceId}" && currentInterfaceId == navigation.interfaceId) {
+                        // Already on the SAME interface's stats screen - just signal reconnect
+                        Log.d("ColumbaNavigation", "Already on stats screen for interface ${navigation.interfaceId}, skipping navigation")
+                    } else {
+                        // Navigate to the (different) interface's stats screen
+                        navController.navigate(targetRoute) {
+                            // Pop the current stats screen if we're switching between interfaces
+                            if (currentRoute == "interface_stats/{interfaceId}") {
+                                popUpTo("interface_stats/{interfaceId}") { inclusive = true }
+                            }
+                            launchSingleTop = true
+                        }
+                        Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
+                    }
+                }
+                is PendingNavigation.RNodeWizardWithUsb -> {
+                    // Navigate to RNode wizard with USB pre-selected
+                    val route = "rnode_wizard?connectionType=usb" +
+                        "&usbDeviceId=${navigation.usbDeviceId}" +
+                        "&usbVendorId=${navigation.vendorId}" +
+                        "&usbProductId=${navigation.productId}" +
+                        "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                    navController.navigate(route)
+                    Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
                 }
             }
             // Clear the pending navigation after handling
@@ -424,6 +657,7 @@ fun ColumbaNavigation(
 
     // Synchronize selectedTab with current route when navigating back
     LaunchedEffect(currentRoute) {
+        Log.d("ColumbaNavigation", "📍 currentRoute changed to: $currentRoute")
         selectedTab =
             when (currentRoute) {
                 Screen.Chats.route -> 0
@@ -484,6 +718,7 @@ fun ColumbaNavigation(
             "rnode_wizard",
             "voice_call/",
             "incoming_call/",
+            "interface_stats/",
         )
     val shouldShowBottomNav =
         currentRoute != null &&
@@ -645,6 +880,12 @@ fun ColumbaNavigation(
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
                             },
+                            onNavigateToInterfaceStats = { interfaceId ->
+                                navController.navigate("interface_stats/$interfaceId")
+                            },
+                            onNavigateToInterfaceManagement = {
+                                navController.navigate("interface_management")
+                            },
                         )
                     }
 
@@ -705,6 +946,9 @@ fun ColumbaNavigation(
                             onNavigateToTcpClientWizard = {
                                 navController.navigate("tcp_client_wizard")
                             },
+                            onNavigateToInterfaceStats = { interfaceId ->
+                                navController.navigate("interface_stats/$interfaceId")
+                            },
                         )
                     }
 
@@ -720,23 +964,77 @@ fun ColumbaNavigation(
                     }
 
                     composable(
-                        route = "rnode_wizard?interfaceId={interfaceId}",
+                        route = "rnode_wizard?interfaceId={interfaceId}" +
+                            "&connectionType={connectionType}" +
+                            "&usbDeviceId={usbDeviceId}" +
+                            "&usbVendorId={usbVendorId}" +
+                            "&usbProductId={usbProductId}" +
+                            "&usbDeviceName={usbDeviceName}",
                         arguments =
                             listOf(
                                 navArgument("interfaceId") {
                                     type = NavType.LongType
                                     defaultValue = -1L
                                 },
+                                navArgument("connectionType") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                                navArgument("usbDeviceId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbVendorId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbProductId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbDeviceName") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
                             ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                        val connectionType = backStackEntry.arguments?.getString("connectionType")
+                        val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
+                        val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
+                        val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
+                        val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName")
                         com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(
                             editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
+                            preselectedConnectionType = connectionType,
+                            preselectedUsbDeviceId = if (usbDeviceId >= 0) usbDeviceId else null,
+                            preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,
+                            preselectedUsbProductId = if (usbProductId >= 0) usbProductId else null,
+                            preselectedUsbDeviceName = usbDeviceName,
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
                                 navController.navigate("interface_management") {
                                     popUpTo("interface_management") { inclusive = true }
                                 }
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "interface_stats/{interfaceId}",
+                        arguments =
+                            listOf(
+                                navArgument("interfaceId") {
+                                    type = NavType.LongType
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        com.lxmf.messenger.ui.screens.InterfaceStatsScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToEdit = { interfaceId ->
+                                navController.navigate("rnode_wizard?interfaceId=$interfaceId")
                             },
                         )
                     }
@@ -827,6 +1125,12 @@ fun ColumbaNavigation(
                             settingsViewModel = settingsViewModel,
                             onNavigateToBleStatus = {
                                 navController.navigate("ble_connection_status")
+                            },
+                            onNavigateToInterfaceStats = { interfaceId ->
+                                navController.navigate("interface_stats/$interfaceId")
+                            },
+                            onNavigateToInterfaceManagement = {
+                                navController.navigate("interface_management")
                             },
                         )
                     }

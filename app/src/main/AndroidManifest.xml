@@ -37,6 +37,9 @@
     <!-- Declare BLE hardware feature (optional but recommended) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
+    <!-- USB Host feature for RNode USB serial connections (optional) -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <!-- Foreground service permissions (Android 9+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -77,6 +80,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenLayout|screenSize|uiMode|keyboard|keyboardHidden"
             android:windowSoftInputMode="adjustResize|stateUnchanged">
             <intent-filter>
@@ -91,6 +95,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="lxma" />
             </intent-filter>
+
+            <!-- USB device attached handler for RNode and compatible serial devices -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
 
         <!-- Reticulum Background Service -->

@@ -183,6 +183,14 @@ interface ReticulumProtocol {
      */
     suspend fun getFailedInterfaces(): List<FailedInterface>
 
+    /**
+     * Get statistics for a specific interface.
+     *
+     * @param interfaceName The name of the interface
+     * @return Map containing interface stats (online, rxb, txb) or null if not found
+     */
+    suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>?
+
     // Performance optimization
 
     /**

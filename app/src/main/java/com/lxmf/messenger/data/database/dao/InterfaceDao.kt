@@ -115,6 +115,72 @@ interface InterfaceDao {
 
     @Query("SELECT * FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode')")
     fun getEnabledBluetoothCandidates(): Flow<List<InterfaceEntity>>
+
+    /**
+     * Find an RNode interface by USB device ID.
+     * Used to check if a USB device is already configured when it's plugged in.
+     *
+     * Note: We check for the device ID followed by comma or closing brace to avoid
+     * partial matches (e.g., searching for 100 shouldn't match 1002).
+     *
+     * @param usbDeviceId The Android USB device ID to search for
+     * @return The matching interface entity or null if not found
+     * @deprecated Use findRNodeByUsbVidPid instead - device IDs are runtime IDs that change
+     */
+    @Query(
+        """
+        SELECT * FROM interfaces
+        WHERE type = 'RNode'
+        AND (
+            configJson LIKE '%"usb_device_id":' || :usbDeviceId || ',%'
+            OR configJson LIKE '%"usb_device_id":' || :usbDeviceId || '}%'
+        )
+        LIMIT 1
+        """,
+    )
+    suspend fun findRNodeByUsbDeviceId(usbDeviceId: Int): InterfaceEntity?
+
+    /**
+     * Find an RNode interface by USB Vendor ID and Product ID.
+     * This is the preferred method for matching USB devices since VID/PID are stable
+     * hardware identifiers, unlike device IDs which are runtime IDs that can change.
+     *
+     * Uses SQLite's json_extract() for reliable JSON parsing (requires SQLite 3.38+/Android 13+).
+     *
+     * @param vendorId The USB Vendor ID (VID)
+     * @param productId The USB Product ID (PID)
+     * @return The matching interface entity or null if not found
+     */
+    @Query(
+        """
+        SELECT * FROM interfaces
+        WHERE type = 'RNode'
+        AND json_extract(configJson, '${"$"}.usb_vendor_id') = :vendorId
+        AND json_extract(configJson, '${"$"}.usb_product_id') = :productId
+        AND json_extract(configJson, '${"$"}.connection_mode') = 'usb'
+        LIMIT 1
+        """,
+    )
+    suspend fun findRNodeByUsbVidPid(vendorId: Int, productId: Int): InterfaceEntity?
+
+    /**
+     * Get an interface by ID (suspend version for one-shot queries).
+     *
+     * @param id The interface ID
+     * @return The interface entity or null if not found
+     */
+    @Query("SELECT * FROM interfaces WHERE id = :id")
+    suspend fun getInterfaceByIdOnce(id: Long): InterfaceEntity?
+
+    /**
+     * Find an interface by name.
+     * Used to look up the database ID when navigating from the network status screen.
+     *
+     * @param name The interface name to search for
+     * @return The interface entity or null if not found
+     */
+    @Query("SELECT * FROM interfaces WHERE name = :name LIMIT 1")
+    suspend fun findInterfaceByName(name: String): InterfaceEntity?
 }
 
 /**

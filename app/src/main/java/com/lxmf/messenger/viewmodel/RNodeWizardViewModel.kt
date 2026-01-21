@@ -13,7 +13,10 @@ import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
@@ -22,6 +25,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.CommunitySlots
+import com.lxmf.messenger.data.model.DeviceClassifier
+import com.lxmf.messenger.data.model.DeviceTypeCache
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.FrequencyRegion
 import com.lxmf.messenger.data.model.FrequencyRegions
@@ -33,6 +38,8 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePairingHandler
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.RssiThrottler
+import com.lxmf.messenger.util.validation.DeviceNameValidator
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +52,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
@@ -70,7 +78,11 @@ enum class WizardStep {
 enum class RNodeConnectionType {
     BLUETOOTH, // Classic or BLE Bluetooth
     TCP_WIFI, // TCP over WiFi
+    USB_SERIAL, // USB Serial (CDC-ACM, FTDI, CP210x, CH340, etc.)
 }
+
+/** Default interface name - used to detect if user has customized it */
+private const val DEFAULT_INTERFACE_NAME = "RNode LoRa"
 
 /**
  * Regulatory limits for a frequency region.
@@ -116,6 +128,21 @@ data class RNodeWizardState(
     val isTcpValidating: Boolean = false,
     val tcpValidationSuccess: Boolean? = null,
     val tcpValidationError: String? = null,
+    // USB Serial connection fields
+    val usbDevices: List<com.lxmf.messenger.data.model.DiscoveredUsbDevice> = emptyList(),
+    val selectedUsbDevice: com.lxmf.messenger.data.model.DiscoveredUsbDevice? = null,
+    val isUsbScanning: Boolean = false,
+    val usbScanError: String? = null,
+    val isRequestingUsbPermission: Boolean = false,
+    // Bluetooth pairing via USB mode
+    val isUsbPairingMode: Boolean = false,
+    val usbBluetoothPin: String? = null,
+    val usbPairingStatus: String? = null,
+    // USB-assisted Bluetooth pairing (from Bluetooth tab)
+    val isUsbAssistedPairingActive: Boolean = false,
+    val usbAssistedPairingDevices: List<com.lxmf.messenger.data.model.DiscoveredRNode> = emptyList(),
+    val usbAssistedPairingPin: String? = null,
+    val usbAssistedPairingStatus: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
@@ -140,7 +167,7 @@ data class RNodeWizardState(
     // The preset selected on slot page
     val selectedSlotPreset: RNodeRegionalPreset? = null,
     // Step 5: Review & Configure
-    val interfaceName: String = "RNode LoRa",
+    val interfaceName: String = DEFAULT_INTERFACE_NAME,
     // US default
     val frequency: String = "914875000",
     // Long Fast default
@@ -197,8 +224,10 @@ class RNodeWizardViewModel
             private const val PIN_ENTRY_TIMEOUT_MS = 60_000L // 60s for user to enter PIN
             private const val RECONNECT_SCAN_TIMEOUT_MS = 15_000L // 15s to find device after reboot
             private const val RSSI_UPDATE_INTERVAL_MS = 3000L // Update RSSI every 3s
-            private const val MAX_DEVICE_NAME_LENGTH = 32 // Standard Bluetooth device name limit
             private const val TCP_CONNECTION_TIMEOUT_MS = 5000 // 5 second TCP connection timeout
+
+            // Test configuration flag - disable RSSI polling during tests
+            internal var enableRssiPolling = true
         }
 
         private val _state = MutableStateFlow(RNodeWizardState())
@@ -207,8 +236,13 @@ class RNodeWizardViewModel
         private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
 
-        // RSSI update throttling - track last update time per device
-        private val lastRssiUpdate = mutableMapOf<String, Long>()
+        // USB bridge (singleton from reticulum module)
+        private val usbBridge by lazy {
+            com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.getInstance(context)
+        }
+
+        // RSSI update throttling - prevent excessive UI updates
+        private val rssiThrottler = RssiThrottler(intervalMs = RSSI_UPDATE_INTERVAL_MS)
 
         // RSSI polling for connected RNode (edit mode)
         private var rssiPollingJob: Job? = null
@@ -216,53 +250,50 @@ class RNodeWizardViewModel
         // Device type cache - persists detected BLE vs Classic types
         private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+        // Device classifier for determining BLE vs Classic device types
+        private val deviceClassifier = DeviceClassifier(
+            deviceTypeCache = object : DeviceTypeCache {
+                override fun getCachedType(address: String): BluetoothType? {
+                    val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                    return try {
+                        val jsonObj = org.json.JSONObject(json)
+                        if (!jsonObj.has(address)) return null
+                        when (jsonObj.optString(address)) {
+                            "CLASSIC" -> BluetoothType.CLASSIC
+                            "BLE" -> BluetoothType.BLE
+                            else -> null
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to read device type cache", e)
+                        null
+                    }
+                }
+
+                override fun cacheType(address: String, type: BluetoothType) {
+                    try {
+                        val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                        val obj = org.json.JSONObject(json)
+                        obj.put(address, type.name)
+                        deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
+                        Log.d(TAG, "Cached device type: $address -> $type")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to cache device type", e)
+                    }
+                }
+            },
+        )
+
         // Track user-modified fields to preserve state during navigation
         // When user explicitly modifies a field, we don't overwrite it with region defaults
         private val userModifiedFields = mutableSetOf<String>()
 
-        /**
-         * Get cached Bluetooth type for a device address.
-         */
-        private fun getCachedDeviceType(address: String): BluetoothType? {
-            val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-            return try {
-                val jsonObj = org.json.JSONObject(json)
-                if (!jsonObj.has(address)) return null
-                when (jsonObj.optString(address)) {
-                    "CLASSIC" -> BluetoothType.CLASSIC
-                    "BLE" -> BluetoothType.BLE
-                    else -> null
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to read device type cache", e)
-                null
-            }
-        }
-
-        /**
-         * Cache the Bluetooth type for a device address.
-         */
-        private fun cacheDeviceType(
-            address: String,
-            type: BluetoothType,
-        ) {
-            if (type == BluetoothType.UNKNOWN) return // Don't cache unknown
-            try {
-                val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-                val obj = org.json.JSONObject(json)
-                obj.put(address, type.name)
-                deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
-                Log.d(TAG, "Cached device type: $address -> $type")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to cache device type", e)
-            }
-        }
 
         // ========== INITIALIZATION ==========
 
         /**
          * Initialize wizard for editing an existing RNode interface.
          */
+        @Suppress("LongMethod", "CyclomaticComplexMethod") // Complex config mapping is inherent
         fun loadExistingConfig(interfaceId: Long) {
             viewModelScope.launch {
                 try {
@@ -288,19 +319,51 @@ class RNodeWizardViewModel
 
                     val isTcp = config.connectionMode == "tcp"
                     val isBle = config.connectionMode == "ble"
+                    val isUsb = config.connectionMode == "usb"
+
+                    // Determine connection type
+                    val connectionType =
+                        when {
+                            isTcp -> RNodeConnectionType.TCP_WIFI
+                            isUsb -> RNodeConnectionType.USB_SERIAL
+                            else -> RNodeConnectionType.BLUETOOTH
+                        }
+
+                    // Create placeholder USB device for USB mode
+                    // Capture nullable values in local variables for smart cast
+                    val usbVendorId = config.usbVendorId
+                    val usbProductId = config.usbProductId
+                    val usbDevice =
+                        if (isUsb && usbVendorId != null && usbProductId != null) {
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = config.usbDeviceId ?: 0,
+                                vendorId = usbVendorId,
+                                productId = usbProductId,
+                                deviceName = "",
+                                manufacturerName = null,
+                                productName = "Configured USB RNode",
+                                serialNumber = null,
+                                driverType = "Unknown",
+                                hasPermission = true, // Assume permission since it was previously configured
+                            )
+                        } else {
+                            null
+                        }
 
                     _state.update { state ->
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
                             // Connection type
-                            connectionType = if (isTcp) RNodeConnectionType.TCP_WIFI else RNodeConnectionType.BLUETOOTH,
+                            connectionType = connectionType,
                             // Pre-populate TCP fields (for TCP mode)
                             tcpHost = config.tcpHost ?: "",
                             tcpPort = config.tcpPort.toString(),
-                            // Pre-populate device (for Bluetooth mode)
+                            // Pre-populate USB device (for USB mode)
+                            selectedUsbDevice = usbDevice,
+                            // Pre-populate Bluetooth device (for Bluetooth mode)
                             selectedDevice =
-                                if (isTcp) {
+                                if (isTcp || isUsb) {
                                     null
                                 } else {
                                     DiscoveredRNode(
@@ -347,9 +410,12 @@ class RNodeWizardViewModel
          */
         private fun startRssiPolling() {
             rssiPollingJob?.cancel()
+            if (!enableRssiPolling) {
+                return  // Skip during tests
+            }
             rssiPollingJob =
                 viewModelScope.launch {
-                    while (true) {
+                    while (isActive) {
                         delay(RSSI_UPDATE_INTERVAL_MS)
                         val rssi = configManager.getRNodeRssi()
                         if (rssi > -100) {
@@ -455,6 +521,8 @@ class RNodeWizardViewModel
                                         state.manualDeviceName.isNotBlank() &&
                                         state.manualDeviceNameError == null
                                 )
+                        RNodeConnectionType.USB_SERIAL ->
+                            state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
                     }
                 WizardStep.REGION_SELECTION ->
                     state.selectedFrequencyRegion != null || state.isCustomMode || state.selectedPreset != null
@@ -725,7 +793,7 @@ class RNodeWizardViewModel
                 scanForBleRNodes { bleDevice ->
                     bleDeviceAddresses.add(bleDevice.address)
                     devices[bleDevice.address] = bleDevice
-                    cacheDeviceType(bleDevice.address, BluetoothType.BLE)
+                    deviceClassifier.cacheDeviceType(bleDevice.address, BluetoothType.BLE)
                     _state.update { it.copy(discoveredDevices = devices.values.toList()) }
                 }
             } catch (e: Exception) {
@@ -743,7 +811,7 @@ class RNodeWizardViewModel
         ) {
             try {
                 bluetoothAdapter?.bondedDevices?.forEach { device ->
-                    if (device.name?.startsWith("RNode ") == true) {
+                    if (deviceClassifier.shouldIncludeInDiscovery(device)) {
                         classifyBondedDevice(device, bleDeviceAddresses, devices)
                     }
                 }
@@ -764,29 +832,37 @@ class RNodeWizardViewModel
             val address = device.address
             val name = device.name ?: address
 
-            if (bleDeviceAddresses.contains(address)) {
-                // Found in BLE scan - definitely BLE, update paired status
-                devices[address]?.let { existing ->
-                    devices[address] = existing.copy(isPaired = true)
+            when (val result = deviceClassifier.classifyDevice(device, bleDeviceAddresses)) {
+                is DeviceClassifier.ClassificationResult.ConfirmedBle -> {
+                    // Found in BLE scan - update paired status
+                    devices[address]?.let { existing ->
+                        devices[address] = existing.copy(isPaired = true)
+                    }
                 }
-            } else {
-                // Use cached type or mark as unknown
-                val cachedType = getCachedDeviceType(address)
-                val deviceType = cachedType ?: BluetoothType.UNKNOWN
-
-                devices[address] =
-                    DiscoveredRNode(
-                        name = name,
-                        address = address,
-                        type = deviceType,
-                        rssi = null,
-                        isPaired = true,
-                        bluetoothDevice = device,
-                    )
-
-                if (cachedType != null) {
-                    Log.d(TAG, "Using cached type for $name: $cachedType")
-                } else {
+                is DeviceClassifier.ClassificationResult.Cached -> {
+                    // Use cached type
+                    devices[address] =
+                        DiscoveredRNode(
+                            name = name,
+                            address = address,
+                            type = result.type,
+                            rssi = null,
+                            isPaired = true,
+                            bluetoothDevice = device,
+                        )
+                    Log.d(TAG, "Using cached type for $name: ${result.type}")
+                }
+                is DeviceClassifier.ClassificationResult.Unknown -> {
+                    // Mark as unknown
+                    devices[address] =
+                        DiscoveredRNode(
+                            name = name,
+                            address = address,
+                            type = BluetoothType.UNKNOWN,
+                            rssi = null,
+                            isPaired = true,
+                            bluetoothDevice = device,
+                        )
                     Log.d(TAG, "Unknown type for bonded device $name (no cache)")
                 }
             }
@@ -837,7 +913,7 @@ class RNodeWizardViewModel
             device: DiscoveredRNode,
             type: BluetoothType,
         ) {
-            cacheDeviceType(device.address, type)
+            deviceClassifier.cacheDeviceType(device.address, type)
             val updatedDevice = device.copy(type = type)
             _state.update { state ->
                 val newSelected =
@@ -1033,9 +1109,27 @@ class RNodeWizardViewModel
 
         fun selectDevice(device: DiscoveredRNode) {
             _state.update {
+                // Auto-generate interface name if user hasn't customized it
+                val newInterfaceName =
+                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                        // Extract identifier from device name (e.g., "RNode E16A" -> "E16A")
+                        val identifier =
+                            if (device.name.startsWith("RNode ")) {
+                                device.name.removePrefix("RNode ").trim()
+                            } else {
+                                device.name
+                            }
+                        // Add BLE/BT suffix based on device type
+                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
+                        "RNode $identifier $suffix"
+                    } else {
+                        it.interfaceName
+                    }
+
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
+                    interfaceName = newInterfaceName,
                 )
             }
         }
@@ -1047,11 +1141,8 @@ class RNodeWizardViewModel
             address: String,
             rssi: Int,
         ) {
-            val now = System.currentTimeMillis()
-            val lastUpdate = lastRssiUpdate[address] ?: 0L
-            if (now - lastUpdate < RSSI_UPDATE_INTERVAL_MS) return
+            if (!rssiThrottler.shouldUpdate(address)) return
 
-            lastRssiUpdate[address] = now
             _state.update { state ->
                 // Update RSSI in discovered devices list
                 val updatedDevices =
@@ -1150,17 +1241,35 @@ class RNodeWizardViewModel
                                 Log.w(TAG, "Failed to start observing device presence", e)
                             }
 
-                            // Device is now associated - select it
+                            // Device is now associated - select it and update interface name
                             _state.update {
+                                // Auto-generate interface name if user hasn't customized it
+                                val newInterfaceName =
+                                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                                        // Extract identifier from device name (e.g., "RNode 958F" -> "958F")
+                                        val identifier =
+                                            if (device.name.startsWith("RNode ")) {
+                                                device.name.removePrefix("RNode ").trim()
+                                            } else {
+                                                device.name
+                                            }
+                                        // Add BLE/BT suffix based on device type
+                                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
+                                        "RNode $identifier $suffix"
+                                    } else {
+                                        it.interfaceName
+                                    }
+
                                 it.copy(
                                     selectedDevice = device,
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
                                     showManualEntry = false,
+                                    interfaceName = newInterfaceName,
                                 )
                             }
                             // Cache the device type since it's now confirmed
-                            cacheDeviceType(device.address, device.type)
+                            deviceClassifier.cacheDeviceType(device.address, device.type)
                         }
 
                         override fun onFailure(error: CharSequence?) {
@@ -1283,12 +1392,10 @@ class RNodeWizardViewModel
          * @return Pair of (error, warning) - error prevents proceeding, warning is informational
          */
         private fun validateManualDeviceName(name: String): Pair<String?, String?> {
-            return when {
-                name.length > MAX_DEVICE_NAME_LENGTH ->
-                    "Device name must be $MAX_DEVICE_NAME_LENGTH characters or less" to null
-                name.isNotBlank() && !name.startsWith("RNode", ignoreCase = true) ->
-                    null to "Device may not be an RNode. Proceed with caution."
-                else -> null to null
+            return when (val result = DeviceNameValidator.validate(name)) {
+                is DeviceNameValidator.ValidationResult.Valid -> null to null
+                is DeviceNameValidator.ValidationResult.Error -> result.message to null
+                is DeviceNameValidator.ValidationResult.Warning -> null to result.message
             }
         }
 
@@ -1304,14 +1411,43 @@ class RNodeWizardViewModel
          */
         fun setConnectionType(type: RNodeConnectionType) {
             _state.update {
+                // Auto-generate interface name based on connection type if not manually customized
+                // Update if it's the default or matches an auto-generated pattern
+                val isAutoGeneratedName = it.interfaceName == DEFAULT_INTERFACE_NAME ||
+                    it.interfaceName == "RNode TCP" ||
+                    it.interfaceName == "RNode USB" ||
+                    it.interfaceName.matches(Regex("RNode .+ (BLE|BT)"))
+
+                val newInterfaceName =
+                    if (isAutoGeneratedName) {
+                        when (type) {
+                            RNodeConnectionType.TCP_WIFI -> "RNode TCP"
+                            RNodeConnectionType.USB_SERIAL -> "RNode USB"
+                            RNodeConnectionType.BLUETOOTH -> DEFAULT_INTERFACE_NAME // Updated when device selected
+                        }
+                    } else {
+                        it.interfaceName
+                    }
+
                 it.copy(
                     connectionType = type,
-                    // Clear Bluetooth selection when switching to TCP
-                    selectedDevice = if (type == RNodeConnectionType.TCP_WIFI) null else it.selectedDevice,
-                    // Clear TCP validation when switching to Bluetooth
-                    tcpValidationSuccess = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationSuccess,
-                    tcpValidationError = if (type == RNodeConnectionType.BLUETOOTH) null else it.tcpValidationError,
+                    interfaceName = newInterfaceName,
+                    // Clear Bluetooth selection when switching away from Bluetooth
+                    selectedDevice = if (type != RNodeConnectionType.BLUETOOTH) null else it.selectedDevice,
+                    // Clear TCP validation when switching away from TCP
+                    tcpValidationSuccess = if (type != RNodeConnectionType.TCP_WIFI) null else it.tcpValidationSuccess,
+                    tcpValidationError = if (type != RNodeConnectionType.TCP_WIFI) null else it.tcpValidationError,
+                    // Clear USB selection when switching away from USB
+                    selectedUsbDevice = if (type != RNodeConnectionType.USB_SERIAL) null else it.selectedUsbDevice,
+                    usbScanError = if (type != RNodeConnectionType.USB_SERIAL) null else it.usbScanError,
+                    usbBluetoothPin = if (type != RNodeConnectionType.USB_SERIAL) null else it.usbBluetoothPin,
+                    isUsbPairingMode = if (type != RNodeConnectionType.USB_SERIAL) false else it.isUsbPairingMode,
                 )
+            }
+
+            // Auto-scan USB devices when switching to USB mode
+            if (type == RNodeConnectionType.USB_SERIAL) {
+                scanUsbDevices()
             }
         }
 
@@ -1406,6 +1542,1003 @@ class RNodeWizardViewModel
                         )
                     }
                 }
+            }
+        }
+
+        // =========================================================================
+        // USB Serial Methods
+        // =========================================================================
+
+        /**
+         * Scan for connected USB serial devices.
+         */
+        fun scanUsbDevices() {
+            viewModelScope.launch {
+                _state.update { it.copy(isUsbScanning = true, usbScanError = null) }
+
+                try {
+                    val devices =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.getConnectedUsbDevices()
+                        }
+
+                    val usbDevices =
+                        devices.map { device ->
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = device.deviceId,
+                                vendorId = device.vendorId,
+                                productId = device.productId,
+                                deviceName = device.deviceName,
+                                manufacturerName = device.manufacturerName,
+                                productName = device.productName,
+                                serialNumber = device.serialNumber,
+                                driverType = device.driverType,
+                                hasPermission = usbBridge.hasPermission(device.deviceId),
+                            )
+                        }
+
+                    _state.update {
+                        it.copy(
+                            isUsbScanning = false,
+                            usbDevices = usbDevices,
+                            usbScanError = if (usbDevices.isEmpty()) "No USB serial devices found" else null,
+                        )
+                    }
+
+                    Log.d(TAG, "Found ${usbDevices.size} USB serial device(s)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "USB scan failed", e)
+                    _state.update {
+                        it.copy(
+                            isUsbScanning = false,
+                            usbScanError = "Failed to scan USB devices: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Select a USB device.
+         * If permission is needed, requests it first.
+         */
+        fun selectUsbDevice(device: com.lxmf.messenger.data.model.DiscoveredUsbDevice) {
+            if (device.hasPermission) {
+                _state.update {
+                    // Auto-generate interface name if user hasn't customized it
+                    val newInterfaceName =
+                        if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                            "RNode USB"
+                        } else {
+                            it.interfaceName
+                        }
+                    it.copy(
+                        selectedUsbDevice = device,
+                        interfaceName = newInterfaceName,
+                    )
+                }
+            } else {
+                requestUsbPermission(device)
+            }
+        }
+
+        /**
+         * Request USB permission for a device.
+         */
+        fun requestUsbPermission(device: com.lxmf.messenger.data.model.DiscoveredUsbDevice) {
+            _state.update { it.copy(isRequestingUsbPermission = true) }
+
+            usbBridge.requestPermission(device.deviceId) { granted ->
+                viewModelScope.launch {
+                    if (granted) {
+                        Log.d(TAG, "USB permission granted for device ${device.deviceId}")
+                        // Update device list to reflect new permission status
+                        val updatedDevices =
+                            _state.value.usbDevices.map {
+                                if (it.deviceId == device.deviceId) it.copy(hasPermission = true) else it
+                            }
+                        val updatedDevice = device.copy(hasPermission = true)
+
+                        _state.update {
+                            // Auto-generate interface name if user hasn't customized it
+                            val newInterfaceName =
+                                if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
+                                    "RNode USB"
+                                } else {
+                                    it.interfaceName
+                                }
+                            it.copy(
+                                isRequestingUsbPermission = false,
+                                usbDevices = updatedDevices,
+                                selectedUsbDevice = updatedDevice,
+                                interfaceName = newInterfaceName,
+                            )
+                        }
+                    } else {
+                        Log.w(TAG, "USB permission denied for device ${device.deviceId}")
+                        _state.update {
+                            it.copy(
+                                isRequestingUsbPermission = false,
+                                usbScanError = "USB permission denied. Please grant permission to use this device.",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Pre-select a USB device from USB intent handling.
+         * This is called when a USB device is plugged in and the app is opened.
+         */
+        fun preselectUsbDevice(
+            deviceId: Int,
+            vendorId: Int,
+            productId: Int,
+            deviceName: String,
+        ) {
+            Log.d(TAG, "Pre-selecting USB device: $deviceId ($deviceName)")
+
+            // Switch to USB connection type
+            setConnectionType(RNodeConnectionType.USB_SERIAL)
+
+            // Scan for USB devices to get proper device info and permission status
+            scanUsbDevices()
+
+            // Try to find and select the device after scanning
+            viewModelScope.launch {
+                // Wait a bit for USB scan to complete
+                delay(500)
+
+                // Find the device in the scanned list
+                val scannedDevice = _state.value.usbDevices.find { it.deviceId == deviceId }
+                if (scannedDevice != null) {
+                    selectUsbDevice(scannedDevice)
+                    Log.d(TAG, "Found and selected USB device: ${scannedDevice.displayName}")
+                } else {
+                    // If not found in scan, create a placeholder device
+                    // (permission will be requested when selected)
+                    val placeholderDevice = com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                        deviceId = deviceId,
+                        vendorId = vendorId,
+                        productId = productId,
+                        deviceName = deviceName,
+                        manufacturerName = null,
+                        productName = "USB RNode",
+                        serialNumber = null,
+                        driverType = "Unknown",
+                        hasPermission = false,
+                    )
+                    _state.update {
+                        it.copy(
+                            usbDevices = listOf(placeholderDevice) + it.usbDevices,
+                            selectedUsbDevice = null,
+                        )
+                    }
+                    // Request permission for the device
+                    requestUsbPermission(placeholderDevice)
+                    Log.d(TAG, "Created placeholder USB device and requesting permission")
+                }
+            }
+        }
+
+        /**
+         * Enter Bluetooth pairing mode via USB connection.
+         * Sends CMD_BT_CTRL command to RNode to enter pairing mode.
+         * RNode will respond with CMD_BT_PIN containing the 6-digit PIN.
+         */
+        fun enterUsbBluetoothPairingMode() {
+            val device = _state.value.selectedUsbDevice ?: return
+
+            viewModelScope.launch {
+                _state.update { it.copy(isUsbPairingMode = true, usbBluetoothPin = null) }
+
+                try {
+                    // Set up PIN callback (Kotlin version)
+                    usbBridge.setOnBluetoothPinReceivedKotlin { pin ->
+                        viewModelScope.launch {
+                            Log.d(TAG, "Received Bluetooth PIN from RNode: $pin")
+                            _state.update { it.copy(usbBluetoothPin = pin) }
+
+                            // Attempt auto-pairing with the received PIN
+                            initiateAutoPairingWithPin(pin)
+                        }
+                    }
+
+                    // Connect to USB device
+                    val connected =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.connect(device.deviceId)
+                        }
+
+                    if (!connected) {
+                        _state.update {
+                            it.copy(
+                                isUsbPairingMode = false,
+                                usbScanError = "Failed to connect to USB device",
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Send pairing mode command via Python bridge
+                    // Note: This will be handled by the Python rnode_interface
+                    // For now, we send raw KISS command directly
+                    // KISS frame: FEND (0xC0), CMD_BT_CTRL (0x46), BT_CTRL_PAIRING_MODE (0x02), FEND (0xC0)
+                    val kissPairingCmd =
+                        byteArrayOf(
+                            0xC0.toByte(),
+                            0x46.toByte(),
+                            0x02.toByte(),
+                            0xC0.toByte(),
+                        )
+
+                    val written =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.write(kissPairingCmd)
+                        }
+
+                    if (written != kissPairingCmd.size) {
+                        _state.update {
+                            it.copy(
+                                isUsbPairingMode = false,
+                                usbScanError = "Failed to send pairing command",
+                            )
+                        }
+                        usbBridge.disconnect()
+                    } else {
+                        Log.d(TAG, "Bluetooth pairing mode command sent via USB")
+                        // Wait for PIN response (handled by callback)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to enter Bluetooth pairing mode", e)
+                    _state.update {
+                        it.copy(
+                            isUsbPairingMode = false,
+                            usbScanError = "Error: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Initiate auto-pairing with an RNode using the PIN received via USB.
+         * This scans for RNode devices and attempts to pair automatically.
+         */
+        @SuppressLint("MissingPermission")
+        private suspend fun initiateAutoPairingWithPin(pin: String) {
+            Log.d(TAG, "Initiating auto-pairing with PIN: $pin")
+
+            // Unregister any existing pairing handler to avoid duplicate receivers
+            pairingHandler?.unregister()
+
+            // Create and register pairing handler with the PIN
+            val handler = BlePairingHandler(context).apply {
+                setAutoPairPin(pin)
+                register()
+            }
+            pairingHandler = handler
+
+            try {
+                // The RNode in pairing mode will be advertising via Classic Bluetooth
+                // We use discovery to find it since we don't know its MAC address from USB
+                // (We can't use findBondedRNode() because we might have other RNodes paired)
+                Log.d(TAG, "Starting Classic BT discovery to find RNode in pairing mode")
+                _state.update { it.copy(usbPairingStatus = "Scanning for RNode...") }
+
+                // Start a Classic Bluetooth discovery to find the RNode
+                startClassicBluetoothDiscovery(pin)
+            } catch (e: Exception) {
+                Log.e(TAG, "Auto-pairing failed", e)
+                _state.update { it.copy(usbPairingStatus = "Auto-pairing failed: ${e.message}") }
+            }
+        }
+
+        /**
+         * Start Classic Bluetooth discovery to find RNode devices.
+         */
+        @SuppressLint("MissingPermission")
+        private fun startClassicBluetoothDiscovery(pin: String) {
+            // Get the set of already-bonded device addresses to filter them out
+            val bondedAddresses =
+                bluetoothAdapter?.bondedDevices?.map { it.address }?.toSet() ?: emptySet()
+            Log.d(TAG, "Bonded device addresses to skip: $bondedAddresses")
+
+            val discoveryReceiver =
+                object : BroadcastReceiver() {
+                    override fun onReceive(
+                        ctx: Context,
+                        intent: Intent,
+                    ) {
+                        when (intent.action) {
+                            BluetoothDevice.ACTION_FOUND -> {
+                                val device: BluetoothDevice? =
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        intent.getParcelableExtra(
+                                            BluetoothDevice.EXTRA_DEVICE,
+                                            BluetoothDevice::class.java,
+                                        )
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                                    }
+
+                                device?.let {
+                                    val deviceName = it.name ?: return
+                                    val isAlreadyBonded = bondedAddresses.contains(it.address)
+
+                                    Log.d(
+                                        TAG,
+                                        "Discovery found: $deviceName (${it.address}), " +
+                                            "bondState=${it.bondState}, isAlreadyBonded=$isAlreadyBonded",
+                                    )
+
+                                    // Only pair with RNodes that are NOT already bonded
+                                    if (deviceName.startsWith("RNode", ignoreCase = true) && !isAlreadyBonded) {
+                                        Log.i(TAG, "Discovered unbonded RNode via Classic BT: $deviceName")
+                                        bluetoothAdapter?.cancelDiscovery()
+
+                                        // Set the target device for the pairing handler
+                                        pairingHandler?.setAutoPairPin(pin, it.address)
+
+                                        viewModelScope.launch {
+                                            _state.update {
+                                                it.copy(usbPairingStatus = "Found $deviceName, pairing...")
+                                            }
+
+                                            // Initiate bonding with Classic BT transport (BREDR)
+                                            // RNode uses Classic BT PIN pairing, not BLE SMP
+                                            try {
+                                                val createBondMethod = BluetoothDevice::class.java.getMethod(
+                                                    "createBond",
+                                                    Int::class.javaPrimitiveType
+                                                )
+                                                // TRANSPORT_LE = 2 for BLE (RNode uses BLE random addresses)
+                                                createBondMethod.invoke(it, 2)
+                                                Log.d(TAG, "createBond(TRANSPORT_LE) called for RNode")
+                                            } catch (e: Exception) {
+                                                Log.w(TAG, "createBond with transport failed, using default", e)
+                                                it.createBond()
+                                            }
+                                        }
+
+                                        try {
+                                            context.unregisterReceiver(this)
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "Failed to unregister discovery receiver", e)
+                                        }
+                                    }
+                                }
+                            }
+
+                            BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                                Log.d(TAG, "Classic Bluetooth discovery finished")
+                                try {
+                                    context.unregisterReceiver(this)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister discovery receiver", e)
+                                }
+                            }
+                        }
+                    }
+                }
+
+            val filter =
+                IntentFilter().apply {
+                    addAction(BluetoothDevice.ACTION_FOUND)
+                    addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+                }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(discoveryReceiver, filter)
+            }
+
+            Log.d(TAG, "Starting Classic Bluetooth discovery for RNode")
+            bluetoothAdapter?.startDiscovery()
+        }
+
+        /**
+         * Exit USB Bluetooth pairing mode.
+         */
+        fun exitUsbBluetoothPairingMode() {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    // Send command to exit pairing mode: stop BT (0x00), then start BT (0x01)
+                    // CMD_BT_CTRL = 0x46
+                    val stopPairingCmd = byteArrayOf(
+                        0xC0.toByte(),  // FEND
+                        0x46.toByte(),  // CMD_BT_CTRL
+                        0x00.toByte(),  // Stop Bluetooth (exits pairing mode)
+                        0xC0.toByte(),  // FEND
+                    )
+                    val restartBtCmd = byteArrayOf(
+                        0xC0.toByte(),  // FEND
+                        0x46.toByte(),  // CMD_BT_CTRL
+                        0x01.toByte(),  // Start Bluetooth
+                        0xC0.toByte(),  // FEND
+                    )
+                    usbBridge.write(stopPairingCmd)
+                    delay(100)  // Brief delay between commands
+                    usbBridge.write(restartBtCmd)
+                    delay(100)
+                    usbBridge.disconnect()
+                }
+                _state.update {
+                    it.copy(
+                        isUsbPairingMode = false,
+                        usbBluetoothPin = null,
+                    )
+                }
+            }
+        }
+
+        /**
+         * Clear USB-related errors.
+         */
+        fun clearUsbError() {
+            _state.update { it.copy(usbScanError = null) }
+        }
+
+        // ========== USB-ASSISTED BLUETOOTH PAIRING (from Bluetooth tab) ==========
+
+        /**
+         * Start USB-assisted Bluetooth pairing from the Bluetooth tab.
+         * Scans for USB devices, connects, enters pairing mode, and scans for RNodes.
+         */
+        @Suppress("LongMethod") // USB+BT pairing flow requires sequential steps
+        fun startUsbAssistedPairing() {
+            viewModelScope.launch {
+                _state.update {
+                    it.copy(
+                        isUsbAssistedPairingActive = true,
+                        usbAssistedPairingDevices = emptyList(),
+                        usbAssistedPairingPin = null,
+                        usbAssistedPairingStatus = "Scanning for USB devices...",
+                    )
+                }
+
+                try {
+                    // Scan for USB devices
+                    val devices =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.getConnectedUsbDevices()
+                        }
+
+                    val usbDevices =
+                        devices.map { device ->
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = device.deviceId,
+                                vendorId = device.vendorId,
+                                productId = device.productId,
+                                deviceName = device.deviceName,
+                                manufacturerName = device.manufacturerName,
+                                productName = device.productName,
+                                serialNumber = device.serialNumber,
+                                driverType = device.driverType,
+                                hasPermission = usbBridge.hasPermission(device.deviceId),
+                            )
+                        }
+
+                    if (usbDevices.isEmpty()) {
+                        _state.update {
+                            it.copy(
+                                isUsbAssistedPairingActive = false,
+                                usbAssistedPairingStatus = null,
+                                pairingError = "No USB devices found. Connect your RNode via USB cable.",
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Pick the first USB device (or let user select if multiple in future)
+                    val usbDevice = usbDevices.first()
+                    Log.d(TAG, "USB-assisted pairing: Found USB device ${usbDevice.displayName}")
+                    _state.update { it.copy(usbAssistedPairingStatus = "Connecting to USB device...") }
+
+                    // Check if we need USB permission
+                    if (!usbDevice.hasPermission) {
+                        // Request permission and continue when granted
+                        _state.update {
+                            it.copy(
+                                selectedUsbDevice = usbDevice,
+                                isRequestingUsbPermission = true,
+                            )
+                        }
+                        usbBridge.requestPermission(usbDevice.deviceId) { granted ->
+                            viewModelScope.launch {
+                                _state.update { it.copy(isRequestingUsbPermission = false) }
+                                if (granted) {
+                                    // Update device with permission and continue
+                                    val updatedDevice = usbDevice.copy(hasPermission = true)
+                                    continueUsbAssistedPairing(updatedDevice)
+                                } else {
+                                    _state.update {
+                                        it.copy(
+                                            isUsbAssistedPairingActive = false,
+                                            usbAssistedPairingStatus = null,
+                                            pairingError = "USB permission denied. Please grant permission.",
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        return@launch
+                    }
+
+                    // Continue with USB-assisted pairing
+                    continueUsbAssistedPairing(usbDevice)
+                } catch (e: Exception) {
+                    Log.e(TAG, "USB-assisted pairing failed", e)
+                    _state.update {
+                        it.copy(
+                            isUsbAssistedPairingActive = false,
+                            usbAssistedPairingStatus = null,
+                            pairingError = "USB-assisted pairing failed: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Continue USB-assisted pairing after USB device is connected.
+         */
+        private suspend fun continueUsbAssistedPairing(
+            usbDevice: com.lxmf.messenger.data.model.DiscoveredUsbDevice,
+        ) {
+            try {
+                _state.update { it.copy(usbAssistedPairingStatus = "Entering Bluetooth pairing mode...") }
+
+                // Set up PIN callback
+                usbBridge.setOnBluetoothPinReceivedKotlin { pin ->
+                    viewModelScope.launch {
+                        Log.d(TAG, "USB-assisted: Received Bluetooth PIN from RNode: $pin")
+                        _state.update {
+                            it.copy(
+                                usbAssistedPairingPin = pin,
+                                usbAssistedPairingStatus = "Scanning for RNodes...",
+                            )
+                        }
+
+                        // Start scanning for RNodes to pair with
+                        startUsbAssistedBluetoothDiscovery(pin)
+                    }
+                }
+
+                // Connect to USB device
+                val connected =
+                    withContext(Dispatchers.IO) {
+                        usbBridge.connect(usbDevice.deviceId)
+                    }
+
+                if (!connected) {
+                    _state.update {
+                        it.copy(
+                            isUsbAssistedPairingActive = false,
+                            usbAssistedPairingStatus = null,
+                            pairingError = "Failed to connect to USB device",
+                        )
+                    }
+                    return
+                }
+
+                // Send pairing mode command
+                val kissPairingCmd =
+                    byteArrayOf(
+                        0xC0.toByte(),
+                        0x46.toByte(),
+                        0x02.toByte(),
+                        0xC0.toByte(),
+                    )
+
+                val written =
+                    withContext(Dispatchers.IO) {
+                        usbBridge.write(kissPairingCmd)
+                    }
+
+                if (written != kissPairingCmd.size) {
+                    _state.update {
+                        it.copy(
+                            isUsbAssistedPairingActive = false,
+                            usbAssistedPairingStatus = null,
+                            pairingError = "Failed to send pairing command",
+                        )
+                    }
+                    usbBridge.disconnect()
+                } else {
+                    Log.d(TAG, "USB-assisted: Bluetooth pairing mode command sent")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "USB-assisted pairing error", e)
+                _state.update {
+                    it.copy(
+                        isUsbAssistedPairingActive = false,
+                        usbAssistedPairingStatus = null,
+                        pairingError = "Error: ${e.message}",
+                    )
+                }
+            }
+        }
+
+        // Track USB-assisted pairing discovery receiver for cleanup
+        private var usbAssistedDiscoveryReceiver: BroadcastReceiver? = null
+
+        /**
+         * Start Classic Bluetooth discovery to find all unbonded RNodes for user selection.
+         */
+        @SuppressLint("MissingPermission")
+        private fun startUsbAssistedBluetoothDiscovery(pin: String) {
+            // Get the set of already-bonded device addresses to filter them out
+            val bondedAddresses =
+                bluetoothAdapter?.bondedDevices?.map { it.address }?.toSet() ?: emptySet()
+            Log.d(TAG, "USB-assisted: Bonded device addresses to skip: $bondedAddresses")
+
+            // Collect discovered RNodes
+            val discoveredRNodes = mutableListOf<DiscoveredRNode>()
+
+            // Unregister any existing pairing handler
+            pairingHandler?.unregister()
+
+            // Create and register pairing handler with the PIN
+            val handler = BlePairingHandler(context).apply {
+                setAutoPairPin(pin)
+                register()
+            }
+            pairingHandler = handler
+
+            // Cleanup previous receiver if any
+            usbAssistedDiscoveryReceiver?.let {
+                try {
+                    context.unregisterReceiver(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unregister previous discovery receiver", e)
+                }
+            }
+
+            val discoveryReceiver =
+                object : BroadcastReceiver() {
+                    @Suppress("LongMethod") // Discovery callback handles multiple cases
+                    override fun onReceive(
+                        ctx: Context,
+                        intent: Intent,
+                    ) {
+                        when (intent.action) {
+                            BluetoothDevice.ACTION_FOUND -> {
+                                val device: BluetoothDevice? =
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        intent.getParcelableExtra(
+                                            BluetoothDevice.EXTRA_DEVICE,
+                                            BluetoothDevice::class.java,
+                                        )
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                                    }
+
+                                device?.let { btDevice ->
+                                    val deviceName = btDevice.name ?: return
+                                    val isAlreadyBonded = bondedAddresses.contains(btDevice.address)
+
+                                    Log.d(
+                                        TAG,
+                                        "USB-assisted discovery found: $deviceName (${btDevice.address}), " +
+                                            "bondState=${btDevice.bondState}, isAlreadyBonded=$isAlreadyBonded",
+                                    )
+
+                                    // Only collect RNodes that are NOT already bonded
+                                    if (deviceName.startsWith("RNode", ignoreCase = true) && !isAlreadyBonded) {
+                                        val rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE)
+                                        val rnode = DiscoveredRNode(
+                                            name = deviceName,
+                                            address = btDevice.address,
+                                            type = BluetoothType.CLASSIC,
+                                            rssi = if (rssi != Short.MIN_VALUE) rssi.toInt() else null,
+                                            isPaired = false,
+                                            bluetoothDevice = btDevice,
+                                        )
+
+                                        // Add to list if not already present
+                                        if (discoveredRNodes.none { it.address == btDevice.address }) {
+                                            discoveredRNodes.add(rnode)
+                                            Log.i(TAG, "USB-assisted: Found unbonded RNode: $deviceName")
+
+                                            // Update UI with discovered devices
+                                            viewModelScope.launch {
+                                                _state.update { state ->
+                                                    state.copy(
+                                                        usbAssistedPairingDevices = discoveredRNodes.toList(),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                                Log.d(TAG, "USB-assisted: Bluetooth discovery finished, found ${discoveredRNodes.size} RNodes")
+
+                                viewModelScope.launch {
+                                    if (discoveredRNodes.isEmpty()) {
+                                        _state.update {
+                                            it.copy(
+                                                isUsbAssistedPairingActive = false,
+                                                usbAssistedPairingStatus = null,
+                                                pairingError = "No unpaired RNodes found. Make sure your RNode is powered on and in range.",
+                                            )
+                                        }
+                                        withContext(Dispatchers.IO) {
+                                            usbBridge.disconnect()
+                                        }
+                                    } else if (discoveredRNodes.size == 1) {
+                                        // Auto-select if only one RNode found
+                                        Log.i(TAG, "USB-assisted: Auto-selecting single RNode: ${discoveredRNodes[0].name}")
+                                        _state.update {
+                                            it.copy(usbAssistedPairingStatus = "Found ${discoveredRNodes[0].name}, pairing...")
+                                        }
+                                        selectDeviceForUsbPairing(discoveredRNodes[0])
+                                    } else {
+                                        // Multiple RNodes found - let user select
+                                        _state.update {
+                                            it.copy(
+                                                usbAssistedPairingStatus = "Select your RNode from the list",
+                                                usbAssistedPairingDevices = discoveredRNodes.toList(),
+                                            )
+                                        }
+                                    }
+                                }
+
+                                try {
+                                    context.unregisterReceiver(this)
+                                    usbAssistedDiscoveryReceiver = null
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister discovery receiver", e)
+                                }
+                            }
+                        }
+                    }
+                }
+
+            usbAssistedDiscoveryReceiver = discoveryReceiver
+
+            val filter =
+                IntentFilter().apply {
+                    addAction(BluetoothDevice.ACTION_FOUND)
+                    addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+                }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(discoveryReceiver, filter)
+            }
+
+            Log.d(TAG, "USB-assisted: Starting Classic Bluetooth discovery for RNodes")
+            bluetoothAdapter?.startDiscovery()
+        }
+
+        // Track bond state receiver for USB-assisted pairing
+        private var usbAssistedBondReceiver: BroadcastReceiver? = null
+
+        /**
+         * Select a device for USB-assisted pairing.
+         */
+        @SuppressLint("MissingPermission")
+        @Suppress("LongMethod") // BT pairing flow requires sequential steps with state updates
+        fun selectDeviceForUsbPairing(device: DiscoveredRNode) {
+            val pin = _state.value.usbAssistedPairingPin ?: return
+
+            viewModelScope.launch {
+                _state.update {
+                    it.copy(
+                        usbAssistedPairingStatus = "Pairing with ${device.name}...",
+                        isPairingInProgress = true,
+                    )
+                }
+
+                // Set the target device for the pairing handler
+                pairingHandler?.setAutoPairPin(pin, device.address)
+
+                try {
+                    val btDevice = device.bluetoothDevice ?: bluetoothAdapter?.getRemoteDevice(device.address)
+                    if (btDevice == null) {
+                        _state.update {
+                            it.copy(
+                                isUsbAssistedPairingActive = false,
+                                usbAssistedPairingStatus = null,
+                                isPairingInProgress = false,
+                                pairingError = "Could not find Bluetooth device",
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Use CompletableDeferred to wait for bond state change via broadcast
+                    val bondResult = kotlinx.coroutines.CompletableDeferred<Boolean>()
+
+                    // Register receiver for bond state changes
+                    val bondReceiver = object : BroadcastReceiver() {
+                        override fun onReceive(ctx: Context, intent: Intent) {
+                            if (intent.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
+
+                            val bondDevice: BluetoothDevice? =
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                                }
+
+                            if (bondDevice?.address != device.address) return
+
+                            val newState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                            val prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
+
+                            Log.d(TAG, "USB-assisted: Bond state changed for ${device.name}: $prevState -> $newState")
+
+                            when (newState) {
+                                BluetoothDevice.BOND_BONDED -> {
+                                    Log.i(TAG, "USB-assisted: Pairing successful for ${device.name}")
+                                    bondResult.complete(true)
+                                }
+                                BluetoothDevice.BOND_NONE -> {
+                                    if (prevState == BluetoothDevice.BOND_BONDING) {
+                                        Log.w(TAG, "USB-assisted: Pairing failed for ${device.name}")
+                                        bondResult.complete(false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    usbAssistedBondReceiver = bondReceiver
+
+                    val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        context.registerReceiver(bondReceiver, filter, Context.RECEIVER_EXPORTED)
+                    } else {
+                        @Suppress("UnspecifiedRegisterReceiverFlag")
+                        context.registerReceiver(bondReceiver, filter)
+                    }
+
+                    // Initiate bonding with BLE transport (TRANSPORT_LE = 2)
+                    try {
+                        val createBondMethod = BluetoothDevice::class.java.getMethod(
+                            "createBond",
+                            Int::class.javaPrimitiveType,
+                        )
+                        createBondMethod.invoke(btDevice, 2)
+                        Log.d(TAG, "USB-assisted: createBond(TRANSPORT_LE) called for ${device.name}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "USB-assisted: createBond with transport failed, using default", e)
+                        btDevice.createBond()
+                    }
+
+                    // Wait for bonding to complete with timeout
+                    val success = try {
+                        kotlinx.coroutines.withTimeout(PIN_ENTRY_TIMEOUT_MS) {
+                            bondResult.await()
+                        }
+                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                        Log.w(TAG, "USB-assisted: Pairing timed out for ${device.name}", e)
+                        false
+                    }
+
+                    // Unregister receiver
+                    try {
+                        context.unregisterReceiver(bondReceiver)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to unregister bond receiver", e)
+                    }
+                    usbAssistedBondReceiver = null
+
+                    if (success) {
+                        val pairedDevice = device.copy(isPaired = true)
+                        _state.update { state ->
+                            state.copy(
+                                isUsbAssistedPairingActive = false,
+                                usbAssistedPairingDevices = emptyList(),
+                                usbAssistedPairingPin = null,
+                                usbAssistedPairingStatus = null,
+                                isPairingInProgress = false,
+                                selectedDevice = pairedDevice,
+                                discoveredDevices = state.discoveredDevices.map {
+                                    if (it.address == device.address) pairedDevice else it
+                                } + if (state.discoveredDevices.none { it.address == device.address }) {
+                                    listOf(pairedDevice)
+                                } else {
+                                    emptyList()
+                                },
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                isUsbAssistedPairingActive = false,
+                                usbAssistedPairingDevices = emptyList(),
+                                usbAssistedPairingPin = null,
+                                usbAssistedPairingStatus = null,
+                                isPairingInProgress = false,
+                                pairingError = "Pairing failed. Please try again.",
+                            )
+                        }
+                    }
+
+                    // Disconnect USB
+                    withContext(Dispatchers.IO) {
+                        usbBridge.disconnect()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "USB-assisted pairing error", e)
+                    _state.update {
+                        it.copy(
+                            isUsbAssistedPairingActive = false,
+                            usbAssistedPairingDevices = emptyList(),
+                            usbAssistedPairingPin = null,
+                            usbAssistedPairingStatus = null,
+                            isPairingInProgress = false,
+                            pairingError = "Pairing error: ${e.message}",
+                        )
+                    }
+                    withContext(Dispatchers.IO) {
+                        usbBridge.disconnect()
+                    }
+                }
+            }
+        }
+
+        /**
+         * Cancel USB-assisted Bluetooth pairing.
+         */
+        @SuppressLint("MissingPermission")
+        fun cancelUsbAssistedPairing() {
+            viewModelScope.launch {
+                // Stop Bluetooth discovery if running
+                bluetoothAdapter?.cancelDiscovery()
+
+                // Unregister discovery receiver
+                usbAssistedDiscoveryReceiver?.let {
+                    try {
+                        context.unregisterReceiver(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to unregister discovery receiver", e)
+                    }
+                    usbAssistedDiscoveryReceiver = null
+                }
+
+                // Unregister bond state receiver
+                usbAssistedBondReceiver?.let {
+                    try {
+                        context.unregisterReceiver(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to unregister bond receiver", e)
+                    }
+                    usbAssistedBondReceiver = null
+                }
+
+                // Disconnect USB
+                withContext(Dispatchers.IO) {
+                    usbBridge.disconnect()
+                }
+
+                // Clear pairing handler
+                pairingHandler?.clearAutoPairPin()
+
+                _state.update {
+                    it.copy(
+                        isUsbAssistedPairingActive = false,
+                        usbAssistedPairingDevices = emptyList(),
+                        usbAssistedPairingPin = null,
+                        usbAssistedPairingStatus = null,
+                    )
+                }
+
+                Log.d(TAG, "USB-assisted pairing cancelled")
             }
         }
 
@@ -1885,41 +3018,61 @@ class RNodeWizardViewModel
                     }
 
                     // Determine connection parameters based on connection type
-                    val isTcpMode = state.connectionType == RNodeConnectionType.TCP_WIFI
-
                     val deviceName: String
                     val connectionMode: String
                     val tcpHost: String?
                     val tcpPort: Int
+                    val usbDeviceId: Int?
+                    val usbVendorId: Int?
+                    val usbProductId: Int?
 
-                    if (isTcpMode) {
-                        // TCP/WiFi mode
-                        deviceName = ""
-                        connectionMode = "tcp"
-                        tcpHost = state.tcpHost.trim()
-                        tcpPort = state.tcpPort.toIntOrNull() ?: 7633
-                    } else {
-                        // Bluetooth mode
-                        val (name, mode) =
-                            if (state.selectedDevice != null) {
-                                state.selectedDevice.name to
-                                    when (state.selectedDevice.type) {
-                                        BluetoothType.CLASSIC -> "classic"
-                                        BluetoothType.BLE -> "ble"
-                                        BluetoothType.UNKNOWN -> "classic"
-                                    }
-                            } else {
-                                state.manualDeviceName to
-                                    when (state.manualBluetoothType) {
-                                        BluetoothType.CLASSIC -> "classic"
-                                        BluetoothType.BLE -> "ble"
-                                        BluetoothType.UNKNOWN -> "classic"
-                                    }
-                            }
-                        deviceName = name
-                        connectionMode = mode
-                        tcpHost = null
-                        tcpPort = 7633
+                    when (state.connectionType) {
+                        RNodeConnectionType.TCP_WIFI -> {
+                            // TCP/WiFi mode
+                            deviceName = ""
+                            connectionMode = "tcp"
+                            tcpHost = state.tcpHost.trim()
+                            tcpPort = state.tcpPort.toIntOrNull() ?: 7633
+                            usbDeviceId = null
+                            usbVendorId = null
+                            usbProductId = null
+                        }
+                        RNodeConnectionType.USB_SERIAL -> {
+                            // USB Serial mode
+                            deviceName = ""
+                            connectionMode = "usb"
+                            tcpHost = null
+                            tcpPort = 7633
+                            usbDeviceId = state.selectedUsbDevice?.deviceId
+                            usbVendorId = state.selectedUsbDevice?.vendorId
+                            usbProductId = state.selectedUsbDevice?.productId
+                        }
+                        RNodeConnectionType.BLUETOOTH -> {
+                            // Bluetooth mode
+                            val (name, mode) =
+                                if (state.selectedDevice != null) {
+                                    state.selectedDevice.name to
+                                        when (state.selectedDevice.type) {
+                                            BluetoothType.CLASSIC -> "classic"
+                                            BluetoothType.BLE -> "ble"
+                                            BluetoothType.UNKNOWN -> "classic"
+                                        }
+                                } else {
+                                    state.manualDeviceName to
+                                        when (state.manualBluetoothType) {
+                                            BluetoothType.CLASSIC -> "classic"
+                                            BluetoothType.BLE -> "ble"
+                                            BluetoothType.UNKNOWN -> "classic"
+                                        }
+                                }
+                            deviceName = name
+                            connectionMode = mode
+                            tcpHost = null
+                            tcpPort = 7633
+                            usbDeviceId = null
+                            usbVendorId = null
+                            usbProductId = null
+                        }
                     }
 
                     val config =
@@ -1930,6 +3083,9 @@ class RNodeWizardViewModel
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
+                            usbDeviceId = usbDeviceId,
+                            usbVendorId = usbVendorId,
+                            usbProductId = usbProductId,
                             frequency = state.frequency.toLongOrNull() ?: 915000000,
                             bandwidth = state.bandwidth.toIntOrNull() ?: 125000,
                             txPower = state.txPower.toIntOrNull() ?: 7,
@@ -1973,33 +3129,62 @@ class RNodeWizardViewModel
 
         /**
          * Get the effective device name for display.
-         * For TCP mode, shows the host:port. For Bluetooth, shows device name.
+         * For TCP mode, shows the host:port. For USB, shows USB device name. For Bluetooth, shows device name.
          */
         fun getEffectiveDeviceName(): String {
             val state = _state.value
-            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
-                val port = state.tcpPort.toIntOrNull() ?: 7633
-                if (state.tcpHost.isNotBlank()) {
-                    if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
-                } else {
-                    "No host specified"
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> {
+                    val port = state.tcpPort.toIntOrNull() ?: 7633
+                    if (state.tcpHost.isNotBlank()) {
+                        if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
+                    } else {
+                        "No host specified"
+                    }
                 }
-            } else {
-                state.selectedDevice?.name
-                    ?: state.manualDeviceName.ifBlank { "No device selected" }
+                RNodeConnectionType.USB_SERIAL -> {
+                    state.selectedUsbDevice?.let { device ->
+                        // Prefer product name, fall back to manufacturer, then driver type
+                        device.productName
+                            ?: device.manufacturerName?.let { "$it Device" }
+                            ?: device.driverType
+                    } ?: "No USB device selected"
+                }
+                RNodeConnectionType.BLUETOOTH -> {
+                    state.selectedDevice?.name
+                        ?: state.manualDeviceName.ifBlank { "No device selected" }
+                }
             }
         }
 
         /**
          * Get the effective Bluetooth type for display.
-         * Returns null for TCP mode.
+         * Returns null for TCP mode or USB mode.
          */
         fun getEffectiveBluetoothType(): BluetoothType? {
             val state = _state.value
-            return if (state.connectionType == RNodeConnectionType.TCP_WIFI) {
-                null
-            } else {
-                state.selectedDevice?.type ?: state.manualBluetoothType
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> null
+                RNodeConnectionType.USB_SERIAL -> null
+                RNodeConnectionType.BLUETOOTH -> state.selectedDevice?.type ?: state.manualBluetoothType
+            }
+        }
+
+        /**
+         * Get the connection type string for display.
+         */
+        fun getConnectionTypeString(): String {
+            val state = _state.value
+            return when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> "WiFi / TCP"
+                RNodeConnectionType.USB_SERIAL -> "USB Serial"
+                RNodeConnectionType.BLUETOOTH -> {
+                    when (state.selectedDevice?.type ?: state.manualBluetoothType) {
+                        BluetoothType.CLASSIC -> "Bluetooth Classic"
+                        BluetoothType.BLE -> "Bluetooth LE"
+                        BluetoothType.UNKNOWN -> "Bluetooth"
+                    }
+                }
             }
         }
 
@@ -2007,6 +3192,11 @@ class RNodeWizardViewModel
          * Check if currently in TCP/WiFi mode.
          */
         fun isTcpMode(): Boolean = _state.value.connectionType == RNodeConnectionType.TCP_WIFI
+
+        /**
+         * Check if currently in USB Serial mode.
+         */
+        fun isUsbMode(): Boolean = _state.value.connectionType == RNodeConnectionType.USB_SERIAL
 
         /**
          * Cleanup when ViewModel is cleared.

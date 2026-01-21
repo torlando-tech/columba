@@ -92,6 +92,7 @@ fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
     onNavigateToTcpClientWizard: () -> Unit = {},
+    onNavigateToInterfaceStats: (interfaceId: Long) -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -251,6 +252,7 @@ fun InterfaceManagementScreen(
                                 val isOnline = state.interfaceOnlineStatus[iface.name]
                                 InterfaceCard(
                                     interfaceEntity = iface,
+                                    onClick = { onNavigateToInterfaceStats(iface.id) },
                                     onToggle = { enabled ->
                                         val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                         viewModel.toggleInterface(iface.id, enabled, hasPermissions)
@@ -429,6 +431,7 @@ fun InterfaceManagementScreen(
 @Composable
 fun InterfaceCard(
     interfaceEntity: InterfaceEntity,
+    onClick: (() -> Unit)? = null,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -443,7 +446,15 @@ fun InterfaceCard(
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(

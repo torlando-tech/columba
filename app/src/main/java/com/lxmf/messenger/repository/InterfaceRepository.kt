@@ -235,32 +235,45 @@ class InterfaceRepository
                         val connectionMode = json.optString("connection_mode", "classic")
                         val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
                         val tcpPort = json.optInt("tcp_port", 7633)
+                        val usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null
+                        val usbVendorId = if (json.has("usb_vendor_id")) json.getInt("usb_vendor_id") else null
+                        val usbProductId = if (json.has("usb_product_id")) json.getInt("usb_product_id") else null
 
                         // Validate based on connection mode
-                        if (connectionMode == "tcp") {
-                            // TCP mode requires host
-                            if (tcpHost.isNullOrBlank()) {
-                                Log.e(TAG, "Empty RNode TCP host in database")
-                                error("Empty RNode TCP host")
-                            }
-                            // Validate TCP host format
-                            when (val result = InputValidator.validateHostname(tcpHost)) {
-                                is ValidationResult.Error -> {
-                                    Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
-                                    error("Invalid RNode TCP host: $tcpHost")
+                        when (connectionMode) {
+                            "tcp" -> {
+                                // TCP mode requires host
+                                if (tcpHost.isNullOrBlank()) {
+                                    Log.e(TAG, "Empty RNode TCP host in database")
+                                    error("Empty RNode TCP host")
                                 }
-                                else -> {}
+                                // Validate TCP host format
+                                when (val result = InputValidator.validateHostname(tcpHost)) {
+                                    is ValidationResult.Error -> {
+                                        Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                        error("Invalid RNode TCP host: $tcpHost")
+                                    }
+                                    else -> {}
+                                }
+                                // Validate TCP port
+                                if (tcpPort !in 1..65535) {
+                                    Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
+                                    error("Invalid RNode TCP port: $tcpPort")
+                                }
                             }
-                            // Validate TCP port
-                            if (tcpPort !in 1..65535) {
-                                Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
-                                error("Invalid RNode TCP port: $tcpPort")
+                            "usb" -> {
+                                // USB mode requires device ID
+                                if (usbDeviceId == null) {
+                                    Log.e(TAG, "Missing RNode USB device ID in database")
+                                    error("Missing RNode USB device ID")
+                                }
                             }
-                        } else {
-                            // Bluetooth modes require device name
-                            if (targetDeviceName.isBlank()) {
-                                Log.e(TAG, "Empty RNode target device name in database")
-                                error("Empty RNode target device name")
+                            else -> {
+                                // Bluetooth modes (classic, ble) require device name
+                                if (targetDeviceName.isBlank()) {
+                                    Log.e(TAG, "Empty RNode target device name in database")
+                                    error("Empty RNode target device name")
+                                }
                             }
                         }
 
@@ -271,6 +284,9 @@ class InterfaceRepository
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
+                            usbDeviceId = usbDeviceId,
+                            usbVendorId = usbVendorId,
+                            usbProductId = usbProductId,
                             frequency = json.optLong("frequency", 915000000),
                             bandwidth = json.optInt("bandwidth", 125000),
                             txPower = json.optInt("tx_power", 7),
@@ -389,6 +405,47 @@ class InterfaceRepository
                 Log.e(TAG, "Corrupted JSON in database for interface '${entity.name}': ${e.message}", e)
                 error("Corrupted interface configuration for '${entity.name}': ${e.message}")
             }
+        }
+
+        /**
+         * Find an RNode interface configured for a specific USB device ID.
+         * Used to check if a USB device is already configured when it's plugged in.
+         * @deprecated Use findRNodeByUsbVidPid instead - device IDs are runtime IDs that change
+         */
+        suspend fun findRNodeByUsbDeviceId(usbDeviceId: Int): InterfaceEntity? {
+            return interfaceDao.findRNodeByUsbDeviceId(usbDeviceId)
+        }
+
+        /**
+         * Find an RNode interface by USB Vendor ID and Product ID.
+         * This is the preferred method for matching USB devices since VID/PID are stable
+         * hardware identifiers, unlike device IDs which are runtime IDs that can change.
+         */
+        suspend fun findRNodeByUsbVidPid(vendorId: Int, productId: Int): InterfaceEntity? {
+            Log.d(TAG, "findRNodeByUsbVidPid: looking for VID=$vendorId (0x${vendorId.toString(16)}), PID=$productId (0x${productId.toString(16)})")
+            val result = interfaceDao.findRNodeByUsbVidPid(vendorId, productId)
+            if (result != null) {
+                Log.d(TAG, "findRNodeByUsbVidPid: FOUND '${result.name}' configJson=${result.configJson}")
+            } else {
+                Log.d(TAG, "findRNodeByUsbVidPid: NOT FOUND - no matching RNode interface in database")
+            }
+            return result
+        }
+
+        /**
+         * Get an interface by ID (one-shot query, not Flow).
+         * Useful for intent handling where we need immediate result.
+         */
+        suspend fun getInterfaceByIdOnce(id: Long): InterfaceEntity? {
+            return interfaceDao.getInterfaceByIdOnce(id)
+        }
+
+        /**
+         * Find an interface by name.
+         * Used to look up the database ID when navigating from the network status screen.
+         */
+        suspend fun findInterfaceByName(name: String): InterfaceEntity? {
+            return interfaceDao.findInterfaceByName(name)
         }
 
         companion object {

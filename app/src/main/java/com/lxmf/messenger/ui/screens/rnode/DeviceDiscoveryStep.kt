@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellular4Bar
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
+import com.lxmf.messenger.data.model.DiscoveredUsbDevice
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.viewmodel.RNodeConnectionType
 import com.lxmf.messenger.viewmodel.RNodeWizardState
@@ -155,6 +157,14 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                     Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
                 },
             )
+            FilterChip(
+                selected = state.connectionType == RNodeConnectionType.USB_SERIAL,
+                onClick = { viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL) },
+                label = { Text("USB") },
+                leadingIcon = {
+                    Icon(Icons.Default.Usb, contentDescription = null, Modifier.size(18.dp))
+                },
+            )
         }
         Spacer(Modifier.height(16.dp))
 
@@ -172,6 +182,12 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
             }
             RNodeConnectionType.BLUETOOTH -> {
                 BluetoothDeviceDiscovery(
+                    viewModel = viewModel,
+                    state = state,
+                )
+            }
+            RNodeConnectionType.USB_SERIAL -> {
+                UsbDeviceDiscovery(
                     viewModel = viewModel,
                     state = state,
                 )
@@ -370,7 +386,7 @@ private fun BluetoothDeviceDiscovery(
         }
 
         // Pairing in progress indicator
-        if (state.isPairingInProgress) {
+        if (state.isPairingInProgress && !state.isUsbAssistedPairingActive) {
             Card(
                 colors =
                     CardDefaults.cardColors(
@@ -403,6 +419,19 @@ private fun BluetoothDeviceDiscovery(
                     )
                 }
             }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // USB-assisted pairing progress/device selection
+        if (state.isUsbAssistedPairingActive) {
+            UsbAssistedPairingCard(
+                devices = state.usbAssistedPairingDevices,
+                pin = state.usbAssistedPairingPin,
+                status = state.usbAssistedPairingStatus,
+                isPairing = state.isPairingInProgress,
+                onDeviceSelected = { viewModel.selectDeviceForUsbPairing(it) },
+                onCancel = { viewModel.cancelUsbAssistedPairing() },
+            )
             Spacer(Modifier.height(16.dp))
         }
 
@@ -562,6 +591,56 @@ private fun BluetoothDeviceDiscovery(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+
+            // USB-assisted pairing section
+            if (!state.showManualEntry) {
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Having trouble pairing?",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                item {
+                    OutlinedCard(
+                        onClick = { viewModel.startUsbAssistedPairing() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.isUsbAssistedPairingActive,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Usb,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Pair via USB",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "Connect RNode via USB to securely configure Bluetooth pairing",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (state.isUsbAssistedPairingActive) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
                         }
                     }
                 }
@@ -915,6 +994,504 @@ private fun BluetoothDeviceCard(
                         "Power on device and rescan to auto-detect type.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsbDeviceDiscovery(
+    viewModel: RNodeWizardViewModel,
+    state: RNodeWizardState,
+) {
+    Column {
+        Text(
+            "Connect RNode via USB cable. Supports FTDI, CP210x, CH340, and CDC-ACM devices.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        // Scanning indicator
+        if (state.isUsbScanning) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Scanning for USB devices...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // Error message
+        state.usbScanError?.let { error ->
+            Card(
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { viewModel.clearUsbError() }) {
+                        Text("Dismiss")
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // Bluetooth pairing mode card
+        if (state.isUsbPairingMode) {
+            Card(
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "Bluetooth Pairing Mode",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    if (state.usbBluetoothPin != null) {
+                        Text(
+                            "PIN Code:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            state.usbBluetoothPin,
+                            style = MaterialTheme.typography.displayMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Open Android Bluetooth settings and pair with your RNode using this PIN.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "Waiting for PIN from RNode...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { viewModel.exitUsbBluetoothPairingMode() }) {
+                        Text("Exit Pairing Mode")
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // USB device list
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            items(
+                items = state.usbDevices,
+                key = { it.deviceId },
+            ) { device ->
+                UsbDeviceCard(
+                    device = device,
+                    isSelected = state.selectedUsbDevice?.deviceId == device.deviceId,
+                    onSelect = { viewModel.selectUsbDevice(device) },
+                    isRequestingPermission = state.isRequestingUsbPermission,
+                )
+            }
+
+            // Bluetooth pairing mode option (when device is selected)
+            if (state.selectedUsbDevice != null && !state.isUsbPairingMode) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedCard(
+                        onClick = { viewModel.enterUsbBluetoothPairingMode() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Bluetooth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    "Enter Bluetooth Pairing Mode",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "Pair RNode with your phone via Bluetooth",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Rescan button
+            if (!state.isUsbScanning) {
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.scanUsbDevices() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Rescan USB Devices")
+                    }
+                }
+            }
+
+            // Bottom spacing
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsbDeviceCard(
+    device: DiscoveredUsbDevice,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    isRequestingPermission: Boolean,
+) {
+    Card(
+        onClick = onSelect,
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    Icons.Default.Usb,
+                    contentDescription = null,
+                    tint =
+                        if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        device.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        color =
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            device.driverType,
+                            style = MaterialTheme.typography.labelSmall,
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                        )
+                        Text(
+                            device.vidPid,
+                            style = MaterialTheme.typography.labelSmall,
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                        )
+                        if (device.hasPermission) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint =
+                                        if (isSelected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        },
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                Text(
+                                    "Permitted",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color =
+                                        if (isSelected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Selection indicator or permission button
+            when {
+                isSelected -> {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                isRequestingPermission -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+                !device.hasPermission -> {
+                    TextButton(onClick = onSelect) {
+                        Text("Grant")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsbAssistedPairingCard(
+    devices: List<DiscoveredRNode>,
+    pin: String?,
+    status: String?,
+    isPairing: Boolean,
+    onDeviceSelected: (DiscoveredRNode) -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Usb,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "USB-Assisted Pairing",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Status message
+            status?.let {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (devices.isEmpty() && !isPairing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            // Show PIN if received
+            if (pin != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "PIN: ",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        pin,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            // Device selection list (when multiple RNodes found)
+            if (devices.isNotEmpty() && !isPairing) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Select your RNode:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                )
+                Spacer(Modifier.height(8.dp))
+
+                devices.forEach { device ->
+                    OutlinedCard(
+                        onClick = { onDeviceSelected(device) },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        colors =
+                            CardDefaults.outlinedCardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Bluetooth,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    device.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                device.rssi?.let { rssi ->
+                                    Text(
+                                        "Signal: ${rssi}dBm",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Pairing in progress indicator
+            if (isPairing) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Pairing...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = onCancel,
+                    enabled = !isPairing,
+                ) {
+                    Text(
+                        "Cancel",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }

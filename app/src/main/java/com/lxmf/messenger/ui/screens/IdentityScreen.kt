@@ -37,7 +37,9 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -95,6 +97,8 @@ fun IdentityScreen(
     viewModel: DebugViewModel = hiltViewModel(),
     bleConnectionsViewModel: com.lxmf.messenger.viewmodel.BleConnectionsViewModel = hiltViewModel(),
     onNavigateToBleStatus: () -> Unit = {},
+    onNavigateToInterfaceStats: (Long) -> Unit = {},
+    onNavigateToInterfaceManagement: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val debugInfo by viewModel.debugInfo.collectAsState()
@@ -183,7 +187,12 @@ fun IdentityScreen(
             )
 
             // Interfaces Card
-            InterfacesCard(interfaces = debugInfo.interfaces)
+            InterfacesCard(
+                interfaces = debugInfo.interfaces,
+                viewModel = viewModel,
+                onNavigateToInterfaceStats = onNavigateToInterfaceStats,
+                onNavigateToInterfaceManagement = onNavigateToInterfaceManagement,
+            )
 
             // Test Actions Card
             TestActionsCard(
@@ -396,8 +405,14 @@ fun ReticulumInfoCard(
 }
 
 @Composable
-fun InterfacesCard(interfaces: List<InterfaceInfo>) {
+fun InterfacesCard(
+    interfaces: List<InterfaceInfo>,
+    viewModel: DebugViewModel? = null,
+    onNavigateToInterfaceStats: (Long) -> Unit = {},
+    onNavigateToInterfaceManagement: () -> Unit = {},
+) {
     var selectedInterface by remember { mutableStateOf<InterfaceInfo?>(null) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -410,11 +425,28 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "Network Interfaces (${interfaces.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Network Interfaces (${interfaces.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(
+                    onClick = onNavigateToInterfaceManagement,
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Manage interfaces",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
 
             Divider()
 
@@ -426,14 +458,29 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
                 )
             } else {
                 interfaces.forEach { iface ->
+                    // RNode interfaces are clickable to navigate to stats screen
+                    val isRNode = iface.type.contains("RNode", ignoreCase = true)
                     InterfaceRow(
                         iface = iface,
-                        onClick =
-                            if (!iface.online || iface.error != null) {
+                        onClick = when {
+                            // RNode interfaces navigate to stats screen
+                            isRNode && viewModel != null -> {
+                                {
+                                    coroutineScope.launch {
+                                        val interfaceId = viewModel.findInterfaceIdByName(iface.name)
+                                        if (interfaceId != null) {
+                                            onNavigateToInterfaceStats(interfaceId)
+                                        }
+                                    }
+                                }
+                            }
+                            // Offline/failed interfaces show error dialog
+                            !iface.online || iface.error != null -> {
                                 { selectedInterface = iface }
-                            } else {
-                                null
-                            },
+                            }
+                            else -> null
+                        },
+                        showChevron = isRNode,
                     )
                 }
             }
@@ -508,6 +555,7 @@ fun InterfacesCard(interfaces: List<InterfaceInfo>) {
 fun InterfaceRow(
     iface: InterfaceInfo,
     onClick: (() -> Unit)? = null,
+    showChevron: Boolean = false,
 ) {
     val hasFailed = iface.error != null
 
@@ -544,26 +592,38 @@ fun InterfaceRow(
             )
         }
 
-        Icon(
-            imageVector =
-                when {
-                    iface.online -> Icons.Default.CheckCircle
-                    hasFailed -> Icons.Default.Error
-                    else -> Icons.Default.Warning
-                },
-            contentDescription =
-                when {
-                    iface.online -> "Online"
-                    hasFailed -> "Failed to start - tap for details"
-                    else -> "Offline - tap for details"
-                },
-            tint =
-                when {
-                    iface.online -> MaterialTheme.colorScheme.primary
-                    hasFailed -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.tertiary
-                },
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector =
+                    when {
+                        iface.online -> Icons.Default.CheckCircle
+                        hasFailed -> Icons.Default.Error
+                        else -> Icons.Default.Warning
+                    },
+                contentDescription =
+                    when {
+                        iface.online -> "Online"
+                        hasFailed -> "Failed to start - tap for details"
+                        else -> "Offline - tap for details"
+                    },
+                tint =
+                    when {
+                        iface.online -> MaterialTheme.colorScheme.primary
+                        hasFailed -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.tertiary
+                    },
+            )
+            if (showChevron) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "View details",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.ColumbaDatabase
+import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.db.entity.ContactEntity
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import kotlinx.coroutines.test.runTest
@@ -31,6 +34,8 @@ class ConversationDaoTest {
     private lateinit var database: ColumbaDatabase
     private lateinit var conversationDao: ConversationDao
     private lateinit var identityDao: LocalIdentityDao
+    private lateinit var contactDao: ContactDao
+    private lateinit var announceDao: AnnounceDao
 
     companion object {
         private const val IDENTITY_HASH = "identity_hash_12345678901234567"
@@ -46,6 +51,8 @@ class ConversationDaoTest {
                 .build()
         conversationDao = database.conversationDao()
         identityDao = database.localIdentityDao()
+        contactDao = database.contactDao()
+        announceDao = database.announceDao()
 
         // Setup required parent entity (FK constraint)
         runTest {
@@ -85,6 +92,33 @@ class ConversationDaoTest {
         lastMessage = lastMessage,
         lastMessageTimestamp = lastMessageTimestamp,
         unreadCount = unreadCount,
+    )
+
+    private fun createTestContact(
+        destinationHash: String,
+        customNickname: String? = null,
+    ) = ContactEntity(
+        destinationHash = destinationHash,
+        identityHash = IDENTITY_HASH,
+        publicKey = ByteArray(32) { 0x42 }, // Dummy public key
+        customNickname = customNickname,
+        addedTimestamp = System.currentTimeMillis(),
+        addedVia = "CONVERSATION",
+        status = ContactStatus.ACTIVE,
+    )
+
+    private fun createTestAnnounce(
+        destinationHash: String,
+        peerName: String,
+    ) = AnnounceEntity(
+        destinationHash = destinationHash,
+        peerName = peerName,
+        publicKey = ByteArray(32) { 0x42 }, // Dummy public key
+        appData = null,
+        hops = 1,
+        lastSeenTimestamp = System.currentTimeMillis(),
+        nodeType = "messenger",
+        receivingInterface = "UDP Interface",
     )
 
     // ========== Insert Tests ==========
@@ -401,5 +435,185 @@ class ConversationDaoTest {
             assertNotNull(second)
             assertEquals(IDENTITY_HASH, first?.identityHash)
             assertEquals("second_identity_hash", second?.identityHash)
+        }
+
+    // ========== DisplayName Priority Tests ==========
+
+    @Test
+    fun getEnrichedConversations_displayNameShowsNicknameWhenSet() =
+        runTest {
+            // Create conversation with generic peerName
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create contact with custom nickname
+            contactDao.insertContact(createTestContact("peer1", customNickname = "Alice"))
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Alice", results[0].displayName)
+                assertEquals("peer 12345678", results[0].peerName) // Original peerName preserved
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getEnrichedConversations_displayNameShowsAnnounceNameWhenNoNickname() =
+        runTest {
+            // Create conversation with generic peerName
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create announce with network name (no contact/nickname)
+            announceDao.upsertAnnounce(createTestAnnounce("peer1", peerName = "Bob's Node"))
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Bob's Node", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getEnrichedConversations_displayNameShowsPeerNameWhenNoNicknameOrAnnounce() =
+        runTest {
+            // Create conversation with only peerName set (no contact, no announce)
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "Snapshot Name"),
+            )
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Snapshot Name", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getEnrichedConversations_displayNameFallsToPeerHash() =
+        runTest {
+            // Create conversation where peerName equals peerHash (no other name sources)
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "abc123def456", peerName = "abc123def456"),
+            )
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("abc123def456", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getEnrichedConversations_nicknameOverridesAnnounceName() =
+        runTest {
+            // Create conversation
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create BOTH announce AND contact with nickname
+            announceDao.upsertAnnounce(createTestAnnounce("peer1", peerName = "Network Name"))
+            contactDao.insertContact(createTestContact("peer1", customNickname = "My Friend"))
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                // Nickname takes priority over announce name
+                assertEquals("My Friend", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getEnrichedConversations_contactWithoutNicknameUsesAnnounceName() =
+        runTest {
+            // Create conversation
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create announce with network name
+            announceDao.upsertAnnounce(createTestAnnounce("peer1", peerName = "Network Name"))
+            // Create contact WITHOUT nickname (null)
+            contactDao.insertContact(createTestContact("peer1", customNickname = null))
+
+            conversationDao.getEnrichedConversations(IDENTITY_HASH).test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                // Should fall through to announce name
+                assertEquals("Network Name", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // ========== Enriched Search Tests ==========
+
+    @Test
+    fun searchEnrichedConversations_findsByNickname() =
+        runTest {
+            // Create conversation with non-matching peerName
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create contact with searchable nickname
+            contactDao.insertContact(createTestContact("peer1", customNickname = "Alice Smith"))
+
+            conversationDao.searchEnrichedConversations(IDENTITY_HASH, "Alice").test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Alice Smith", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun searchEnrichedConversations_findsByAnnounceName() =
+        runTest {
+            // Create conversation with non-matching peerName
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "peer 12345678"),
+            )
+            // Create announce with searchable name
+            announceDao.upsertAnnounce(createTestAnnounce("peer1", peerName = "Bob's Radio"))
+
+            conversationDao.searchEnrichedConversations(IDENTITY_HASH, "Radio").test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("Bob's Radio", results[0].displayName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun searchEnrichedConversations_findsByPeerHash() =
+        runTest {
+            // Create conversation
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "abc123def456", peerName = "Some Name"),
+            )
+
+            conversationDao.searchEnrichedConversations(IDENTITY_HASH, "abc123").test {
+                val results = awaitItem()
+                assertEquals(1, results.size)
+                assertEquals("abc123def456", results[0].peerHash)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun searchEnrichedConversations_noResultsWhenNoMatch() =
+        runTest {
+            conversationDao.insertConversation(
+                createTestConversation(peerHash = "peer1", peerName = "Alice"),
+            )
+
+            conversationDao.searchEnrichedConversations(IDENTITY_HASH, "xyz").test {
+                val results = awaitItem()
+                assertTrue(results.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 }

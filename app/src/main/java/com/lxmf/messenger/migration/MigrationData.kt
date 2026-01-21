@@ -88,8 +88,8 @@ data class MessageExport(
 data class ContactExport(
     val destinationHash: String,
     val identityHash: String,
-    /** Base64 encoded public key */
-    val publicKey: String,
+    /** Base64 encoded public key (nullable for pending contacts) */
+    val publicKey: String?,
     val customNickname: String?,
     val notes: String?,
     val tags: String?,
@@ -97,6 +97,8 @@ data class ContactExport(
     val addedVia: String,
     val lastInteractionTimestamp: Long,
     val isPinned: Boolean,
+    /** Contact status: ACTIVE, PENDING_IDENTITY, or UNRESOLVED (nullable for backward compatibility) */
+    val status: String? = null,
 )
 
 /**

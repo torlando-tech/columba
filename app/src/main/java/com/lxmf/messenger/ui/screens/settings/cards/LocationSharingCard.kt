@@ -1202,22 +1202,33 @@ private fun GroupHostPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Group Host") },
         text = {
-            if (contacts.isEmpty()) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Caution text
                 Text(
-                    text = "No contacts available. Add contacts first.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "The group host will receive your location and can share it with others in the group. Only select someone you trust.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp),
-                ) {
-                    items(contacts.sortedBy { it.displayName.lowercase() }) { contact ->
-                        GroupHostContactRow(
-                            contact = contact,
-                            isSelected = contact.destinationHash.equals(selectedHash, ignoreCase = true),
-                            onClick = { onContactSelected(contact) },
-                        )
+
+                if (contacts.isEmpty()) {
+                    Text(
+                        text = "No contacts available. Add contacts first.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 350.dp),
+                    ) {
+                        items(contacts.sortedBy { it.displayName.lowercase() }) { contact ->
+                            GroupHostContactRow(
+                                contact = contact,
+                                isSelected = contact.destinationHash.equals(selectedHash, ignoreCase = true),
+                                onClick = { onContactSelected(contact) },
+                            )
+                        }
                     }
                 }
             }

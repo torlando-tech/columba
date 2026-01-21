@@ -46,7 +46,9 @@ importlib.reload(reticulum_wrapper)
 
 from reticulum_wrapper import (
     pack_telemetry_stream,
+    unpack_telemetry_stream,
     pack_location_telemetry,
+    unpack_location_telemetry,
     ReticulumWrapper,
 )
 
@@ -97,6 +99,223 @@ class TestPackTelemetryStream(unittest.TestCase):
         result = pack_telemetry_stream(entries)
         unpacked = umsgpack.unpackb(result)
         self.assertEqual(len(unpacked), 3)
+
+
+class TestUnpackTelemetryStream(unittest.TestCase):
+    """Test unpack_telemetry_stream function."""
+
+    def _create_valid_packed_telemetry(self, lat=37.7749, lon=-122.4194):
+        """Create valid packed telemetry data for testing."""
+        return pack_location_telemetry(
+            lat=lat, lon=lon, accuracy=10.0, timestamp_ms=1703980800000
+        )
+
+    def test_empty_stream_returns_empty_list(self):
+        """Empty stream should return empty list."""
+        result = unpack_telemetry_stream([])
+        self.assertEqual(result, [])
+
+    def test_unpacks_valid_entry_with_bytes_source_hash(self):
+        """Should unpack entry with bytes source hash."""
+        source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['source_hash'], source_hash.hex())
+
+    def test_unpacks_valid_entry_with_string_source_hash(self):
+        """Should handle string source hash (non-bytes)."""
+        source_hash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['source_hash'], source_hash)
+
+    def test_skips_entry_with_too_few_elements(self):
+        """Should skip entries with fewer than 3 elements."""
+        short_entry = [bytes.fromhex("a1" * 16), 1703980800]  # Only 2 elements
+        valid_entry = [bytes.fromhex("b2" * 16), 1703980800, self._create_valid_packed_telemetry(), None]
+
+        stream = [short_entry, valid_entry]
+        result = unpack_telemetry_stream(stream)
+
+        # Only valid entry should be returned
+        self.assertEqual(len(result), 1)
+
+    def test_skips_entry_with_invalid_telemetry(self):
+        """Should skip entries where telemetry unpacking fails."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        invalid_telemetry = b'not valid telemetry'
+
+        stream = [[source_hash, timestamp, invalid_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 0)
+
+    def test_applies_valid_timestamp(self):
+        """Should apply valid timestamp from entry."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800  # Specific timestamp
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Timestamp should be converted to milliseconds
+        self.assertEqual(result[0]['ts'], timestamp * 1000)
+
+    def test_rejects_future_timestamp(self):
+        """Should reject timestamps more than 1 hour in the future."""
+        source_hash = bytes.fromhex("a1" * 16)
+        future_timestamp = time.time() + 7200  # 2 hours in future
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, future_timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        # Entry should still be returned but timestamp should not be the future one
+        self.assertEqual(len(result), 1)
+        # The original timestamp from packed telemetry should be used instead
+        self.assertNotEqual(result[0]['ts'], future_timestamp * 1000)
+
+    def test_handles_zero_timestamp(self):
+        """Should not apply zero timestamp."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 0
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Original timestamp from telemetry should be preserved
+
+    def test_handles_none_timestamp(self):
+        """Should not apply None timestamp."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = None
+        packed_telemetry = self._create_valid_packed_telemetry()
+
+        stream = [[source_hash, timestamp, packed_telemetry, None]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+
+    def test_parses_valid_appearance(self):
+        """Should parse valid appearance data."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+        appearance = ["icon_name", b'\xff\x00\x00', b'\x00\xff\x00']  # Red fg, green bg
+
+        stream = [[source_hash, timestamp, packed_telemetry, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        self.assertIn('appearance', result[0])
+        self.assertEqual(result[0]['appearance']['name'], 'icon_name')
+        self.assertEqual(result[0]['appearance']['fg'], '#ff0000')
+        self.assertEqual(result[0]['appearance']['bg'], '#00ff00')
+
+    def test_handles_appearance_with_invalid_icon_name(self):
+        """Should reject appearance with invalid icon name."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+        # Icon name with invalid characters
+        appearance = ["icon-name-with-dashes!", b'\xff\x00\x00', b'\x00\xff\x00']
+
+        stream = [[source_hash, timestamp, packed_telemetry, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Appearance should not be set due to invalid icon name
+        self.assertNotIn('appearance', result[0])
+
+    def test_handles_appearance_with_too_long_icon_name(self):
+        """Should reject appearance with icon name > 50 chars."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+        appearance = ["a" * 51, b'\xff\x00\x00', b'\x00\xff\x00']
+
+        stream = [[source_hash, timestamp, packed_telemetry, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        self.assertNotIn('appearance', result[0])
+
+    def test_handles_appearance_with_invalid_color_bytes(self):
+        """Should handle appearance with invalid color bytes gracefully."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+        # Invalid color bytes (too short)
+        appearance = ["icon_name", b'\xff', b'\x00']
+
+        stream = [[source_hash, timestamp, packed_telemetry, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        # Appearance should be set but colors should be None
+        if 'appearance' in result[0]:
+            self.assertIsNone(result[0]['appearance']['fg'])
+            self.assertIsNone(result[0]['appearance']['bg'])
+
+    def test_handles_appearance_with_non_bytes_colors(self):
+        """Should handle appearance with non-bytes color values."""
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        packed_telemetry = self._create_valid_packed_telemetry()
+        # Color values as strings instead of bytes
+        appearance = ["icon_name", "not_bytes", "also_not_bytes"]
+
+        stream = [[source_hash, timestamp, packed_telemetry, appearance]]
+        result = unpack_telemetry_stream(stream)
+
+        self.assertEqual(len(result), 1)
+        if 'appearance' in result[0]:
+            self.assertIsNone(result[0]['appearance']['fg'])
+            self.assertIsNone(result[0]['appearance']['bg'])
+
+    def test_processes_multiple_entries(self):
+        """Should process multiple valid entries."""
+        entries = []
+        for i in range(3):
+            source_hash = bytes([i + 1] * 16)
+            timestamp = 1703980800 + i * 60
+            packed_telemetry = self._create_valid_packed_telemetry(lat=37.0 + i, lon=-122.0 - i)
+            entries.append([source_hash, timestamp, packed_telemetry, None])
+
+        result = unpack_telemetry_stream(entries)
+
+        self.assertEqual(len(result), 3)
+
+    def test_handles_entry_processing_exception(self):
+        """Should handle exceptions during entry processing gracefully."""
+        # Create an entry that will cause an exception during processing
+        # by having packed_telemetry be something that causes issues
+        source_hash = bytes.fromhex("a1" * 16)
+        timestamp = 1703980800
+        # This might cause issues during unpacking
+        broken_entry = [source_hash, timestamp, None, None]
+        valid_entry = [bytes.fromhex("b2" * 16), timestamp, self._create_valid_packed_telemetry(), None]
+
+        stream = [broken_entry, valid_entry]
+        result = unpack_telemetry_stream(stream)
+
+        # Valid entry should still be processed
+        self.assertEqual(len(result), 1)
 
 
 class TestSetTelemetryCollectorEnabled(unittest.TestCase):

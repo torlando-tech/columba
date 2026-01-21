@@ -286,9 +286,17 @@ class TestEstablishLink(unittest.TestCase):
         mock_rns.Destination.return_value = mock_dest
         mock_rns.Transport.has_path.return_value = True
 
-        # Link never becomes active
+        # Use explicit sentinel values for link status constants to avoid
+        # flaky failures from mock object identity comparisons
+        LINK_ACTIVE = "ACTIVE_STATUS"
+        LINK_CLOSED = "CLOSED_STATUS"
+        LINK_PENDING = "PENDING_STATUS"
+        mock_rns.Link.ACTIVE = LINK_ACTIVE
+        mock_rns.Link.CLOSED = LINK_CLOSED
+
+        # Link never becomes active - use a distinct status that won't match ACTIVE or CLOSED
         mock_link = Mock()
-        mock_link.status = Mock()  # Not ACTIVE or CLOSED
+        mock_link.status = LINK_PENDING
         mock_rns.Link.return_value = mock_link
 
         # Mock time to simulate timeout
@@ -321,9 +329,16 @@ class TestEstablishLink(unittest.TestCase):
         mock_rns.Destination.return_value = mock_dest
         mock_rns.Transport.has_path.return_value = True
 
+        # Use explicit sentinel values for link status constants to avoid
+        # flaky failures from mock object identity comparisons
+        LINK_ACTIVE = "ACTIVE_STATUS"
+        LINK_CLOSED = "CLOSED_STATUS"
+        mock_rns.Link.ACTIVE = LINK_ACTIVE
+        mock_rns.Link.CLOSED = LINK_CLOSED
+
         # Link becomes CLOSED
         mock_link = Mock()
-        mock_link.status = mock_rns.Link.CLOSED
+        mock_link.status = LINK_CLOSED
         mock_rns.Link.return_value = mock_link
 
         mock_time.time.side_effect = [0, 0.1]
@@ -592,9 +607,15 @@ class TestCloseLink(unittest.TestCase):
         """Test that close_link doesn't call teardown on inactive link"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
+        # Use explicit sentinel values for link status constants to avoid
+        # flaky failures from mock object identity comparisons
+        LINK_ACTIVE = "ACTIVE_STATUS"
+        LINK_PENDING = "PENDING_STATUS"
+        mock_rns.Link.ACTIVE = LINK_ACTIVE
+
         mock_router = Mock()
         mock_link = Mock()
-        mock_link.status = Mock()  # Not ACTIVE
+        mock_link.status = LINK_PENDING  # Explicit non-ACTIVE status
 
         dest_hash = b'0123456789abcdef'
         mock_router.direct_links = {dest_hash: mock_link}
@@ -717,9 +738,15 @@ class TestGetLinkStatus(unittest.TestCase):
         """Test that get_link_status returns inactive for non-active link"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
+        # Use explicit sentinel values for link status constants to avoid
+        # flaky failures from mock object identity comparisons
+        LINK_ACTIVE = "ACTIVE_STATUS"
+        LINK_CLOSED = "CLOSED_STATUS"
+        mock_rns.Link.ACTIVE = LINK_ACTIVE
+
         mock_router = Mock()
         mock_link = Mock()
-        mock_link.status = mock_rns.Link.CLOSED  # Not ACTIVE
+        mock_link.status = LINK_CLOSED  # Explicit non-ACTIVE status
 
         dest_hash = b'0123456789abcdef'
         mock_router.direct_links = {dest_hash: mock_link}

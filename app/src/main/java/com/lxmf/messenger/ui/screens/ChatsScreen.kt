@@ -184,7 +184,7 @@ fun ChatsScreen(
                         ConversationCard(
                             conversation = conversation,
                             isSaved = isSaved,
-                            onClick = { onChatClick(conversation.peerHash, conversation.peerName) },
+                            onClick = { onChatClick(conversation.peerHash, conversation.displayName) },
                             onLongPress = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showMenu = true
@@ -194,14 +194,14 @@ fun ChatsScreen(
                                     viewModel.removeFromContacts(conversation.peerHash)
                                     Toast.makeText(
                                         context,
-                                        "Removed ${conversation.peerName} from Contacts",
+                                        "Removed ${conversation.displayName} from Contacts",
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                 } else {
                                     viewModel.saveToContacts(conversation)
                                     Toast.makeText(
                                         context,
-                                        "Saved ${conversation.peerName} to Contacts",
+                                        "Saved ${conversation.displayName} to Contacts",
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                 }
@@ -216,12 +216,12 @@ fun ChatsScreen(
                             onSaveToContacts = {
                                 viewModel.saveToContacts(conversation)
                                 showMenu = false
-                                Toast.makeText(context, "Saved ${conversation.peerName} to Contacts", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                             },
                             onRemoveFromContacts = {
                                 viewModel.removeFromContacts(conversation.peerHash)
                                 showMenu = false
-                                Toast.makeText(context, "Removed ${conversation.peerName} from Contacts", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
                             },
                             onMarkAsUnread = {
                                 viewModel.markAsUnread(conversation.peerHash)
@@ -252,9 +252,9 @@ fun ChatsScreen(
         val conversationToDelete = selectedConversation
         if (showDeleteDialog && conversationToDelete != null) {
             DeleteConversationDialog(
-                peerName = conversationToDelete.peerName,
+                peerName = conversationToDelete.displayName,
                 onConfirm = {
-                    val deletedName = conversationToDelete.peerName
+                    val deletedName = conversationToDelete.displayName
                     viewModel.deleteConversation(conversationToDelete.peerHash)
                     showDeleteDialog = false
                     selectedConversation = null
@@ -367,9 +367,9 @@ fun ConversationCard(
                             .align(Alignment.CenterVertically),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Peer name
+                    // Display name (nickname > announce name > peer name > hash)
                     Text(
-                        text = conversation.peerName,
+                        text = conversation.displayName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (conversation.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,

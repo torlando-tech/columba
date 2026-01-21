@@ -58,7 +58,7 @@ import java.util.Locale
 @Composable
 fun InterfaceStatsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToEdit: (Long) -> Unit,
+    onNavigateToEdit: (Long, String) -> Unit,
     viewModel: InterfaceStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -104,7 +104,12 @@ fun InterfaceStatsScreen(
                     StatsContent(
                         state = state,
                         onToggleEnabled = { viewModel.toggleEnabled() },
-                        onEdit = { onNavigateToEdit(state.interfaceEntity!!.id) },
+                        onEdit = {
+                            onNavigateToEdit(
+                                state.interfaceEntity!!.id,
+                                state.interfaceEntity!!.type,
+                            )
+                        },
                         onRequestUsbPermission = { viewModel.requestUsbPermission() },
                     )
                 }

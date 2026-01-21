@@ -706,7 +706,6 @@ fun ColumbaNavigation(
             "interface_management",
             "ble_connection_status",
             "theme_management",
-            "tcp_client_wizard",
             "offline_maps",
             "offline_map_download",
         )
@@ -717,6 +716,7 @@ fun ColumbaNavigation(
             "message_detail/",
             "theme_editor",
             "rnode_wizard",
+            "tcp_client_wizard",
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
@@ -953,7 +953,16 @@ fun ColumbaNavigation(
                         )
                     }
 
-                    composable("tcp_client_wizard") {
+                    composable(
+                        route = "tcp_client_wizard?interfaceId={interfaceId}",
+                        arguments = listOf(
+                            navArgument("interfaceId") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                         TcpClientWizardScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
@@ -961,6 +970,7 @@ fun ColumbaNavigation(
                                     popUpTo("interface_management") { inclusive = true }
                                 }
                             },
+                            interfaceId = if (interfaceId > 0) interfaceId else null,
                         )
                     }
 
@@ -1034,8 +1044,14 @@ fun ColumbaNavigation(
                     ) { backStackEntry ->
                         com.lxmf.messenger.ui.screens.InterfaceStatsScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onNavigateToEdit = { interfaceId ->
-                                navController.navigate("rnode_wizard?interfaceId=$interfaceId")
+                            onNavigateToEdit = { interfaceId, interfaceType ->
+                                // Route to appropriate wizard based on interface type
+                                val route = when (interfaceType) {
+                                    "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
+                                    "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
+                                    else -> "rnode_wizard?interfaceId=$interfaceId"
+                                }
+                                navController.navigate(route)
                             },
                         )
                     }

@@ -33,9 +33,17 @@ import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
 fun TcpClientWizardScreen(
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
+    interfaceId: Long? = null,
     viewModel: TcpClientWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+
+    // Load existing interface for editing
+    LaunchedEffect(interfaceId) {
+        if (interfaceId != null) {
+            viewModel.loadExistingInterface(interfaceId)
+        }
+    }
 
     // Handle system back button - go to previous step or exit wizard
     BackHandler {

@@ -68,6 +68,7 @@ FIELD_TELEMETRY_STREAM = 0x03 # Bulk telemetry stream from collector [[source_ha
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
 FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_bytes(3), bg_bytes(3)] for Sideband/MeshChat interoperability
 FIELD_FILE_ATTACHMENTS = 0x05 # LXMF standard field for file attachments
+FIELD_COMMANDS = 0x09         # LXMF standard field for commands (telemetry requests, etc.)
 FIELD_IMAGE = 0x06            # LXMF standard field for images
 FIELD_AUDIO = 0x07            # LXMF standard field for audio
 LEGACY_LOCATION_FIELD = 7     # Legacy field ID for backwards compatibility

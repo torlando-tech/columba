@@ -188,7 +188,7 @@ fun TelemetryCollectorCard(
             Button(
                 onClick = onSendNow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSending && collectorAddress != null,
+                enabled = enabled && !isSending && collectorAddress != null,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                 ),

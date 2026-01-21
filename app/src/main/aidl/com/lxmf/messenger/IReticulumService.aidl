@@ -419,6 +419,16 @@ interface IReticulumService {
      */
     String setTelemetryCollectorMode(boolean enabled);
 
+    /**
+     * Set the list of identity hashes allowed to request telemetry in host mode.
+     * When the list is empty, all requesters are allowed.
+     * When non-empty, only requesters in the list will receive responses.
+     *
+     * @param allowedHashesJson JSON array of 32-character hex identity hash strings
+     * @return JSON string with result: {"success": true, "count": N}
+     */
+    String setTelemetryAllowedRequesters(String allowedHashesJson);
+
     // ==================== EMOJI REACTIONS ====================
 
     /**

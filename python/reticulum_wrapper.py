@@ -481,6 +481,7 @@ class ReticulumWrapper:
         self.telemetry_collector_enabled = False  # True when acting as host/collector
         self.collected_telemetry = {}  # {source_hash_hex: {timestamp, packed_telemetry, appearance, received_at}}
         self.telemetry_retention_seconds = 86400  # 24 hours TTL
+        self.telemetry_allowed_requesters = set()  # Empty = allow all, otherwise set of allowed identity hashes (lowercase hex)
 
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
@@ -566,6 +567,37 @@ class ReticulumWrapper:
             return {'success': True, 'enabled': enabled}
         except Exception as e:
             log_error("ReticulumWrapper", "set_telemetry_collector_enabled", str(e))
+            return {'success': False, 'error': str(e)}
+
+    def set_telemetry_allowed_requesters(self, allowed_hashes: list) -> Dict:
+        """
+        Set the list of identity hashes that are allowed to request telemetry when in host mode.
+
+        Only requesters whose identity hash is in the list will receive responses;
+        requests from others will be silently ignored. If the list is empty,
+        all requests will be blocked.
+
+        Args:
+            allowed_hashes: List of 32-character hex identity hash strings
+
+        Returns:
+            Dict with success status and count of configured allowed requesters
+        """
+        try:
+            # Normalize to lowercase and store as a set for O(1) lookup
+            self.telemetry_allowed_requesters = set(h.lower() for h in allowed_hashes if h)
+            count = len(self.telemetry_allowed_requesters)
+
+            if count > 0:
+                log_info("ReticulumWrapper", "set_telemetry_allowed_requesters",
+                         f"Configured {count} allowed requester(s)")
+            else:
+                log_info("ReticulumWrapper", "set_telemetry_allowed_requesters",
+                         "Cleared allowed requesters list (all requesters allowed)")
+
+            return {'success': True, 'count': count}
+        except Exception as e:
+            log_error("ReticulumWrapper", "set_telemetry_allowed_requesters", str(e))
             return {'success': False, 'error': str(e)}
 
     def _cleanup_expired_telemetry(self):
@@ -2498,6 +2530,11 @@ class ReticulumWrapper:
 
                 # Priority 1.5: Check FIELD_TELEMETRY_STREAM (0x03) - Bulk telemetry from collector
                 if FIELD_TELEMETRY_STREAM in lxmf_message.fields:
+                    # Telemetry stream messages are always location-only (shouldn't appear in chat)
+                    if not has_text_content:
+                        is_location_only = True
+                        telemetry_source = "FIELD_TELEMETRY_STREAM"
+
                     try:
                         stream_data = lxmf_message.fields[FIELD_TELEMETRY_STREAM]
                         if stream_data and len(stream_data) > 0:
@@ -2515,15 +2552,11 @@ class ReticulumWrapper:
                                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                                              f"⚠️ Error invoking stream entry callback: {e}")
 
-                            # Mark as location-only if no text content
-                            if not has_text_content:
-                                is_location_only = True
-                                telemetry_source = "FIELD_TELEMETRY_STREAM"
-                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                        f"📍 Location-only telemetry stream message, skipping message queue")
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📍 Location-only telemetry stream message, skipping message queue")
                         else:
                             log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"Empty telemetry stream field received")
+                                     f"Empty telemetry stream field received (0 entries from collector)")
                     except Exception as e:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    f"Failed to unpack FIELD_TELEMETRY_STREAM: {e}")
@@ -2620,8 +2653,17 @@ class ReticulumWrapper:
                                         is_collector_request = args[1] if len(args) > 1 else True
 
                                         if is_collector_request:
+                                            requester_hash = lxmf_message.source_hash.hex().lower()
                                             log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                                    f"📡 Telemetry request received from {lxmf_message.source_hash.hex()[:16]} (timebase={timebase})")
+                                                    f"📡 Telemetry request received from {requester_hash[:16]} (timebase={timebase})")
+
+                                            # ✅ Check allowed requesters list (must be explicitly allowed)
+                                            if requester_hash not in self.telemetry_allowed_requesters:
+                                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                                        f"📡 Telemetry request BLOCKED from {requester_hash[:16]} (not in allowed list)")
+                                                # Mark as handled so it doesn't go to message queue
+                                                is_location_only = True
+                                                continue  # Skip processing, move to next command
 
                                             # Get the requester's identity - following Sideband's pattern
                                             requester_identity = RNS.Identity.recall(lxmf_message.source_hash)

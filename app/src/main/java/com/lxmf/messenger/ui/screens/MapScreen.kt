@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.location.Location
 import android.os.Looper
 import android.util.Log
@@ -142,6 +143,49 @@ fun MapScreen(
     var mapStyleLoaded by remember { mutableStateOf(false) }
     var metersPerPixel by remember { mutableStateOf(1.0) }
 
+    // Helper function to set up map style after it loads
+    // Extracted to avoid duplication between factory and LaunchedEffect callbacks
+    fun onMapStyleLoaded(
+        map: MapLibreMap,
+        style: Style,
+        ctx: Context,
+        hasLocationPermission: Boolean,
+    ) {
+        val density = ctx.resources.displayMetrics.density
+
+        // Add dashed circle bitmap for stale markers (if not already present)
+        if (style.getImage("stale-dashed-circle") == null) {
+            val staleCircleBitmap =
+                MarkerBitmapFactory.createDashedCircle(
+                    sizeDp = 28f,
+                    strokeWidthDp = 3f,
+                    color = android.graphics.Color.parseColor("#E0E0E0"),
+                    dashLengthDp = 4f,
+                    gapLengthDp = 3f,
+                    density = density,
+                )
+            style.addImage("stale-dashed-circle", staleCircleBitmap)
+            Log.d("MapScreen", "Added stale-dashed-circle image to style")
+        }
+
+        // Enable user location component (blue dot)
+        if (hasLocationPermission) {
+            @SuppressLint("MissingPermission")
+            map.locationComponent.apply {
+                activateLocationComponent(
+                    LocationComponentActivationOptions
+                        .builder(ctx, style)
+                        .build(),
+                )
+                isLocationComponentEnabled = true
+                cameraMode = CameraMode.NONE
+                renderMode = RenderMode.COMPASS
+            }
+        }
+
+        mapStyleLoaded = true
+    }
+
     // Location client
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
@@ -210,7 +254,7 @@ fun MapScreen(
     }
 
     // Reload map style when mapStyleResult changes (e.g., after offline map download)
-    // No mapStyleLoaded guard needed - setStyle can be called anytime and replaces any loading style
+    // Also triggers on tab restoration when mapLibreMap is restored
     LaunchedEffect(state.mapStyleResult, mapLibreMap) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val styleResult = state.mapStyleResult ?: return@LaunchedEffect
@@ -223,7 +267,12 @@ fun MapScreen(
                 is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
             }
         Log.d("MapScreen", "Applying style: ${styleResult.javaClass.simpleName}")
-        map.setStyle(styleBuilder)
+        // Reset mapStyleLoaded before applying new style
+        mapStyleLoaded = false
+        map.setStyle(styleBuilder) { style ->
+            Log.d("MapScreen", "Style loaded (from LaunchedEffect): ${styleResult.javaClass.simpleName}")
+            onMapStyleLoaded(map, style, context, state.hasLocationPermission)
+        }
     }
 
     // Proper MapView lifecycle management
@@ -301,37 +350,7 @@ fun MapScreen(
                             }
                         map.setStyle(styleBuilder) { style ->
                             Log.d("MapScreen", "Map style loaded: ${styleResult?.javaClass?.simpleName ?: "default"}")
-
-                            // Add dashed circle bitmaps for stale markers
-                            val density = ctx.resources.displayMetrics.density
-                            val staleCircleBitmap =
-                                MarkerBitmapFactory.createDashedCircle(
-                                    sizeDp = 28f,
-                                    strokeWidthDp = 3f,
-                                    color = android.graphics.Color.parseColor("#E0E0E0"),
-                                    dashLengthDp = 4f,
-                                    gapLengthDp = 3f,
-                                    density = density,
-                                )
-                            style.addImage("stale-dashed-circle", staleCircleBitmap)
-                            Log.d("MapScreen", "Added stale-dashed-circle image to style")
-
-                            mapStyleLoaded = true
-
-                            // Enable user location component (blue dot)
-                            if (state.hasLocationPermission) {
-                                @SuppressLint("MissingPermission")
-                                map.locationComponent.apply {
-                                    activateLocationComponent(
-                                        LocationComponentActivationOptions
-                                            .builder(ctx, style)
-                                            .build(),
-                                    )
-                                    isLocationComponentEnabled = true
-                                    cameraMode = CameraMode.NONE
-                                    renderMode = RenderMode.COMPASS
-                                }
-                            }
+                            onMapStyleLoaded(map, style, ctx, state.hasLocationPermission)
                         }
 
                         // Add click listener for contact markers

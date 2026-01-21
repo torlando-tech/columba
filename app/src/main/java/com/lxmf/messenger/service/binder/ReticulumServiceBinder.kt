@@ -849,6 +849,27 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun setTelemetryAllowedRequesters(allowedHashesJson: String): String {
+        return try {
+            val jsonArray = JSONArray(allowedHashesJson)
+            val allowedList = mutableListOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                allowedList.add(jsonArray.getString(i))
+            }
+            Log.d(TAG, "📡 Setting telemetry allowed requesters: ${allowedList.size} contacts")
+            wrapperManager.withWrapper { wrapper ->
+                // Convert to Python list (Java ArrayList doesn't serialize properly to Python)
+                val pyList = com.chaquo.python.Python.getInstance()
+                    .builtins.callAttr("list", allowedList.toTypedArray())
+                val result = wrapper.callAttr("set_telemetry_allowed_requesters", pyList)
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting telemetry allowed requesters", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
     // ===========================================
     // Emoji Reactions
     // ===========================================

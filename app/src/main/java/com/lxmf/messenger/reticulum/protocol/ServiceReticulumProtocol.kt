@@ -2241,6 +2241,45 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun sendTelemetryRequest(
+        destinationHash: ByteArray,
+        sourceIdentity: Identity,
+        timebase: Long?,
+        isCollectorRequest: Boolean,
+    ): Result<MessageReceipt> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+
+            val resultJson =
+                service.sendTelemetryRequest(
+                    destinationHash,
+                    privateKey,
+                    timebase ?: -1L, // -1 means request all
+                    isCollectorRequest,
+                )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val msgHash = result.optString("message_hash").toByteArrayFromBase64() ?: byteArrayOf()
+            val timestamp = result.optLong("timestamp", System.currentTimeMillis())
+            val destHash = result.optString("destination_hash").toByteArrayFromBase64() ?: byteArrayOf()
+
+            Log.d(TAG, "📡 Telemetry request sent to ${destinationHash.joinToString("") { "%02x".format(it) }.take(16)}")
+
+            MessageReceipt(
+                messageHash = msgHash,
+                timestamp = timestamp,
+                destinationHash = destHash,
+            )
+        }
+    }
+
     override suspend fun sendReaction(
         destinationHash: ByteArray,
         targetMessageId: String,

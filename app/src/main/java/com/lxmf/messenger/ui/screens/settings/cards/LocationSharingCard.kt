@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Send
@@ -83,6 +84,14 @@ fun LocationSharingCard(
     onTelemetryCollectorAddressChange: (String?) -> Unit,
     onTelemetrySendIntervalChange: (Int) -> Unit,
     onTelemetrySendNow: () -> Unit,
+    // Telemetry request props
+    telemetryRequestEnabled: Boolean,
+    telemetryRequestIntervalSeconds: Int,
+    lastTelemetryRequestTime: Long?,
+    isRequestingTelemetry: Boolean,
+    onTelemetryRequestEnabledChange: (Boolean) -> Unit,
+    onTelemetryRequestIntervalChange: (Int) -> Unit,
+    onRequestTelemetryNow: () -> Unit,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -146,6 +155,14 @@ fun LocationSharingCard(
             onCollectorAddressChange = onTelemetryCollectorAddressChange,
             onSendIntervalChange = onTelemetrySendIntervalChange,
             onSendNow = onTelemetrySendNow,
+            // Request props
+            requestEnabled = telemetryRequestEnabled,
+            requestIntervalSeconds = telemetryRequestIntervalSeconds,
+            lastRequestTime = lastTelemetryRequestTime,
+            isRequesting = isRequestingTelemetry,
+            onRequestEnabledChange = onTelemetryRequestEnabledChange,
+            onRequestIntervalChange = onTelemetryRequestIntervalChange,
+            onRequestNow = onRequestTelemetryNow,
         )
     }
 
@@ -461,6 +478,14 @@ private fun TelemetryCollectorSection(
     onCollectorAddressChange: (String?) -> Unit,
     onSendIntervalChange: (Int) -> Unit,
     onSendNow: () -> Unit,
+    // Request props
+    requestEnabled: Boolean,
+    requestIntervalSeconds: Int,
+    lastRequestTime: Long?,
+    isRequesting: Boolean,
+    onRequestEnabledChange: (Boolean) -> Unit,
+    onRequestIntervalChange: (Int) -> Unit,
+    onRequestNow: () -> Unit,
 ) {
     var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
 
@@ -479,12 +504,12 @@ private fun TelemetryCollectorSection(
         ) {
             Icon(
                 imageVector = Icons.Default.CloudUpload,
-                contentDescription = "Telemetry Collector",
+                contentDescription = "Group Tracker",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                text = "Telemetry Collector",
+                text = "Group Tracker",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
             )
@@ -492,7 +517,7 @@ private fun TelemetryCollectorSection(
 
         // Description
         Text(
-            text = "Send your location to a telemetry collector and receive locations from multiple peers.",
+            text = "Share your location with a group and see where everyone is",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -510,12 +535,12 @@ private fun TelemetryCollectorSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Enable Collector",
+                    text = "Share with group",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = "Automatically send location telemetry",
+                    text = "Automatically share your location",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -538,7 +563,7 @@ private fun TelemetryCollectorSection(
         // Send interval chips
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Send interval: ${formatTelemetryIntervalDisplay(sendIntervalSeconds)}",
+                text = "Send every: ${formatTelemetryIntervalDisplay(sendIntervalSeconds)}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary,
@@ -575,49 +600,186 @@ private fun TelemetryCollectorSection(
             }
         }
 
-        // Send Now button
-        Button(
-            onClick = onSendNow,
+        // Send Now button with last send time
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isSending && collectorAddress != null,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (isSending) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onSecondary,
+            Button(
+                onClick = onSendNow,
+                enabled = !isSending && collectorAddress != null,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                ),
+            ) {
+                if (isSending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sending...")
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Send Now")
+                }
+            }
+            // Last send timestamp with periodic refresh
+            if (lastSendTime != null) {
+                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(5_000)
+                        currentTime = System.currentTimeMillis()
+                    }
+                }
+                Text(
+                    text = "Last sent: ${formatTelemetryRelativeTime(lastSendTime, currentTime)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sending...")
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Send Now")
             }
         }
 
-        // Last send timestamp with periodic refresh
-        if (lastSendTime != null) {
-            var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    delay(5_000)
-                    currentTime = System.currentTimeMillis()
+        // Divider between send and receive sections
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+
+        // Request toggle (receive from collector)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = null,
+                    indication = null,
+                    enabled = collectorAddress != null,
+                ) { onRequestEnabledChange(!requestEnabled) },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Receive locations from group",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (collectorAddress != null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Text(
+                    text = "Get everyone's location periodically",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = requestEnabled,
+                onCheckedChange = null,
+                enabled = collectorAddress != null,
+            )
+        }
+
+        // Request interval chips
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Request every: ${formatTelemetryIntervalDisplay(requestIntervalSeconds)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (requestEnabled && collectorAddress != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TelemetryIntervalChip(
+                    label = "5min",
+                    selected = requestIntervalSeconds == 300,
+                    enabled = requestEnabled && collectorAddress != null,
+                    onClick = { onRequestIntervalChange(300) },
+                )
+                TelemetryIntervalChip(
+                    label = "15min",
+                    selected = requestIntervalSeconds == 900,
+                    enabled = requestEnabled && collectorAddress != null,
+                    onClick = { onRequestIntervalChange(900) },
+                )
+                TelemetryIntervalChip(
+                    label = "30min",
+                    selected = requestIntervalSeconds == 1800,
+                    enabled = requestEnabled && collectorAddress != null,
+                    onClick = { onRequestIntervalChange(1800) },
+                )
+                TelemetryIntervalChip(
+                    label = "1hr",
+                    selected = requestIntervalSeconds == 3600,
+                    enabled = requestEnabled && collectorAddress != null,
+                    onClick = { onRequestIntervalChange(3600) },
+                )
+            }
+        }
+
+        // Request Now button with last request time
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedButton(
+                onClick = {
+                    android.util.Log.d("LocationSharingCard", "Request Now clicked! collectorAddress=$collectorAddress, isRequesting=$isRequesting")
+                    onRequestNow()
+                },
+                enabled = !isRequesting && collectorAddress != null,
+            ) {
+                if (isRequesting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Requesting...")
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Request Now")
                 }
             }
-            Text(
-                text = "Last sent: ${formatTelemetryRelativeTime(lastSendTime, currentTime)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // Last request timestamp with periodic refresh
+            if (lastRequestTime != null) {
+                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(5_000)
+                        currentTime = System.currentTimeMillis()
+                    }
+                }
+                Text(
+                    text = "Last received: ${formatTelemetryRelativeTime(lastRequestTime, currentTime)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -652,7 +814,7 @@ private fun CollectorAddressInput(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Collector Address",
+            text = "Group Host",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )

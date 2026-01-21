@@ -386,6 +386,19 @@ interface IReticulumService {
      */
     String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
 
+    /**
+     * Send a telemetry request to a collector via LXMF FIELD_COMMANDS.
+     * The collector will respond with FIELD_TELEMETRY_STREAM containing
+     * all known telemetry entries since the specified timebase.
+     *
+     * @param destHash Destination hash bytes (16 bytes) of the collector
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @param timebaseMs Optional Unix timestamp in milliseconds to request telemetry since (-1 for all)
+     * @param isCollectorRequest True if requesting from a collector
+     * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
+     */
+    String sendTelemetryRequest(in byte[] destHash, in byte[] sourceIdentityPrivateKey, long timebaseMs, boolean isCollectorRequest);
+
     // ==================== EMOJI REACTIONS ====================
 
     /**

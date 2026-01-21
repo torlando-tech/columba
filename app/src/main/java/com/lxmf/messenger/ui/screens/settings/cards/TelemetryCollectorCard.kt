@@ -75,10 +75,10 @@ fun TelemetryCollectorCard(
 ) {
     var showContactPicker by remember { mutableStateOf(false) }
 
-    // Find the selected contact name for display
-    val selectedContactName = contacts.find {
+    // Find the selected contact for display
+    val selectedContact = contacts.find {
         it.destinationHash.equals(collectorAddress, ignoreCase = true)
-    }?.displayName
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -158,15 +158,29 @@ fun TelemetryCollectorCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+                    if (selectedContact != null) {
+                        val hashBytes = selectedContact.destinationHash
+                            .chunked(2)
+                            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                            .toByteArray()
+                        ProfileIcon(
+                            iconName = selectedContact.iconName,
+                            foregroundColor = selectedContact.iconForegroundColor,
+                            backgroundColor = selectedContact.iconBackgroundColor,
+                            size = 24.dp,
+                            fallbackHash = hashBytes,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
-                        text = selectedContactName ?: "Select from contacts...",
+                        text = selectedContact?.displayName ?: "Select from contacts...",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (selectedContactName != null) {
+                        color = if (selectedContact != null) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant

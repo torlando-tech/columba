@@ -129,6 +129,11 @@ data class SettingsState(
     val telemetrySendIntervalSeconds: Int = 300,
     val lastTelemetrySendTime: Long? = null,
     val isSendingTelemetry: Boolean = false,
+    // Telemetry request state
+    val telemetryRequestEnabled: Boolean = false,
+    val telemetryRequestIntervalSeconds: Int = 900,
+    val lastTelemetryRequestTime: Long? = null,
+    val isRequestingTelemetry: Boolean = false,
     // Protocol versions (for About screen)
     val reticulumVersion: String? = null,
     val lxmfVersion: String? = null,
@@ -369,6 +374,11 @@ class SettingsViewModel
                             telemetrySendIntervalSeconds = _state.value.telemetrySendIntervalSeconds,
                             lastTelemetrySendTime = _state.value.lastTelemetrySendTime,
                             isSendingTelemetry = _state.value.isSendingTelemetry,
+                            // Preserve telemetry request state from loadTelemetryCollectorSettings()
+                            telemetryRequestEnabled = _state.value.telemetryRequestEnabled,
+                            telemetryRequestIntervalSeconds = _state.value.telemetryRequestIntervalSeconds,
+                            lastTelemetryRequestTime = _state.value.lastTelemetryRequestTime,
+                            isRequestingTelemetry = _state.value.isRequestingTelemetry,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve protocol versions from fetchProtocolVersions()
@@ -1683,6 +1693,22 @@ class SettingsViewModel
                     _state.update { it.copy(lastTelemetrySendTime = timestamp) }
                 }
             }
+            // Request settings
+            viewModelScope.launch {
+                settingsRepository.telemetryRequestEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(telemetryRequestEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.telemetryRequestIntervalSecondsFlow.collect { interval ->
+                    _state.update { it.copy(telemetryRequestIntervalSeconds = interval) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.lastTelemetryRequestTimeFlow.collect { timestamp ->
+                    _state.update { it.copy(lastTelemetryRequestTime = timestamp) }
+                }
+            }
         }
 
         /**
@@ -1692,6 +1718,11 @@ class SettingsViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.isSending.collect { sending ->
                     _state.update { it.copy(isSendingTelemetry = sending) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequesting.collect { requesting ->
+                    _state.update { it.copy(isRequestingTelemetry = requesting) }
                 }
             }
         }
@@ -1738,6 +1769,39 @@ class SettingsViewModel
             viewModelScope.launch {
                 Log.d(TAG, "User triggered manual telemetry send")
                 telemetryCollectorManager.sendTelemetryNow()
+            }
+        }
+
+        /**
+         * Set the telemetry request enabled state.
+         * When enabled, location telemetry is automatically requested from the collector.
+         */
+        fun setTelemetryRequestEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setRequestEnabled(enabled)
+                Log.d(TAG, "Telemetry request ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the telemetry request interval.
+         *
+         * @param seconds Interval in seconds (minimum 60, maximum 86400)
+         */
+        fun setTelemetryRequestInterval(seconds: Int) {
+            viewModelScope.launch {
+                telemetryCollectorManager.setRequestIntervalSeconds(seconds)
+                Log.d(TAG, "Telemetry request interval set to: ${seconds}s")
+            }
+        }
+
+        /**
+         * Manually trigger a telemetry request from the collector.
+         */
+        fun requestTelemetryNow() {
+            viewModelScope.launch {
+                Log.d(TAG, "User triggered manual telemetry request")
+                telemetryCollectorManager.requestTelemetryNow()
             }
         }
     }

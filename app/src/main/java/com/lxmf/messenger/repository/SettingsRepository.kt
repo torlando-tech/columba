@@ -120,6 +120,7 @@ class SettingsRepository
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
             val TELEMETRY_COLLECTOR_ENABLED = booleanPreferencesKey("telemetry_collector_enabled")
             val TELEMETRY_SEND_INTERVAL_SECONDS = intPreferencesKey("telemetry_send_interval_seconds")
+            val TELEMETRY_REQUEST_ENABLED = booleanPreferencesKey("telemetry_request_enabled")
             val TELEMETRY_REQUEST_INTERVAL_SECONDS = intPreferencesKey("telemetry_request_interval_seconds")
             val LAST_TELEMETRY_SEND_TIME = longPreferencesKey("last_telemetry_send_time")
             val LAST_TELEMETRY_REQUEST_TIME = longPreferencesKey("last_telemetry_request_time")
@@ -1241,6 +1242,37 @@ class SettingsRepository
         suspend fun saveTelemetrySendIntervalSeconds(seconds: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] = seconds.coerceIn(60, 86400)
+            }
+        }
+
+        /**
+         * Flow of the telemetry request enabled state.
+         * Defaults to false if not set.
+         */
+        val telemetryRequestEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the telemetry request enabled state (non-flow).
+         */
+        suspend fun getTelemetryRequestEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] ?: false
+            }.first()
+        }
+
+        /**
+         * Save the telemetry request enabled state.
+         *
+         * @param enabled Whether automatic telemetry requesting from collector is enabled
+         */
+        suspend fun saveTelemetryRequestEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] = enabled
             }
         }
 

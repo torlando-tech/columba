@@ -693,7 +693,7 @@ private fun TelemetryCollectorSection(
         ) {
             Button(
                 onClick = onSendNow,
-                enabled = !isSending && collectorAddress != null,
+                enabled = enabled && !isSending && collectorAddress != null,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                 ),

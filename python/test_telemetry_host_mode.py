@@ -379,5 +379,408 @@ class TestTelemetryHostModeIntegration(unittest.TestCase):
         self.assertEqual(fresh_wrapper.telemetry_retention_seconds, 86400)
 
 
+class TestSendTelemetryStreamResponse(unittest.TestCase):
+    """Test _send_telemetry_stream_response method."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+        self.wrapper.telemetry_collector_enabled = True
+        self.wrapper.telemetry_retention_seconds = 86400
+
+        # Set up mock router and destination
+        self.wrapper.router = MagicMock()
+        self.wrapper.local_lxmf_destination = MagicMock()
+
+        # Ensure RNS and LXMF are properly mocked in reticulum_wrapper module
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_sends_all_entries_when_timebase_is_none(self):
+        """Should send all entries when timebase is None."""
+        current_time = time.time()
+
+        # Store test entries
+        for i in range(3):
+            self.wrapper.collected_telemetry[f"{i:032x}"] = {
+                'timestamp': 1703980800 + i * 60,
+                'packed_telemetry': b'test_data',
+                'appearance': None,
+                'received_at': current_time - i * 10,
+            }
+
+        # Create mock identity and hash
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        # Call the method with timebase=None
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, None)
+
+        # Verify router.handle_outbound was called
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+    def test_sends_all_entries_when_timebase_is_zero(self):
+        """Should send all entries when timebase is 0."""
+        current_time = time.time()
+
+        # Store test entries
+        self.wrapper.collected_telemetry["a" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'test_data',
+            'appearance': None,
+            'received_at': current_time,
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, 0)
+
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+    def test_filters_entries_by_timebase(self):
+        """Should only send entries with received_at >= timebase."""
+        current_time = time.time()
+
+        # Store old entry (before timebase)
+        self.wrapper.collected_telemetry["0" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'old_data',
+            'appearance': None,
+            'received_at': current_time - 100,  # 100 seconds ago
+        }
+
+        # Store new entry (after timebase)
+        self.wrapper.collected_telemetry["f" * 32] = {
+            'timestamp': 1703980860,
+            'packed_telemetry': b'new_data',
+            'appearance': None,
+            'received_at': current_time,  # Now
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        # Capture the fields passed to LXMessage using side_effect
+        captured_fields = {}
+        original_mock = MagicMock()
+        original_mock.DIRECT = 2  # LXMF.LXMessage.DIRECT value
+
+        def capture_lxmessage(*args, **kwargs):
+            captured_fields.update(kwargs.get('fields', {}))
+            mock_msg = MagicMock()
+            mock_msg.fields = kwargs.get('fields', {})
+            return mock_msg
+
+        original_mock.side_effect = capture_lxmessage
+        reticulum_wrapper.LXMF.LXMessage = original_mock
+
+        # Set timebase to 50 seconds ago - should only include "new" entry
+        timebase = current_time - 50
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, timebase)
+
+        # Verify handle_outbound was called
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+        # Check the fields contain the stream with only the new entry
+        self.assertIn(reticulum_wrapper.FIELD_TELEMETRY_STREAM, captured_fields)
+        stream_data = captured_fields[reticulum_wrapper.FIELD_TELEMETRY_STREAM]
+        self.assertEqual(len(stream_data), 1)
+        self.assertEqual(stream_data[0][2], b'new_data')
+
+    def test_creates_lxmf_message_with_correct_fields(self):
+        """Should create LXMF message with FIELD_TELEMETRY_STREAM."""
+        current_time = time.time()
+
+        self.wrapper.collected_telemetry["a" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'test_data',
+            'appearance': ['icon', b'\xff'],
+            'received_at': current_time,
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        # Capture the fields passed to LXMessage using side_effect
+        captured_fields = {}
+        original_mock = MagicMock()
+        original_mock.DIRECT = 2
+
+        def capture_lxmessage(*args, **kwargs):
+            captured_fields.update(kwargs.get('fields', {}))
+            mock_msg = MagicMock()
+            mock_msg.fields = kwargs.get('fields', {})
+            return mock_msg
+
+        original_mock.side_effect = capture_lxmessage
+        reticulum_wrapper.LXMF.LXMessage = original_mock
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, None)
+
+        # Verify handle_outbound was called
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+        # Check fields
+        self.assertIn(reticulum_wrapper.FIELD_TELEMETRY_STREAM, captured_fields)
+        stream_data = captured_fields[reticulum_wrapper.FIELD_TELEMETRY_STREAM]
+
+        # Stream should be a list of entries
+        self.assertIsInstance(stream_data, list)
+        self.assertEqual(len(stream_data), 1)
+
+        # Each entry should have [source_hash, timestamp, packed_telemetry, appearance]
+        entry = stream_data[0]
+        self.assertEqual(len(entry), 4)
+        self.assertEqual(entry[0], bytes.fromhex("a" * 32))
+        self.assertEqual(entry[1], 1703980800)
+        self.assertEqual(entry[2], b'test_data')
+        self.assertEqual(entry[3], ['icon', b'\xff'])
+
+    def test_handles_empty_collected_telemetry(self):
+        """Should handle case with no collected telemetry gracefully."""
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        # No telemetry stored
+        self.assertEqual(len(self.wrapper.collected_telemetry), 0)
+
+        # Should not raise
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, None)
+
+        # Should still send (empty stream)
+        self.wrapper.router.handle_outbound.assert_called_once()
+
+    def test_cleans_up_expired_before_sending(self):
+        """Should call _cleanup_expired_telemetry before sending."""
+        current_time = time.time()
+
+        # Store an expired entry
+        self.wrapper.telemetry_retention_seconds = 1  # 1 second retention
+        self.wrapper.collected_telemetry["expired" + "0" * 25] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'expired_data',
+            'appearance': None,
+            'received_at': current_time - 100,  # 100 seconds ago, well past retention
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, None)
+
+        # The expired entry should have been cleaned up
+        self.assertNotIn("expired" + "0" * 25, self.wrapper.collected_telemetry)
+
+
+class TestSendTelemetryRequest(unittest.TestCase):
+    """Test send_telemetry_request method."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+        self.wrapper.initialized = True
+
+        # Set up mock router and destination
+        self.wrapper.router = MagicMock()
+        self.wrapper.local_lxmf_destination = MagicMock()
+        self.wrapper.local_lxmf_destination.hexhash = "a" * 32
+
+        # Ensure RNS and LXMF are properly mocked in reticulum_wrapper module
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_returns_error_when_not_initialized(self):
+        """Should return error when wrapper is not initialized."""
+        self.wrapper.initialized = False
+
+        # send_telemetry_request takes bytes, not hex strings
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=None,
+            is_collector_request=True,
+        )
+
+        self.assertFalse(result.get('success', True))
+
+    def test_returns_error_when_router_not_initialized(self):
+        """Should return error when router is not initialized."""
+        self.wrapper.router = None
+
+        dest_hash = bytes.fromhex("b" * 32)
+        source_key = bytes.fromhex("c" * 64)
+
+        result = self.wrapper.send_telemetry_request(
+            dest_hash=dest_hash,
+            source_identity_private_key=source_key,
+            timebase=None,
+            is_collector_request=True,
+        )
+
+        self.assertFalse(result.get('success', True))
+
+
+class TestFieldCommandsConstants(unittest.TestCase):
+    """Test FIELD_COMMANDS related constants are defined."""
+
+    def test_field_commands_constant_exists(self):
+        """FIELD_COMMANDS constant should be defined."""
+        self.assertTrue(hasattr(reticulum_wrapper, 'FIELD_COMMANDS'))
+        self.assertEqual(reticulum_wrapper.FIELD_COMMANDS, 0x09)
+
+    def test_command_telemetry_request_constant_exists(self):
+        """COMMAND_TELEMETRY_REQUEST constant should be defined."""
+        self.assertTrue(hasattr(reticulum_wrapper, 'COMMAND_TELEMETRY_REQUEST'))
+        self.assertEqual(reticulum_wrapper.COMMAND_TELEMETRY_REQUEST, 0x01)
+
+    def test_field_telemetry_stream_constant_exists(self):
+        """FIELD_TELEMETRY_STREAM constant should be defined."""
+        self.assertTrue(hasattr(reticulum_wrapper, 'FIELD_TELEMETRY_STREAM'))
+        self.assertEqual(reticulum_wrapper.FIELD_TELEMETRY_STREAM, 0x03)
+
+    def test_field_telemetry_constant_exists(self):
+        """FIELD_TELEMETRY constant should be defined."""
+        self.assertTrue(hasattr(reticulum_wrapper, 'FIELD_TELEMETRY'))
+        self.assertEqual(reticulum_wrapper.FIELD_TELEMETRY, 0x02)
+
+
+class TestTelemetryStreamFiltering(unittest.TestCase):
+    """Test telemetry stream filtering logic in detail."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.wrapper = ReticulumWrapper(self.temp_dir)
+        self.wrapper.telemetry_collector_enabled = True
+        self.wrapper.telemetry_retention_seconds = 86400
+        self.wrapper.router = MagicMock()
+        self.wrapper.local_lxmf_destination = MagicMock()
+
+        # Ensure RNS and LXMF are properly mocked in reticulum_wrapper module
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_timebase_filtering_uses_received_at_not_timestamp(self):
+        """Filtering should use received_at, not the telemetry timestamp."""
+        current_time = time.time()
+
+        # Entry with old telemetry timestamp but recent received_at
+        # This simulates receiving telemetry that was generated a while ago
+        self.wrapper.collected_telemetry["a" * 32] = {
+            'timestamp': 1000,  # Very old telemetry timestamp
+            'packed_telemetry': b'test_data',
+            'appearance': None,
+            'received_at': current_time,  # But received just now
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("b" * 32)
+
+        # Capture the fields passed to LXMessage using side_effect
+        captured_fields = {}
+        original_mock = MagicMock()
+        original_mock.DIRECT = 2
+
+        def capture_lxmessage(*args, **kwargs):
+            captured_fields.update(kwargs.get('fields', {}))
+            mock_msg = MagicMock()
+            mock_msg.fields = kwargs.get('fields', {})
+            return mock_msg
+
+        original_mock.side_effect = capture_lxmessage
+        reticulum_wrapper.LXMF.LXMessage = original_mock
+
+        # Timebase is 1 second ago - entry should be included because received_at is recent
+        timebase = current_time - 1
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, timebase)
+
+        # Get the stream data from captured fields
+        stream_data = captured_fields[reticulum_wrapper.FIELD_TELEMETRY_STREAM]
+
+        # Entry should be included despite old telemetry timestamp
+        self.assertEqual(len(stream_data), 1)
+
+    def test_multiple_entries_filtered_correctly(self):
+        """Multiple entries should be filtered based on their received_at times."""
+        current_time = time.time()
+
+        # Entry 1: received 10 seconds ago
+        self.wrapper.collected_telemetry["1" * 32] = {
+            'timestamp': 1703980800,
+            'packed_telemetry': b'data1',
+            'appearance': None,
+            'received_at': current_time - 10,
+        }
+
+        # Entry 2: received 5 seconds ago
+        self.wrapper.collected_telemetry["2" * 32] = {
+            'timestamp': 1703980860,
+            'packed_telemetry': b'data2',
+            'appearance': None,
+            'received_at': current_time - 5,
+        }
+
+        # Entry 3: received just now
+        self.wrapper.collected_telemetry["3" * 32] = {
+            'timestamp': 1703980920,
+            'packed_telemetry': b'data3',
+            'appearance': None,
+            'received_at': current_time,
+        }
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("b" * 32)
+
+        # Capture the fields passed to LXMessage using side_effect
+        captured_fields = {}
+        original_mock = MagicMock()
+        original_mock.DIRECT = 2
+
+        def capture_lxmessage(*args, **kwargs):
+            captured_fields.update(kwargs.get('fields', {}))
+            mock_msg = MagicMock()
+            mock_msg.fields = kwargs.get('fields', {})
+            return mock_msg
+
+        original_mock.side_effect = capture_lxmessage
+        reticulum_wrapper.LXMF.LXMessage = original_mock
+
+        # Timebase is 7 seconds ago - should include entries 2 and 3
+        timebase = current_time - 7
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, timebase)
+
+        stream_data = captured_fields[reticulum_wrapper.FIELD_TELEMETRY_STREAM]
+
+        # Should have 2 entries (entry 2 and 3)
+        self.assertEqual(len(stream_data), 2)
+
+        # Verify the correct entries are included (by their packed_telemetry)
+        packed_data = [entry[2] for entry in stream_data]
+        self.assertIn(b'data2', packed_data)
+        self.assertIn(b'data3', packed_data)
+        self.assertNotIn(b'data1', packed_data)
+
+
 if __name__ == '__main__':
     unittest.main()

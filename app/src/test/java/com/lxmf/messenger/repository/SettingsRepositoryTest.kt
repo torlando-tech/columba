@@ -1388,4 +1388,72 @@ class SettingsRepositoryTest {
                 repository.getTelemetrySendIntervalSeconds(),
             )
         }
+
+    // ========== Telemetry Host Mode Flow Tests ==========
+
+    @Test
+    fun telemetryHostModeEnabledFlow_defaultsToFalse() =
+        runTest {
+            repository.telemetryHostModeEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertFalse("Telemetry host mode should default to disabled", initial)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryHostModeEnabledFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.telemetryHostModeEnabledFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveTelemetryHostModeEnabled(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveTelemetryHostModeEnabled(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun telemetryHostModeEnabled_persistsAcrossSessions() =
+        runTest {
+            // Enable host mode
+            repository.saveTelemetryHostModeEnabled(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Verify it persists
+            assertTrue(
+                "Host mode should persist after save",
+                repository.getTelemetryHostModeEnabled(),
+            )
+
+            // Disable host mode
+            repository.saveTelemetryHostModeEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Verify it persists
+            assertFalse(
+                "Host mode disabled should persist after save",
+                repository.getTelemetryHostModeEnabled(),
+            )
+        }
+
+    @Test
+    fun telemetryHostMode_flowAndGetMethodReturnSameValue() =
+        runTest {
+            // Set to known value
+            repository.saveTelemetryHostModeEnabled(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Compare flow and method values
+            assertEquals(
+                repository.telemetryHostModeEnabledFlow.first(),
+                repository.getTelemetryHostModeEnabled(),
+            )
+        }
 }

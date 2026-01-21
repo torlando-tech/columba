@@ -15,16 +15,19 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -88,6 +91,8 @@ class SettingsViewModelTest {
     private val telemetrySendIntervalSecondsFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
     private val lastTelemetrySendTimeFlow = MutableStateFlow<Long?>(null)
     private val isSendingTelemetryFlow = MutableStateFlow(false)
+    private val telemetryHostModeEnabledFlow = MutableStateFlow(false)
+    private val isHostModeEnabledFlow = MutableStateFlow(false)
 
     @Before
     fun setup() {
@@ -135,6 +140,9 @@ class SettingsViewModelTest {
 
         // Mock TelemetryCollectorManager flows
         every { telemetryCollectorManager.isSending } returns isSendingTelemetryFlow
+        every { telemetryCollectorManager.isHostModeEnabled } returns isHostModeEnabledFlow
+        every { settingsRepository.telemetryHostModeEnabledFlow } returns telemetryHostModeEnabledFlow
+        coEvery { telemetryCollectorManager.setHostModeEnabled(any()) } just Runs
 
         // Mock PropagationNodeManager flows (StateFlows)
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
@@ -3068,6 +3076,149 @@ class SettingsViewModelTest {
                     900,
                     state.telemetrySendIntervalSeconds,
                 )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // ========== Telemetry Host Mode Tests ==========
+
+    @Test
+    fun `initial state has telemetry host mode disabled`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertFalse(state.telemetryHostModeEnabled)
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state updates when telemetry host mode enabled changes`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Initial value should be false
+                assertFalse(state.telemetryHostModeEnabled)
+
+                // Enable host mode
+                telemetryHostModeEnabledFlow.value = true
+                state = awaitItem()
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Disable host mode
+                telemetryHostModeEnabledFlow.value = false
+                state = awaitItem()
+                assertFalse(state.telemetryHostModeEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setTelemetryHostModeEnabled calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Enable host mode
+            viewModel.setTelemetryHostModeEnabled(true)
+            advanceUntilIdle()
+
+            // Verify manager was called
+            coVerify { telemetryCollectorManager.setHostModeEnabled(true) }
+        }
+
+    @Test
+    fun `setTelemetryHostModeEnabled with false calls manager`() =
+        runTest {
+            // Start with host mode enabled
+            telemetryHostModeEnabledFlow.value = true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Disable host mode
+            viewModel.setTelemetryHostModeEnabled(false)
+            advanceUntilIdle()
+
+            // Verify manager was called with false
+            coVerify { telemetryCollectorManager.setHostModeEnabled(false) }
+        }
+
+    @Test
+    fun `host mode state is preserved when other settings change`() =
+        runTest {
+            // Set up initial host mode state
+            telemetryHostModeEnabledFlow.value = true
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Change another setting
+                autoAnnounceEnabledFlow.value = false
+                state = awaitItem()
+
+                // Host mode state should be preserved
+                assertTrue(
+                    "telemetryHostModeEnabled should be preserved",
+                    state.telemetryHostModeEnabled,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `host mode can be enabled independently of collector mode`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Both should start disabled
+                assertFalse(state.telemetryCollectorEnabled)
+                assertFalse(state.telemetryHostModeEnabled)
+
+                // Enable only host mode
+                telemetryHostModeEnabledFlow.value = true
+                state = awaitItem()
+
+                // Host mode enabled, collector mode still disabled
+                assertFalse(state.telemetryCollectorEnabled)
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Enable collector mode
+                telemetryCollectorEnabledFlow.value = true
+                state = awaitItem()
+
+                // Both now enabled
+                assertTrue(state.telemetryCollectorEnabled)
+                assertTrue(state.telemetryHostModeEnabled)
 
                 cancelAndConsumeRemainingEvents()
             }

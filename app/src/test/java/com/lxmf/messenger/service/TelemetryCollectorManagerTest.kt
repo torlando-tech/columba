@@ -52,6 +52,7 @@ class TelemetryCollectorManagerTest {
     private val sendIntervalFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
     private val lastSendTimeFlow = MutableStateFlow<Long?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.INITIALIZING)
+    private val hostModeEnabledFlow = MutableStateFlow(false)
 
     @Before
     fun setup() {
@@ -64,6 +65,7 @@ class TelemetryCollectorManagerTest {
         every { mockSettingsRepository.telemetryCollectorEnabledFlow } returns collectorEnabledFlow
         every { mockSettingsRepository.telemetrySendIntervalSecondsFlow } returns sendIntervalFlow
         every { mockSettingsRepository.lastTelemetrySendTimeFlow } returns lastSendTimeFlow
+        every { mockSettingsRepository.telemetryHostModeEnabledFlow } returns hostModeEnabledFlow
         every { mockReticulumProtocol.networkStatus } returns networkStatusFlow
 
         // Setup save methods
@@ -71,6 +73,10 @@ class TelemetryCollectorManagerTest {
         coEvery { mockSettingsRepository.saveTelemetryCollectorEnabled(any()) } just Runs
         coEvery { mockSettingsRepository.saveTelemetrySendIntervalSeconds(any()) } just Runs
         coEvery { mockSettingsRepository.saveLastTelemetrySendTime(any()) } just Runs
+        coEvery { mockSettingsRepository.saveTelemetryHostModeEnabled(any()) } just Runs
+
+        // Setup protocol methods for host mode
+        coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
     }
 
     @After
@@ -564,6 +570,167 @@ class TelemetryCollectorManagerTest {
             advanceUntilIdle()
             assertEquals(timestamp2, awaitItem())
 
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        manager.stop()
+    }
+
+    // ========== Host Mode Tests ==========
+
+    @Test
+    fun `initial host mode state is disabled`() = testScope.runTest {
+        manager = createManager()
+
+        manager.isHostModeEnabled.test {
+            assertFalse(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `isHostModeEnabled flow emits updates from settings`() = testScope.runTest {
+        manager = createManager()
+        manager.start()
+
+        manager.isHostModeEnabled.test {
+            // Initial value
+            assertFalse(awaitItem())
+
+            // Enable host mode
+            hostModeEnabledFlow.value = true
+            advanceUntilIdle()
+            assertTrue(awaitItem())
+
+            // Disable host mode
+            hostModeEnabledFlow.value = false
+            advanceUntilIdle()
+            assertFalse(awaitItem())
+
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `setHostModeEnabled saves to repository`() = testScope.runTest {
+        manager = createManager()
+        manager.start()
+        advanceUntilIdle()
+
+        // Enable host mode
+        manager.setHostModeEnabled(true)
+        advanceUntilIdle()
+
+        // Verify save was called
+        coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `setHostModeEnabled syncs with Python layer`() = testScope.runTest {
+        manager = createManager()
+        manager.start()
+        advanceUntilIdle()
+
+        // Set network to ready so Python sync will be attempted
+        networkStatusFlow.value = NetworkStatus.READY
+        advanceUntilIdle()
+
+        // Enable host mode - simulate the flow update that would come from the repository
+        hostModeEnabledFlow.value = true
+        advanceUntilIdle()
+
+        // Verify Python sync was called
+        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+
+        // Disable host mode - simulate the flow update
+        hostModeEnabledFlow.value = false
+        advanceUntilIdle()
+
+        // Verify Python sync was called with false
+        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(false) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `host mode setting change triggers Python sync`() = testScope.runTest {
+        manager = createManager()
+        manager.start()
+        advanceUntilIdle()
+
+        // Set network to ready so Python sync will be attempted
+        networkStatusFlow.value = NetworkStatus.READY
+        advanceUntilIdle()
+
+        // Simulate settings flow update (as if changed externally)
+        hostModeEnabledFlow.value = true
+        advanceUntilIdle()
+
+        // Verify Python layer was synced
+        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `setHostModeEnabled handles Python sync failure gracefully`() = testScope.runTest {
+        // Setup Python sync to fail
+        coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns
+            Result.failure(RuntimeException("Python error"))
+
+        manager = createManager()
+        manager.start()
+        advanceUntilIdle()
+
+        // Set network to ready so Python sync will be attempted
+        networkStatusFlow.value = NetworkStatus.READY
+        advanceUntilIdle()
+
+        // Enable host mode - should not throw
+        manager.setHostModeEnabled(true)
+        advanceUntilIdle()
+
+        // Verify save was still called even if Python sync failed
+        coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `host mode can be enabled and disabled independently of collector mode`() = testScope.runTest {
+        manager = createManager()
+        manager.start()
+        advanceUntilIdle()
+
+        // Enable collector mode (sending telemetry)
+        collectorEnabledFlow.value = true
+        advanceUntilIdle()
+
+        // Enable host mode (receiving telemetry) - should work independently
+        // Simulate the flow update that would come from settings repository
+        hostModeEnabledFlow.value = true
+        advanceUntilIdle()
+
+        manager.isHostModeEnabled.test {
+            assertTrue(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        manager.isEnabled.test {
+            assertTrue(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // Disable collector mode - host mode should remain enabled
+        collectorEnabledFlow.value = false
+        advanceUntilIdle()
+
+        manager.isHostModeEnabled.test {
+            assertTrue(awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
 

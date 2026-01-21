@@ -79,6 +79,7 @@ private data class LocationTelemetryData(
  * to LocationSharingManager for storage.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Manager class with distinct responsibilities
 class TelemetryCollectorManager
     @Inject
     constructor(
@@ -564,6 +565,7 @@ class TelemetryCollectorManager
          * Request telemetry from the specified collector.
          * The collector will respond with FIELD_TELEMETRY_STREAM containing locations from all peers.
          */
+        @Suppress("ReturnCount") // Early returns for guard conditions improve readability
         private suspend fun requestTelemetryFromCollector(collectorHash: String): TelemetryRequestResult {
             if (_isRequesting.value) {
                 Log.d(TAG, "Already requesting, skipping")
@@ -645,7 +647,7 @@ class TelemetryCollectorManager
                         }
                     } catch (e: IllegalArgumentException) {
                         // CancellationToken was already cancelled - this can happen in race conditions
-                        Log.w(TAG, "Location request cancelled before it could start")
+                        Log.w(TAG, "Location request cancelled before it could start", e)
                         if (continuation.isActive) {
                             continuation.resume(null)
                         }

@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // Composable UI file with multiple small components
+
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import androidx.compose.foundation.clickable

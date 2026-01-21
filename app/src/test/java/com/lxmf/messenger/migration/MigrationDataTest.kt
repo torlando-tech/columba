@@ -84,6 +84,7 @@ class MigrationDataTest {
             addedVia = "announce",
             lastInteractionTimestamp = 1700000000000L,
             isPinned = true,
+            status = "ACTIVE",
         )
 
     private fun createTestAnnounce(receivingInterfaceType: String? = "AUTO_INTERFACE") =
@@ -543,6 +544,123 @@ class MigrationDataTest {
         assertNotNull(decoded.configJson)
         assert(decoded.configJson.contains("example.com"))
         assert(decoded.configJson.contains("secret123"))
+    }
+
+    // endregion
+
+    // region ContactExport Tests
+
+    @Test
+    fun `ContactExport with null publicKey serializes correctly`() {
+        // This tests the scenario where a contact has PENDING_IDENTITY status
+        // and hasn't yet resolved their identity from the network
+        val contact =
+            ContactExport(
+                destinationHash = "pending_contact_123",
+                identityHash = "abc123def456",
+                publicKey = null, // Pending contact - no public key yet
+                customNickname = "Pending Friend",
+                notes = "Added via destination hash only",
+                tags = "pending",
+                addedTimestamp = 1699000000000L,
+                addedVia = "MANUAL_PENDING",
+                lastInteractionTimestamp = 0L,
+                isPinned = false,
+                status = "PENDING_IDENTITY",
+            )
+
+        val jsonString = json.encodeToString(contact)
+        val decoded = json.decodeFromString<ContactExport>(jsonString)
+
+        assertEquals(contact, decoded)
+        assertNull(decoded.publicKey)
+        assertEquals("pending_contact_123", decoded.destinationHash)
+        assertEquals("Pending Friend", decoded.customNickname)
+        assertEquals("PENDING_IDENTITY", decoded.status)
+    }
+
+    @Test
+    fun `ContactExport with valid publicKey serializes correctly`() {
+        val contact = createTestContact()
+
+        val jsonString = json.encodeToString(contact)
+        val decoded = json.decodeFromString<ContactExport>(jsonString)
+
+        assertEquals(contact, decoded)
+        assertNotNull(decoded.publicKey)
+        assertEquals("Y29udGFjdFB1YmxpY0tleQ==", decoded.publicKey)
+        assertEquals("ACTIVE", decoded.status)
+    }
+
+    @Test
+    fun `MigrationBundle with pending contacts serializes correctly`() {
+        // Test that a migration bundle containing both resolved and pending contacts works
+        val resolvedContact = createTestContact()
+        val pendingContact =
+            ContactExport(
+                destinationHash = "pending_123",
+                identityHash = "abc123def456",
+                publicKey = null, // Pending - no public key
+                customNickname = null,
+                notes = null,
+                tags = null,
+                addedTimestamp = 1699000000000L,
+                addedVia = "MANUAL_PENDING",
+                lastInteractionTimestamp = 0L,
+                isPinned = false,
+                status = "PENDING_IDENTITY",
+            )
+
+        val bundle =
+            MigrationBundle(
+                identities = listOf(createTestIdentity()),
+                conversations = emptyList(),
+                messages = emptyList(),
+                contacts = listOf(resolvedContact, pendingContact),
+                settings = createTestSettings(),
+            )
+
+        val jsonString = json.encodeToString(bundle)
+        val decoded = json.decodeFromString<MigrationBundle>(jsonString)
+
+        assertEquals(2, decoded.contacts.size)
+        // First contact should have public key
+        assertNotNull(decoded.contacts[0].publicKey)
+        // Second contact (pending) should have null public key
+        assertNull(decoded.contacts[1].publicKey)
+        // Status should be preserved
+        assertEquals("ACTIVE", decoded.contacts[0].status)
+        assertEquals("PENDING_IDENTITY", decoded.contacts[1].status)
+    }
+
+    @Test
+    fun `ContactExport backward compatibility with older exports without status field`() {
+        // Simulate deserializing an older export without the status field
+        val oldJson =
+            """
+            {
+                "destinationHash": "contact123",
+                "identityHash": "abc123def456",
+                "publicKey": "Y29udGFjdFB1YmxpY0tleQ==",
+                "customNickname": "Old Friend",
+                "notes": null,
+                "tags": null,
+                "addedTimestamp": 1699000000000,
+                "addedVia": "announce",
+                "lastInteractionTimestamp": 1700000000000,
+                "isPinned": false
+            }
+            """.trimIndent()
+
+        val decoded = json.decodeFromString<ContactExport>(oldJson)
+
+        // Original fields should be preserved
+        assertEquals("contact123", decoded.destinationHash)
+        assertEquals("Y29udGFjdFB1YmxpY0tleQ==", decoded.publicKey)
+        assertEquals("Old Friend", decoded.customNickname)
+
+        // Status should be null (backward compatibility default)
+        assertNull(decoded.status)
     }
 
     // endregion

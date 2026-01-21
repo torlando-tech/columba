@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
+import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -303,10 +304,15 @@ class MigrationImporter
         private suspend fun importContacts(contacts: List<ContactExport>): Int {
             val entities =
                 contacts.map { contact ->
+                    // Determine status: use exported value, or infer from publicKey for backward compatibility
+                    val status = contact.status?.let {
+                        try { ContactStatus.valueOf(it) } catch (_: Exception) { null }
+                    } ?: if (contact.publicKey == null) ContactStatus.PENDING_IDENTITY else ContactStatus.ACTIVE
+
                     ContactEntity(
                         destinationHash = contact.destinationHash,
                         identityHash = contact.identityHash,
-                        publicKey = Base64.decode(contact.publicKey, Base64.NO_WRAP),
+                        publicKey = contact.publicKey?.let { Base64.decode(it, Base64.NO_WRAP) },
                         customNickname = contact.customNickname,
                         notes = contact.notes,
                         tags = contact.tags,
@@ -314,6 +320,7 @@ class MigrationImporter
                         addedVia = contact.addedVia,
                         lastInteractionTimestamp = contact.lastInteractionTimestamp,
                         isPinned = contact.isPinned,
+                        status = status,
                     )
                 }
             database.contactDao().insertContacts(entities)

@@ -79,7 +79,9 @@ import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.IncomingCallScreen
+import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
+import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
@@ -874,6 +876,126 @@ fun ColumbaNavigation(
                         )
                     }
 
+                    // Map with focus location (for discovered interfaces)
+                    composable(
+                        route = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
+                            "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
+                            "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
+                        arguments = listOf(
+                            navArgument("lat") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("lon") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("label") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("type") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("height") {
+                                type = NavType.FloatType
+                                defaultValue = Float.NaN
+                            },
+                            navArgument("reachableOn") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("frequency") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("bandwidth") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("sf") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("cr") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("modulation") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("status") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("lastHeard") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("hops") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
+                        val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
+                        val label = backStackEntry.arguments?.getString("label")
+                        val type = backStackEntry.arguments?.getString("type")
+                        val height = backStackEntry.arguments?.getFloat("height")?.toDouble()
+                        val reachableOn = backStackEntry.arguments?.getString("reachableOn")
+                        val port = backStackEntry.arguments?.getInt("port")
+                        val frequency = backStackEntry.arguments?.getLong("frequency")
+                        val bandwidth = backStackEntry.arguments?.getInt("bandwidth")
+                        val sf = backStackEntry.arguments?.getInt("sf")
+                        val cr = backStackEntry.arguments?.getInt("cr")
+                        val modulation = backStackEntry.arguments?.getString("modulation")
+                        val status = backStackEntry.arguments?.getString("status")
+                        val lastHeard = backStackEntry.arguments?.getLong("lastHeard")
+                        val hops = backStackEntry.arguments?.getInt("hops")
+
+                        // Build FocusInterfaceDetails if we have valid lat/lon
+                        val focusDetails = if (lat != null && lat != 0.0 && lon != null && lon != 0.0) {
+                            FocusInterfaceDetails(
+                                name = label ?: "Unknown",
+                                type = type?.ifEmpty { null } ?: "Unknown",
+                                latitude = lat,
+                                longitude = lon,
+                                height = if (height?.isNaN() == false) height else null,
+                                reachableOn = reachableOn?.ifEmpty { null },
+                                port = if (port != -1) port else null,
+                                frequency = if (frequency != -1L) frequency else null,
+                                bandwidth = if (bandwidth != -1) bandwidth else null,
+                                spreadingFactor = if (sf != -1) sf else null,
+                                codingRate = if (cr != -1) cr else null,
+                                modulation = modulation?.ifEmpty { null },
+                                status = status?.ifEmpty { null },
+                                lastHeard = if (lastHeard != -1L) lastHeard else null,
+                                hops = if (hops != -1) hops else null,
+                            )
+                        } else null
+
+                        MapScreen(
+                            onNavigateToConversation = { destinationHash ->
+                                val encodedHash = Uri.encode(destinationHash)
+                                navController.navigate("messaging/$encodedHash/Contact")
+                            },
+                            onNavigateToOfflineMaps = {
+                                navController.navigate("offline_maps")
+                            },
+                            focusLatitude = if (lat != 0.0) lat else null,
+                            focusLongitude = if (lon != 0.0) lon else null,
+                            focusLabel = label?.ifEmpty { null },
+                            focusInterfaceDetails = focusDetails,
+                        )
+                    }
+
                     composable(Screen.Identity.route) {
                         IdentityScreen(
                             onBackClick = { navController.popBackStack() },
@@ -950,19 +1072,65 @@ fun ColumbaNavigation(
                             onNavigateToInterfaceStats = { interfaceId ->
                                 navController.navigate("interface_stats/$interfaceId")
                             },
+                            onNavigateToDiscoveredInterfaces = {
+                                navController.navigate("discovered_interfaces")
+                            },
+                        )
+                    }
+
+                    composable("discovered_interfaces") {
+                        DiscoveredInterfacesScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToTcpClientWizard = { host, port, name ->
+                                val encodedHost = Uri.encode(host)
+                                val encodedName = Uri.encode(name)
+                                navController.navigate("tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName")
+                            },
+                            onNavigateToMapWithInterface = { details ->
+                                val encodedLabel = Uri.encode(details.name)
+                                val encodedType = Uri.encode(details.type)
+                                val encodedReachableOn = Uri.encode(details.reachableOn ?: "")
+                                val encodedModulation = Uri.encode(details.modulation ?: "")
+                                val encodedStatus = Uri.encode(details.status ?: "")
+                                navController.navigate(
+                                    "map_focus?lat=${details.latitude}&lon=${details.longitude}" +
+                                        "&label=$encodedLabel&type=$encodedType" +
+                                        "&height=${details.height ?: Float.NaN}" +
+                                        "&reachableOn=$encodedReachableOn&port=${details.port ?: -1}" +
+                                        "&frequency=${details.frequency ?: -1L}&bandwidth=${details.bandwidth ?: -1}" +
+                                        "&sf=${details.spreadingFactor ?: -1}&cr=${details.codingRate ?: -1}" +
+                                        "&modulation=$encodedModulation&status=$encodedStatus" +
+                                        "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}"
+                                )
+                            },
                         )
                     }
 
                     composable(
-                        route = "tcp_client_wizard?interfaceId={interfaceId}",
+                        route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}",
                         arguments = listOf(
                             navArgument("interfaceId") {
                                 type = NavType.LongType
                                 defaultValue = -1L
                             },
+                            navArgument("host") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = 0
+                            },
+                            navArgument("name") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                        val host = backStackEntry.arguments?.getString("host") ?: ""
+                        val port = backStackEntry.arguments?.getInt("port") ?: 0
+                        val name = backStackEntry.arguments?.getString("name") ?: ""
                         TcpClientWizardScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
@@ -971,6 +1139,9 @@ fun ColumbaNavigation(
                                 }
                             },
                             interfaceId = if (interfaceId > 0) interfaceId else null,
+                            initialHost = host.ifEmpty { null },
+                            initialPort = if (port > 0) port else null,
+                            initialName = name.ifEmpty { null },
                         )
                     }
 

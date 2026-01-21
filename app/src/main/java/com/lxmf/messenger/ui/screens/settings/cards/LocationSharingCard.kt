@@ -59,7 +59,6 @@ import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.model.SharingDuration
-import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.delay
 
 /**
@@ -521,7 +520,6 @@ private fun TelemetryCollectorSection(
     contacts: List<EnrichedContact>,
     onAllowedRequestersChange: (Set<String>) -> Unit,
 ) {
-    var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
     var showAllowedRequestersDialog by remember { mutableStateOf(false) }
     var showContactPicker by remember { mutableStateOf(false) }
 
@@ -529,11 +527,6 @@ private fun TelemetryCollectorSection(
     val selectedContactName = contacts.find {
         it.destinationHash.equals(collectorAddress, ignoreCase = true)
     }?.displayName
-
-    // Sync input with external state
-    LaunchedEffect(collectorAddress) {
-        addressInput = collectorAddress ?: ""
-    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -625,15 +618,6 @@ private fun TelemetryCollectorSection(
             }
         }
 
-        // Manual address input (alternative)
-        CollectorAddressInput(
-            addressInput = addressInput,
-            onAddressChange = { addressInput = it },
-            onConfirm = { normalizedHash ->
-                onCollectorAddressChange(normalizedHash)
-            },
-        )
-
         // Contact picker dialog
         if (showContactPicker) {
             GroupHostPickerDialog(
@@ -641,7 +625,6 @@ private fun TelemetryCollectorSection(
                 selectedHash = collectorAddress,
                 onContactSelected = { contact ->
                     onCollectorAddressChange(contact.destinationHash.lowercase())
-                    addressInput = contact.destinationHash.lowercase()
                     showContactPicker = false
                 },
                 onDismiss = { showContactPicker = false },
@@ -1143,58 +1126,6 @@ private fun TelemetryIntervalChip(
         enabled = enabled,
         label = { Text(label) },
     )
-}
-
-@Composable
-private fun CollectorAddressInput(
-    addressInput: String,
-    onAddressChange: (String) -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    val validationResult = DestinationHashValidator.validate(addressInput)
-    val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
-    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = "Group Host",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-
-        OutlinedTextField(
-            value = addressInput,
-            onValueChange = { input ->
-                // Only allow hex characters, up to 32 chars
-                val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                    .take(32)
-                onAddressChange(filtered)
-
-                // Auto-confirm when valid 32-char address is entered
-                if (filtered.length == 32) {
-                    val result = DestinationHashValidator.validate(filtered)
-                    if (result is DestinationHashValidator.ValidationResult.Valid) {
-                        onConfirm(result.normalizedHash)
-                    }
-                }
-            },
-            label = { Text("Destination Hash") },
-            placeholder = { Text("32-character hex") },
-            singleLine = true,
-            isError = addressInput.isNotEmpty() && !isValid && addressInput.length == 32,
-            supportingText = {
-                when {
-                    addressInput.isEmpty() -> Text("Enter the collector's destination hash")
-                    !isValid && errorMessage != null -> Text(errorMessage)
-                    else -> Text(DestinationHashValidator.getCharacterCount(addressInput))
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
 
 /**

@@ -28,9 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,7 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.ProfileIcon
-import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.delay
 
 /**
@@ -76,18 +73,12 @@ fun TelemetryCollectorCard(
     onSendIntervalChange: (Int) -> Unit,
     onSendNow: () -> Unit,
 ) {
-    var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
     var showContactPicker by remember { mutableStateOf(false) }
 
     // Find the selected contact name for display
     val selectedContactName = contacts.find {
         it.destinationHash.equals(collectorAddress, ignoreCase = true)
     }?.displayName
-
-    // Sync input with external state
-    LaunchedEffect(collectorAddress) {
-        addressInput = collectorAddress ?: ""
-    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -185,15 +176,6 @@ fun TelemetryCollectorCard(
                 }
             }
 
-            // Manual address input (alternative)
-            CollectorAddressInput(
-                addressInput = addressInput,
-                onAddressChange = { addressInput = it },
-                onConfirm = { normalizedHash ->
-                    onCollectorAddressChange(normalizedHash)
-                },
-            )
-
             // Contact picker dialog
             if (showContactPicker) {
                 ContactPickerDialog(
@@ -201,7 +183,6 @@ fun TelemetryCollectorCard(
                     selectedHash = collectorAddress,
                     onContactSelected = { contact ->
                         onCollectorAddressChange(contact.destinationHash.lowercase())
-                        addressInput = contact.destinationHash.lowercase()
                         showContactPicker = false
                     },
                     onDismiss = { showContactPicker = false },
@@ -309,58 +290,6 @@ private fun IntervalChip(
         enabled = enabled,
         label = { Text(label) },
     )
-}
-
-@Composable
-private fun CollectorAddressInput(
-    addressInput: String,
-    onAddressChange: (String) -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    val validationResult = DestinationHashValidator.validate(addressInput)
-    val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
-    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = "Group Host",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-
-        OutlinedTextField(
-            value = addressInput,
-            onValueChange = { input ->
-                // Only allow hex characters, up to 32 chars
-                val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                    .take(32)
-                onAddressChange(filtered)
-
-                // Auto-confirm when valid 32-char address is entered
-                if (filtered.length == 32) {
-                    val result = DestinationHashValidator.validate(filtered)
-                    if (result is DestinationHashValidator.ValidationResult.Valid) {
-                        onConfirm(result.normalizedHash)
-                    }
-                }
-            },
-            label = { Text("Destination Hash") },
-            placeholder = { Text("32-character hex") },
-            singleLine = true,
-            isError = addressInput.isNotEmpty() && !isValid && addressInput.length == 32,
-            supportingText = {
-                when {
-                    addressInput.isEmpty() -> Text("Enter the collector's destination hash")
-                    !isValid && errorMessage != null -> Text(errorMessage)
-                    else -> Text(DestinationHashValidator.getCharacterCount(addressInput))
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
 
 /**

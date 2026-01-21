@@ -292,6 +292,38 @@ interface ReticulumProtocol {
     ): Result<MessageReceipt>
 
     /**
+     * Send a telemetry request to a collector via LXMF FIELD_COMMANDS.
+     *
+     * The collector will respond with FIELD_TELEMETRY_STREAM containing
+     * all known telemetry entries since the specified timebase.
+     *
+     * @param destinationHash Destination hash bytes (16 bytes identity hash) of the collector
+     * @param sourceIdentity Identity of the sender
+     * @param timebase Optional Unix timestamp (milliseconds) to request telemetry since
+     * @param isCollectorRequest True if requesting from a collector (default)
+     * @return Result containing MessageReceipt or failure
+     */
+    suspend fun sendTelemetryRequest(
+        destinationHash: ByteArray,
+        sourceIdentity: Identity,
+        timebase: Long? = null,
+        isCollectorRequest: Boolean = true,
+    ): Result<MessageReceipt>
+
+    /**
+     * Enable or disable telemetry collector (host) mode.
+     *
+     * When enabled, this device will:
+     * - Store incoming FIELD_TELEMETRY location data from peers
+     * - Handle FIELD_COMMANDS telemetry requests
+     * - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+     *
+     * @param enabled True to enable host mode, False to disable
+     * @return Result indicating success
+     */
+    suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit>
+
+    /**
      * Send an emoji reaction to a message via LXMF Field 16.
      *
      * The reaction is sent as a lightweight LXMF message with Field 16 containing

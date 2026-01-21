@@ -394,6 +394,31 @@ interface IReticulumService {
      */
     String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
 
+    /**
+     * Send a telemetry request to a collector via LXMF FIELD_COMMANDS.
+     * The collector will respond with FIELD_TELEMETRY_STREAM containing
+     * all known telemetry entries since the specified timebase.
+     *
+     * @param destHash Destination hash bytes (16 bytes) of the collector
+     * @param sourceIdentityPrivateKey Source identity private key bytes
+     * @param timebaseMs Optional Unix timestamp in milliseconds to request telemetry since (-1 for all)
+     * @param isCollectorRequest True if requesting from a collector
+     * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
+     */
+    String sendTelemetryRequest(in byte[] destHash, in byte[] sourceIdentityPrivateKey, long timebaseMs, boolean isCollectorRequest);
+
+    /**
+     * Enable or disable telemetry collector (host) mode.
+     * When enabled, this device will:
+     * - Store incoming FIELD_TELEMETRY location data from peers
+     * - Handle FIELD_COMMANDS telemetry requests
+     * - Respond with FIELD_TELEMETRY_STREAM containing all stored entries
+     *
+     * @param enabled True to enable host mode, False to disable
+     * @return JSON string with result: {"success": true, "enabled": true/false}
+     */
+    String setTelemetryCollectorMode(boolean enabled);
+
     // ==================== EMOJI REACTIONS ====================
 
     /**

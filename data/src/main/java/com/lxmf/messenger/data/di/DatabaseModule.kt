@@ -64,6 +64,7 @@ object DatabaseModule {
             MIGRATION_28_29,
             MIGRATION_29_30,
             MIGRATION_30_31,
+            MIGRATION_31_32,
         )
     }
 
@@ -1239,15 +1240,12 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 29 to 30: Add received message info fields
-    // Stores hop count and receiving interface captured when messages are received
+    // Migration from version 29 to 30: Add appearanceJson to received_locations for telemetry stream
+    // Stores icon appearance (name, foreground/background colors) from telemetry collector responses
     private val MIGRATION_29_30 =
         object : Migration(29, 30) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Add receivedHopCount column (nullable INTEGER for hop count at reception)
-                database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")
-                // Add receivedInterface column (nullable TEXT for interface name at reception)
-                database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
+                database.execSQL("ALTER TABLE received_locations ADD COLUMN appearanceJson TEXT DEFAULT NULL")
             }
         }
 
@@ -1260,6 +1258,53 @@ object DatabaseModule {
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
                 // Add receivedSnr column (nullable REAL for SNR in dB)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedSnr REAL DEFAULT NULL")
+            }
+        }
+
+    // Migration from version 31 to 32: Add received message info fields
+    // Stores hop count and receiving interface captured when messages are received
+    // Also ensures all columns from previous migrations exist (handles pre-release build edge cases)
+    private val MIGRATION_31_32 =
+        object : Migration(31, 32) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Check existing columns in messages table to make migration idempotent
+                // (handles devices that had pre-release builds with these columns at different versions)
+                val messagesCursor = database.query("PRAGMA table_info(messages)")
+                val messagesColumns = mutableSetOf<String>()
+                while (messagesCursor.moveToNext()) {
+                    messagesColumns.add(messagesCursor.getString(messagesCursor.getColumnIndexOrThrow("name")))
+                }
+                messagesCursor.close()
+
+                // Add receivedHopCount column (nullable INTEGER for hop count at reception)
+                if ("receivedHopCount" !in messagesColumns) {
+                    database.execSQL("ALTER TABLE messages ADD COLUMN receivedHopCount INTEGER DEFAULT NULL")
+                }
+                // Add receivedInterface column (nullable TEXT for interface name at reception)
+                if ("receivedInterface" !in messagesColumns) {
+                    database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
+                }
+                // Add receivedRssi column (should have been added in 30→31, but may be missing on some devices)
+                if ("receivedRssi" !in messagesColumns) {
+                    database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
+                }
+                // Add receivedSnr column (should have been added in 30→31, but may be missing on some devices)
+                if ("receivedSnr" !in messagesColumns) {
+                    database.execSQL("ALTER TABLE messages ADD COLUMN receivedSnr REAL DEFAULT NULL")
+                }
+
+                // Also check received_locations table for appearanceJson (should have been added in 29→30)
+                // Some pre-release builds may have skipped this migration
+                val locationsCursor = database.query("PRAGMA table_info(received_locations)")
+                val locationsColumns = mutableSetOf<String>()
+                while (locationsCursor.moveToNext()) {
+                    locationsColumns.add(locationsCursor.getString(locationsCursor.getColumnIndexOrThrow("name")))
+                }
+                locationsCursor.close()
+
+                if ("appearanceJson" !in locationsColumns) {
+                    database.execSQL("ALTER TABLE received_locations ADD COLUMN appearanceJson TEXT DEFAULT NULL")
+                }
             }
         }
 

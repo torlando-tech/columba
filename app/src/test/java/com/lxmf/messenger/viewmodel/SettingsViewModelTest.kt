@@ -13,17 +13,21 @@ import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -60,6 +64,7 @@ class SettingsViewModelTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var mapTileSourceManager: MapTileSourceManager
+    private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -80,6 +85,15 @@ class SettingsViewModelTest {
     private val imageCompressionPresetFlow =
         MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
 
+    // Telemetry collector flows
+    private val telemetryCollectorEnabledFlow = MutableStateFlow(false)
+    private val telemetryCollectorAddressFlow = MutableStateFlow<String?>(null)
+    private val telemetrySendIntervalSecondsFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
+    private val lastTelemetrySendTimeFlow = MutableStateFlow<Long?>(null)
+    private val isSendingTelemetryFlow = MutableStateFlow(false)
+    private val telemetryHostModeEnabledFlow = MutableStateFlow(false)
+    private val isHostModeEnabledFlow = MutableStateFlow(false)
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -95,6 +109,7 @@ class SettingsViewModelTest {
         locationSharingManager = mockk(relaxed = true)
         interfaceRepository = mockk(relaxed = true)
         mapTileSourceManager = mockk(relaxed = true)
+        telemetryCollectorManager = mockk(relaxed = true)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -117,7 +132,17 @@ class SettingsViewModelTest {
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
+        every { settingsRepository.telemetryCollectorEnabledFlow } returns telemetryCollectorEnabledFlow
+        every { settingsRepository.telemetryCollectorAddressFlow } returns telemetryCollectorAddressFlow
+        every { settingsRepository.telemetrySendIntervalSecondsFlow } returns telemetrySendIntervalSecondsFlow
+        every { settingsRepository.lastTelemetrySendTimeFlow } returns lastTelemetrySendTimeFlow
         every { identityRepository.activeIdentity } returns activeIdentityFlow
+
+        // Mock TelemetryCollectorManager flows
+        every { telemetryCollectorManager.isSending } returns isSendingTelemetryFlow
+        every { telemetryCollectorManager.isHostModeEnabled } returns isHostModeEnabledFlow
+        every { settingsRepository.telemetryHostModeEnabledFlow } returns telemetryHostModeEnabledFlow
+        coEvery { telemetryCollectorManager.setHostModeEnabled(any()) } just Runs
 
         // Mock PropagationNodeManager flows (StateFlows)
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
@@ -152,6 +177,7 @@ class SettingsViewModelTest {
             locationSharingManager = locationSharingManager,
             interfaceRepository = interfaceRepository,
             mapTileSourceManager = mapTileSourceManager,
+            telemetryCollectorManager = telemetryCollectorManager,
         )
     }
 
@@ -1448,6 +1474,7 @@ class SettingsViewModelTest {
                     locationSharingManager = locationSharingManager,
                     interfaceRepository = interfaceRepository,
                     mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1492,6 +1519,7 @@ class SettingsViewModelTest {
                     locationSharingManager = locationSharingManager,
                     interfaceRepository = interfaceRepository,
                     mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -2082,6 +2110,7 @@ class SettingsViewModelTest {
                     locationSharingManager = locationSharingManager,
                     interfaceRepository = interfaceRepository,
                     mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
                 )
 
             // Wait for any potential async operations to settle
@@ -2123,6 +2152,7 @@ class SettingsViewModelTest {
                     locationSharingManager = locationSharingManager,
                     interfaceRepository = interfaceRepository,
                     mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol
@@ -2729,6 +2759,466 @@ class SettingsViewModelTest {
                     "mapSourceRmspEnabled should be preserved",
                     state.mapSourceRmspEnabled,
                 )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
+
+    // region Telemetry Collector Tests
+
+    @Test
+    fun `initial state has telemetry collector disabled`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.telemetryCollectorEnabled)
+            }
+        }
+
+    @Test
+    fun `initial state has null telemetry collector address`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.telemetryCollectorAddress)
+            }
+        }
+
+    @Test
+    fun `initial state has default telemetry send interval`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(
+                    SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS,
+                    state.telemetrySendIntervalSeconds,
+                )
+            }
+        }
+
+    @Test
+    fun `initial state has null last telemetry send time`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.lastTelemetrySendTime)
+            }
+        }
+
+    @Test
+    fun `initial state is not sending telemetry`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.isSendingTelemetry)
+            }
+        }
+
+    @Test
+    fun `setTelemetryCollectorEnabled true calls manager setEnabled`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetryCollectorEnabled(true)
+
+            coVerify { telemetryCollectorManager.setEnabled(true) }
+        }
+
+    @Test
+    fun `setTelemetryCollectorEnabled false calls manager setEnabled`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetryCollectorEnabled(false)
+
+            coVerify { telemetryCollectorManager.setEnabled(false) }
+        }
+
+    @Test
+    fun `setTelemetryCollectorAddress valid address calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+            val validAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+
+            viewModel.setTelemetryCollectorAddress(validAddress)
+
+            coVerify { telemetryCollectorManager.setCollectorAddress(validAddress) }
+        }
+
+    @Test
+    fun `setTelemetryCollectorAddress null calls manager with null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetryCollectorAddress(null)
+
+            coVerify { telemetryCollectorManager.setCollectorAddress(null) }
+        }
+
+    @Test
+    fun `setTelemetrySendInterval 300 calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetrySendInterval(300)
+
+            coVerify { telemetryCollectorManager.setSendIntervalSeconds(300) }
+        }
+
+    @Test
+    fun `setTelemetrySendInterval 900 calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetrySendInterval(900)
+
+            coVerify { telemetryCollectorManager.setSendIntervalSeconds(900) }
+        }
+
+    @Test
+    fun `setTelemetrySendInterval 1800 calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetrySendInterval(1800)
+
+            coVerify { telemetryCollectorManager.setSendIntervalSeconds(1800) }
+        }
+
+    @Test
+    fun `setTelemetrySendInterval 3600 calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setTelemetrySendInterval(3600)
+
+            coVerify { telemetryCollectorManager.setSendIntervalSeconds(3600) }
+        }
+
+    @Test
+    fun `sendTelemetryNow calls manager sendTelemetryNow`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.sendTelemetryNow()
+
+            coVerify { telemetryCollectorManager.sendTelemetryNow() }
+        }
+
+    @Test
+    fun `state collects telemetryCollectorEnabled from repository`() =
+        runTest {
+            telemetryCollectorEnabledFlow.value = false
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertFalse(state.telemetryCollectorEnabled)
+
+                // Update flow
+                telemetryCollectorEnabledFlow.value = true
+                state = awaitItem()
+                assertTrue(state.telemetryCollectorEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collects telemetryCollectorAddress from repository`() =
+        runTest {
+            telemetryCollectorAddressFlow.value = null
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertNull(state.telemetryCollectorAddress)
+
+                // Update flow with address
+                val testAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                telemetryCollectorAddressFlow.value = testAddress
+                state = awaitItem()
+                assertEquals(testAddress, state.telemetryCollectorAddress)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collects telemetrySendIntervalSeconds from repository`() =
+        runTest {
+            telemetrySendIntervalSecondsFlow.value = 300
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertEquals(300, state.telemetrySendIntervalSeconds)
+
+                // Update flow to 15 minutes
+                telemetrySendIntervalSecondsFlow.value = 900
+                state = awaitItem()
+                assertEquals(900, state.telemetrySendIntervalSeconds)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state collects lastTelemetrySendTime from repository`() =
+        runTest {
+            lastTelemetrySendTimeFlow.value = null
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertNull(state.lastTelemetrySendTime)
+
+                // Update flow with timestamp
+                val testTimestamp = System.currentTimeMillis()
+                lastTelemetrySendTimeFlow.value = testTimestamp
+                state = awaitItem()
+                assertEquals(testTimestamp, state.lastTelemetrySendTime)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state has default isSendingTelemetry as false`() =
+        runTest {
+            // Note: The isSendingTelemetry flow from manager is collected in startTelemetryCollectorMonitor()
+            // which is only called when enableMonitors=true. Since monitors are disabled for tests,
+            // we verify the default state value is false.
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Default value should be false
+                assertFalse(state.isSendingTelemetry)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `telemetry state is preserved when other settings change`() =
+        runTest {
+            // Set up initial telemetry state
+            telemetryCollectorEnabledFlow.value = true
+            telemetryCollectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            telemetrySendIntervalSecondsFlow.value = 900
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue(state.telemetryCollectorEnabled)
+                assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", state.telemetryCollectorAddress)
+                assertEquals(900, state.telemetrySendIntervalSeconds)
+
+                // Change another setting
+                autoAnnounceEnabledFlow.value = false
+                state = awaitItem()
+
+                // Telemetry state should be preserved
+                assertTrue(
+                    "telemetryCollectorEnabled should be preserved",
+                    state.telemetryCollectorEnabled,
+                )
+                assertEquals(
+                    "telemetryCollectorAddress should be preserved",
+                    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                    state.telemetryCollectorAddress,
+                )
+                assertEquals(
+                    "telemetrySendIntervalSeconds should be preserved",
+                    900,
+                    state.telemetrySendIntervalSeconds,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // ========== Telemetry Host Mode Tests ==========
+
+    @Test
+    fun `initial state has telemetry host mode disabled`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                assertFalse(state.telemetryHostModeEnabled)
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `state updates when telemetry host mode enabled changes`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Initial value should be false
+                assertFalse(state.telemetryHostModeEnabled)
+
+                // Enable host mode
+                telemetryHostModeEnabledFlow.value = true
+                state = awaitItem()
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Disable host mode
+                telemetryHostModeEnabledFlow.value = false
+                state = awaitItem()
+                assertFalse(state.telemetryHostModeEnabled)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setTelemetryHostModeEnabled calls manager`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Enable host mode
+            viewModel.setTelemetryHostModeEnabled(true)
+            advanceUntilIdle()
+
+            // Verify manager was called
+            coVerify { telemetryCollectorManager.setHostModeEnabled(true) }
+        }
+
+    @Test
+    fun `setTelemetryHostModeEnabled with false calls manager`() =
+        runTest {
+            // Start with host mode enabled
+            telemetryHostModeEnabledFlow.value = true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Disable host mode
+            viewModel.setTelemetryHostModeEnabled(false)
+            advanceUntilIdle()
+
+            // Verify manager was called with false
+            coVerify { telemetryCollectorManager.setHostModeEnabled(false) }
+        }
+
+    @Test
+    fun `host mode state is preserved when other settings change`() =
+        runTest {
+            // Set up initial host mode state
+            telemetryHostModeEnabledFlow.value = true
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Change another setting
+                autoAnnounceEnabledFlow.value = false
+                state = awaitItem()
+
+                // Host mode state should be preserved
+                assertTrue(
+                    "telemetryHostModeEnabled should be preserved",
+                    state.telemetryHostModeEnabled,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `host mode can be enabled independently of collector mode`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                // Both should start disabled
+                assertFalse(state.telemetryCollectorEnabled)
+                assertFalse(state.telemetryHostModeEnabled)
+
+                // Enable only host mode
+                telemetryHostModeEnabledFlow.value = true
+                state = awaitItem()
+
+                // Host mode enabled, collector mode still disabled
+                assertFalse(state.telemetryCollectorEnabled)
+                assertTrue(state.telemetryHostModeEnabled)
+
+                // Enable collector mode
+                telemetryCollectorEnabledFlow.value = true
+                state = awaitItem()
+
+                // Both now enabled
+                assertTrue(state.telemetryCollectorEnabled)
+                assertTrue(state.telemetryHostModeEnabled)
 
                 cancelAndConsumeRemainingEvents()
             }

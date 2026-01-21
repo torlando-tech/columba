@@ -809,6 +809,46 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun sendTelemetryRequest(
+        destHash: ByteArray,
+        sourceIdentityPrivateKey: ByteArray,
+        timebaseMs: Long,
+        isCollectorRequest: Boolean,
+    ): String {
+        return try {
+            Log.d(TAG, "📡 Sending telemetry request to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
+            wrapperManager.withWrapper { wrapper ->
+                // Convert timebaseMs to seconds for Python, or null if -1 (request all)
+                val timebaseSec: Double? = if (timebaseMs >= 0) timebaseMs / 1000.0 else null
+                val result =
+                    wrapper.callAttr(
+                        "send_telemetry_request",
+                        destHash,
+                        sourceIdentityPrivateKey,
+                        timebaseSec,
+                        isCollectorRequest,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending telemetry request", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
+    override fun setTelemetryCollectorMode(enabled: Boolean): String {
+        return try {
+            Log.d(TAG, "📡 Setting telemetry collector mode: $enabled")
+            wrapperManager.withWrapper { wrapper ->
+                val result = wrapper.callAttr("set_telemetry_collector_enabled", enabled)
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting telemetry collector mode", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
     // ===========================================
     // Emoji Reactions
     // ===========================================

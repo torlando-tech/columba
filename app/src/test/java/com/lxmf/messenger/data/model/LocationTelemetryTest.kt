@@ -267,6 +267,66 @@ class LocationTelemetryTest {
         assertEquals(0, telemetry.approxRadius)
     }
 
+    // ========== Timestamp Semantics ==========
+
+    @Test
+    fun `timestamp should represent location capture time not current time`() {
+        // This test documents the expected semantics: ts should be the time
+        // when the location was captured by the GPS/location provider,
+        // NOT System.currentTimeMillis() at the time of creating the telemetry.
+        // This ensures accurate timeline representation when locations are
+        // sent to collectors or displayed to users.
+        val captureTime = 1609459200000L // Jan 1, 2021 00:00:00 UTC
+        val telemetry =
+            LocationTelemetry(
+                lat = 37.7749,
+                lng = -122.4194,
+                acc = 10.0f,
+                ts = captureTime,
+            )
+
+        assertEquals(captureTime, telemetry.ts)
+        // The timestamp should be independent of when we create/send the telemetry
+    }
+
+    @Test
+    fun `timestamp preserves millisecond precision from location provider`() {
+        // Location providers give timestamps in milliseconds since epoch.
+        // The telemetry should preserve this precision exactly.
+        val preciseTimestamp = 1609459200123L // With milliseconds
+        val telemetry =
+            LocationTelemetry(
+                lat = 0.0,
+                lng = 0.0,
+                acc = 0f,
+                ts = preciseTimestamp,
+            )
+
+        assertEquals(preciseTimestamp, telemetry.ts)
+    }
+
+    @Test
+    fun `timestamp serializes correctly for collector API compatibility`() {
+        // The Sideband/collector API expects timestamps in specific format.
+        // Verify our serialization matches expectations.
+        val knownTimestamp = 1704067200000L // Jan 1, 2024 00:00:00 UTC
+        val telemetry =
+            LocationTelemetry(
+                lat = 51.5074,
+                lng = -0.1278,
+                acc = 5.0f,
+                ts = knownTimestamp,
+            )
+
+        val jsonString = json.encodeToString(telemetry)
+
+        // Verify the exact timestamp value is in the JSON
+        assertTrue(
+            "JSON should contain exact timestamp: $knownTimestamp",
+            jsonString.contains("1704067200000"),
+        )
+    }
+
     // ========== Edge Cases ==========
 
     @Test

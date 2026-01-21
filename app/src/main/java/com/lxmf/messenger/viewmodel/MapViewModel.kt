@@ -127,12 +127,14 @@ class MapViewModel
         private val _refreshTrigger = MutableStateFlow(0L)
 
         // Contacts from repository (exposed for ShareLocationBottomSheet)
+        // Use Lazily instead of WhileSubscribed to prevent flow cancellation when switching tabs
+        // This ensures markers are immediately available when returning to the map
         val contacts: StateFlow<List<EnrichedContact>> =
             contactRepository
                 .getEnrichedContacts()
                 .stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
+                    started = SharingStarted.Lazily,
                     initialValue = emptyList(),
                 )
 

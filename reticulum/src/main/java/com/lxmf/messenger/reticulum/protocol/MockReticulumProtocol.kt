@@ -394,6 +394,27 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
+    override suspend fun sendTelemetryRequest(
+        destinationHash: ByteArray,
+        sourceIdentity: Identity,
+        timebase: Long?,
+        isCollectorRequest: Boolean,
+    ): Result<MessageReceipt> {
+        // Mock implementation - return success with fake receipt
+        return Result.success(
+            MessageReceipt(
+                messageHash = ByteArray(32) { it.toByte() },
+                timestamp = System.currentTimeMillis(),
+                destinationHash = destinationHash,
+            ),
+        )
+    }
+
+    override suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit> {
+        // Mock implementation - always succeeds
+        return Result.success(Unit)
+    }
+
     override suspend fun sendReaction(
         destinationHash: ByteArray,
         targetMessageId: String,

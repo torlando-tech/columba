@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,10 +35,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -95,6 +99,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -115,12 +120,42 @@ import org.maplibre.geojson.Point
  * - Share location functionality
  * - Contact detail bottom sheets
  */
+/**
+ * Data class for discovered interface details to display on map.
+ */
+data class FocusInterfaceDetails(
+    val name: String,
+    val type: String,
+    val latitude: Double,
+    val longitude: Double,
+    val height: Double? = null,
+    // TCP-specific
+    val reachableOn: String? = null,
+    val port: Int? = null,
+    // Radio-specific (LoRa)
+    val frequency: Long? = null,
+    val bandwidth: Int? = null,
+    val spreadingFactor: Int? = null,
+    val codingRate: Int? = null,
+    val modulation: String? = null,
+    // Status
+    val status: String? = null,
+    val lastHeard: Long? = null,
+    val hops: Int? = null,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     viewModel: MapViewModel = hiltViewModel(),
     onNavigateToConversation: (destinationHash: String) -> Unit = {},
     onNavigateToOfflineMaps: () -> Unit = {},
+    // Optional focus location - if provided, map will center here with a marker
+    focusLatitude: Double? = null,
+    focusLongitude: Double? = null,
+    focusLabel: String? = null,
+    // Optional full interface details for bottom sheet
+    focusInterfaceDetails: FocusInterfaceDetails? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -133,6 +168,7 @@ fun MapScreen(
             !state.hasUserDismissedPermissionSheet
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
+    var showFocusInterfaceSheet by remember { mutableStateOf(false) }
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val shareLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val contactLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -214,8 +250,25 @@ fun MapScreen(
     // Center map on user location once when both map and location are ready
     // Key on both so we catch whichever becomes available last, but only center once
     var hasInitiallyCentered by remember { mutableStateOf(false) }
+
+    // If focus coordinates are provided, center on them instead of user location
+    LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
+        if (!hasInitiallyCentered && mapLibreMap != null && focusLatitude != null && focusLongitude != null) {
+            mapLibreMap?.let { map ->
+                val cameraPosition =
+                    CameraPosition.Builder()
+                        .target(LatLng(focusLatitude, focusLongitude))
+                        .zoom(14.0)
+                        .build()
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+                hasInitiallyCentered = true
+            }
+        }
+    }
+
+    // Fall back to user location if no focus coordinates
     LaunchedEffect(mapLibreMap, state.userLocation != null) {
-        if (!hasInitiallyCentered && mapLibreMap != null && state.userLocation != null) {
+        if (!hasInitiallyCentered && mapLibreMap != null && state.userLocation != null && focusLatitude == null) {
             state.userLocation?.let { location ->
                 mapLibreMap?.let { map ->
                     val cameraPosition =
@@ -353,9 +406,22 @@ fun MapScreen(
                             onMapStyleLoaded(map, style, ctx, state.hasLocationPermission)
                         }
 
-                        // Add click listener for contact markers
+                        // Add click listener for contact markers and focus marker
                         map.addOnMapClickListener { latLng ->
                             val screenPoint = map.projection.toScreenLocation(latLng)
+
+                            // Check for focus marker click first
+                            val focusFeatures = map.queryRenderedFeatures(
+                                screenPoint,
+                                "focus-marker-layer",
+                            )
+                            if (focusFeatures.isNotEmpty() && focusInterfaceDetails != null) {
+                                showFocusInterfaceSheet = true
+                                Log.d("MapScreen", "Focus marker tapped: ${focusInterfaceDetails.name}")
+                                return@addOnMapClickListener true
+                            }
+
+                            // Check for contact marker click
                             val features =
                                 map.queryRenderedFeatures(
                                     screenPoint,
@@ -550,6 +616,60 @@ fun MapScreen(
                     ),
                 )
             }
+        }
+
+        // Add focus marker for discovered interface location (if provided)
+        LaunchedEffect(focusLatitude, focusLongitude, focusLabel, mapStyleLoaded) {
+            if (!mapStyleLoaded) return@LaunchedEffect
+            if (focusLatitude == null || focusLongitude == null) return@LaunchedEffect
+            val map = mapLibreMap ?: return@LaunchedEffect
+            val style = map.style ?: return@LaunchedEffect
+
+            val sourceId = "focus-marker-source"
+            val layerId = "focus-marker-layer"
+            val screenDensity = context.resources.displayMetrics.density
+
+            // Create a marker bitmap for the focus location
+            val imageId = "focus-marker-image"
+            if (style.getImage(imageId) == null) {
+                val label = focusLabel ?: "Location"
+                val initial = label.firstOrNull() ?: 'L'
+                val bitmap = MarkerBitmapFactory.createInitialMarker(
+                    initial = initial,
+                    displayName = label,
+                    backgroundColor = android.graphics.Color.parseColor("#E91E63"), // Pink/Magenta for visibility
+                    density = screenDensity,
+                )
+                style.addImage(imageId, bitmap)
+            }
+
+            // Create GeoJSON feature for the focus marker
+            val feature = Feature.fromGeometry(
+                Point.fromLngLat(focusLongitude, focusLatitude),
+            ).apply {
+                addStringProperty("name", focusLabel ?: "Location")
+                addStringProperty("imageId", imageId)
+            }
+            val featureCollection = FeatureCollection.fromFeatures(listOf(feature))
+
+            // Update or create the source
+            val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
+            if (existingSource != null) {
+                existingSource.setGeoJson(featureCollection)
+            } else {
+                style.addSource(GeoJsonSource(sourceId, featureCollection))
+
+                // Add symbol layer for the focus marker
+                style.addLayer(
+                    SymbolLayer(layerId, sourceId).withProperties(
+                        PropertyFactory.iconImage(Expression.get("imageId")),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                    ),
+                )
+            }
+            Log.d("MapScreen", "Added focus marker at $focusLatitude, $focusLongitude for $focusLabel")
         }
 
         // Gradient scrim behind TopAppBar for readability
@@ -763,6 +883,209 @@ fun MapScreen(
             },
             sheetState = contactLocationSheetState,
         )
+    }
+
+    // Bottom sheet for focus interface details (discovered interface)
+    if (showFocusInterfaceSheet && focusInterfaceDetails != null) {
+        FocusInterfaceBottomSheet(
+            details = focusInterfaceDetails,
+            onDismiss = { showFocusInterfaceSheet = false },
+        )
+    }
+}
+
+/**
+ * Bottom sheet showing discovered interface details when the focus marker is tapped.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FocusInterfaceBottomSheet(
+    details: FocusInterfaceDetails,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Header with name and type
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = details.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = details.type,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                details.status?.let { status ->
+                    Surface(
+                        color = when (status.lowercase()) {
+                            "available" -> MaterialTheme.colorScheme.primaryContainer
+                            "unknown" -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text(
+                            text = status.replaceFirstChar { it.uppercase() },
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = when (status.lowercase()) {
+                                "available" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                "unknown" -> MaterialTheme.colorScheme.onTertiaryContainer
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // Location info
+            InterfaceDetailRow(
+                label = "Location",
+                value = "%.4f, %.4f".format(details.latitude, details.longitude),
+            )
+            details.height?.let { height ->
+                InterfaceDetailRow(
+                    label = "Altitude",
+                    value = "${height.toInt()} m",
+                )
+            }
+
+            // Radio parameters (if LoRa interface)
+            if (details.frequency != null) {
+                HorizontalDivider()
+                Text(
+                    text = "Radio Parameters",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                InterfaceDetailRow(
+                    label = "Frequency",
+                    value = "%.3f MHz".format(details.frequency / 1_000_000.0),
+                )
+                details.bandwidth?.let { bw ->
+                    InterfaceDetailRow(
+                        label = "Bandwidth",
+                        value = "$bw kHz",
+                    )
+                }
+                details.spreadingFactor?.let { sf ->
+                    InterfaceDetailRow(
+                        label = "Spreading Factor",
+                        value = "SF$sf",
+                    )
+                }
+                details.codingRate?.let { cr ->
+                    InterfaceDetailRow(
+                        label = "Coding Rate",
+                        value = "4/$cr",
+                    )
+                }
+                details.modulation?.let { mod ->
+                    InterfaceDetailRow(
+                        label = "Modulation",
+                        value = mod,
+                    )
+                }
+            }
+
+            // TCP parameters (if TCP interface)
+            if (details.reachableOn != null) {
+                HorizontalDivider()
+                Text(
+                    text = "Network",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                InterfaceDetailRow(
+                    label = "Host",
+                    value = details.reachableOn,
+                )
+                details.port?.let { port ->
+                    InterfaceDetailRow(
+                        label = "Port",
+                        value = port.toString(),
+                    )
+                }
+            }
+
+            // Status details
+            if (details.lastHeard != null || details.hops != null) {
+                HorizontalDivider()
+                Text(
+                    text = "Status",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                details.lastHeard?.let { timestamp ->
+                    val timeAgo = formatTimeAgo(timestamp)
+                    InterfaceDetailRow(
+                        label = "Last Heard",
+                        value = timeAgo,
+                    )
+                }
+                details.hops?.let { hops ->
+                    InterfaceDetailRow(
+                        label = "Hops",
+                        value = hops.toString(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterfaceDetailRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+private fun formatTimeAgo(timestamp: Long): String {
+    val now = System.currentTimeMillis() / 1000
+    val diff = now - timestamp
+    return when {
+        diff < 60 -> "Just now"
+        diff < 3600 -> "${diff / 60} min ago"
+        diff < 86400 -> "${diff / 3600} hours ago"
+        else -> "${diff / 86400} days ago"
     }
 }
 

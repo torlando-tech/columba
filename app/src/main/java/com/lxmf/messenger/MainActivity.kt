@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
 
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 

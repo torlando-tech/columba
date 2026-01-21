@@ -89,11 +89,12 @@ object DeviceInfoUtil {
             appendLine("- **Device**: ${info.deviceModel} by ${info.manufacturer}")
             if (info.identityHash != null) {
                 // Truncate identity hash for privacy
-                val truncatedHash = if (info.identityHash.length > 8) {
-                    "${info.identityHash.take(8)}..."
-                } else {
-                    info.identityHash
-                }
+                val truncatedHash =
+                    if (info.identityHash.length > 8) {
+                        "${info.identityHash.take(8)}..."
+                    } else {
+                        info.identityHash
+                    }
                 appendLine("- **Identity**: $truncatedHash")
             }
             appendLine()

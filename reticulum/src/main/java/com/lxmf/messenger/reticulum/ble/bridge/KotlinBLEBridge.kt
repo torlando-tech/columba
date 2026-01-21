@@ -192,8 +192,7 @@ class KotlinBLEBridge(
     // During the grace period, we don't clean up the peer for unexpected disconnects
     data class DeduplicationTracker(
         val timestamp: Long,
-        // true if closing central, false if closing peripheral
-        val closingCentral: Boolean,
+        val closingCentral: Boolean, // true if closing central, false if closing peripheral
     )
 
     private val deduplicationInProgress = ConcurrentHashMap<String, DeduplicationTracker>()

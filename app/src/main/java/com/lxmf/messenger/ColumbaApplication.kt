@@ -83,6 +83,7 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
+
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
     // SupervisorJob ensures failures don't crash the entire app

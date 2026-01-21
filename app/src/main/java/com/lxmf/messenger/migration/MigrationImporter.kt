@@ -305,9 +305,18 @@ class MigrationImporter
             val entities =
                 contacts.map { contact ->
                     // Determine status: use exported value, or infer from publicKey for backward compatibility
-                    val status = contact.status?.let {
-                        try { ContactStatus.valueOf(it) } catch (_: Exception) { null }
-                    } ?: if (contact.publicKey == null) ContactStatus.PENDING_IDENTITY else ContactStatus.ACTIVE
+                    val status =
+                        contact.status?.let {
+                            try {
+                                ContactStatus.valueOf(it)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } ?: if (contact.publicKey == null) {
+                            ContactStatus.PENDING_IDENTITY
+                        } else {
+                            ContactStatus.ACTIVE
+                        }
 
                     ContactEntity(
                         destinationHash = contact.destinationHash,

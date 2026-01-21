@@ -242,6 +242,12 @@ android {
                     // Required for Java 9+ compatibility
                     excludes = listOf("jdk.internal.*")
                 }
+                // Show test progress in CI logs
+                it.testLogging {
+                    events("passed", "skipped", "failed")
+                    showStandardStreams = false
+                    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                }
             }
         }
         execution = "ANDROIDX_TEST_ORCHESTRATOR"

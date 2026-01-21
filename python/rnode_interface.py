@@ -437,7 +437,7 @@ class ColumbaRNodeInterface:
             self._running.clear()
             self._read_thread.join(timeout=2.0)
             if self._read_thread.is_alive():
-                RNS.log(f"Warning: old read thread did not stop within timeout", RNS.LOG_WARNING)
+                RNS.log(f"Old read thread did not stop within timeout - potential thread leak", RNS.LOG_ERROR)
 
         # Reset detection state for fresh configuration
         self.detected = False

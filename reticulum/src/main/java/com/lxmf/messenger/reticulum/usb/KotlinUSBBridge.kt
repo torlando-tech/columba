@@ -256,15 +256,19 @@ class KotlinUSBBridge(
                                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                             }
                         device?.let { dev ->
-                            Log.d(TAG, "USB device detached: ${dev.deviceName} (deviceId=${dev.deviceId}, connectedDeviceId=$connectedDeviceId)")
+                            // Capture deviceId early - the UsbDevice parcelable from the intent
+                            // contains a snapshot, so this should be stable even if the physical
+                            // device is already removed from the system
+                            val detachedDeviceId = dev.deviceId
+                            Log.d(TAG, "USB device detached: ${dev.deviceName} (deviceId=$detachedDeviceId, connectedDeviceId=$connectedDeviceId)")
                             // If this was our connected device, handle disconnect
-                            if (dev.deviceId == connectedDeviceId) {
+                            if (detachedDeviceId == connectedDeviceId) {
                                 Log.d(TAG, "Device ID matches - calling handleDisconnect()")
                                 handleDisconnect()
                             } else {
                                 Log.d(TAG, "Device ID mismatch - NOT calling handleDisconnect()")
                             }
-                            notifyListeners { it.onUsbDisconnected(dev.deviceId) }
+                            notifyListeners { it.onUsbDisconnected(detachedDeviceId) }
                         }
                     }
                 }
@@ -654,7 +658,7 @@ class KotlinUSBBridge(
 
             // Start I/O manager for async reads
             val manager = SerialInputOutputManager(port, this)
-            manager.readTimeout = 0 // Non-blocking reads
+            manager.readTimeout = 100 // Small timeout to reduce CPU usage
             ioManager = manager
             ioExecutor.submit(manager)
 
@@ -859,10 +863,11 @@ class KotlinUSBBridge(
                             val rawBytes = kissDataBuffer.take(4).map { it.toInt() and 0xFF }
                             Log.d(TAG, "Raw PIN bytes: ${rawBytes.joinToString(", ") { "0x${it.toString(16).padStart(2, '0')}" }}")
 
-                            val pinValue = ((kissDataBuffer[0].toInt() and 0xFF) shl 24) or
-                                ((kissDataBuffer[1].toInt() and 0xFF) shl 16) or
-                                ((kissDataBuffer[2].toInt() and 0xFF) shl 8) or
-                                (kissDataBuffer[3].toInt() and 0xFF)
+                            val pinValue =
+                                ((kissDataBuffer[0].toInt() and 0xFF) shl 24) or
+                                    ((kissDataBuffer[1].toInt() and 0xFF) shl 16) or
+                                    ((kissDataBuffer[2].toInt() and 0xFF) shl 8) or
+                                    (kissDataBuffer[3].toInt() and 0xFF)
                             Log.d(TAG, "PIN as integer: $pinValue (0x${pinValue.toString(16)})")
 
                             val pin = String.format(Locale.US, "%06d", pinValue)
@@ -883,11 +888,12 @@ class KotlinUSBBridge(
                 if (kissEscape) {
                     // Handle escaped byte
                     kissEscape = false
-                    val actualByte = when (byte) {
-                        KISS_TFEND -> KISS_FEND
-                        KISS_TFESC -> KISS_FESC
-                        else -> byte
-                    }
+                    val actualByte =
+                        when (byte) {
+                            KISS_TFEND -> KISS_FEND
+                            KISS_TFESC -> KISS_FESC
+                            else -> byte
+                        }
                     kissDataBuffer.add(actualByte)
                 } else if (byte == KISS_FESC) {
                     kissEscape = true

@@ -108,6 +108,30 @@ class TcpClientWizardViewModel
         }
 
         /**
+         * Set initial values when creating from a discovered interface.
+         */
+        fun setInitialValues(host: String, port: Int, name: String) {
+            // Check if this matches a community server
+            val matchingServer = TcpCommunityServers.servers.find { server ->
+                server.host == host && server.port == port
+            }
+
+            _state.update {
+                it.copy(
+                    selectedServer = matchingServer,
+                    isCustomMode = matchingServer == null,
+                    interfaceName = name,
+                    targetHost = host,
+                    targetPort = port.toString(),
+                    bootstrapOnly = matchingServer?.isBootstrap ?: false,
+                    // Skip to review step since we have all the info
+                    currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
+                )
+            }
+            Log.d(TAG, "Set initial values from discovered: $name @ $host:$port, matched server: ${matchingServer?.name}")
+        }
+
+        /**
          * Get the list of community servers.
          */
         fun getCommunityServers(): List<TcpCommunityServer> = TcpCommunityServers.servers

@@ -34,14 +34,24 @@ fun TcpClientWizardScreen(
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
     interfaceId: Long? = null,
+    // Initial values for creating from discovered interface
+    initialHost: String? = null,
+    initialPort: Int? = null,
+    initialName: String? = null,
     viewModel: TcpClientWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
 
-    // Load existing interface for editing
-    LaunchedEffect(interfaceId) {
+    // Load existing interface for editing, or set initial values from discovered interface
+    LaunchedEffect(interfaceId, initialHost) {
         if (interfaceId != null) {
             viewModel.loadExistingInterface(interfaceId)
+        } else if (initialHost != null) {
+            viewModel.setInitialValues(
+                host = initialHost,
+                port = initialPort ?: 4242,
+                name = initialName ?: "TCP Connection",
+            )
         }
     }
 

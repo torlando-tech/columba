@@ -1,0 +1,719 @@
+package com.lxmf.messenger.ui.screens
+
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
+import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Screen for displaying discovered interfaces from RNS 1.1.x discovery.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DiscoveredInterfacesScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToTcpClientWizard: (host: String, port: Int, name: String) -> Unit = { _, _, _ -> },
+    onNavigateToMapWithInterface: (details: FocusInterfaceDetails) -> Unit = { _ -> },
+    viewModel: DiscoveredInterfacesViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Discovered Interfaces") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.loadDiscoveredInterfaces() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
+        },
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
+            when {
+                state.isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        // Discovery settings card
+                        item {
+                            DiscoverySettingsCard(
+                                isEnabled = state.isDiscoveryEnabled,
+                                showMockData = state.showMockData,
+                                onToggleMockData = { viewModel.toggleMockData() },
+                            )
+                        }
+
+                        // Status summary (only if we have interfaces)
+                        if (state.interfaces.isNotEmpty()) {
+                            item {
+                                DiscoveryStatusSummary(
+                                    totalCount = state.interfaces.size,
+                                    availableCount = state.availableCount,
+                                    unknownCount = state.unknownCount,
+                                    staleCount = state.staleCount,
+                                )
+                            }
+                        }
+
+                        // Show empty state or interfaces
+                        if (state.interfaces.isEmpty() && !state.showMockData) {
+                            item {
+                                EmptyDiscoveredCard()
+                            }
+                        } else {
+                            items(state.interfaces, key = { it.transportId ?: it.name }) { iface ->
+                                val reachableHost = iface.reachableOn
+                                DiscoveredInterfaceCard(
+                                    iface = iface,
+                                    distanceKm = viewModel.calculateDistance(iface),
+                                    onAddToConfig = {
+                                        if (iface.isTcpInterface && reachableHost != null) {
+                                            onNavigateToTcpClientWizard(
+                                                reachableHost,
+                                                iface.port ?: 4242,
+                                                iface.name,
+                                            )
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "Only TCP interfaces can be added currently",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    },
+                                    onOpenLocation = {
+                                        // Open in Columba's map with focus on this location
+                                        val lat = iface.latitude ?: return@DiscoveredInterfaceCard
+                                        val lon = iface.longitude ?: return@DiscoveredInterfaceCard
+                                        val details = FocusInterfaceDetails(
+                                            name = iface.name,
+                                            type = iface.type,
+                                            latitude = lat,
+                                            longitude = lon,
+                                            height = iface.height,
+                                            reachableOn = iface.reachableOn,
+                                            port = iface.port,
+                                            frequency = iface.frequency,
+                                            bandwidth = iface.bandwidth,
+                                            spreadingFactor = iface.spreadingFactor,
+                                            codingRate = iface.codingRate,
+                                            modulation = iface.modulation,
+                                            status = iface.status,
+                                            lastHeard = iface.lastHeard,
+                                            hops = iface.hops,
+                                        )
+                                        onNavigateToMapWithInterface(details)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Card showing discovery settings and status.
+ */
+@Composable
+private fun DiscoverySettingsCard(
+    isEnabled: Boolean,
+    showMockData: Boolean,
+    onToggleMockData: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isEnabled) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            // Status row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(12.dp),
+                        shape = RoundedCornerShape(50),
+                        color = if (isEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
+                    ) {}
+                    Text(
+                        text = if (isEnabled) "Discovery Enabled" else "Discovery Disabled",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Info text
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isEnabled) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
+                )
+                Text(
+                    text = if (isEnabled) {
+                        "RNS is discovering interfaces from the network. New interfaces will appear here automatically."
+                    } else {
+                        "To enable discovery, configure a TCP Client interface with 'Bootstrap Only' enabled, or set autoconnect_discovered_interfaces > 0 in your config."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isEnabled) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = if (isEnabled) {
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
+            )
+
+            // Mock data toggle for testing
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "Show Mock Data",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    Text(
+                        text = "Display sample interfaces for UI testing",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
+                    )
+                }
+                Switch(
+                    checked = showMockData,
+                    onCheckedChange = { onToggleMockData() },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Card shown when no interfaces are discovered.
+ */
+@Composable
+private fun EmptyDiscoveredCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No Discovered Interfaces",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Interfaces announced by other nodes will appear here once discovery is active.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+/**
+ * Summary of discovered interface statuses.
+ */
+@Composable
+private fun DiscoveryStatusSummary(
+    totalCount: Int,
+    availableCount: Int,
+    unknownCount: Int,
+    staleCount: Int,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "$totalCount",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Total",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "$availableCount",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Available",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "$unknownCount",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                Text(
+                    text = "Unknown",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "$staleCount",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                Text(
+                    text = "Stale",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Card showing details for a single discovered interface.
+ */
+@Composable
+private fun DiscoveredInterfaceCard(
+    iface: DiscoveredInterface,
+    distanceKm: Double?,
+    onAddToConfig: () -> Unit,
+    onOpenLocation: () -> Unit,
+) {
+    val statusColor = when (iface.status) {
+        "available" -> MaterialTheme.colorScheme.primary
+        "unknown" -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.outline
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            // Header: Name and Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = getInterfaceIcon(iface.type),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = iface.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                // Status badge
+                Surface(
+                    color = statusColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(8.dp),
+                            shape = RoundedCornerShape(50),
+                            color = statusColor,
+                        ) {}
+                        Text(
+                            text = iface.status.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor,
+                        )
+                    }
+                }
+            }
+
+            // Transport ID (truncated)
+            iface.transportId?.let { transportId ->
+                Text(
+                    text = "transport: ${transportId.take(12)}...",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            // Type-specific details
+            when {
+                iface.isTcpInterface -> {
+                    TcpInterfaceDetails(iface)
+                }
+                iface.isRadioInterface -> {
+                    RadioInterfaceDetails(iface)
+                }
+            }
+
+            // Location if available
+            val lat = iface.latitude
+            val lon = iface.longitude
+            if (lat != null && lon != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LocationDetails(
+                    latitude = lat,
+                    longitude = lon,
+                    height = iface.height,
+                    distanceKm = distanceKm,
+                    onClick = onOpenLocation,
+                )
+            }
+
+            // Last heard and hops
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "Last heard: ${formatLastHeard(iface.lastHeard)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (iface.hops > 0) {
+                    Text(
+                        text = "${iface.hops} ${if (iface.hops == 1) "hop" else "hops"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // Add to Config button (only for TCP interfaces with host info)
+            if (iface.isTcpInterface && iface.reachableOn != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onAddToConfig,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add to Config")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Details for TCP-based interfaces.
+ */
+@Composable
+private fun TcpInterfaceDetails(iface: DiscoveredInterface) {
+    val hostPort = buildString {
+        iface.reachableOn?.let { append(it) }
+        iface.port?.let { port ->
+            if (isNotEmpty()) append(":$port") else append("port $port")
+        }
+    }
+    if (hostPort.isNotEmpty()) {
+        Text(
+            text = hostPort,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+}
+
+/**
+ * Details for radio-based interfaces (RNode, Weave, KISS).
+ */
+@Composable
+private fun RadioInterfaceDetails(iface: DiscoveredInterface) {
+    val parts = mutableListOf<String>()
+
+    iface.frequency?.let { freq ->
+        val mhz = freq / 1_000_000.0
+        parts.add("${mhz} MHz")
+    }
+    iface.bandwidth?.let { bw ->
+        val khz = bw / 1000
+        parts.add("$khz kHz")
+    }
+    iface.spreadingFactor?.let { sf ->
+        parts.add("SF$sf")
+    }
+    iface.codingRate?.let { cr ->
+        parts.add("CR 4/$cr")
+    }
+    iface.modulation?.let { mod ->
+        parts.add(mod)
+    }
+    iface.channel?.let { ch ->
+        parts.add("CH$ch")
+    }
+
+    if (parts.isNotEmpty()) {
+        Text(
+            text = parts.joinToString(" · "),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+/**
+ * Location details with optional distance. Tappable to open in maps.
+ */
+@Composable
+private fun LocationDetails(
+    latitude: Double,
+    longitude: Double,
+    height: Double?,
+    distanceKm: Double?,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = "Open in maps",
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        val locationText = buildString {
+            append("%.4f, %.4f".format(latitude, longitude))
+            height?.let { append(" (${it.toInt()}m)") }
+            distanceKm?.let { dist ->
+                append(" - ")
+                if (dist < 1.0) {
+                    append("${(dist * 1000).toInt()}m away")
+                } else {
+                    append("%.1f km away".format(dist))
+                }
+            }
+        }
+        Text(
+            text = locationText,
+            style = MaterialTheme.typography.bodySmall.copy(
+                textDecoration = TextDecoration.Underline,
+            ),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+
+/**
+ * Get appropriate icon for interface type.
+ */
+private fun getInterfaceIcon(type: String): androidx.compose.ui.graphics.vector.ImageVector {
+    // Using Settings as a generic icon for now
+    // Could be expanded with custom icons for different interface types
+    return Icons.Default.Settings
+}
+
+/**
+ * Format last heard timestamp as relative time.
+ */
+private fun formatLastHeard(timestamp: Long): String {
+    if (timestamp == 0L) return "Never"
+
+    val now = System.currentTimeMillis() / 1000
+    val diff = now - timestamp
+
+    return when {
+        diff < 60 -> "just now"
+        diff < 3600 -> "${diff / 60} min ago"
+        diff < 86400 -> "${diff / 3600} hours ago"
+        diff < 604800 -> "${diff / 86400} days ago"
+        else -> {
+            val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
+            sdf.format(Date(timestamp * 1000))
+        }
+    }
+}

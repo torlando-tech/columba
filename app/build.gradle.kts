@@ -309,7 +309,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.preview)
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("com.composables:icons-lucide-android:1.1.0")
+    implementation("com.composables:icons-lucide-android:2.2.1")
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 

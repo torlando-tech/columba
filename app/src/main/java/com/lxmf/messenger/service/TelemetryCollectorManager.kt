@@ -127,7 +127,7 @@ class TelemetryCollectorManager
         private val _isHostModeEnabled = MutableStateFlow(false)
         val isHostModeEnabled: StateFlow<Boolean> = _isHostModeEnabled.asStateFlow()
 
-        // Allowed requesters for host mode (empty = allow all)
+        // Allowed requesters for host mode (empty = block all for security)
         private val _allowedRequesters = MutableStateFlow<Set<String>>(emptySet())
         val allowedRequesters: StateFlow<Set<String>> = _allowedRequesters.asStateFlow()
 

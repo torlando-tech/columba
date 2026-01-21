@@ -154,6 +154,7 @@ data class SettingsState(
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
 @HiltViewModel
 class SettingsViewModel
+    @Suppress("LongParameterList") // ViewModel with many DI dependencies is expected
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,

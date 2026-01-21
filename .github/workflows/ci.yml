@@ -168,6 +168,14 @@ jobs:
           path: app/build/outputs/mapping/release/mapping.txt
           retention-days: 30
 
+      - name: Annotate failure before cancelling
+        if: failure()
+        run: |
+          echo "::error title=ProGuard Verification Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
+          echo "## ❌ ProGuard Verification Failed" >> $GITHUB_STEP_SUMMARY
+          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
+          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
+
       - name: Cancel workflow on failure (fail-fast)
         if: failure()
         run: gh run cancel ${{ github.run_id }}
@@ -220,6 +228,14 @@ jobs:
           name: python-coverage-report
           path: python/coverage-python.xml
           retention-days: 7
+
+      - name: Annotate failure before cancelling
+        if: failure()
+        run: |
+          echo "::error title=Python Tests Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
+          echo "## ❌ Python Tests Failed" >> $GITHUB_STEP_SUMMARY
+          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
+          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
 
       - name: Cancel workflow on failure (fail-fast)
         if: failure()
@@ -310,6 +326,14 @@ jobs:
           path: |
             **/build/reports/jacoco/
           retention-days: 7
+
+      - name: Annotate failure before cancelling
+        if: failure()
+        run: |
+          echo "::error title=Kotlin Tests Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
+          echo "## ❌ Kotlin Tests Failed" >> $GITHUB_STEP_SUMMARY
+          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
+          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
 
       - name: Cancel workflow on failure (fail-fast)
         if: failure()

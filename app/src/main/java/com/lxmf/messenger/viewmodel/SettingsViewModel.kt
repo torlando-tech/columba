@@ -3,7 +3,9 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -136,6 +138,10 @@ data class SettingsState(
     val isRequestingTelemetry: Boolean = false,
     // Telemetry host mode (acting as collector for others)
     val telemetryHostModeEnabled: Boolean = false,
+    // Allowed requesters for host mode (empty = allow all)
+    val telemetryAllowedRequesters: Set<String> = emptySet(),
+    // Contacts (for allowed requesters picker)
+    val contacts: List<EnrichedContact> = emptyList(),
     // Protocol versions (for About screen)
     val reticulumVersion: String? = null,
     val lxmfVersion: String? = null,
@@ -148,6 +154,7 @@ data class SettingsState(
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
 @HiltViewModel
 class SettingsViewModel
+    @Suppress("LongParameterList") // ViewModel with many DI dependencies is expected
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
@@ -159,6 +166,7 @@ class SettingsViewModel
         private val interfaceRepository: InterfaceRepository,
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
+        private val contactRepository: ContactRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -204,6 +212,8 @@ class SettingsViewModel
             // Load protocol versions for About screen
             fetchProtocolVersions()
             loadTelemetryCollectorSettings()
+            // Load contacts for allowed requesters picker
+            loadContacts()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -383,6 +393,9 @@ class SettingsViewModel
                             isRequestingTelemetry = _state.value.isRequestingTelemetry,
                             // Preserve telemetry host mode state from loadTelemetryCollectorSettings()
                             telemetryHostModeEnabled = _state.value.telemetryHostModeEnabled,
+                            // Preserve allowed requesters and contacts from loadTelemetryCollectorSettings()
+                            telemetryAllowedRequesters = _state.value.telemetryAllowedRequesters,
+                            contacts = _state.value.contacts,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve protocol versions from fetchProtocolVersions()
@@ -1720,6 +1733,24 @@ class SettingsViewModel
                     _state.update { it.copy(telemetryHostModeEnabled = enabled) }
                 }
             }
+
+            // Allowed requesters for host mode
+            viewModelScope.launch {
+                settingsRepository.telemetryAllowedRequestersFlow.collect { allowedHashes ->
+                    _state.update { it.copy(telemetryAllowedRequesters = allowedHashes) }
+                }
+            }
+        }
+
+        /**
+         * Load contacts for the allowed requesters picker.
+         */
+        private fun loadContacts() {
+            viewModelScope.launch {
+                contactRepository.getEnrichedContacts().collect { contacts ->
+                    _state.update { it.copy(contacts = contacts) }
+                }
+            }
         }
 
         /**
@@ -1824,6 +1855,21 @@ class SettingsViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.setHostModeEnabled(enabled)
                 Log.d(TAG, "Telemetry host mode set to: $enabled")
+            }
+        }
+
+        /**
+         * Set the allowed requesters for telemetry host mode.
+         * Only requesters in the set will receive responses; others will be blocked.
+         * If the set is empty, all requests will be blocked.
+         *
+         * @param allowedHashes Set of 32-character hex identity hash strings
+         */
+        fun setTelemetryAllowedRequesters(allowedHashes: Set<String>) {
+            Log.d(TAG, "setTelemetryAllowedRequesters called with ${allowedHashes.size} hashes: $allowedHashes")
+            viewModelScope.launch {
+                telemetryCollectorManager.setAllowedRequesters(allowedHashes)
+                Log.d(TAG, "Telemetry allowed requesters saved: ${allowedHashes.size}")
             }
         }
     }

@@ -298,6 +298,10 @@ fun SettingsScreen(
                     // Telemetry host mode props
                     telemetryHostModeEnabled = state.telemetryHostModeEnabled,
                     onTelemetryHostModeEnabledChange = { viewModel.setTelemetryHostModeEnabled(it) },
+                    // Allowed requesters props
+                    telemetryAllowedRequesters = state.telemetryAllowedRequesters,
+                    contacts = state.contacts,
+                    onTelemetryAllowedRequestersChange = { viewModel.setTelemetryAllowedRequesters(it) },
                 )
 
                 MapSourcesCard(

@@ -2,6 +2,7 @@
 
 package com.lxmf.messenger.ui.screens.settings.cards
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,23 +12,31 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -45,10 +54,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
+import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.model.SharingDuration
-import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.delay
 
 /**
@@ -97,6 +107,10 @@ fun LocationSharingCard(
     // Telemetry host mode props (acting as collector for others)
     telemetryHostModeEnabled: Boolean,
     onTelemetryHostModeEnabledChange: (Boolean) -> Unit,
+    // Allowed requesters for host mode
+    telemetryAllowedRequesters: Set<String>,
+    contacts: List<EnrichedContact>,
+    onTelemetryAllowedRequestersChange: (Set<String>) -> Unit,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -171,6 +185,10 @@ fun LocationSharingCard(
             // Host mode props
             hostModeEnabled = telemetryHostModeEnabled,
             onHostModeEnabledChange = onTelemetryHostModeEnabledChange,
+            // Allowed requesters props
+            allowedRequesters = telemetryAllowedRequesters,
+            contacts = contacts,
+            onAllowedRequestersChange = onTelemetryAllowedRequestersChange,
         )
     }
 
@@ -497,12 +515,17 @@ private fun TelemetryCollectorSection(
     // Host mode props (acting as collector for others)
     hostModeEnabled: Boolean,
     onHostModeEnabledChange: (Boolean) -> Unit,
+    // Allowed requesters for host mode
+    allowedRequesters: Set<String>,
+    contacts: List<EnrichedContact>,
+    onAllowedRequestersChange: (Set<String>) -> Unit,
 ) {
-    var addressInput by remember { mutableStateOf(collectorAddress ?: "") }
+    var showAllowedRequestersDialog by remember { mutableStateOf(false) }
+    var showContactPicker by remember { mutableStateOf(false) }
 
-    // Sync input with external state
-    LaunchedEffect(collectorAddress) {
-        addressInput = collectorAddress ?: ""
+    // Find the selected contact for display
+    val selectedContact = contacts.find {
+        it.destinationHash.equals(collectorAddress, ignoreCase = true)
     }
 
     Column(
@@ -562,14 +585,65 @@ private fun TelemetryCollectorSection(
             )
         }
 
-        // Collector address input
-        CollectorAddressInput(
-            addressInput = addressInput,
-            onAddressChange = { addressInput = it },
-            onConfirm = { normalizedHash ->
-                onCollectorAddressChange(normalizedHash)
-            },
-        )
+        // Select from contacts
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Group Host",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showContactPicker = true }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (selectedContact != null) {
+                    val hashBytes = selectedContact.destinationHash
+                        .chunked(2)
+                        .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                        .toByteArray()
+                    ProfileIcon(
+                        iconName = selectedContact.iconName,
+                        foregroundColor = selectedContact.iconForegroundColor,
+                        backgroundColor = selectedContact.iconBackgroundColor,
+                        size = 24.dp,
+                        fallbackHash = hashBytes,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = selectedContact?.displayName ?: "Select from contacts...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selectedContact != null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        // Contact picker dialog
+        if (showContactPicker) {
+            GroupHostPickerDialog(
+                contacts = contacts,
+                selectedHash = collectorAddress,
+                onContactSelected = { contact ->
+                    onCollectorAddressChange(contact.destinationHash.lowercase())
+                    showContactPicker = false
+                },
+                onDismiss = { showContactPicker = false },
+            )
+        }
 
         // Send interval chips
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -619,7 +693,7 @@ private fun TelemetryCollectorSection(
         ) {
             Button(
                 onClick = onSendNow,
-                enabled = !isSending && collectorAddress != null,
+                enabled = enabled && !isSending && collectorAddress != null,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                 ),
@@ -827,6 +901,238 @@ private fun TelemetryCollectorSection(
                 onCheckedChange = null,
             )
         }
+
+        // Allowed requesters section (only visible when host mode is enabled)
+        if (hostModeEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            AllowedRequestersSection(
+                allowedRequesters = allowedRequesters,
+                contacts = contacts,
+                onEditClick = { showAllowedRequestersDialog = true },
+            )
+        }
+    }
+
+    // Allowed requesters dialog
+    if (showAllowedRequestersDialog) {
+        AllowedRequestersDialog(
+            contacts = contacts,
+            allowedRequesters = allowedRequesters,
+            onDismiss = { showAllowedRequestersDialog = false },
+            onConfirm = { selectedHashes ->
+                onAllowedRequestersChange(selectedHashes)
+                showAllowedRequestersDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun AllowedRequestersSection(
+    allowedRequesters: Set<String>,
+    contacts: List<EnrichedContact>,
+    onEditClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // Header row with Edit button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Allowed Requesters",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            IconButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit allowed requesters",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        // Warning when no contacts are selected (blocks all)
+        if (allowedRequesters.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = "No contacts selected - all requests blocked",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        } else {
+            // Show count and list of selected contacts
+            val selectedContacts = contacts.filter { it.destinationHash in allowedRequesters }
+            val displayNames = selectedContacts.map { it.displayName }.take(3)
+            val remaining = selectedContacts.size - displayNames.size
+
+            val displayText = if (remaining > 0) {
+                displayNames.joinToString(", ") + " +$remaining more"
+            } else {
+                displayNames.joinToString(", ")
+            }
+
+            Text(
+                text = displayText.ifEmpty { "${allowedRequesters.size} selected" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "Only selected contacts can request your group's locations",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AllowedRequestersDialog(
+    contacts: List<EnrichedContact>,
+    allowedRequesters: Set<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit,
+) {
+    var selectedHashes by remember { mutableStateOf(allowedRequesters) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Filter contacts by search query
+    val filteredContacts = remember(contacts, searchQuery) {
+        if (searchQuery.isBlank()) {
+            contacts
+        } else {
+            contacts.filter { contact ->
+                contact.displayName.contains(searchQuery, ignoreCase = true) ||
+                    contact.destinationHash.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Allowed Requesters") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Description
+                Text(
+                    text = "Only selected contacts can request your group's location data. " +
+                        "If no contacts are selected, all requests will be blocked.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // Search field
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search contacts") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+
+                // Contact list
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(filteredContacts, key = { it.destinationHash }) { contact ->
+                        ContactSelectionRow(
+                            contact = contact,
+                            isSelected = contact.destinationHash in selectedHashes,
+                            onSelectionChange = { selected ->
+                                selectedHashes = if (selected) {
+                                    selectedHashes + contact.destinationHash
+                                } else {
+                                    selectedHashes - contact.destinationHash
+                                }
+                            },
+                        )
+                    }
+                }
+
+                // Show count
+                if (selectedHashes.isNotEmpty()) {
+                    Text(
+                        text = "${selectedHashes.size} contact(s) selected",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(selectedHashes) }) {
+                Text("Done")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun ContactSelectionRow(
+    contact: EnrichedContact,
+    isSelected: Boolean,
+    onSelectionChange: (Boolean) -> Unit,
+) {
+    val hashBytes = contact.destinationHash
+        .chunked(2)
+        .mapNotNull { it.toIntOrNull(16)?.toByte() }
+        .toByteArray()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelectionChange(!isSelected) }
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ProfileIcon(
+            iconName = contact.iconName,
+            foregroundColor = contact.iconForegroundColor,
+            backgroundColor = contact.iconBackgroundColor,
+            size = 40.dp,
+            fallbackHash = hashBytes,
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = contact.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+
+        Checkbox(
+            checked = isSelected,
+            onCheckedChange = onSelectionChange,
+        )
     }
 }
 
@@ -843,58 +1149,6 @@ private fun TelemetryIntervalChip(
         enabled = enabled,
         label = { Text(label) },
     )
-}
-
-@Composable
-private fun CollectorAddressInput(
-    addressInput: String,
-    onAddressChange: (String) -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    val validationResult = DestinationHashValidator.validate(addressInput)
-    val isValid = validationResult is DestinationHashValidator.ValidationResult.Valid
-    val errorMessage = (validationResult as? DestinationHashValidator.ValidationResult.Error)?.message
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = "Group Host",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-
-        OutlinedTextField(
-            value = addressInput,
-            onValueChange = { input ->
-                // Only allow hex characters, up to 32 chars
-                val filtered = input.filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                    .take(32)
-                onAddressChange(filtered)
-
-                // Auto-confirm when valid 32-char address is entered
-                if (filtered.length == 32) {
-                    val result = DestinationHashValidator.validate(filtered)
-                    if (result is DestinationHashValidator.ValidationResult.Valid) {
-                        onConfirm(result.normalizedHash)
-                    }
-                }
-            },
-            label = { Text("Destination Hash") },
-            placeholder = { Text("32-character hex") },
-            singleLine = true,
-            isError = addressInput.isNotEmpty() && !isValid && addressInput.length == 32,
-            supportingText = {
-                when {
-                    addressInput.isEmpty() -> Text("Enter the collector's destination hash")
-                    !isValid && errorMessage != null -> Text(errorMessage)
-                    else -> Text(DestinationHashValidator.getCharacterCount(addressInput))
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
 
 /**
@@ -931,5 +1185,103 @@ private fun formatTelemetryIntervalDisplay(seconds: Int): String {
         hours > 0 -> "${hours}h ${minutes}m"
         secs == 0 -> "${minutes}min"
         else -> "${minutes}m ${secs}s"
+    }
+}
+
+/**
+ * Dialog for selecting a contact as the group host/collector.
+ */
+@Composable
+private fun GroupHostPickerDialog(
+    contacts: List<EnrichedContact>,
+    selectedHash: String?,
+    onContactSelected: (EnrichedContact) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Group Host") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Caution text
+                Text(
+                    text = "The group host will receive your location and can share it with others in the group. Only select someone you trust.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                if (contacts.isEmpty()) {
+                    Text(
+                        text = "No contacts available. Add contacts first.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 350.dp),
+                    ) {
+                        items(contacts.sortedBy { it.displayName.lowercase() }) { contact ->
+                            GroupHostContactRow(
+                                contact = contact,
+                                isSelected = contact.destinationHash.equals(selectedHash, ignoreCase = true),
+                                onClick = { onContactSelected(contact) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+/**
+ * A clickable row displaying a contact for single selection.
+ */
+@Composable
+private fun GroupHostContactRow(
+    contact: EnrichedContact,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+    ) {
+        val hashBytes = contact.destinationHash
+            .chunked(2)
+            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+            .toByteArray()
+
+        ProfileIcon(
+            iconName = contact.iconName,
+            foregroundColor = contact.iconForegroundColor,
+            backgroundColor = contact.iconBackgroundColor,
+            size = 40.dp,
+            fallbackHash = hashBytes,
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = contact.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

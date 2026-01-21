@@ -127,6 +127,10 @@ class TelemetryCollectorManager
         private val _isHostModeEnabled = MutableStateFlow(false)
         val isHostModeEnabled: StateFlow<Boolean> = _isHostModeEnabled.asStateFlow()
 
+        // Allowed requesters for host mode (empty = block all for security)
+        private val _allowedRequesters = MutableStateFlow<Set<String>>(emptySet())
+        val allowedRequesters: StateFlow<Set<String>> = _allowedRequesters.asStateFlow()
+
         // Jobs for periodic operations
         private var settingsObserverJob: Job? = null
         private var periodicSendJob: Job? = null
@@ -145,88 +149,99 @@ class TelemetryCollectorManager
 
             // Observe settings changes
             settingsObserverJob = scope.launch {
-                launch {
-                    settingsRepository.telemetryCollectorAddressFlow
-                        .distinctUntilChanged()
-                        .collect { address ->
-                            _collectorAddress.value = address
-                            Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
-                        }
-                }
-
-                launch {
-                    settingsRepository.telemetryCollectorEnabledFlow
-                        .distinctUntilChanged()
-                        .collect { enabled ->
-                            _isEnabled.value = enabled
-                            Log.d(TAG, "Collector enabled: $enabled")
-                            restartPeriodicSend()
-                        }
-                }
-
-                launch {
-                    settingsRepository.telemetrySendIntervalSecondsFlow
-                        .distinctUntilChanged()
-                        .collect { interval ->
-                            _sendIntervalSeconds.value = interval
-                            Log.d(TAG, "Send interval updated: ${interval}s")
-                            restartPeriodicSend()
-                        }
-                }
-
-                launch {
-                    settingsRepository.lastTelemetrySendTimeFlow
-                        .distinctUntilChanged()
-                        .collect { timestamp ->
-                            _lastSendTime.value = timestamp
-                        }
-                }
-
-                // Request settings observers
-                launch {
-                    settingsRepository.telemetryRequestEnabledFlow
-                        .distinctUntilChanged()
-                        .collect { enabled ->
-                            _isRequestEnabled.value = enabled
-                            Log.d(TAG, "Request enabled: $enabled")
-                            restartPeriodicRequest()
-                        }
-                }
-
-                launch {
-                    settingsRepository.telemetryRequestIntervalSecondsFlow
-                        .distinctUntilChanged()
-                        .collect { interval ->
-                            _requestIntervalSeconds.value = interval
-                            Log.d(TAG, "Request interval updated: ${interval}s")
-                            restartPeriodicRequest()
-                        }
-                }
-
-                launch {
-                    settingsRepository.lastTelemetryRequestTimeFlow
-                        .distinctUntilChanged()
-                        .collect { timestamp ->
-                            _lastRequestTime.value = timestamp
-                        }
-                }
-
-                // Host mode observer - sync with Python when setting changes
-                launch {
-                    settingsRepository.telemetryHostModeEnabledFlow
-                        .distinctUntilChanged()
-                        .collect { enabled ->
-                            _isHostModeEnabled.value = enabled
-                            Log.d(TAG, "Host mode: $enabled")
-                            // Sync with Python layer
-                            syncHostModeWithPython(enabled)
-                        }
-                }
+                launchSendSettingsObservers()
+                launchRequestSettingsObservers()
+                launchHostModeObservers()
             }
 
             // Start periodic sending and requesting
             restartPeriodicSend()
             restartPeriodicRequest()
+        }
+
+        private fun CoroutineScope.launchSendSettingsObservers() {
+            launch {
+                settingsRepository.telemetryCollectorAddressFlow
+                    .distinctUntilChanged()
+                    .collect { address ->
+                        _collectorAddress.value = address
+                        Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
+                    }
+            }
+            launch {
+                settingsRepository.telemetryCollectorEnabledFlow
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        _isEnabled.value = enabled
+                        Log.d(TAG, "Collector enabled: $enabled")
+                        restartPeriodicSend()
+                    }
+            }
+            launch {
+                settingsRepository.telemetrySendIntervalSecondsFlow
+                    .distinctUntilChanged()
+                    .collect { interval ->
+                        _sendIntervalSeconds.value = interval
+                        Log.d(TAG, "Send interval updated: ${interval}s")
+                        restartPeriodicSend()
+                    }
+            }
+            launch {
+                settingsRepository.lastTelemetrySendTimeFlow
+                    .distinctUntilChanged()
+                    .collect { timestamp ->
+                        _lastSendTime.value = timestamp
+                    }
+            }
+        }
+
+        private fun CoroutineScope.launchRequestSettingsObservers() {
+            launch {
+                settingsRepository.telemetryRequestEnabledFlow
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        _isRequestEnabled.value = enabled
+                        Log.d(TAG, "Request enabled: $enabled")
+                        restartPeriodicRequest()
+                    }
+            }
+            launch {
+                settingsRepository.telemetryRequestIntervalSecondsFlow
+                    .distinctUntilChanged()
+                    .collect { interval ->
+                        _requestIntervalSeconds.value = interval
+                        Log.d(TAG, "Request interval updated: ${interval}s")
+                        restartPeriodicRequest()
+                    }
+            }
+            launch {
+                settingsRepository.lastTelemetryRequestTimeFlow
+                    .distinctUntilChanged()
+                    .collect { timestamp ->
+                        _lastRequestTime.value = timestamp
+                    }
+            }
+        }
+
+        private fun CoroutineScope.launchHostModeObservers() {
+            launch {
+                settingsRepository.telemetryHostModeEnabledFlow
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        _isHostModeEnabled.value = enabled
+                        Log.d(TAG, "Host mode: $enabled")
+                        syncHostModeWithPython(enabled)
+                    }
+            }
+            launch {
+                settingsRepository.telemetryAllowedRequestersFlow
+                    .distinctUntilChanged()
+                    .collect { allowedHashes ->
+                        Log.d(TAG, "telemetryAllowedRequestersFlow emitted: ${allowedHashes.size} hashes")
+                        _allowedRequesters.value = allowedHashes
+                        syncAllowedRequestersWithPython(allowedHashes)
+                    }
+            }
         }
 
         /**
@@ -330,6 +345,42 @@ class TelemetryCollectorManager
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error syncing host mode with Python", e)
+            }
+        }
+
+        /**
+         * Set the list of identity hashes allowed to request telemetry when in host mode.
+         * Only requesters in the set will receive responses; others will be blocked.
+         * If the set is empty, all requests will be blocked.
+         *
+         * @param allowedHashes Set of 32-character hex identity hash strings
+         */
+        suspend fun setAllowedRequesters(allowedHashes: Set<String>) {
+            Log.d(TAG, "setAllowedRequesters: saving ${allowedHashes.size} hashes to repository")
+            settingsRepository.saveTelemetryAllowedRequesters(allowedHashes)
+            Log.d(TAG, "setAllowedRequesters: saved to repository, observer will sync with Python")
+            // The observer will automatically sync with Python
+        }
+
+        /**
+         * Sync allowed requesters with Python layer.
+         * Called when the setting changes.
+         */
+        private suspend fun syncAllowedRequestersWithPython(allowedHashes: Set<String>) {
+            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+                Log.d(TAG, "Network not ready, will sync allowed requesters when ready")
+                return
+            }
+
+            try {
+                val result = reticulumProtocol.setTelemetryAllowedRequesters(allowedHashes)
+                if (result.isSuccess) {
+                    Log.i(TAG, "✅ Allowed requesters synced with Python: ${allowedHashes.size}")
+                } else {
+                    Log.e(TAG, "❌ Failed to sync allowed requesters with Python: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing allowed requesters with Python", e)
             }
         }
 

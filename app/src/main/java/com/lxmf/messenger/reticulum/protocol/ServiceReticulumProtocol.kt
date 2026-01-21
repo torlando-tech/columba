@@ -2333,6 +2333,28 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit> {
+        return runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val jsonArray = JSONArray(allowedHashes.toList())
+            val resultJson = service.setTelemetryAllowedRequesters(jsonArray.toString())
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+
+            val count = result.optInt("count", 0)
+            if (count > 0) {
+                Log.d(TAG, "📡 Telemetry allowed requesters set ($count contacts)")
+            } else {
+                Log.d(TAG, "📡 Telemetry allowed requesters cleared (all allowed)")
+            }
+        }
+    }
+
     override suspend fun sendReaction(
         destinationHash: ByteArray,
         targetMessageId: String,

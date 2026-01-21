@@ -324,6 +324,18 @@ interface ReticulumProtocol {
     suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit>
 
     /**
+     * Set the list of identity hashes allowed to request telemetry in host mode.
+     *
+     * Only requesters whose identity hash is in the set will receive responses;
+     * requests from others will be silently ignored. If the set is empty,
+     * all requests will be blocked.
+     *
+     * @param allowedHashes Set of 32-character hex identity hash strings
+     * @return Result indicating success
+     */
+    suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit>
+
+    /**
      * Send an emoji reaction to a message via LXMF Field 16.
      *
      * The reaction is sent as a lightweight LXMF message with Field 16 containing

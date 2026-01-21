@@ -287,6 +287,15 @@ jobs:
           rm -rf build/reports/jacoco
           rm -rf */build/reports/jacoco
 
+      - name: Cache Robolectric Android SDKs
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.16-${{ runner.os }}
+          restore-keys: |
+            robolectric-4.16-
+            robolectric-
+
       - name: Run unit tests and generate coverage report
         run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4 --no-build-cache
 

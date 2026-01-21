@@ -16,14 +16,21 @@ interface ConversationDao {
     fun getAllConversations(identityHash: String): Flow<List<ConversationEntity>>
 
     /**
-     * Get enriched conversations with profile icon data from announces.
-     * Combines conversation data with icon appearance from announces table.
+     * Get enriched conversations with profile icon data from announces and display names from contacts.
+     * Combines conversation data with icon appearance from announces table and nicknames from contacts.
+     *
+     * Display name priority (via COALESCE):
+     * 1. contacts.customNickname - User-set nickname (highest priority)
+     * 2. announces.peerName - Network broadcast name
+     * 3. conversations.peerName - Snapshot from conversation creation
+     * 4. conversations.peerHash - Fallback to hash (never null)
      */
     @Query(
         """
         SELECT
             c.peerHash,
             c.peerName,
+            COALESCE(ct.customNickname, a.peerName, c.peerName, c.peerHash) as displayName,
             c.peerPublicKey,
             c.lastMessage,
             c.lastMessageTimestamp,
@@ -33,6 +40,7 @@ interface ConversationDao {
             a.iconBackgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
+        LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
         WHERE c.identityHash = :identityHash
         ORDER BY c.lastMessageTimestamp DESC
         """,
@@ -40,13 +48,15 @@ interface ConversationDao {
     fun getEnrichedConversations(identityHash: String): Flow<List<EnrichedConversation>>
 
     /**
-     * Search enriched conversations by peer name with profile icon data.
+     * Search enriched conversations by display name (nickname, announce name, or peer name).
+     * Searches across all name sources for better discoverability.
      */
     @Query(
         """
         SELECT
             c.peerHash,
             c.peerName,
+            COALESCE(ct.customNickname, a.peerName, c.peerName, c.peerHash) as displayName,
             c.peerPublicKey,
             c.lastMessage,
             c.lastMessageTimestamp,
@@ -56,7 +66,12 @@ interface ConversationDao {
             a.iconBackgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
-        WHERE c.identityHash = :identityHash AND c.peerName LIKE '%' || :query || '%'
+        LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
+        WHERE c.identityHash = :identityHash
+            AND (ct.customNickname LIKE '%' || :query || '%'
+                OR a.peerName LIKE '%' || :query || '%'
+                OR c.peerName LIKE '%' || :query || '%'
+                OR c.peerHash LIKE '%' || :query || '%')
         ORDER BY c.lastMessageTimestamp DESC
         """,
     )

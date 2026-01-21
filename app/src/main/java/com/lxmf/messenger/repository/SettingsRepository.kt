@@ -127,6 +127,7 @@ class SettingsRepository
 
             // Telemetry host mode (acting as collector for others)
             val TELEMETRY_HOST_MODE_ENABLED = booleanPreferencesKey("telemetry_host_mode_enabled")
+            val TELEMETRY_ALLOWED_REQUESTERS = stringSetPreferencesKey("telemetry_allowed_requesters")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1403,6 +1404,44 @@ class SettingsRepository
         suspend fun saveTelemetryHostModeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] = enabled
+            }
+        }
+
+        // Telemetry allowed requesters (for host mode access control)
+
+        /**
+         * Flow of identity hashes that are allowed to request telemetry when in host mode.
+         * Only identity hashes in this set can request telemetry.
+         * Empty set means all requests are blocked.
+         */
+        val telemetryAllowedRequestersFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the allowed telemetry requesters (non-flow).
+         */
+        suspend fun getTelemetryAllowedRequesters(): Set<String> {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
+            }.first()
+        }
+
+        /**
+         * Save the allowed telemetry requesters.
+         *
+         * @param allowedHashes Set of 32-character hex identity hashes. Empty set blocks all requests.
+         */
+        suspend fun saveTelemetryAllowedRequesters(allowedHashes: Set<String>) {
+            context.dataStore.edit { preferences ->
+                if (allowedHashes.isEmpty()) {
+                    preferences.remove(PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS)
+                } else {
+                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] = allowedHashes
+                }
             }
         }
 

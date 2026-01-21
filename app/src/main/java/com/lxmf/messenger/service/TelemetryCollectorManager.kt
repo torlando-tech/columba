@@ -127,6 +127,10 @@ class TelemetryCollectorManager
         private val _isHostModeEnabled = MutableStateFlow(false)
         val isHostModeEnabled: StateFlow<Boolean> = _isHostModeEnabled.asStateFlow()
 
+        // Allowed requesters for host mode (empty = allow all)
+        private val _allowedRequesters = MutableStateFlow<Set<String>>(emptySet())
+        val allowedRequesters: StateFlow<Set<String>> = _allowedRequesters.asStateFlow()
+
         // Jobs for periodic operations
         private var settingsObserverJob: Job? = null
         private var periodicSendJob: Job? = null
@@ -220,6 +224,18 @@ class TelemetryCollectorManager
                             Log.d(TAG, "Host mode: $enabled")
                             // Sync with Python layer
                             syncHostModeWithPython(enabled)
+                        }
+                }
+
+                // Allowed requesters observer - sync with Python when setting changes
+                launch {
+                    settingsRepository.telemetryAllowedRequestersFlow
+                        .distinctUntilChanged()
+                        .collect { allowedHashes ->
+                            Log.d(TAG, "telemetryAllowedRequestersFlow emitted: ${allowedHashes.size} hashes")
+                            _allowedRequesters.value = allowedHashes
+                            // Sync with Python layer
+                            syncAllowedRequestersWithPython(allowedHashes)
                         }
                 }
             }
@@ -330,6 +346,42 @@ class TelemetryCollectorManager
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error syncing host mode with Python", e)
+            }
+        }
+
+        /**
+         * Set the list of identity hashes allowed to request telemetry when in host mode.
+         * Only requesters in the set will receive responses; others will be blocked.
+         * If the set is empty, all requests will be blocked.
+         *
+         * @param allowedHashes Set of 32-character hex identity hash strings
+         */
+        suspend fun setAllowedRequesters(allowedHashes: Set<String>) {
+            Log.d(TAG, "setAllowedRequesters: saving ${allowedHashes.size} hashes to repository")
+            settingsRepository.saveTelemetryAllowedRequesters(allowedHashes)
+            Log.d(TAG, "setAllowedRequesters: saved to repository, observer will sync with Python")
+            // The observer will automatically sync with Python
+        }
+
+        /**
+         * Sync allowed requesters with Python layer.
+         * Called when the setting changes.
+         */
+        private suspend fun syncAllowedRequestersWithPython(allowedHashes: Set<String>) {
+            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+                Log.d(TAG, "Network not ready, will sync allowed requesters when ready")
+                return
+            }
+
+            try {
+                val result = reticulumProtocol.setTelemetryAllowedRequesters(allowedHashes)
+                if (result.isSuccess) {
+                    Log.i(TAG, "✅ Allowed requesters synced with Python: ${allowedHashes.size}")
+                } else {
+                    Log.e(TAG, "❌ Failed to sync allowed requesters with Python: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing allowed requesters with Python", e)
             }
         }
 

@@ -34,10 +34,11 @@ class ServiceSettingsAccessorTest {
 
         // Get direct access to SharedPreferences for verification
         @Suppress("DEPRECATION")
-        prefs = context.getSharedPreferences(
-            ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
-            Context.MODE_MULTI_PROCESS,
-        )
+        prefs =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
 
         // Clear prefs before each test
         prefs.edit().clear().apply()

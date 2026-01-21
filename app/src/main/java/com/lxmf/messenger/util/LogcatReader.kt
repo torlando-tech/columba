@@ -37,54 +37,57 @@ object LogcatReader {
     suspend fun readRecentLogs(
         maxLines: Int = DEFAULT_MAX_LINES,
         minPriority: LogPriority = LogPriority.WARN,
-    ): String = withContext(Dispatchers.IO) {
-        try {
-            val pid = android.os.Process.myPid()
+    ): String =
+        withContext(Dispatchers.IO) {
+            try {
+                val pid = android.os.Process.myPid()
 
-            // Build logcat command:
-            // -d: dump and exit (don't block)
-            // -t N: show last N lines
-            // --pid=PID: filter to current process only
-            // *:PRIORITY: minimum priority level
-            val command = arrayOf(
-                "logcat",
-                "-d",
-                "-t",
-                maxLines.toString(),
-                "--pid=$pid",
-                "*:${minPriority.flag}",
-            )
+                // Build logcat command:
+                // -d: dump and exit (don't block)
+                // -t N: show last N lines
+                // --pid=PID: filter to current process only
+                // *:PRIORITY: minimum priority level
+                val command =
+                    arrayOf(
+                        "logcat",
+                        "-d",
+                        "-t",
+                        maxLines.toString(),
+                        "--pid=$pid",
+                        "*:${minPriority.flag}",
+                    )
 
-            val process = Runtime.getRuntime().exec(command)
+                val process = Runtime.getRuntime().exec(command)
 
-            // Read output with timeout
-            val output = StringBuilder()
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    output.appendLine(line)
+                // Read output with timeout
+                val output = StringBuilder()
+                BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        output.appendLine(line)
+                    }
                 }
-            }
 
-            // Wait for process to complete with timeout
-            val exitCode = try {
-                process.waitFor()
-            } catch (e: InterruptedException) {
-                process.destroy()
-                Log.w(TAG, "Logcat process interrupted")
-                return@withContext ""
-            }
+                // Wait for process to complete with timeout
+                val exitCode =
+                    try {
+                        process.waitFor()
+                    } catch (e: InterruptedException) {
+                        process.destroy()
+                        Log.w(TAG, "Logcat process interrupted")
+                        return@withContext ""
+                    }
 
-            if (exitCode != 0) {
-                Log.w(TAG, "Logcat exited with code $exitCode")
-            }
+                if (exitCode != 0) {
+                    Log.w(TAG, "Logcat exited with code $exitCode")
+                }
 
-            output.toString().trim()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to read logcat: ${e.message}", e)
-            ""
+                output.toString().trim()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read logcat: ${e.message}", e)
+                ""
+            }
         }
-    }
 
     /**
      * Read recent logs with all priorities (for comprehensive bug reports).

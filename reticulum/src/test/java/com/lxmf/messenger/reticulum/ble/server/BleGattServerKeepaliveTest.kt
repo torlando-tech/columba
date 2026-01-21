@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleGattServerKeepaliveTest {
-
     // ========== Keepalive Job Cleanup Pattern Tests ==========
 
     /**
@@ -46,67 +45,71 @@ class BleGattServerKeepaliveTest {
      * removing the address from connectedCentrals.
      */
     @Test
-    fun `stopping keepalive before removing from map prevents orphaned jobs`() = runTest {
-        val keepaliveJobs = mutableMapOf<String, Job>()
-        val connectedCentrals = mutableMapOf<String, Any>()
-        val address = "AA:BB:CC:DD:EE:FF"
+    fun `stopping keepalive before removing from map prevents orphaned jobs`() =
+        runTest {
+            val keepaliveJobs = mutableMapOf<String, Job>()
+            val connectedCentrals = mutableMapOf<String, Any>()
+            val address = "AA:BB:CC:DD:EE:FF"
 
-        // Setup: Add connected central and keepalive job
-        connectedCentrals[address] = Object()
-        val keepaliveJob = launch {
-            while (true) {
-                delay(100)
-            }
+            // Setup: Add connected central and keepalive job
+            connectedCentrals[address] = Object()
+            val keepaliveJob =
+                launch {
+                    while (true) {
+                        delay(100)
+                    }
+                }
+            keepaliveJobs[address] = keepaliveJob
+
+            // The fix pattern: stop keepalive BEFORE removing from connectedCentrals
+            keepaliveJobs[address]?.cancel()
+            keepaliveJobs.remove(address)
+            connectedCentrals.remove(address)
+
+            advanceUntilIdle()
+
+            // Verify
+            assertTrue("Keepalive job should be cancelled", keepaliveJob.isCancelled)
+            assertFalse("Keepalive should not exist in map", keepaliveJobs.containsKey(address))
+            assertFalse("Central should not be connected", connectedCentrals.containsKey(address))
         }
-        keepaliveJobs[address] = keepaliveJob
-
-        // The fix pattern: stop keepalive BEFORE removing from connectedCentrals
-        keepaliveJobs[address]?.cancel()
-        keepaliveJobs.remove(address)
-        connectedCentrals.remove(address)
-
-        advanceUntilIdle()
-
-        // Verify
-        assertTrue("Keepalive job should be cancelled", keepaliveJob.isCancelled)
-        assertFalse("Keepalive should not exist in map", keepaliveJobs.containsKey(address))
-        assertFalse("Central should not be connected", connectedCentrals.containsKey(address))
-    }
 
     /**
      * Test that NOT stopping keepalive creates orphaned jobs (the bug scenario).
      */
     @Test
-    fun `not stopping keepalive creates orphaned job - bug demonstration`() = runTest {
-        val keepaliveJobs = mutableMapOf<String, Job>()
-        val connectedCentrals = mutableMapOf<String, Any>()
-        val address = "AA:BB:CC:DD:EE:FF"
+    fun `not stopping keepalive creates orphaned job - bug demonstration`() =
+        runTest {
+            val keepaliveJobs = mutableMapOf<String, Job>()
+            val connectedCentrals = mutableMapOf<String, Any>()
+            val address = "AA:BB:CC:DD:EE:FF"
 
-        // Setup
-        connectedCentrals[address] = Object()
-        val keepaliveRunning = AtomicBoolean(false)
-        val keepaliveJob = launch {
-            keepaliveRunning.set(true)
-            while (true) {
-                delay(50)
-            }
+            // Setup
+            connectedCentrals[address] = Object()
+            val keepaliveRunning = AtomicBoolean(false)
+            val keepaliveJob =
+                launch {
+                    keepaliveRunning.set(true)
+                    while (true) {
+                        delay(50)
+                    }
+                }
+            keepaliveJobs[address] = keepaliveJob
+
+            // The BUG pattern (before fix): only remove from connectedCentrals, forget keepalive
+            connectedCentrals.remove(address)
+            // Missing: keepaliveJobs[address]?.cancel()
+
+            // Advance time a bit for keepalive to run
+            advanceTimeBy(100)
+
+            // Bug: Keepalive job is STILL running even though central is "disconnected"
+            assertTrue("Keepalive job should still be active (orphaned)", keepaliveJob.isActive)
+            assertTrue("Central should be removed", !connectedCentrals.containsKey(address))
+
+            // Cleanup for test
+            keepaliveJob.cancel()
         }
-        keepaliveJobs[address] = keepaliveJob
-
-        // The BUG pattern (before fix): only remove from connectedCentrals, forget keepalive
-        connectedCentrals.remove(address)
-        // Missing: keepaliveJobs[address]?.cancel()
-
-        // Advance time a bit for keepalive to run
-        advanceTimeBy(100)
-
-        // Bug: Keepalive job is STILL running even though central is "disconnected"
-        assertTrue("Keepalive job should still be active (orphaned)", keepaliveJob.isActive)
-        assertTrue("Central should be removed", !connectedCentrals.containsKey(address))
-
-        // Cleanup for test
-        keepaliveJob.cancel()
-    }
 
     // ========== Keepalive Loop Exit Pattern Tests ==========
 
@@ -117,74 +120,78 @@ class BleGattServerKeepaliveTest {
      * if (error.contains("No connected centrals")) break
      */
     @Test
-    fun `keepalive loop exits on no connected centrals error`() = runTest {
-        val connectedCentrals = mutableMapOf<String, Any>()
-        val address = "AA:BB:CC:DD:EE:FF"
-        val loopIterations = AtomicInteger(0)
-        val loopExitedCleanly = AtomicBoolean(false)
+    fun `keepalive loop exits on no connected centrals error`() =
+        runTest {
+            val connectedCentrals = mutableMapOf<String, Any>()
+            val address = "AA:BB:CC:DD:EE:FF"
+            val loopIterations = AtomicInteger(0)
+            val loopExitedCleanly = AtomicBoolean(false)
 
-        // Simulate keepalive loop with the fix
-        val keepaliveJob = launch {
-            while (true) {
-                loopIterations.incrementAndGet()
+            // Simulate keepalive loop with the fix
+            val keepaliveJob =
+                launch {
+                    while (true) {
+                        loopIterations.incrementAndGet()
 
-                // Simulate checking if central is still connected
-                val target = connectedCentrals[address]
-                if (target == null) {
-                    // This is the fix: detect "No connected centrals" and break
-                    loopExitedCleanly.set(true)
-                    break
+                        // Simulate checking if central is still connected
+                        val target = connectedCentrals[address]
+                        if (target == null) {
+                            // This is the fix: detect "No connected centrals" and break
+                            loopExitedCleanly.set(true)
+                            break
+                        }
+
+                        delay(50)
+                    }
                 }
 
-                delay(50)
-            }
+            // Let coroutines run - central is not in map, so loop should exit immediately
+            advanceUntilIdle()
+
+            assertTrue("Loop should have exited cleanly", loopExitedCleanly.get())
+            assertEquals("Loop should have run only once", 1, loopIterations.get())
+            assertFalse("Keepalive job should be completed", keepaliveJob.isActive)
         }
-
-        // Let coroutines run - central is not in map, so loop should exit immediately
-        advanceUntilIdle()
-
-        assertTrue("Loop should have exited cleanly", loopExitedCleanly.get())
-        assertEquals("Loop should have run only once", 1, loopIterations.get())
-        assertFalse("Keepalive job should be completed", keepaliveJob.isActive)
-    }
 
     /**
      * Test that keepalive continues while target is tracked.
      */
     @Test
-    fun `keepalive continues while target is tracked`() = runTest {
-        val connectedCentrals = mutableMapOf<String, Any>()
-        val address = "AA:BB:CC:DD:EE:FF"
-        val loopIterations = AtomicInteger(0)
+    fun `keepalive continues while target is tracked`() =
+        runTest {
+            val connectedCentrals = mutableMapOf<String, Any>()
+            val address = "AA:BB:CC:DD:EE:FF"
+            val loopIterations = AtomicInteger(0)
 
-        // Add central to map
-        connectedCentrals[address] = Object()
+            // Add central to map
+            connectedCentrals[address] = Object()
 
-        // Simulate keepalive loop
-        val keepaliveJob = launch {
-            while (true) {
-                val target = connectedCentrals[address]
-                if (target == null) {
-                    break
+            // Simulate keepalive loop
+            val keepaliveJob =
+                launch {
+                    while (true) {
+                        val target = connectedCentrals[address]
+                        if (target == null) {
+                            break
+                        }
+                        loopIterations.incrementAndGet()
+                        delay(30)
+                    }
                 }
-                loopIterations.incrementAndGet()
-                delay(30)
-            }
+
+            // Advance time - should run multiple iterations
+            advanceTimeBy(150)
+
+            // Should have run multiple iterations (150ms / 30ms = 5 iterations)
+            assertTrue("Loop should have run multiple times", loopIterations.get() >= 3)
+            assertTrue("Keepalive job should still be active", keepaliveJob.isActive)
+
+            // Remove central - loop should exit on next iteration
+            connectedCentrals.remove(address)
+            advanceTimeBy(50)
+
+            assertFalse("Keepalive job should complete after central removed", keepaliveJob.isActive)
         }
-
-        // Advance time - should run multiple iterations
-        advanceTimeBy(150)
-
-        // Should have run multiple iterations (150ms / 30ms = 5 iterations)
-        assertTrue("Loop should have run multiple times", loopIterations.get() >= 3)
-        assertTrue("Keepalive job should still be active", keepaliveJob.isActive)
-
-        // Remove central - loop should exit on next iteration
-        connectedCentrals.remove(address)
-        advanceTimeBy(50)
-
-        assertFalse("Keepalive job should complete after central removed", keepaliveJob.isActive)
-    }
 
     /**
      * Test error message detection pattern.
@@ -204,11 +211,12 @@ class BleGattServerKeepaliveTest {
      */
     @Test
     fun `partial error message match works for detection`() {
-        val possibleErrors = listOf(
-            "No connected centrals to notify",
-            "Error: No connected centrals found",
-            "IllegalStateException: No connected centrals",
-        )
+        val possibleErrors =
+            listOf(
+                "No connected centrals to notify",
+                "Error: No connected centrals found",
+                "IllegalStateException: No connected centrals",
+            )
 
         possibleErrors.forEach { error ->
             assertTrue(
@@ -224,58 +232,62 @@ class BleGattServerKeepaliveTest {
      * Test that stopping one keepalive doesn't affect others.
      */
     @Test
-    fun `stopping one keepalive does not affect others`() = runTest {
-        val keepaliveJobs = mutableMapOf<String, Job>()
-        val addresses = listOf("AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:03")
+    fun `stopping one keepalive does not affect others`() =
+        runTest {
+            val keepaliveJobs = mutableMapOf<String, Job>()
+            val addresses = listOf("AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:03")
 
-        // Create keepalive jobs for all addresses
-        addresses.forEach { address ->
-            keepaliveJobs[address] = launch {
-                while (true) {
-                    delay(50)
-                }
+            // Create keepalive jobs for all addresses
+            addresses.forEach { address ->
+                keepaliveJobs[address] =
+                    launch {
+                        while (true) {
+                            delay(50)
+                        }
+                    }
             }
+
+            // Stop only the first one
+            keepaliveJobs[addresses[0]]?.cancel()
+            keepaliveJobs.remove(addresses[0])
+
+            advanceTimeBy(50)
+
+            // First should be stopped, others should still be active
+            assertFalse("First keepalive should be stopped", keepaliveJobs.containsKey(addresses[0]))
+            assertTrue("Second keepalive should be active", keepaliveJobs[addresses[1]]?.isActive == true)
+            assertTrue("Third keepalive should be active", keepaliveJobs[addresses[2]]?.isActive == true)
+
+            // Cleanup
+            keepaliveJobs.values.forEach { it.cancel() }
         }
-
-        // Stop only the first one
-        keepaliveJobs[addresses[0]]?.cancel()
-        keepaliveJobs.remove(addresses[0])
-
-        advanceTimeBy(50)
-
-        // First should be stopped, others should still be active
-        assertFalse("First keepalive should be stopped", keepaliveJobs.containsKey(addresses[0]))
-        assertTrue("Second keepalive should be active", keepaliveJobs[addresses[1]]?.isActive == true)
-        assertTrue("Third keepalive should be active", keepaliveJobs[addresses[2]]?.isActive == true)
-
-        // Cleanup
-        keepaliveJobs.values.forEach { it.cancel() }
-    }
 
     /**
      * Test idempotent stopping (stopping same address multiple times).
      */
     @Test
-    fun `stopping same keepalive multiple times is safe`() = runTest {
-        val keepaliveJobs = mutableMapOf<String, Job>()
-        val address = "AA:BB:CC:DD:EE:FF"
+    fun `stopping same keepalive multiple times is safe`() =
+        runTest {
+            val keepaliveJobs = mutableMapOf<String, Job>()
+            val address = "AA:BB:CC:DD:EE:FF"
 
-        // Create keepalive
-        keepaliveJobs[address] = launch {
-            while (true) {
-                delay(50)
+            // Create keepalive
+            keepaliveJobs[address] =
+                launch {
+                    while (true) {
+                        delay(50)
+                    }
+                }
+
+            // Stop multiple times (should be idempotent)
+            repeat(3) {
+                keepaliveJobs[address]?.cancel()
+                keepaliveJobs.remove(address)
             }
-        }
 
-        // Stop multiple times (should be idempotent)
-        repeat(3) {
-            keepaliveJobs[address]?.cancel()
-            keepaliveJobs.remove(address)
+            // Should not crash and address should be removed
+            assertFalse("Address should not be in map", keepaliveJobs.containsKey(address))
         }
-
-        // Should not crash and address should be removed
-        assertFalse("Address should not be in map", keepaliveJobs.containsKey(address))
-    }
 
     // ========== Callback Pattern Tests ==========
 
@@ -283,23 +295,24 @@ class BleGattServerKeepaliveTest {
      * Test that disconnect callback is fired during cleanup.
      */
     @Test
-    fun `disconnect triggers callback`() = runTest {
-        val callbackFired = AtomicBoolean(false)
-        val callbackAddress = StringBuilder()
+    fun `disconnect triggers callback`() =
+        runTest {
+            val callbackFired = AtomicBoolean(false)
+            val callbackAddress = StringBuilder()
 
-        // Simulate onCentralDisconnected callback
-        val onCentralDisconnected: (String) -> Unit = { address ->
-            callbackFired.set(true)
-            callbackAddress.append(address)
+            // Simulate onCentralDisconnected callback
+            val onCentralDisconnected: (String) -> Unit = { address ->
+                callbackFired.set(true)
+                callbackAddress.append(address)
+            }
+
+            val address = "AA:BB:CC:DD:EE:FF"
+
+            // Simulate disconnect flow
+            // ... cleanup state ...
+            onCentralDisconnected(address)
+
+            assertTrue("Callback should be fired", callbackFired.get())
+            assertEquals("Callback should receive correct address", address, callbackAddress.toString())
         }
-
-        val address = "AA:BB:CC:DD:EE:FF"
-
-        // Simulate disconnect flow
-        // ... cleanup state ...
-        onCentralDisconnected(address)
-
-        assertTrue("Callback should be fired", callbackFired.get())
-        assertEquals("Callback should receive correct address", address, callbackAddress.toString())
-    }
 }

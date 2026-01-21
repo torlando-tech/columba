@@ -82,7 +82,7 @@ class ReticulumService : Service() {
                                 val now = System.currentTimeMillis()
                                 managers.settingsAccessor.saveNetworkChangeAnnounceTime(now)
                                 managers.settingsAccessor.saveLastAutoAnnounceTime(now)
-                            } catch (e: TimeoutCancellationException) {
+                            } catch (_: TimeoutCancellationException) {
                                 Log.w(TAG, "LXMF announce timed out on network change")
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to announce on network change", e)

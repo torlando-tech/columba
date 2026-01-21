@@ -51,65 +51,72 @@ class LogcatReaderTest {
     // Note: These tests verify behavior when logcat isn't available (test environment)
 
     @Test
-    fun `readRecentLogs returns empty string on failure`() = runTest {
-        // In Robolectric, logcat isn't available, so this should return empty string
-        val logs = LogcatReader.readRecentLogs()
+    fun `readRecentLogs returns empty string on failure`() =
+        runTest {
+            // In Robolectric, logcat isn't available, so this should return empty string
+            val logs = LogcatReader.readRecentLogs()
 
-        // Should return empty string (not throw) when logcat fails
-        assertTrue(logs.isEmpty() || logs.isNotBlank())
-    }
-
-    @Test
-    fun `readRecentLogs with custom maxLines does not throw`() = runTest {
-        // Should handle custom parameters without throwing
-        val logs = LogcatReader.readRecentLogs(maxLines = 100)
-
-        // May return empty or actual logs depending on environment
-        assertTrue(logs.isEmpty() || logs.isNotBlank())
-    }
+            // Should return empty string (not throw) when logcat fails
+            assertTrue(logs.isEmpty() || logs.isNotBlank())
+        }
 
     @Test
-    fun `readRecentLogs with custom priority does not throw`() = runTest {
-        // Should handle different priority levels
-        val logs = LogcatReader.readRecentLogs(minPriority = LogcatReader.LogPriority.ERROR)
+    fun `readRecentLogs with custom maxLines does not throw`() =
+        runTest {
+            // Should handle custom parameters without throwing
+            val logs = LogcatReader.readRecentLogs(maxLines = 100)
 
-        assertTrue(logs.isEmpty() || logs.isNotBlank())
-    }
-
-    @Test
-    fun `readAllRecentLogs does not throw`() = runTest {
-        // readAllRecentLogs should work with DEBUG priority
-        val logs = LogcatReader.readAllRecentLogs()
-
-        assertTrue(logs.isEmpty() || logs.isNotBlank())
-    }
+            // May return empty or actual logs depending on environment
+            assertTrue(logs.isEmpty() || logs.isNotBlank())
+        }
 
     @Test
-    fun `readAllRecentLogs with custom maxLines does not throw`() = runTest {
-        val logs = LogcatReader.readAllRecentLogs(maxLines = 200)
+    fun `readRecentLogs with custom priority does not throw`() =
+        runTest {
+            // Should handle different priority levels
+            val logs = LogcatReader.readRecentLogs(minPriority = LogcatReader.LogPriority.ERROR)
 
-        assertTrue(logs.isEmpty() || logs.isNotBlank())
-    }
+            assertTrue(logs.isEmpty() || logs.isNotBlank())
+        }
+
+    @Test
+    fun `readAllRecentLogs does not throw`() =
+        runTest {
+            // readAllRecentLogs should work with DEBUG priority
+            val logs = LogcatReader.readAllRecentLogs()
+
+            assertTrue(logs.isEmpty() || logs.isNotBlank())
+        }
+
+    @Test
+    fun `readAllRecentLogs with custom maxLines does not throw`() =
+        runTest {
+            val logs = LogcatReader.readAllRecentLogs(maxLines = 200)
+
+            assertTrue(logs.isEmpty() || logs.isNotBlank())
+        }
 
     // ========== Integration-style Tests ==========
     // These verify the function contract without depending on actual logcat
 
     @Test
-    fun `readRecentLogs returns string type`() = runTest {
-        val result = LogcatReader.readRecentLogs()
+    fun `readRecentLogs returns string type`() =
+        runTest {
+            val result = LogcatReader.readRecentLogs()
 
-        // Verify return type is String (not null)
-        assertTrue(result is String)
-    }
+            // Verify return type is String (not null)
+            assertTrue(result is String)
+        }
 
     @Test
-    fun `readRecentLogs is suspendable and completes`() = runTest {
-        // Verify the suspend function completes without hanging
-        val startTime = System.currentTimeMillis()
-        LogcatReader.readRecentLogs()
-        val elapsed = System.currentTimeMillis() - startTime
+    fun `readRecentLogs is suspendable and completes`() =
+        runTest {
+            // Verify the suspend function completes without hanging
+            val startTime = System.currentTimeMillis()
+            LogcatReader.readRecentLogs()
+            val elapsed = System.currentTimeMillis() - startTime
 
-        // Should complete reasonably quickly (under 10 seconds)
-        assertTrue("readRecentLogs took too long: ${elapsed}ms", elapsed < 10000)
-    }
+            // Should complete reasonably quickly (under 10 seconds)
+            assertTrue("readRecentLogs took too long: ${elapsed}ms", elapsed < 10000)
+        }
 }

@@ -12,6 +12,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -24,7 +25,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlinx.coroutines.flow.flowOf
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -61,10 +61,11 @@ class SettingsRepositoryCrossProcessTest {
 
         // Get direct access to cross-process SharedPreferences for testing
         @Suppress("DEPRECATION")
-        crossProcessPrefs = context.getSharedPreferences(
-            ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
-            Context.MODE_MULTI_PROCESS,
-        )
+        crossProcessPrefs =
+            context.getSharedPreferences(
+                ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
+                Context.MODE_MULTI_PROCESS,
+            )
 
         // Clear prefs before each test
         crossProcessPrefs.edit().clear().apply()
@@ -111,10 +112,11 @@ class SettingsRepositoryCrossProcessTest {
 
             repository.saveLastAutoAnnounceTime(timestamp)
 
-            val savedValue = crossProcessPrefs.getLong(
-                ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
-                -1L,
-            )
+            val savedValue =
+                crossProcessPrefs.getLong(
+                    ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
+                    -1L,
+                )
             assertEquals(timestamp, savedValue)
         }
 
@@ -126,10 +128,11 @@ class SettingsRepositoryCrossProcessTest {
             repository.saveLastAutoAnnounceTime(timestamp)
 
             // Verify it's in SharedPreferences
-            val sharedPrefsValue = crossProcessPrefs.getLong(
-                ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
-                -1L,
-            )
+            val sharedPrefsValue =
+                crossProcessPrefs.getLong(
+                    ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME,
+                    -1L,
+                )
             assertEquals(timestamp, sharedPrefsValue)
 
             // The flow should also see the value (reads from SharedPreferences)
@@ -174,10 +177,11 @@ class SettingsRepositoryCrossProcessTest {
 
             repository.saveNetworkChangeAnnounceTime(timestamp)
 
-            val savedValue = crossProcessPrefs.getLong(
-                ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
-                -1L,
-            )
+            val savedValue =
+                crossProcessPrefs.getLong(
+                    ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
+                    -1L,
+                )
             assertEquals(timestamp, savedValue)
         }
 
@@ -211,10 +215,11 @@ class SettingsRepositoryCrossProcessTest {
             // Service accessor reads from same SharedPreferences
             // Note: getBlockUnknownSenders reads from SharedPreferences, confirming the accessor works
             // For timestamps, we verify directly via SharedPreferences
-            val savedValue = crossProcessPrefs.getLong(
-                ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
-                -1L,
-            )
+            val savedValue =
+                crossProcessPrefs.getLong(
+                    ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME,
+                    -1L,
+                )
             assertEquals(timestamp, savedValue)
         }
 

@@ -58,7 +58,6 @@ import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
@@ -85,6 +84,7 @@ import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
+import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint

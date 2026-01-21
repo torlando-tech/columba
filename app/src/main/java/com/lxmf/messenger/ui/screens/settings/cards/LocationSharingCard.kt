@@ -1101,29 +1101,38 @@ private fun ContactSelectionRow(
     isSelected: Boolean,
     onSelectionChange: (Boolean) -> Unit,
 ) {
+    val hashBytes = contact.destinationHash
+        .chunked(2)
+        .mapNotNull { it.toIntOrNull(16)?.toByte() }
+        .toByteArray()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onSelectionChange(!isSelected) }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ProfileIcon(
+            iconName = contact.iconName,
+            foregroundColor = contact.iconForegroundColor,
+            backgroundColor = contact.iconBackgroundColor,
+            size = 40.dp,
+            fallbackHash = hashBytes,
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = contact.displayName,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+
         Checkbox(
             checked = isSelected,
             onCheckedChange = onSelectionChange,
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = contact.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = contact.destinationHash.take(16) + "...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 

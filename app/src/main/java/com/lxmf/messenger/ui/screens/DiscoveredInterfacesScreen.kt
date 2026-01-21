@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -34,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -45,7 +48,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -66,10 +71,17 @@ fun DiscoveredInterfacesScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTcpClientWizard: (host: String, port: Int, name: String) -> Unit = { _, _, _ -> },
     onNavigateToMapWithInterface: (details: FocusInterfaceDetails) -> Unit = { _ -> },
+    onNavigateToRNodeWizardWithParams: (
+        frequency: Long?,
+        bandwidth: Int?,
+        spreadingFactor: Int?,
+        codingRate: Int?,
+    ) -> Unit = { _, _, _, _ -> },
     viewModel: DiscoveredInterfacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     Scaffold(
         topBar = {
@@ -178,6 +190,23 @@ fun DiscoveredInterfacesScreen(
                                             hops = iface.hops,
                                         )
                                         onNavigateToMapWithInterface(details)
+                                    },
+                                    onCopyLoraParams = {
+                                        val params = formatLoraParamsForClipboard(iface)
+                                        clipboardManager.setText(AnnotatedString(params))
+                                        Toast.makeText(
+                                            context,
+                                            "LoRa parameters copied",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                    onUseForNewRNode = {
+                                        onNavigateToRNodeWizardWithParams(
+                                            iface.frequency,
+                                            iface.bandwidth,
+                                            iface.spreadingFactor,
+                                            iface.codingRate,
+                                        )
                                     },
                                 )
                             }
@@ -442,6 +471,8 @@ private fun DiscoveredInterfaceCard(
     distanceKm: Double?,
     onAddToConfig: () -> Unit,
     onOpenLocation: () -> Unit,
+    onCopyLoraParams: () -> Unit,
+    onUseForNewRNode: () -> Unit,
 ) {
     val statusColor = when (iface.status) {
         "available" -> MaterialTheme.colorScheme.primary
@@ -583,6 +614,45 @@ private fun DiscoveredInterfaceCard(
                     Text("Add to Config")
                 }
             }
+
+            // LoRa params buttons (only for radio interfaces with frequency info)
+            if (iface.isRadioInterface && iface.frequency != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Copy button
+                    OutlinedButton(
+                        onClick = onCopyLoraParams,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Copy Params")
+                    }
+                    // Use for New RNode button
+                    Button(
+                        onClick = onUseForNewRNode,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Radio,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Use for RNode")
+                    }
+                }
+            }
         }
     }
 }
@@ -716,4 +786,29 @@ private fun formatLastHeard(timestamp: Long): String {
             sdf.format(Date(timestamp * 1000))
         }
     }
+}
+
+/**
+ * Format LoRa parameters for clipboard.
+ */
+private fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
+    return buildString {
+        appendLine("LoRa Parameters from: ${iface.name}")
+        appendLine("---")
+        iface.frequency?.let { freq ->
+            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
+        }
+        iface.bandwidth?.let { bw ->
+            appendLine("Bandwidth: ${bw / 1000} kHz")
+        }
+        iface.spreadingFactor?.let { sf ->
+            appendLine("Spreading Factor: SF$sf")
+        }
+        iface.codingRate?.let { cr ->
+            appendLine("Coding Rate: 4/$cr")
+        }
+        iface.modulation?.let { mod ->
+            appendLine("Modulation: $mod")
+        }
+    }.trim()
 }

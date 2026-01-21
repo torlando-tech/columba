@@ -873,6 +873,14 @@ fun ColumbaNavigation(
                             onNavigateToOfflineMaps = {
                                 navController.navigate("offline_maps")
                             },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
                         )
                     }
 
@@ -989,6 +997,14 @@ fun ColumbaNavigation(
                             onNavigateToOfflineMaps = {
                                 navController.navigate("offline_maps")
                             },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
                             focusLatitude = if (lat != 0.0) lat else null,
                             focusLongitude = if (lon != 0.0) lon else null,
                             focusLabel = label?.ifEmpty { null },
@@ -1103,6 +1119,14 @@ fun ColumbaNavigation(
                                         "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}"
                                 )
                             },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
                         )
                     }
 
@@ -1151,7 +1175,11 @@ fun ColumbaNavigation(
                             "&usbDeviceId={usbDeviceId}" +
                             "&usbVendorId={usbVendorId}" +
                             "&usbProductId={usbProductId}" +
-                            "&usbDeviceName={usbDeviceName}",
+                            "&usbDeviceName={usbDeviceName}" +
+                            "&loraFrequency={loraFrequency}" +
+                            "&loraBandwidth={loraBandwidth}" +
+                            "&loraSf={loraSf}" +
+                            "&loraCr={loraCr}",
                         arguments =
                             listOf(
                                 navArgument("interfaceId") {
@@ -1180,6 +1208,22 @@ fun ColumbaNavigation(
                                     nullable = true
                                     defaultValue = null
                                 },
+                                navArgument("loraFrequency") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                                navArgument("loraBandwidth") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("loraSf") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("loraCr") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
                             ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
@@ -1188,6 +1232,10 @@ fun ColumbaNavigation(
                         val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                         val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                         val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName")
+                        val loraFrequency = backStackEntry.arguments?.getLong("loraFrequency") ?: -1L
+                        val loraBandwidth = backStackEntry.arguments?.getInt("loraBandwidth") ?: -1
+                        val loraSf = backStackEntry.arguments?.getInt("loraSf") ?: -1
+                        val loraCr = backStackEntry.arguments?.getInt("loraCr") ?: -1
                         com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(
                             editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
                             preselectedConnectionType = connectionType,
@@ -1195,6 +1243,10 @@ fun ColumbaNavigation(
                             preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,
                             preselectedUsbProductId = if (usbProductId >= 0) usbProductId else null,
                             preselectedUsbDeviceName = usbDeviceName,
+                            preselectedLoraFrequency = if (loraFrequency > 0) loraFrequency else null,
+                            preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
+                            preselectedLoraSf = if (loraSf > 0) loraSf else null,
+                            preselectedLoraCr = if (loraCr > 0) loraCr else null,
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
                                 navController.navigate("interface_management") {

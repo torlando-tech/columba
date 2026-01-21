@@ -6,6 +6,7 @@ import android.location.Location
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -26,11 +27,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.ShareLocation
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +45,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,8 +67,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -150,6 +158,12 @@ fun MapScreen(
     viewModel: MapViewModel = hiltViewModel(),
     onNavigateToConversation: (destinationHash: String) -> Unit = {},
     onNavigateToOfflineMaps: () -> Unit = {},
+    onNavigateToRNodeWizardWithParams: (
+        frequency: Long?,
+        bandwidth: Int?,
+        spreadingFactor: Int?,
+        codingRate: Int?,
+    ) -> Unit = { _, _, _, _ -> },
     // Optional focus location - if provided, map will center here with a marker
     focusLatitude: Double? = null,
     focusLongitude: Double? = null,
@@ -890,6 +904,23 @@ fun MapScreen(
         FocusInterfaceBottomSheet(
             details = focusInterfaceDetails,
             onDismiss = { showFocusInterfaceSheet = false },
+            onCopyLoraParams = {
+                val params = formatLoraParamsForClipboard(focusInterfaceDetails)
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("LoRa Parameters", params)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, "LoRa parameters copied", Toast.LENGTH_SHORT).show()
+            },
+            onUseForNewRNode = {
+                showFocusInterfaceSheet = false
+                onNavigateToRNodeWizardWithParams(
+                    focusInterfaceDetails.frequency,
+                    focusInterfaceDetails.bandwidth,
+                    focusInterfaceDetails.spreadingFactor,
+                    focusInterfaceDetails.codingRate,
+                )
+            },
         )
     }
 }
@@ -902,6 +933,8 @@ fun MapScreen(
 private fun FocusInterfaceBottomSheet(
     details: FocusInterfaceDetails,
     onDismiss: () -> Unit,
+    onCopyLoraParams: () -> Unit,
+    onUseForNewRNode: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -1052,8 +1085,73 @@ private fun FocusInterfaceBottomSheet(
                     )
                 }
             }
+
+            // LoRa params buttons (only for radio interfaces with frequency info)
+            if (details.frequency != null) {
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Copy button
+                    OutlinedButton(
+                        onClick = onCopyLoraParams,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Copy Params")
+                    }
+                    // Use for New RNode button
+                    Button(
+                        onClick = onUseForNewRNode,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Radio,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Use for RNode")
+                    }
+                }
+            }
         }
     }
+}
+
+/**
+ * Format LoRa parameters for clipboard.
+ */
+private fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): String {
+    return buildString {
+        appendLine("LoRa Parameters from: ${details.name}")
+        appendLine("---")
+        details.frequency?.let { freq ->
+            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
+        }
+        details.bandwidth?.let { bw ->
+            appendLine("Bandwidth: ${bw / 1000} kHz")
+        }
+        details.spreadingFactor?.let { sf ->
+            appendLine("Spreading Factor: SF$sf")
+        }
+        details.codingRate?.let { cr ->
+            appendLine("Coding Rate: 4/$cr")
+        }
+        details.modulation?.let { mod ->
+            appendLine("Modulation: $mod")
+        }
+    }.trim()
 }
 
 @Composable

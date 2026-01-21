@@ -2509,6 +2509,11 @@ class ReticulumWrapper:
 
                 # Priority 1.5: Check FIELD_TELEMETRY_STREAM (0x03) - Bulk telemetry from collector
                 if FIELD_TELEMETRY_STREAM in lxmf_message.fields:
+                    # Telemetry stream messages are always location-only (shouldn't appear in chat)
+                    if not has_text_content:
+                        is_location_only = True
+                        telemetry_source = "FIELD_TELEMETRY_STREAM"
+
                     try:
                         stream_data = lxmf_message.fields[FIELD_TELEMETRY_STREAM]
                         if stream_data and len(stream_data) > 0:
@@ -2526,15 +2531,11 @@ class ReticulumWrapper:
                                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                                              f"⚠️ Error invoking stream entry callback: {e}")
 
-                            # Mark as location-only if no text content
-                            if not has_text_content:
-                                is_location_only = True
-                                telemetry_source = "FIELD_TELEMETRY_STREAM"
-                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                        f"📍 Location-only telemetry stream message, skipping message queue")
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📍 Location-only telemetry stream message, skipping message queue")
                         else:
                             log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                     f"Empty telemetry stream field received")
+                                     f"Empty telemetry stream field received (0 entries from collector)")
                     except Exception as e:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    f"Failed to unpack FIELD_TELEMETRY_STREAM: {e}")

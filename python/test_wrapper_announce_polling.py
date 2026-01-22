@@ -88,9 +88,10 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         mock_identity.hash = b'\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x20'
         mock_identity.get_public_key = MagicMock(return_value=b'mock_public_key_data')
 
-        # Create interface with proper class name (we use type().__name__ now)
+        # Create interface with proper .name attribute
+        # Code builds "ClassName[UserConfiguredName]" from type().__name__ and .name
         class TCPClientInterface:
-            pass
+            name = "Testnet/192.168.1.100:4242"  # Just the user-configured name
         mock_interface = TCPClientInterface()
         mock_packet = MagicMock()
         mock_packet.receiving_interface = mock_interface
@@ -112,7 +113,7 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         self.assertEqual(announce['public_key'], b'mock_public_key_data')
         self.assertEqual(announce['app_data'], b'app_data_content')
         self.assertEqual(announce['hops'], 3)
-        self.assertEqual(announce['interface'], "TCPClientInterface")
+        self.assertEqual(announce['interface'], "TCPClientInterface[Testnet/192.168.1.100:4242]")
         self.assertIn('timestamp', announce)
         self.assertIsInstance(announce['timestamp'], int)
 

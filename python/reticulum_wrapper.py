@@ -1640,10 +1640,12 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                # Use class name to identify interface type (reliable, not user-configured)
+                                # Build formatted interface string: "ClassName[UserConfiguredName]"
+                                # This allows Kotlin to extract both the friendly name and the interface type
                                 class_name = type(interface_obj).__name__
-                                if "AutoInterface" in class_name:
-                                    receiving_interface = "AutoInterface"
+                                user_name = getattr(interface_obj, 'name', None)
+                                if user_name and user_name != class_name:
+                                    receiving_interface = f"{class_name}[{user_name}]"
                                 else:
                                     receiving_interface = class_name
             except Exception as e:
@@ -2568,10 +2570,12 @@ class ReticulumWrapper:
                         if packet and hasattr(packet, 'receiving_interface'):
                             interface_obj = packet.receiving_interface
                             if interface_obj:
-                                # Use class name to identify interface type (reliable, not user-configured)
+                                # Build formatted interface string: "ClassName[UserConfiguredName]"
+                                # This allows Kotlin to extract both the friendly name and the interface type
                                 class_name = type(interface_obj).__name__
-                                if "AutoInterface" in class_name:
-                                    receiving_interface = "AutoInterface"
+                                user_name = getattr(interface_obj, 'name', None)
+                                if user_name and user_name != class_name:
+                                    receiving_interface = f"{class_name}[{user_name}]"
                                 else:
                                     receiving_interface = class_name
                 except Exception as e:

@@ -238,9 +238,9 @@ class TestAnnounceTableExtraction(unittest.TestCase):
         # Mock packet with receiving_interface
         mock_packet = Mock()
         mock_interface = Mock()
-        # Code uses type().__name__ to identify interface class, not .name attribute
+        # Code builds "ClassName[UserConfiguredName]" from type().__name__ and .name
         mock_interface.__class__.__name__ = 'TCPInterface'
-        mock_interface.name = "TCPInterface[Testnet/127.0.0.1:4242]"
+        mock_interface.name = "Testnet/127.0.0.1:4242"  # Just the user-configured name
         mock_packet.receiving_interface = mock_interface
 
         # announce_table entry structure: IDX_AT_PACKET is at index 5
@@ -259,10 +259,10 @@ class TestAnnounceTableExtraction(unittest.TestCase):
         handler = wrapper._announce_handlers["lxmf.delivery"]
         handler.received_announce(test_dest_hash, test_identity, test_app_data)
 
-        # Verify interface was extracted (code uses class name, not .name attribute)
+        # Verify interface was extracted (format: "ClassName[UserConfiguredName]")
         self.assertEqual(len(wrapper.pending_announces), 1)
         stored_announce = wrapper.pending_announces[0]
-        self.assertEqual(stored_announce['interface'], "TCPInterface")
+        self.assertEqual(stored_announce['interface'], "TCPInterface[Testnet/127.0.0.1:4242]")
 
     @patch('reticulum_wrapper.RNS')
     def test_handle_missing_announce_table(self, mock_rns):

@@ -276,4 +276,56 @@ class ReceivingInterfaceInfoTest {
         assertEquals("Name[with", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
     }
+
+    @Test
+    fun `Name with slash but blank before slash returns fallback`() {
+        // Test when there's a slash but nothing before it
+        val info = getReceivingInterfaceInfo("TCPClientInterface[/192.168.1.100:4965]")
+
+        assertEquals("TCP/IP", info.text)
+        assertEquals("TCPClientInterface", info.subtitle)
+    }
+
+    @Test
+    fun `Auto prefix without full AutoInterface name recognized`() {
+        // Test the startsWith("auto") branch
+        val info = getReceivingInterfaceInfo("AutoDiscovery[LAN]")
+
+        assertEquals(Icons.Default.Wifi, info.icon)
+        assertEquals("LAN", info.text)
+        assertEquals("AutoDiscovery", info.subtitle)
+    }
+
+    @Test
+    fun `IPv6 link-local address starting with fe80 returns fallback`() {
+        val info = getReceivingInterfaceInfo("TCPClientInterface[fe80::a00:27ff:fe4e:66a1%eth0]")
+
+        assertEquals("TCP/IP", info.text)
+        assertEquals("TCPClientInterface", info.subtitle)
+    }
+
+    @Test
+    fun `Address with dot but no colon returns fallback`() {
+        // Test looksLikeAddress with dot only (like hostname.local)
+        val info = getReceivingInterfaceInfo("TCPClientInterface[server.local]")
+
+        assertEquals("TCP/IP", info.text)
+        assertEquals("TCPClientInterface", info.subtitle)
+    }
+
+    @Test
+    fun `extractInterfaceType with no bracket uses full name`() {
+        val info = getReceivingInterfaceInfo("SomeInterface")
+
+        assertEquals("SomeInterface", info.subtitle)
+    }
+
+    @Test
+    fun `Unknown interface shorter than 30 chars shows full name`() {
+        val shortName = "ShortUnknown"
+        val info = getReceivingInterfaceInfo(shortName)
+
+        assertEquals(shortName, info.text)
+        assertEquals(shortName, info.subtitle)
+    }
 }

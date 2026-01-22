@@ -136,26 +136,28 @@ class MapSourcesCardTest {
     }
 
     @Test
-    fun mapSourcesCard_httpCannotBeDisabledWhenOnlySource() {
-        var callbackCalled = false
+    fun mapSourcesCard_httpCanBeDisabledEvenWhenOnlySource() {
+        // HTTP can now be disabled even when it's the only source, because
+        // MapScreen shows a helpful overlay explaining no map source is enabled
+        var httpEnabledResult = true
 
         composeTestRule.setContent {
             MapSourcesCard(
                 isExpanded = true,
                 onExpandedChange = {},
                 httpEnabled = true,
-                onHttpEnabledChange = { callbackCalled = true },
+                onHttpEnabledChange = { httpEnabledResult = it },
                 rmspEnabled = false,
                 onRmspEnabledChange = {},
-                hasOfflineMaps = false, // No offline maps, HTTP is only source
+                hasOfflineMaps = false, // No offline maps, but HTTP can still be disabled
             )
         }
 
-        // Try to click to disable - Switch should be disabled
+        // Click to disable - should work now
         composeTestRule.onNode(isToggleable()).performClick()
 
-        // Callback should NOT be called because HTTP cannot be disabled
-        assertFalse("Callback should not be called when HTTP is only source", callbackCalled)
+        // Callback should be called and HTTP should be disabled
+        assertFalse("HTTP should be disabled after toggle", httpEnabledResult)
     }
 
     @Test
@@ -256,7 +258,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("At least one map source must be enabled")
+        composeTestRule.onNodeWithText("No map tiles will load until a source is enabled or offline maps are downloaded")
             .assertDoesNotExist()
     }
 
@@ -274,7 +276,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("At least one map source must be enabled")
+        composeTestRule.onNodeWithText("No map tiles will load until a source is enabled or offline maps are downloaded")
             .assertDoesNotExist()
     }
 
@@ -331,7 +333,7 @@ class MapSourcesCardTest {
         }
 
         // No warning when offline maps are available
-        composeTestRule.onNodeWithText("At least one map source must be enabled")
+        composeTestRule.onNodeWithText("No map tiles will load until a source is enabled or offline maps are downloaded")
             .assertDoesNotExist()
     }
 

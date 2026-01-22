@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.ShareLocation
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,6 +99,27 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
+
+/**
+ * Empty MapLibre style JSON that shows a blank map with no tiles.
+ * Used when HTTP map source is disabled and no offline maps are available.
+ */
+private const val EMPTY_MAP_STYLE = """
+{
+    "version": 8,
+    "name": "Empty",
+    "sources": {},
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "#f0f0f0"
+            }
+        }
+    ]
+}
+"""
 
 /**
  * Map screen displaying user location and contact markers.
@@ -205,18 +228,28 @@ fun MapScreen(
         }
     }
 
-    // Reload map style when mapStyleResult changes (e.g., after offline map download)
+    // Reload map style when mapStyleResult changes (e.g., after offline map download or settings change)
     // No mapStyleLoaded guard needed - setStyle can be called anytime and replaces any loading style
     LaunchedEffect(state.mapStyleResult, mapLibreMap) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val styleResult = state.mapStyleResult ?: return@LaunchedEffect
 
+        // Control MapLibre's network connectivity based on style result
+        // When Offline or Unavailable, prevent any network requests for tiles
+        val allowNetwork = styleResult is MapStyleResult.Online || styleResult is MapStyleResult.Rmsp
+        MapLibre.setConnected(allowNetwork)
+        Log.d("MapScreen", "MapLibre network connectivity: $allowNetwork")
+
         val styleBuilder =
             when (styleResult) {
                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
-                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
                 is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                is MapStyleResult.Unavailable -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                is MapStyleResult.Unavailable -> {
+                    // Set an empty style to clear the map - don't load HTTP tiles
+                    Log.d("MapScreen", "Style unavailable: ${styleResult.reason}, clearing map")
+                    Style.Builder().fromJson(EMPTY_MAP_STYLE)
+                }
             }
         Log.d("MapScreen", "Applying style: ${styleResult.javaClass.simpleName}")
         map.setStyle(styleBuilder)
@@ -264,11 +297,21 @@ fun MapScreen(
                         }
 
                         // Load map style based on settings (offline, HTTP, or RMSP)
+                        // When Unavailable, load an empty style to clear the map
                         val styleResult = state.mapStyleResult
+
+                        // Control MapLibre's network connectivity based on style result
+                        // When Offline or Unavailable, prevent any network requests for tiles
+                        val allowNetwork = styleResult is MapStyleResult.Online ||
+                            styleResult is MapStyleResult.Rmsp ||
+                            styleResult == null // Default to online if not yet resolved
+                        MapLibre.setConnected(allowNetwork)
+                        Log.d("MapScreen", "Initial MapLibre network connectivity: $allowNetwork")
+
                         val styleBuilder =
                             when (styleResult) {
                                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
-                                is MapStyleResult.Offline -> Style.Builder().fromJson(styleResult.styleJson)
+                                is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
                                 is MapStyleResult.Rmsp -> {
                                     // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
                                     Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
@@ -276,7 +319,8 @@ fun MapScreen(
                                 }
                                 is MapStyleResult.Unavailable -> {
                                     Log.w("MapScreen", "No map source available: ${styleResult.reason}")
-                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                    // Load empty style to clear the map
+                                    Style.Builder().fromJson(EMPTY_MAP_STYLE)
                                 }
                                 null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
                             }
@@ -672,6 +716,22 @@ fun MapScreen(
             )
         }
 
+        // Show overlay when no map source is available (HTTP disabled, no offline maps)
+        // Track dismissal locally - resets when map style changes
+        var isOverlayDismissed by remember(state.mapStyleResult) { mutableStateOf(false) }
+        if (state.mapStyleResult is MapStyleResult.Unavailable && !isOverlayDismissed) {
+            NoMapSourceOverlay(
+                reason = (state.mapStyleResult as MapStyleResult.Unavailable).reason,
+                onEnableHttp = { viewModel.enableHttp() },
+                onNavigateToOfflineMaps = onNavigateToOfflineMaps,
+                onDismiss = { isOverlayDismissed = true },
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(32.dp),
+            )
+        }
+
         // Loading indicator
         if (state.isLoading) {
             Box(
@@ -775,6 +835,90 @@ internal fun EmptyMapStateCard(
                     textAlign = TextAlign.Center,
                 )
             }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Overlay shown when no map source is available (HTTP disabled, no offline maps covering area).
+ * Provides options to enable HTTP or download offline maps, and can be dismissed.
+ */
+@Composable
+internal fun NoMapSourceOverlay(
+    reason: String,
+    onEnableHttp: () -> Unit,
+    onNavigateToOfflineMaps: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    ) {
+        Box {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .padding(top = 8.dp), // Extra top padding for close button
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WifiOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "No Map Source Enabled",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onEnableHttp,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Enable HTTP Map Source")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "or",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = onNavigateToOfflineMaps,
+                ) {
+                    Text("Download Offline Maps First")
+                }
+            }
+            // Close button in top-right corner
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopEnd),

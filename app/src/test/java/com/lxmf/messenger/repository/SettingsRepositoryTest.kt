@@ -1048,4 +1048,78 @@ class SettingsRepositoryTest {
             assertEquals(6, repository.autoAnnounceIntervalHoursFlow.first())
             assertTrue(repository.transportNodeEnabledFlow.first())
         }
+
+    // ========== HTTP Enabled For Download Tests ==========
+
+    @Test
+    fun setHttpEnabledForDownload_true_updatesFlow() =
+        runTest {
+            repository.httpEnabledForDownloadFlow.test(timeout = 5.seconds) {
+                // Get initial value (may be true or false from previous tests)
+                val initial = awaitItem()
+
+                // Ensure we start from false so we can test setting to true
+                if (initial) {
+                    repository.setHttpEnabledForDownload(false)
+                    testDispatcher.scheduler.advanceUntilIdle()
+                    awaitItem() // consume the false emission
+                }
+
+                // Set to true
+                repository.setHttpEnabledForDownload(true)
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                val updated = awaitItem()
+                assertTrue("Flow should emit true after setting", updated)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun setHttpEnabledForDownload_false_updatesFlow() =
+        runTest {
+            repository.httpEnabledForDownloadFlow.test(timeout = 5.seconds) {
+                // Get initial value (may be true or false from previous tests)
+                val initial = awaitItem()
+
+                // Ensure we start from true so we can test setting to false
+                if (!initial) {
+                    repository.setHttpEnabledForDownload(true)
+                    testDispatcher.scheduler.advanceUntilIdle()
+                    awaitItem() // consume the true emission
+                }
+
+                // Set to false
+                repository.setHttpEnabledForDownload(false)
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                val reset = awaitItem()
+                assertFalse("Flow should emit false after resetting", reset)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun httpEnabledForDownloadFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.httpEnabledForDownloadFlow.test(timeout = 5.seconds) {
+                // Get initial value
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.setHttpEnabledForDownload(initial)
+                testDispatcher.scheduler.advanceUntilIdle()
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.setHttpEnabledForDownload(!initial)
+                testDispatcher.scheduler.advanceUntilIdle()
+                val changed = awaitItem()
+                assertEquals(!initial, changed)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
 }

@@ -112,6 +112,7 @@ class SettingsRepository
             // Map source preferences
             val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
+            val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1261,6 +1262,26 @@ class SettingsRepository
         suspend fun saveMapSourceRmspEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow indicating if HTTP was enabled specifically for downloading offline maps.
+         * Used to auto-disable HTTP after download completes.
+         */
+        val httpEnabledForDownloadFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.HTTP_ENABLED_FOR_DOWNLOAD] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Set whether HTTP was enabled specifically for downloading offline maps.
+         */
+        suspend fun setHttpEnabledForDownload(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.HTTP_ENABLED_FOR_DOWNLOAD] = enabled
             }
         }
 

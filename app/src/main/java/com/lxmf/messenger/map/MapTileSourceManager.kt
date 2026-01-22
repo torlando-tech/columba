@@ -23,9 +23,10 @@ sealed class MapStyleResult {
     data class Online(val styleUrl: String) : MapStyleResult()
 
     /**
-     * Use offline MBTiles file.
+     * Use offline cached tiles (via MapLibre's OfflineManager).
+     * Uses the same style URL as online - MapLibre serves cached tiles automatically.
      */
-    data class Offline(val styleJson: String, val regionName: String) : MapStyleResult()
+    data class Offline(val styleUrl: String) : MapStyleResult()
 
     /**
      * Use RMSP server for tiles.
@@ -101,19 +102,30 @@ class MapTileSourceManager
         ): MapStyleResult {
             val httpEnabled = _httpEnabledOverride ?: settingsRepository.getMapSourceHttpEnabled()
             val rmspEnabled = _rmspEnabledOverride ?: settingsRepository.getMapSourceRmspEnabled()
+            val hasOffline = hasOfflineMaps().first()
 
-            Log.d(TAG, "Getting map style for location: $latitude, $longitude (HTTP=$httpEnabled, RMSP=$rmspEnabled)")
+            Log.d(
+                TAG,
+                "Getting map style for location: $latitude, $longitude " +
+                    "(HTTP=$httpEnabled, RMSP=$rmspEnabled, hasOffline=$hasOffline)",
+            )
 
-            // NOTE: Offline maps are now handled by MapLibre's native OfflineManager API.
-            // Tiles downloaded via OfflineManager are automatically used when offline -
-            // no explicit style switching needed. We always return the online style URL
-            // and MapLibre handles caching/offline usage transparently.
+            // NOTE: Offline maps are handled by MapLibre's native OfflineManager API.
+            // Tiles downloaded via OfflineManager are automatically used when the style
+            // references them - MapLibre serves cached tiles without network requests.
+            // We must still load the style URL so MapLibre knows which sources to use.
 
-            // Check HTTP source, then RMSP source, then return unavailable
+            // Check HTTP source, offline maps, RMSP source, then return unavailable
             return when {
                 httpEnabled -> {
                     Log.d(TAG, "Using HTTP source")
                     MapStyleResult.Online(DEFAULT_STYLE_URL)
+                }
+                hasOffline -> {
+                    // Load the online style URL - MapLibre will serve cached tiles
+                    // without making network requests for areas covered by offline maps
+                    Log.d(TAG, "Using offline maps (loading style for cached tile access)")
+                    MapStyleResult.Offline(DEFAULT_STYLE_URL)
                 }
                 rmspEnabled -> {
                     val servers = rmspServerRepository.getNearestServers(1).first()
@@ -128,7 +140,7 @@ class MapTileSourceManager
                         )
                     }
                 }
-                else -> MapStyleResult.Unavailable("Both HTTP and RMSP sources are disabled")
+                else -> MapStyleResult.Unavailable("HTTP map source is disabled. Enable it in Settings or download offline maps.")
             }
         }
 

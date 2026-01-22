@@ -354,6 +354,8 @@ class SettingsViewModel
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
                             bleReticulumVersion = _state.value.bleReticulumVersion,
+                            // Preserve card expansion states
+                            cardExpansionStates = _state.value.cardExpansionStates,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value
@@ -1580,11 +1582,7 @@ class SettingsViewModel
          * @param enabled Whether HTTP map source is enabled
          */
         fun setMapSourceHttpEnabled(enabled: Boolean) {
-            // Prevent disabling both sources (unless offline maps are available)
-            if (!enabled && !_state.value.mapSourceRmspEnabled && !_state.value.hasOfflineMaps) {
-                Log.w(TAG, "Cannot disable HTTP when RMSP is also disabled and no offline maps")
-                return
-            }
+            // Allow disabling HTTP - MapScreen now shows a helpful overlay when no sources enabled
             viewModelScope.launch {
                 settingsRepository.saveMapSourceHttpEnabled(enabled)
                 Log.d(TAG, "HTTP map source ${if (enabled) "enabled" else "disabled"}")

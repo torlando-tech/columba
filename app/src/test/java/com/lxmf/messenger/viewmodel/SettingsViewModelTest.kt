@@ -2506,9 +2506,10 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `setMapSourceHttpEnabled false does not save when only source`() =
+    fun `setMapSourceHttpEnabled false saves even when only source`() =
         runTest {
-            // Both RMSP and offline maps disabled - HTTP cannot be disabled
+            // Issue #285 fix: HTTP can now be disabled even if it's the only source
+            // Both RMSP and offline maps disabled - HTTP can still be disabled
             val rmspEnabledFlow = MutableStateFlow(false)
             val hasOfflineMapsFlow = MutableStateFlow(false)
             every { settingsRepository.mapSourceRmspEnabledFlow } returns rmspEnabledFlow
@@ -2528,8 +2529,8 @@ class SettingsViewModelTest {
 
             viewModel.setMapSourceHttpEnabled(false)
 
-            // Should NOT save because HTTP is the only source
-            coVerify(exactly = 0) { settingsRepository.saveMapSourceHttpEnabled(false) }
+            // Should save - blocking was removed in Issue #285 fix
+            coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
         }
 
     @Test
@@ -2728,6 +2729,70 @@ class SettingsViewModelTest {
                 assertTrue(
                     "mapSourceRmspEnabled should be preserved",
                     state.mapSourceRmspEnabled,
+                )
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // endregion
+
+    // region HTTP Toggle and Card Expansion Tests
+
+    @Test
+    fun `setMapSourceHttpEnabled can disable HTTP without blocking`() =
+        runTest {
+            // Setup: HTTP initially enabled
+            val httpEnabledFlow = MutableStateFlow(true)
+            every { mapTileSourceManager.httpEnabledFlow } returns httpEnabledFlow
+
+            viewModel = createViewModel()
+
+            // Wait for initial load
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Disable HTTP - should work without blocking
+            viewModel.setMapSourceHttpEnabled(false)
+
+            // Verify the repository was called to save the setting
+            coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
+        }
+
+    @Test
+    fun `card expansion states are preserved after toggling HTTP`() =
+        runTest {
+            val httpEnabledFlow = MutableStateFlow(true)
+            every { mapTileSourceManager.httpEnabledFlow } returns httpEnabledFlow
+
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Expand a card first
+                viewModel.toggleCardExpanded(SettingsCardId.MAP_SOURCES, true)
+                var state = awaitItem()
+                assertTrue(
+                    "MAP_SOURCES should be expanded",
+                    state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] == true,
+                )
+
+                // Toggle HTTP
+                viewModel.setMapSourceHttpEnabled(false)
+                httpEnabledFlow.value = false
+                state = awaitItem()
+
+                // Card should still be expanded
+                assertTrue(
+                    "MAP_SOURCES should still be expanded after toggle",
+                    state.cardExpansionStates[SettingsCardId.MAP_SOURCES.name] == true,
                 )
 
                 cancelAndConsumeRemainingEvents()

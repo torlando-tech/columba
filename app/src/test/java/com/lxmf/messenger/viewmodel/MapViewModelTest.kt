@@ -82,6 +82,8 @@ class MapViewModelTest {
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
         coEvery { mapTileSourceManager.getMapStyle(any(), any()) } returns MapStyleResult.Online(MapTileSourceManager.DEFAULT_STYLE_URL)
+        every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
+        every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
     }
 
     @After
@@ -1127,6 +1129,48 @@ class MapViewModelTest {
                 val updated = awaitItem()
                 assertTrue(updated.hasUserDismissedPermissionSheet)
             }
+        }
+
+    // ========== enableHttp Tests ==========
+
+    @Test
+    fun `enableHttp clears download flag and enables HTTP`() =
+        runTest {
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            viewModel.enableHttp()
+
+            // Verify it clears the download flag and enables HTTP
+            coVerify { settingsRepository.setHttpEnabledForDownload(false) }
+            coVerify { mapTileSourceManager.setHttpEnabled(true) }
+        }
+
+    @Test
+    fun `enableHttp triggers map style refresh`() =
+        runTest {
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            viewModel.enableHttp()
+
+            // Verify getMapStyle is called (initial + after enableHttp)
+            coVerify(atLeast = 2) { mapTileSourceManager.getMapStyle(any(), any()) }
+        }
+
+    // ========== httpEnabledFlow observer Tests ==========
+
+    @Test
+    fun `httpEnabledFlow changes trigger map style refresh`() =
+        runTest {
+            val httpEnabledFlow = MutableStateFlow(true)
+            every { mapTileSourceManager.httpEnabledFlow } returns httpEnabledFlow
+
+            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            // Change HTTP enabled state
+            httpEnabledFlow.value = false
+
+            // Verify getMapStyle was called multiple times (initial + after flow change)
+            coVerify(atLeast = 2) { mapTileSourceManager.getMapStyle(any(), any()) }
         }
 
     // Helper function to create mock Location

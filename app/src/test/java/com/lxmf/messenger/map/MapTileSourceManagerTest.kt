@@ -100,7 +100,7 @@ class MapTileSourceManagerTest {
             val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
             assertTrue(result is MapStyleResult.Unavailable)
-            assertEquals("Both HTTP and RMSP sources are disabled", (result as MapStyleResult.Unavailable).reason)
+            assertEquals("HTTP map source is disabled. Enable it in Settings or download offline maps.", (result as MapStyleResult.Unavailable).reason)
         }
 
     @Test
@@ -115,6 +115,42 @@ class MapTileSourceManagerTest {
 
             assertTrue(result is MapStyleResult.Unavailable)
             assertTrue((result as MapStyleResult.Unavailable).reason.contains("No RMSP servers discovered"))
+        }
+
+    @Test
+    fun `getMapStyle returns Offline when HTTP disabled but offline maps exist`() =
+        runTest {
+            // Setup: HTTP disabled, offline maps available
+            coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
+            coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
+
+            val region =
+                OfflineMapRegion(
+                    id = 1,
+                    name = "Test Region",
+                    centerLatitude = 37.7749,
+                    centerLongitude = -122.4194,
+                    radiusKm = 10,
+                    minZoom = 0,
+                    maxZoom = 14,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 1000,
+                    sizeBytes = 5000000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = null,
+                )
+            every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(listOf(region))
+
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+
+            // Should return Offline with the default style URL (not Unavailable)
+            assertTrue("Expected Offline but got ${result::class.simpleName}", result is MapStyleResult.Offline)
+            assertEquals(MapTileSourceManager.DEFAULT_STYLE_URL, (result as MapStyleResult.Offline).styleUrl)
         }
 
     // ========== getMapStyle() Tests - Offline Source ==========
@@ -285,10 +321,9 @@ class MapTileSourceManagerTest {
     }
 
     @Test
-    fun `MapStyleResult Offline holds style JSON and region name`() {
-        val result = MapStyleResult.Offline("{}", "Test Region")
-        assertEquals("{}", result.styleJson)
-        assertEquals("Test Region", result.regionName)
+    fun `MapStyleResult Offline holds style URL`() {
+        val result = MapStyleResult.Offline("https://example.com/style")
+        assertEquals("https://example.com/style", result.styleUrl)
     }
 
     @Test

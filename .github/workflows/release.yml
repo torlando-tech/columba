@@ -92,7 +92,7 @@ jobs:
           files: |
             columba-${{ steps.version.outputs.version }}.apk
             columba-${{ steps.version.outputs.version }}.apk.sha256
-          draft: ${{ contains(steps.version.outputs.version, '-') }}
+          draft: true
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true
           body: |

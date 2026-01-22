@@ -129,9 +129,7 @@ fun DiscoveredInterfacesScreen(
                                 autoconnectCount = state.autoconnectCount,
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
-                                showMockData = state.showMockData,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
-                                onToggleMockData = { viewModel.toggleMockData() },
                             )
                         }
 
@@ -148,7 +146,7 @@ fun DiscoveredInterfacesScreen(
                         }
 
                         // Show empty state or interfaces
-                        if (state.interfaces.isEmpty() && !state.showMockData) {
+                        if (state.interfaces.isEmpty()) {
                             item {
                                 EmptyDiscoveredCard()
                             }
@@ -233,9 +231,7 @@ private fun DiscoverySettingsCard(
     autoconnectCount: Int,
     bootstrapInterfaceNames: List<String>,
     isRestarting: Boolean,
-    showMockData: Boolean,
     onToggleDiscovery: () -> Unit,
-    onToggleMockData: () -> Unit,
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -419,47 +415,6 @@ private fun DiscoverySettingsCard(
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     },
                     modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = if (isEnabled) {
-                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            )
-
-            // Mock data toggle for testing
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        text = "Show Mock Data",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isEnabled) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    Text(
-                        text = "Display sample interfaces for UI testing",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isEnabled) {
-                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        },
-                    )
-                }
-                Switch(
-                    checked = showMockData,
-                    onCheckedChange = { onToggleMockData() },
                 )
             }
         }

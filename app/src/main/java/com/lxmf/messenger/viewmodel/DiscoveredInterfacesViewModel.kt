@@ -39,8 +39,6 @@ data class DiscoveredInterfacesState(
     val isDiscoveryEnabled: Boolean = false,
     // Bootstrap interfaces that enable discovery
     val bootstrapInterfaceNames: List<String> = emptyList(),
-    // Show mock data for UI testing
-    val showMockData: Boolean = false,
     // Service is currently restarting
     val isRestarting: Boolean = false,
 )
@@ -86,39 +84,17 @@ class DiscoveredInterfacesViewModel
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
 
-                    // Use mock data if enabled and no real interfaces
-                    val finalInterfaces = if (_state.value.showMockData && discovered.isEmpty()) {
-                        createMockInterfaces()
-                    } else {
-                        discovered
-                    }
-                    val finalAvailable = if (_state.value.showMockData && discovered.isEmpty()) {
-                        finalInterfaces.count { it.status == "available" }
-                    } else {
-                        availableCount
-                    }
-                    val finalUnknown = if (_state.value.showMockData && discovered.isEmpty()) {
-                        finalInterfaces.count { it.status == "unknown" }
-                    } else {
-                        unknownCount
-                    }
-                    val finalStale = if (_state.value.showMockData && discovered.isEmpty()) {
-                        finalInterfaces.count { it.status == "stale" }
-                    } else {
-                        staleCount
-                    }
-
                     _state.update {
                         it.copy(
-                            interfaces = finalInterfaces,
+                            interfaces = discovered,
                             isLoading = false,
-                            availableCount = finalAvailable,
-                            unknownCount = finalUnknown,
-                            staleCount = finalStale,
+                            availableCount = availableCount,
+                            unknownCount = unknownCount,
+                            staleCount = staleCount,
                             isDiscoveryEnabled = isEnabled,
                         )
                     }
-                    Log.d(TAG, "Loaded ${finalInterfaces.size} discovered interfaces (mock=${_state.value.showMockData})")
+                    Log.d(TAG, "Loaded ${discovered.size} discovered interfaces")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovered interfaces", e)
                     _state.update {
@@ -210,115 +186,6 @@ class DiscoveredInterfacesViewModel
                     }
                 }
             }
-        }
-
-        /**
-         * Toggle mock data display for UI testing.
-         */
-        fun toggleMockData() {
-            _state.update { it.copy(showMockData = !it.showMockData) }
-            loadDiscoveredInterfaces()
-        }
-
-        /**
-         * Create mock interfaces for UI testing.
-         */
-        private fun createMockInterfaces(): List<DiscoveredInterface> {
-            val now = System.currentTimeMillis() / 1000
-            return listOf(
-                DiscoveredInterface(
-                    name = "Beleth TCP Server",
-                    type = "TCPServerInterface",
-                    transportId = "abc123def456789012345678901234567890",
-                    networkId = "net123456789",
-                    status = "available",
-                    statusCode = 1000,
-                    lastHeard = now - 120,  // 2 minutes ago
-                    heardCount = 15,
-                    hops = 3,
-                    stampValue = 14,
-                    reachableOn = "rns.beleth.net",
-                    port = 4242,
-                    frequency = null,
-                    bandwidth = null,
-                    spreadingFactor = null,
-                    codingRate = null,
-                    modulation = null,
-                    channel = null,
-                    latitude = null,
-                    longitude = null,
-                    height = null,
-                ),
-                DiscoveredInterface(
-                    name = "Mobile RNode",
-                    type = "RNodeInterface",
-                    transportId = "def456abc789012345678901234567890123",
-                    networkId = "net987654321",
-                    status = "available",
-                    statusCode = 1000,
-                    lastHeard = now - 300,  // 5 minutes ago
-                    heardCount = 8,
-                    hops = 1,
-                    stampValue = 14,
-                    reachableOn = null,
-                    port = null,
-                    frequency = 915000000,
-                    bandwidth = 125000,
-                    spreadingFactor = 8,
-                    codingRate = 5,
-                    modulation = "LoRa",
-                    channel = null,
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    height = 50.0,
-                ),
-                DiscoveredInterface(
-                    name = "Community Node",
-                    type = "TCPServerInterface",
-                    transportId = "789012345678901234567890123456789012",
-                    networkId = "netabc123",
-                    status = "unknown",
-                    statusCode = 100,
-                    lastHeard = now - 900,  // 15 minutes ago
-                    heardCount = 3,
-                    hops = 5,
-                    stampValue = 12,
-                    reachableOn = "tcp.example.com",
-                    port = 4242,
-                    frequency = null,
-                    bandwidth = null,
-                    spreadingFactor = null,
-                    codingRate = null,
-                    modulation = null,
-                    channel = null,
-                    latitude = null,
-                    longitude = null,
-                    height = null,
-                ),
-                DiscoveredInterface(
-                    name = "Old Gateway",
-                    type = "TCPServerInterface",
-                    transportId = "stale12345678901234567890123456789012",
-                    networkId = "netstale",
-                    status = "stale",
-                    statusCode = 0,
-                    lastHeard = now - 7200,  // 2 hours ago
-                    heardCount = 1,
-                    hops = 8,
-                    stampValue = 10,
-                    reachableOn = "192.168.1.100",
-                    port = 4965,
-                    frequency = null,
-                    bandwidth = null,
-                    spreadingFactor = null,
-                    codingRate = null,
-                    modulation = null,
-                    channel = null,
-                    latitude = null,
-                    longitude = null,
-                    height = null,
-                ),
-            )
         }
 
         /**

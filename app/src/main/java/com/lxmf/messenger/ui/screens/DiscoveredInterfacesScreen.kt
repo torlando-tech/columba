@@ -43,9 +43,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -567,6 +572,53 @@ private fun DiscoveredInterfaceCard(
         else -> MaterialTheme.colorScheme.outline
     }
 
+    // Check if this is a special network type that needs explanation
+    val isYggdrasil = iface.isTcpInterface && isYggdrasilAddress(iface.reachableOn)
+    val isI2p = iface.type == "I2PInterface"
+    var showNetworkInfoDialog by remember { mutableStateOf(false) }
+
+    // Network info dialogs
+    if (showNetworkInfoDialog) {
+        when {
+            isYggdrasil -> {
+                AlertDialog(
+                    onDismissRequest = { showNetworkInfoDialog = false },
+                    title = { Text("Yggdrasil Network") },
+                    text = {
+                        Text(
+                            "Yggdrasil is an encrypted IPv6 mesh network. To connect to this " +
+                            "interface, you need the Yggdrasil app installed and running on your device. " +
+                            "It's available on F-Droid and Google Play."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showNetworkInfoDialog = false }) {
+                            Text("OK")
+                        }
+                    },
+                )
+            }
+            isI2p -> {
+                AlertDialog(
+                    onDismissRequest = { showNetworkInfoDialog = false },
+                    title = { Text("I2P Network") },
+                    text = {
+                        Text(
+                            "I2P (Invisible Internet Project) is an anonymous overlay network. To connect " +
+                            "to this interface, you need an I2P daemon running on your device. Install the " +
+                            "I2P or i2pd app from F-Droid and start it before connecting."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showNetworkInfoDialog = false }) {
+                            Text("OK")
+                        }
+                    },
+                )
+            }
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -601,11 +653,27 @@ private fun DiscoveredInterfaceCard(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
-                        Text(
-                            text = formatInterfaceType(iface.type),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = if (isYggdrasil) "Yggdrasil" else formatInterfaceType(iface.type),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            // Info icon for special networks (Yggdrasil, I2P)
+                            if (isYggdrasil || isI2p) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Network info",
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clickable { showNetworkInfoDialog = true },
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
                 // Badges row

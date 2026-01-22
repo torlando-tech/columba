@@ -337,4 +337,177 @@ class InterfaceManagementScreenTest {
 
         assertTrue(clicked)
     }
+
+    // ========== DiscoveredInterfacesSummaryCard UI Tests ==========
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard displays title`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 0,
+                availableCount = 0,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = false,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Interface Discovery").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows disabled message when discovery disabled`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 0,
+                availableCount = 0,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = false,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Tap to configure RNS 1.1.x interface discovery")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows no interfaces message when enabled but empty`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 0,
+                availableCount = 0,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Discovery enabled - no interfaces found yet")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows total count when interfaces found`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 5,
+                availableCount = 3,
+                unknownCount = 1,
+                staleCount = 1,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("5 interfaces found via RNS Discovery")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows available status badge`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 3,
+                availableCount = 3,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("3 available").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows unknown status badge`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 2,
+                availableCount = 0,
+                unknownCount = 2,
+                staleCount = 0,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("2 unknown").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows stale status badge`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 1,
+                availableCount = 0,
+                unknownCount = 0,
+                staleCount = 1,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("1 stale").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard shows all status badges`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 6,
+                availableCount = 3,
+                unknownCount = 2,
+                staleCount = 1,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("3 available").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 unknown").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 stale").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard hides zero count badges`() {
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 3,
+                availableCount = 3,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = true,
+                onClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("3 available").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 unknown").assertDoesNotExist()
+        composeTestRule.onNodeWithText("0 stale").assertDoesNotExist()
+    }
+
+    @Test
+    fun `DiscoveredInterfacesSummaryCard calls onClick when clicked`() {
+        var clicked = false
+
+        composeTestRule.setContent {
+            DiscoveredInterfacesSummaryCard(
+                totalCount = 0,
+                availableCount = 0,
+                unknownCount = 0,
+                staleCount = 0,
+                isDiscoveryEnabled = false,
+                onClick = { clicked = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Interface Discovery").performClick()
+
+        assertTrue(clicked)
+    }
 }

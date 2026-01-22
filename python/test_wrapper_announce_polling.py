@@ -88,9 +88,10 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         mock_identity.hash = b'\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x20'
         mock_identity.get_public_key = MagicMock(return_value=b'mock_public_key_data')
 
-        # Create interface with proper class name (we use type().__name__ now)
+        # Create interface with proper .name attribute
+        # Code builds "ClassName[UserConfiguredName]" from type().__name__ and .name
         class TCPClientInterface:
-            pass
+            name = "Testnet/192.168.1.100:4242"  # Just the user-configured name
         mock_interface = TCPClientInterface()
         mock_packet = MagicMock()
         mock_packet.receiving_interface = mock_interface
@@ -112,7 +113,7 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         self.assertEqual(announce['public_key'], b'mock_public_key_data')
         self.assertEqual(announce['app_data'], b'app_data_content')
         self.assertEqual(announce['hops'], 3)
-        self.assertEqual(announce['interface'], "TCPClientInterface")
+        self.assertEqual(announce['interface'], "TCPClientInterface[Testnet/192.168.1.100:4242]")
         self.assertIn('timestamp', announce)
         self.assertIsInstance(announce['timestamp'], int)
 
@@ -495,6 +496,65 @@ class TestPollReceivedAnnounces(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['interface'], "UDPInterface")
         self.assertIsInstance(result[0]['interface'], str)
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_interface_name_same_as_class_returns_class_only(self, mock_rns):
+        """Test that when interface.name equals class name, only class name is returned"""
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        mock_identity = MagicMock()
+        mock_identity.hash = dest_hash
+        mock_identity.get_public_key = MagicMock(return_value=b'')
+
+        # Create interface where .name equals class name
+        class AutoInterface:
+            name = "AutoInterface"
+        mock_interface = AutoInterface()
+
+        mock_packet = MagicMock()
+        mock_packet.receiving_interface = mock_interface
+
+        announce_entry = [time.time(), 0, 0, None, 0, mock_packet]
+        mock_rns.Transport.announce_table = {dest_hash: announce_entry}
+        mock_rns.Identity.recall = MagicMock(return_value=mock_identity)
+        mock_rns.Identity.recall_app_data = MagicMock(return_value=b'')
+        mock_rns.Transport.hops_to = MagicMock(return_value=0)
+
+        result = self.wrapper.poll_received_announces()
+
+        self.assertEqual(len(result), 1)
+        # Should return just "AutoInterface", not "AutoInterface[AutoInterface]"
+        self.assertEqual(result[0]['interface'], "AutoInterface")
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_interface_with_none_name_returns_class_only(self, mock_rns):
+        """Test that when interface.name is None, only class name is returned"""
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        mock_identity = MagicMock()
+        mock_identity.hash = dest_hash
+        mock_identity.get_public_key = MagicMock(return_value=b'')
+
+        # Create interface where .name is None
+        class TCPClientInterface:
+            name = None
+        mock_interface = TCPClientInterface()
+
+        mock_packet = MagicMock()
+        mock_packet.receiving_interface = mock_interface
+
+        announce_entry = [time.time(), 0, 0, None, 0, mock_packet]
+        mock_rns.Transport.announce_table = {dest_hash: announce_entry}
+        mock_rns.Identity.recall = MagicMock(return_value=mock_identity)
+        mock_rns.Identity.recall_app_data = MagicMock(return_value=b'')
+        mock_rns.Transport.hops_to = MagicMock(return_value=0)
+
+        result = self.wrapper.poll_received_announces()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['interface'], "TCPClientInterface")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')

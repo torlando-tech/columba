@@ -625,46 +625,51 @@ data class DiscoveredInterface(
          */
         fun parseFromJson(jsonString: String): List<DiscoveredInterface> {
             val jsonArray = org.json.JSONArray(jsonString)
-            val discovered = mutableListOf<DiscoveredInterface>()
-            for (i in 0 until jsonArray.length()) {
-                val item = jsonArray.getJSONObject(i)
-                discovered.add(
-                    DiscoveredInterface(
-                        // Core identification
-                        name = item.optString("name", "Unknown"),
-                        type = item.optString("type", "Unknown"),
-                        transportId = item.optString("transport_id", "").ifEmpty { null },
-                        networkId = item.optString("network_id", "").ifEmpty { null },
-
-                        // Status information
-                        status = item.optString("status", "unknown"),
-                        statusCode = item.optInt("status_code", STATUS_UNKNOWN),
-                        lastHeard = item.optLong("last_heard", 0),
-                        heardCount = item.optInt("heard_count", 0),
-                        hops = item.optInt("hops", 0),
-                        stampValue = item.optInt("stamp_value", 0),
-
-                        // TCP-specific
-                        reachableOn = item.optString("reachable_on", "").ifEmpty { null },
-                        port = if (item.has("port") && !item.isNull("port")) item.getInt("port") else null,
-
-                        // Radio-specific
-                        frequency = if (item.has("frequency") && !item.isNull("frequency")) item.getLong("frequency") else null,
-                        bandwidth = if (item.has("bandwidth") && !item.isNull("bandwidth")) item.getInt("bandwidth") else null,
-                        spreadingFactor = if (item.has("spreading_factor") && !item.isNull("spreading_factor")) item.getInt("spreading_factor") else null,
-                        codingRate = if (item.has("coding_rate") && !item.isNull("coding_rate")) item.getInt("coding_rate") else null,
-                        modulation = item.optString("modulation", "").ifEmpty { null },
-                        channel = if (item.has("channel") && !item.isNull("channel")) item.getInt("channel") else null,
-
-                        // Location
-                        latitude = if (item.has("latitude") && !item.isNull("latitude")) item.getDouble("latitude") else null,
-                        longitude = if (item.has("longitude") && !item.isNull("longitude")) item.getDouble("longitude") else null,
-                        height = if (item.has("height") && !item.isNull("height")) item.getDouble("height") else null,
-                    ),
-                )
+            return (0 until jsonArray.length()).map { i ->
+                parseItem(jsonArray.getJSONObject(i))
             }
-            return discovered
         }
+
+        private fun parseItem(item: org.json.JSONObject): DiscoveredInterface {
+            return DiscoveredInterface(
+                // Core identification
+                name = item.optString("name", "Unknown"),
+                type = item.optString("type", "Unknown"),
+                transportId = item.optString("transport_id", "").ifEmpty { null },
+                networkId = item.optString("network_id", "").ifEmpty { null },
+                // Status information
+                status = item.optString("status", "unknown"),
+                statusCode = item.optInt("status_code", STATUS_UNKNOWN),
+                lastHeard = item.optLong("last_heard", 0),
+                heardCount = item.optInt("heard_count", 0),
+                hops = item.optInt("hops", 0),
+                stampValue = item.optInt("stamp_value", 0),
+                // TCP-specific
+                reachableOn = item.optString("reachable_on", "").ifEmpty { null },
+                port = item.optIntOrNull("port"),
+                // Radio-specific
+                frequency = item.optLongOrNull("frequency"),
+                bandwidth = item.optIntOrNull("bandwidth"),
+                spreadingFactor = item.optIntOrNull("spreading_factor"),
+                codingRate = item.optIntOrNull("coding_rate"),
+                modulation = item.optString("modulation", "").ifEmpty { null },
+                channel = item.optIntOrNull("channel"),
+                // Location
+                latitude = item.optDoubleOrNull("latitude"),
+                longitude = item.optDoubleOrNull("longitude"),
+                height = item.optDoubleOrNull("height"),
+            )
+        }
+
+        // JSON extension helpers for nullable values
+        private fun org.json.JSONObject.optIntOrNull(key: String): Int? =
+            if (has(key) && !isNull(key)) getInt(key) else null
+
+        private fun org.json.JSONObject.optLongOrNull(key: String): Long? =
+            if (has(key) && !isNull(key)) getLong(key) else null
+
+        private fun org.json.JSONObject.optDoubleOrNull(key: String): Double? =
+            if (has(key) && !isNull(key)) getDouble(key) else null
     }
 }
 

@@ -98,6 +98,10 @@ class SettingsRepository
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
 
+            // RNS 1.1.x Interface Discovery preferences
+            val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
+            val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
+
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
@@ -974,6 +978,72 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        // RNS 1.1.x Interface Discovery preferences
+
+        /**
+         * Flow of the interface discovery enabled setting.
+         * When enabled, RNS will discover interfaces announced by other nodes.
+         * Defaults to false if not set.
+         */
+        val discoverInterfacesEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] ?: false
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the interface discovery enabled setting (non-flow).
+         */
+        suspend fun getDiscoverInterfacesEnabled(): Boolean {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] ?: false
+            }.first()
+        }
+
+        /**
+         * Save the interface discovery enabled setting.
+         *
+         * @param enabled Whether interface discovery is enabled
+         */
+        suspend fun saveDiscoverInterfacesEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the autoconnect discovered interfaces count.
+         * Number of discovered interfaces to auto-connect (0 = disabled).
+         * Defaults to 0 if not set.
+         */
+        val autoconnectDiscoveredCountFlow: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: 0
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Get the autoconnect discovered interfaces count (non-flow).
+         */
+        suspend fun getAutoconnectDiscoveredCount(): Int {
+            return context.dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: 0
+            }.first()
+        }
+
+        /**
+         * Save the autoconnect discovered interfaces count.
+         *
+         * @param count Number of discovered interfaces to auto-connect (0 = disabled)
+         */
+        suspend fun saveAutoconnectDiscoveredCount(count: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] = count
             }
         }
 

@@ -286,9 +286,12 @@ class ColumbaApplication : Application() {
                     val preferOwnInstance = startupConfig.preferOwn
                     val rpcKey = startupConfig.rpcKey
                     val transportNodeEnabled = startupConfig.transport
+                    val discoverInterfaces = startupConfig.discoverInterfaces
+                    val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
                     android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                     android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                     android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
+                    android.util.Log.d("ColumbaApplication", "Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
 
                     // Ensure identity file exists (recover from keyData if missing)
                     var identityPath: String? = null
@@ -328,6 +331,8 @@ class ColumbaApplication : Application() {
                             preferOwnInstance = preferOwnInstance,
                             rpcKey = rpcKey,
                             enableTransport = transportNodeEnabled,
+                            discoverInterfaces = discoverInterfaces,
+                            autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         )
 
                     reticulumProtocol.initialize(config)
@@ -531,7 +536,10 @@ class ColumbaApplication : Application() {
             val preferOwnInstance = startupConfig.preferOwn
             val rpcKey = startupConfig.rpcKey
             val transportNodeEnabled = startupConfig.transport
+            val discoverInterfaces = startupConfig.discoverInterfaces
+            val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loaded ${enabledInterfaces.size} enabled interface(s)")
+            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
 
             // Ensure identity file exists (recover from keyData if missing)
             var identityPath: String? = null
@@ -569,6 +577,8 @@ class ColumbaApplication : Application() {
                     preferOwnInstance = preferOwnInstance,
                     rpcKey = rpcKey,
                     enableTransport = transportNodeEnabled,
+                    discoverInterfaces = discoverInterfaces,
+                    autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                 )
 
             serviceProtocol.initialize(config)

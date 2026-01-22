@@ -6754,29 +6754,42 @@ class ReticulumWrapper:
             return json.dumps([])
 
         try:
-            # RNS 1.1.0+ provides discovered_interfaces() which returns a dict
-            # keyed by transport identity hash with interface discovery info
+            # RNS 1.1.0+ provides discovered_interfaces() which returns a list
+            # of dicts with interface discovery info
             if hasattr(RNS.Reticulum, 'discovered_interfaces'):
-                discovered_dict = RNS.Reticulum.discovered_interfaces()
+                discovered_list = RNS.Reticulum.discovered_interfaces()
                 result = []
 
-                for transport_id_bytes, iface_info in discovered_dict.items():
+                log_debug("ReticulumWrapper", "get_discovered_interfaces",
+                         f"Raw discovered_interfaces() returned {len(discovered_list)} items")
+
+                for iface_info in discovered_list:
                     try:
+                        # Extract transport_id from the info dict
+                        transport_id = iface_info.get('transport_id', b'')
+                        if isinstance(transport_id, bytes):
+                            transport_id = transport_id.hex()
+
+                        # Extract network_id
+                        network_id = iface_info.get('network_id', b'')
+                        if isinstance(network_id, bytes):
+                            network_id = network_id.hex()
+
                         # Extract interface details from discovery info
                         iface_data = {
                             # Core identification
                             'name': iface_info.get('name', 'Unknown'),
-                            'type': iface_info.get('interface_type', iface_info.get('type', 'Unknown')),
-                            'transport_id': transport_id_bytes.hex() if isinstance(transport_id_bytes, bytes) else str(transport_id_bytes),
-                            'network_id': iface_info.get('network_id', b'').hex() if isinstance(iface_info.get('network_id'), bytes) else iface_info.get('network_id'),
+                            'type': iface_info.get('type', 'Unknown'),
+                            'transport_id': transport_id,
+                            'network_id': network_id,
 
                             # Status information
-                            'status': self._get_discovery_status_name(iface_info.get('status', 100)),
-                            'status_code': iface_info.get('status', 100),
+                            'status': iface_info.get('status', 'unknown'),
+                            'status_code': iface_info.get('status_code', 100),
                             'last_heard': iface_info.get('last_heard', 0),
                             'heard_count': iface_info.get('heard_count', 0),
                             'hops': iface_info.get('hops', 0),
-                            'stamp_value': iface_info.get('stamp_value', 0),
+                            'stamp_value': iface_info.get('value', iface_info.get('stamp_value', 0)),
 
                             # TCP-specific (TCPServerInterface, I2PInterface)
                             'reachable_on': iface_info.get('reachable_on'),
@@ -6800,9 +6813,14 @@ class ReticulumWrapper:
                         iface_data = {k: v for k, v in iface_data.items() if v is not None}
                         result.append(iface_data)
 
+                        log_debug("ReticulumWrapper", "get_discovered_interfaces",
+                                 f"Processed interface: {iface_data.get('name')} ({iface_data.get('type')})")
+
                     except Exception as e:
                         log_warning("ReticulumWrapper", "get_discovered_interfaces",
                                    f"Error processing discovered interface: {e}")
+                        import traceback
+                        traceback.print_exc()
                         continue
 
                 # Sort by status (available first), then by stamp_value (higher first)

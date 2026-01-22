@@ -118,14 +118,19 @@ fun DiscoveredInterfacesScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         // Discovery settings card
                         item {
                             DiscoverySettingsCard(
-                                isEnabled = state.isDiscoveryEnabled,
+                                isRuntimeEnabled = state.isDiscoveryEnabled,
+                                isSettingEnabled = state.discoverInterfacesEnabled,
+                                autoconnectCount = state.autoconnectCount,
+                                bootstrapInterfaceNames = state.bootstrapInterfaceNames,
+                                isRestarting = state.isRestarting,
                                 showMockData = state.showMockData,
+                                onToggleDiscovery = { viewModel.toggleDiscovery() },
                                 onToggleMockData = { viewModel.toggleMockData() },
                             )
                         }
@@ -223,10 +228,17 @@ fun DiscoveredInterfacesScreen(
  */
 @Composable
 private fun DiscoverySettingsCard(
-    isEnabled: Boolean,
+    isRuntimeEnabled: Boolean,
+    isSettingEnabled: Boolean,
+    autoconnectCount: Int,
+    bootstrapInterfaceNames: List<String>,
+    isRestarting: Boolean,
     showMockData: Boolean,
+    onToggleDiscovery: () -> Unit,
     onToggleMockData: () -> Unit,
 ) {
+    val isEnabled = isRuntimeEnabled || isSettingEnabled
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -242,7 +254,7 @@ private fun DiscoverySettingsCard(
                 .fillMaxWidth()
                 .padding(16.dp),
         ) {
-            // Status row
+            // Discovery toggle row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -251,26 +263,78 @@ private fun DiscoverySettingsCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
                 ) {
                     Surface(
                         modifier = Modifier.size(12.dp),
                         shape = RoundedCornerShape(50),
-                        color = if (isEnabled) {
+                        color = if (isRuntimeEnabled) {
                             MaterialTheme.colorScheme.primary
+                        } else if (isSettingEnabled) {
+                            MaterialTheme.colorScheme.tertiary
                         } else {
                             MaterialTheme.colorScheme.outline
                         },
                     ) {}
-                    Text(
-                        text = if (isEnabled) "Discovery Enabled" else "Discovery Disabled",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isEnabled) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
+                    Column {
+                        Text(
+                            text = "Interface Discovery",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isEnabled) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        Text(
+                            text = if (isRestarting) {
+                                "Restarting..."
+                            } else if (isRuntimeEnabled) {
+                                "Active - discovering interfaces"
+                            } else {
+                                "Disabled"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isEnabled) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            },
+                        )
+                    }
+                }
+                Switch(
+                    checked = isSettingEnabled,
+                    onCheckedChange = { onToggleDiscovery() },
+                    enabled = !isRestarting,
+                )
+            }
+
+            // Restarting message
+            if (isRestarting) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        Text(
+                            text = "Restarting Reticulum service...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
                 }
             }
 
@@ -292,10 +356,10 @@ private fun DiscoverySettingsCard(
                     },
                 )
                 Text(
-                    text = if (isEnabled) {
-                        "RNS is discovering interfaces from the network. New interfaces will appear here automatically."
+                    text = if (isSettingEnabled) {
+                        "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
                     } else {
-                        "To enable discovery, configure a TCP Client interface with 'Bootstrap Only' enabled, or set autoconnect_discovered_interfaces > 0 in your config."
+                        "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (isEnabled) {
@@ -303,6 +367,58 @@ private fun DiscoverySettingsCard(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     },
+                )
+            }
+
+            // Bootstrap interfaces section
+            if (bootstrapInterfaceNames.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Bootstrap Interfaces",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isEnabled) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                bootstrapInterfaceNames.forEach { name ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(6.dp),
+                            shape = RoundedCornerShape(50),
+                            color = if (isEnabled) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            },
+                        ) {}
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isEnabled) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            },
+                        )
+                    }
+                }
+                Text(
+                    text = "These interfaces will auto-detach once discovered interfaces connect.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isEnabled) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
 

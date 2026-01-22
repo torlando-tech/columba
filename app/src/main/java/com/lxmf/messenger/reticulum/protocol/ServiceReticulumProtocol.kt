@@ -1117,6 +1117,7 @@ class ServiceReticulumProtocol(
                     ifaceJson.put("mode", iface.mode)
                     iface.networkName?.let { ifaceJson.put("network_name", it) }
                     iface.passphrase?.let { ifaceJson.put("passphrase", it) }
+                    ifaceJson.put("bootstrap_only", iface.bootstrapOnly)
                 }
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")
@@ -1174,6 +1175,18 @@ class ServiceReticulumProtocol(
 
         // Transport node setting
         json.put("enable_transport", config.enableTransport)
+
+        // RNS 1.1.x Interface Discovery settings
+        json.put("discover_interfaces", config.discoverInterfaces)
+        json.put("autoconnect_discovered_interfaces", config.autoconnectDiscoveredInterfaces)
+        config.interfaceDiscoverySources?.let { sources ->
+            val sourcesArray = JSONArray()
+            sources.forEach { sourcesArray.put(it) }
+            json.put("interface_discovery_sources", sourcesArray)
+        }
+        if (config.requiredDiscoveryValue != 14) {
+            json.put("required_discovery_value", config.requiredDiscoveryValue)
+        }
 
         return json.toString()
     }

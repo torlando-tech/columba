@@ -220,6 +220,11 @@ class InterfaceConfigManager
                 val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
                 Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
 
+                // Load discovery settings
+                val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
+                val autoconnectDiscoveredCount = settingsRepository.getAutoconnectDiscoveredCount()
+                Log.d(TAG, "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount")
+
                 val config =
                     ReticulumConfig(
                         storagePath = context.filesDir.absolutePath + "/reticulum",
@@ -231,6 +236,8 @@ class InterfaceConfigManager
                         preferOwnInstance = preferOwnInstance,
                         rpcKey = rpcKey,
                         enableTransport = transportNodeEnabled,
+                        discoverInterfaces = discoverInterfaces,
+                        autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                     )
 
                 reticulumProtocol.initialize(config)

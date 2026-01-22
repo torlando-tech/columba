@@ -917,13 +917,31 @@ private fun FocusInterfaceBottomSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+        FocusInterfaceContent(
+            details = details,
+            onCopyLoraParams = onCopyLoraParams,
+            onUseForNewRNode = onUseForNewRNode,
+        )
+    }
+}
+
+/**
+ * Content for the focus interface bottom sheet.
+ * Extracted for testability since ModalBottomSheet is difficult to test in Robolectric.
+ */
+@Composable
+internal fun FocusInterfaceContent(
+    details: FocusInterfaceDetails,
+    onCopyLoraParams: () -> Unit = {},
+    onUseForNewRNode: () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
             // Header with name and type
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1100,7 +1118,6 @@ private fun FocusInterfaceBottomSheet(
                 }
             }
         }
-    }
 }
 
 /**
@@ -1129,7 +1146,7 @@ internal fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): Strin
 }
 
 @Composable
-private fun InterfaceDetailRow(
+internal fun InterfaceDetailRow(
     label: String,
     value: String,
 ) {
@@ -1273,7 +1290,7 @@ private fun startLocationUpdates(
  * @param modifier Modifier for positioning
  */
 @Composable
-private fun ScaleBar(
+internal fun ScaleBar(
     metersPerPixel: Double,
     modifier: Modifier = Modifier,
 ) {

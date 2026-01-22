@@ -15,19 +15,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,6 +114,16 @@ fun AnnounceStreamScreen(
     // Filter dialog state
     var showFilterDialog by remember { mutableStateOf(false) }
 
+    // Delete dialog state
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var announceToDelete by remember { mutableStateOf<Announce?>(null) }
+
+    // Clear all announces dialog state
+    var showClearAllDialog by remember { mutableStateOf(false) }
+
+    // Overflow menu state
+    var showOverflowMenu by remember { mutableStateOf(false) }
+
     // Scroll state and coroutine scope
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -180,6 +195,40 @@ fun AnnounceStreamScreen(
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
+                    // Overflow menu
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteSweep,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = "Clear All Announces",
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showClearAllDialog = true
+                                },
+                            )
+                        }
+                    }
                 },
             )
         },
@@ -241,6 +290,10 @@ fun AnnounceStreamScreen(
                                         onViewDetails = {
                                             onPeerClick(announce.destinationHash, announce.peerName)
                                         },
+                                        onDeleteAnnounce = {
+                                            announceToDelete = announce
+                                            showDeleteDialog = true
+                                        },
                                     )
                                 }
                             }
@@ -300,6 +353,36 @@ fun AnnounceStreamScreen(
                 viewModel.updateSelectedNodeTypes(newSelection)
                 viewModel.updateShowAudioAnnounces(newShowAudio)
                 showFilterDialog = false
+            },
+        )
+    }
+
+    // Delete announce confirmation dialog
+    val announceForDelete = announceToDelete
+    if (showDeleteDialog && announceForDelete != null) {
+        DeleteAnnounceDialog(
+            peerName = announceForDelete.peerName,
+            onConfirm = {
+                viewModel.deleteAnnounce(announceForDelete.destinationHash)
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+        )
+    }
+
+    // Clear all announces confirmation dialog
+    if (showClearAllDialog) {
+        ClearAllAnnouncesDialog(
+            onConfirm = {
+                viewModel.deleteAllAnnounces()
+                showClearAllDialog = false
+            },
+            onDismiss = {
+                showClearAllDialog = false
             },
         )
     }
@@ -484,6 +567,7 @@ fun PeerContextMenu(
     onToggleFavorite: () -> Unit,
     onStartChat: () -> Unit,
     onViewDetails: () -> Unit,
+    onDeleteAnnounce: () -> Unit,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -531,8 +615,6 @@ fun PeerContextMenu(
             )
         }
 
-        HorizontalDivider()
-
         // View details
         DropdownMenuItem(
             leadingIcon = {
@@ -546,6 +628,29 @@ fun PeerContextMenu(
             },
             onClick = {
                 onViewDetails()
+                onDismiss()
+            },
+        )
+
+        HorizontalDivider()
+
+        // Delete announce
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            text = {
+                Text(
+                    text = "Delete",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            onClick = {
+                onDeleteAnnounce()
                 onDismiss()
             },
         )
@@ -568,6 +673,10 @@ fun AnnounceStreamContent(
     // Context menu state
     var showContextMenu by remember { mutableStateOf(false) }
     var contextMenuAnnounce by remember { mutableStateOf<Announce?>(null) }
+
+    // Delete dialog state
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var announceToDelete by remember { mutableStateOf<Announce?>(null) }
 
     // Scroll state
     val listState = rememberLazyListState()
@@ -617,6 +726,10 @@ fun AnnounceStreamContent(
                                 onViewDetails = {
                                     onPeerClick(announce.destinationHash, announce.peerName)
                                 },
+                                onDeleteAnnounce = {
+                                    announceToDelete = announce
+                                    showDeleteDialog = true
+                                },
                             )
                         }
                     }
@@ -628,6 +741,23 @@ fun AnnounceStreamContent(
                 Spacer(modifier = Modifier.height(100.dp))
             }
         }
+    }
+
+    // Delete announce confirmation dialog
+    val announceForDelete = announceToDelete
+    if (showDeleteDialog && announceForDelete != null) {
+        DeleteAnnounceDialog(
+            peerName = announceForDelete.peerName,
+            onConfirm = {
+                viewModel.deleteAnnounce(announceForDelete.destinationHash)
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+        )
     }
 }
 
@@ -664,4 +794,81 @@ private fun formatHash(hash: ByteArray): String {
     return hash.take(8).joinToString("") { byte ->
         "%02x".format(byte)
     }
+}
+
+@Composable
+fun DeleteAnnounceDialog(
+    peerName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = {
+            Text("Delete Announce?")
+        },
+        text = {
+            Text("Remove $peerName from the list? They will reappear when they announce again.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+fun ClearAllAnnouncesDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.DeleteSweep,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = {
+            Text("Clear All Announces?")
+        },
+        text = {
+            Text("This will remove all discovered nodes from the list. They will reappear when they announce again.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Clear All")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }

@@ -711,9 +711,7 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Local Network").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via automatic local network discovery")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("AutoInterface").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -736,9 +734,7 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("TCP/IP").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via TCP network connection")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("TCPClientInterface").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -761,9 +757,7 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Bluetooth").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via Bluetooth Low Energy")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("AndroidBleInterface").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -786,9 +780,7 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("LoRa Radio").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via RNode LoRa radio")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNodeInterface").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -811,9 +803,7 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Serial").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via serial interface")
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("SerialInterface").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -838,11 +828,12 @@ class MessageDetailScreenTest {
         }
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
-        // Should truncate to first 30 characters
+        // Should truncate to first 30 characters for content text
         composeTestRule.onNodeWithText("CustomUnknownInterfaceWithVery")
             .performScrollTo()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Received via network interface")
+        // Subtitle shows the full interface name (interface type)
+        composeTestRule.onNodeWithText("CustomUnknownInterfaceWithVeryLongName")
             .performScrollTo()
             .assertIsDisplayed()
     }

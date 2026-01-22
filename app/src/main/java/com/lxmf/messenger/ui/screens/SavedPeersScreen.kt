@@ -49,6 +49,10 @@ fun SavedPeersScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var contextMenuAnnounce by remember { mutableStateOf<Announce?>(null) }
 
+    // Delete dialog state
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var announceToDelete by remember { mutableStateOf<Announce?>(null) }
+
     Scaffold(
         topBar = {
             SearchableTopAppBar(
@@ -113,6 +117,10 @@ fun SavedPeersScreen(
                                 onViewDetails = {
                                     onPeerClick(announce.destinationHash, announce.peerName)
                                 },
+                                onDeleteAnnounce = {
+                                    announceToDelete = announce
+                                    showDeleteDialog = true
+                                },
                             )
                         }
                     }
@@ -124,6 +132,23 @@ fun SavedPeersScreen(
                 }
             }
         }
+    }
+
+    // Delete announce confirmation dialog
+    val announceForDelete = announceToDelete
+    if (showDeleteDialog && announceForDelete != null) {
+        DeleteAnnounceDialog(
+            peerName = announceForDelete.peerName,
+            onConfirm = {
+                viewModel.deleteAnnounce(announceForDelete.destinationHash)
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+            onDismiss = {
+                showDeleteDialog = false
+                announceToDelete = null
+            },
+        )
     }
 }
 

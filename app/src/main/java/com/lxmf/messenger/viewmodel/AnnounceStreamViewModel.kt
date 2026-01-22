@@ -448,6 +448,36 @@ class AnnounceStreamViewModel
             }
         }
 
+        /**
+         * Delete a single announce from the database.
+         * The announce will reappear if the peer announces again.
+         */
+        fun deleteAnnounce(destinationHash: String) {
+            viewModelScope.launch {
+                try {
+                    announceRepository.deleteAnnounce(destinationHash)
+                    Log.d(TAG, "Deleted announce: $destinationHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to delete announce: $destinationHash", e)
+                }
+            }
+        }
+
+        /**
+         * Delete all announces from the database.
+         * Nodes will reappear when they announce again.
+         */
+        fun deleteAllAnnounces() {
+            viewModelScope.launch {
+                try {
+                    announceRepository.deleteAllAnnounces()
+                    Log.d(TAG, "Deleted all announces")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to delete all announces", e)
+                }
+            }
+        }
+
         override fun onCleared() {
             super.onCleared()
             // Shutdown Reticulum when ViewModel is cleared

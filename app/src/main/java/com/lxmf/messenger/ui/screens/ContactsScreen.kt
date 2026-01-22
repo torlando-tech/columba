@@ -36,9 +36,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.People
@@ -147,6 +149,8 @@ fun ContactsScreen(
     val announceSuccess by announceViewModel.announceSuccess.collectAsState()
     val announceError by announceViewModel.announceError.collectAsState()
     var showNodeTypeFilterDialog by remember { mutableStateOf(false) }
+    var showNetworkOverflowMenu by remember { mutableStateOf(false) }
+    var showClearAllAnnouncesDialog by remember { mutableStateOf(false) }
 
     // Show toast for announce success/error
     LaunchedEffect(announceSuccess) {
@@ -277,6 +281,39 @@ fun ContactsScreen(
                                     imageVector = Icons.Default.FilterList,
                                     contentDescription = "Filter node types",
                                 )
+                            }
+                            // Overflow menu
+                            Box {
+                                IconButton(onClick = { showNetworkOverflowMenu = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More options",
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showNetworkOverflowMenu,
+                                    onDismissRequest = { showNetworkOverflowMenu = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteSweep,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                text = "Clear All Announces",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        onClick = {
+                                            showNetworkOverflowMenu = false
+                                            showClearAllAnnouncesDialog = true
+                                        },
+                                    )
+                                }
                             }
                         }
                     },
@@ -777,6 +814,19 @@ fun ContactsScreen(
                 announceViewModel.updateSelectedNodeTypes(newSelection)
                 announceViewModel.updateShowAudioAnnounces(newShowAudio)
                 showNodeTypeFilterDialog = false
+            },
+        )
+    }
+
+    // Clear all announces confirmation dialog
+    if (showClearAllAnnouncesDialog) {
+        ClearAllAnnouncesDialog(
+            onConfirm = {
+                announceViewModel.deleteAllAnnounces()
+                showClearAllAnnouncesDialog = false
+            },
+            onDismiss = {
+                showClearAllAnnouncesDialog = false
             },
         )
     }

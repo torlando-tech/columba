@@ -823,4 +823,81 @@ class AnnounceStreamViewModelTest {
             // Then: getPathTableHashes should NOT be called after shutdown
             coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
         }
+
+    // ========== Delete Announce Tests ==========
+
+    @Test
+    fun `deleteAnnounce calls repository with correct hash`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.deleteAnnounce(any()) } just Runs
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Delete an announce
+            val testHash = "abc123def456"
+            viewModel.deleteAnnounce(testHash)
+            advanceUntilIdle()
+
+            // Verify repository was called with correct hash
+            coVerify { announceRepository.deleteAnnounce(testHash) }
+        }
+
+    @Test
+    fun `deleteAnnounce handles errors gracefully`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.deleteAnnounce(any()) } throws Exception("Database error")
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Delete should not crash even with error
+            viewModel.deleteAnnounce("abc123")
+            advanceUntilIdle()
+
+            // Verify delete was attempted
+            coVerify { announceRepository.deleteAnnounce("abc123") }
+
+            // ViewModel should still be functioning
+            assertNotNull(viewModel)
+        }
+
+    @Test
+    fun `deleteAllAnnounces calls repository`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.deleteAllAnnounces() } just Runs
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Delete all announces
+            viewModel.deleteAllAnnounces()
+            advanceUntilIdle()
+
+            // Verify repository was called
+            coVerify { announceRepository.deleteAllAnnounces() }
+        }
+
+    @Test
+    fun `deleteAllAnnounces handles errors gracefully`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { announceRepository.deleteAllAnnounces() } throws Exception("Database error")
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Delete all should not crash even with error
+            viewModel.deleteAllAnnounces()
+            advanceUntilIdle()
+
+            // Verify delete was attempted
+            coVerify { announceRepository.deleteAllAnnounces() }
+
+            // ViewModel should still be functioning
+            assertNotNull(viewModel)
+        }
 }

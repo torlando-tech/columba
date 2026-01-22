@@ -72,4 +72,19 @@ class SavedPeersViewModel
                 }
             }
         }
+
+        /**
+         * Delete an announce from the database.
+         * The announce will reappear if the peer announces again.
+         */
+        fun deleteAnnounce(destinationHash: String) {
+            viewModelScope.launch {
+                try {
+                    announceRepository.deleteAnnounce(destinationHash)
+                    Log.d(TAG, "Deleted announce: $destinationHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to delete announce: $destinationHash", e)
+                }
+            }
+        }
     }

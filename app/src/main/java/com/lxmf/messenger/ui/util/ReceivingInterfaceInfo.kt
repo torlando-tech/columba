@@ -15,6 +15,21 @@ data class ReceivingInterfaceInfo(
 )
 
 /**
+ * Enum representing known interface categories with their display properties.
+ */
+private enum class InterfaceCategory(
+    val icon: ImageVector,
+    val defaultText: String,
+) {
+    AUTO(Icons.Default.Wifi, "Local Network"),
+    TCP(Icons.Default.Cloud, "TCP/IP"),
+    BLUETOOTH(Icons.Default.Bluetooth, "Bluetooth"),
+    LORA(Icons.Default.CellTower, "LoRa Radio"),
+    SERIAL(Icons.Default.SettingsInputAntenna, "Serial"),
+    UNKNOWN(Icons.Default.SettingsInputAntenna, ""),
+}
+
+/**
  * Extract the user-friendly name from an interface string.
  * Interface names have formats like:
  * - "TCPInterface[Sideband Server/192.168.1.100:4965]" -> "Sideband Server"
@@ -29,8 +44,7 @@ private fun extractFriendlyName(interfaceName: String): String? {
     // For TCP interfaces, the format is often "Name/address:port" or just "address:port"
     return if (bracketContent.contains("/")) {
         bracketContent.substringBefore("/").takeIf { it.isNotBlank() }
-    } else if (!bracketContent.contains(":") && !bracketContent.contains(".") && !bracketContent.startsWith("fe80")) {
-        // If it doesn't look like an address (no colons, dots, or IPv6 link-local), it's probably a name
+    } else if (!looksLikeAddress(bracketContent)) {
         bracketContent.takeIf { it.isNotBlank() }
     } else {
         null
@@ -38,59 +52,52 @@ private fun extractFriendlyName(interfaceName: String): String? {
 }
 
 /**
+ * Check if a string looks like a network address (IP, IPv6, or contains port).
+ */
+private fun looksLikeAddress(value: String): Boolean =
+    value.contains(":") || value.contains(".") || value.startsWith("fe80")
+
+/**
  * Extract the interface type/class name from an interface string.
  * - "TCPClientInterface[Sideband Server/192.168.1.100:4965]" -> "TCPClientInterface"
  * - "AutoInterface" -> "AutoInterface"
  */
-private fun extractInterfaceType(interfaceName: String): String {
-    return interfaceName.substringBefore("[").ifEmpty { interfaceName }
+private fun extractInterfaceType(interfaceName: String): String =
+    interfaceName.substringBefore("[").ifEmpty { interfaceName }
+
+/**
+ * Determine the interface category based on the interface name.
+ */
+private fun categorizeInterface(interfaceName: String): InterfaceCategory {
+    val lowerName = interfaceName.lowercase()
+    return when {
+        lowerName.contains("autointerface") ||
+            lowerName.contains("auto discovery") ||
+            lowerName.startsWith("auto") -> InterfaceCategory.AUTO
+        lowerName.contains("tcp") -> InterfaceCategory.TCP
+        lowerName.contains("ble") ||
+            lowerName.contains("bluetooth") ||
+            lowerName.contains("androidble") -> InterfaceCategory.BLUETOOTH
+        lowerName.contains("rnode") ||
+            lowerName.contains("lora") -> InterfaceCategory.LORA
+        lowerName.contains("serial") -> InterfaceCategory.SERIAL
+        else -> InterfaceCategory.UNKNOWN
+    }
 }
 
 fun getReceivingInterfaceInfo(interfaceName: String): ReceivingInterfaceInfo {
     val friendlyName = extractFriendlyName(interfaceName)
     val interfaceType = extractInterfaceType(interfaceName)
+    val category = categorizeInterface(interfaceName)
 
-    return when {
-        interfaceName.contains("AutoInterface", ignoreCase = true) ||
-            interfaceName.contains("Auto Discovery", ignoreCase = true) ||
-            interfaceName.startsWith("Auto", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Wifi,
-                text = friendlyName ?: "Local Network",
-                subtitle = interfaceType,
-            )
-        interfaceName.contains("TCP", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Cloud,
-                text = friendlyName ?: "TCP/IP",
-                subtitle = interfaceType,
-            )
-        interfaceName.contains("BLE", ignoreCase = true) ||
-            interfaceName.contains("Bluetooth", ignoreCase = true) ||
-            interfaceName.contains("AndroidBle", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.Bluetooth,
-                text = friendlyName ?: "Bluetooth",
-                subtitle = interfaceType,
-            )
-        interfaceName.contains("RNode", ignoreCase = true) ||
-            interfaceName.contains("LoRa", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.CellTower,
-                text = friendlyName ?: "LoRa Radio",
-                subtitle = interfaceType,
-            )
-        interfaceName.contains("Serial", ignoreCase = true) ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.SettingsInputAntenna,
-                text = friendlyName ?: "Serial",
-                subtitle = interfaceType,
-            )
-        else ->
-            ReceivingInterfaceInfo(
-                icon = Icons.Default.SettingsInputAntenna,
-                text = friendlyName ?: interfaceName.take(30),
-                subtitle = interfaceType,
-            )
+    val displayText = when (category) {
+        InterfaceCategory.UNKNOWN -> friendlyName ?: interfaceName.take(30)
+        else -> friendlyName ?: category.defaultText
     }
+
+    return ReceivingInterfaceInfo(
+        icon = category.icon,
+        text = displayText,
+        subtitle = interfaceType,
+    )
 }

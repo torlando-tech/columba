@@ -977,7 +977,7 @@ private fun LocationDetails(
  * Check if a host address is a Yggdrasil network address (IPv6 in 0200::/7 space).
  * Yggdrasil uses addresses starting with 02xx or 03xx.
  */
-private fun isYggdrasilAddress(host: String?): Boolean {
+internal fun isYggdrasilAddress(host: String?): Boolean {
     // Early exit for null
     if (host == null) return false
 
@@ -1065,7 +1065,7 @@ private fun InterfaceTypeIcon(
 /**
  * Format interface type for display.
  */
-private fun formatInterfaceType(type: String): String {
+internal fun formatInterfaceType(type: String): String {
     return when (type) {
         "TCPServerInterface" -> "TCP Server"
         "TCPClientInterface" -> "TCP Client"
@@ -1081,7 +1081,7 @@ private fun formatInterfaceType(type: String): String {
 /**
  * Format last heard timestamp as relative time.
  */
-private fun formatLastHeard(timestamp: Long): String {
+internal fun formatLastHeard(timestamp: Long): String {
     if (timestamp == 0L) return "Never"
 
     val now = System.currentTimeMillis() / 1000
@@ -1102,7 +1102,7 @@ private fun formatLastHeard(timestamp: Long): String {
 /**
  * Format LoRa parameters for clipboard.
  */
-private fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
+internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
     return buildString {
         appendLine("LoRa Parameters from: ${iface.name}")
         appendLine("---")

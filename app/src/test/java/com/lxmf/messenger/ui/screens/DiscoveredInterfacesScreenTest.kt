@@ -49,9 +49,6 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Unit tests for DiscoveredInterfacesScreen UI components and helper functions.
@@ -78,99 +75,99 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `isYggdrasilAddress with null returns false`() {
-        assertFalse(isYggdrasilAddressTestable(null))
+        assertFalse(isYggdrasilAddress(null))
     }
 
     @Test
     fun `isYggdrasilAddress with IPv4 returns false`() {
-        assertFalse(isYggdrasilAddressTestable("192.168.1.1"))
+        assertFalse(isYggdrasilAddress("192.168.1.1"))
     }
 
     @Test
     fun `isYggdrasilAddress with regular IPv6 returns false`() {
-        assertFalse(isYggdrasilAddressTestable("2001:db8::1"))
+        assertFalse(isYggdrasilAddress("2001:db8::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 0200 prefix returns true`() {
-        assertTrue(isYggdrasilAddressTestable("200:abcd::1"))
+        assertTrue(isYggdrasilAddress("200:abcd::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 0300 prefix returns true`() {
-        assertTrue(isYggdrasilAddressTestable("300:1234::1"))
+        assertTrue(isYggdrasilAddress("300:1234::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 0400 above range returns false`() {
-        assertFalse(isYggdrasilAddressTestable("400:abcd::1"))
+        assertFalse(isYggdrasilAddress("400:abcd::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 01FF below range returns false`() {
-        assertFalse(isYggdrasilAddressTestable("1FF:abcd::1"))
+        assertFalse(isYggdrasilAddress("1FF:abcd::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 0200 exact boundary returns true`() {
-        assertTrue(isYggdrasilAddressTestable("200::1"))
+        assertTrue(isYggdrasilAddress("200::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with 03FF exact boundary returns true`() {
-        assertTrue(isYggdrasilAddressTestable("3FF::1"))
+        assertTrue(isYggdrasilAddress("3FF::1"))
     }
 
     @Test
     fun `isYggdrasilAddress with bracketed address returns true`() {
-        assertTrue(isYggdrasilAddressTestable("[200:abcd::1]"))
+        assertTrue(isYggdrasilAddress("[200:abcd::1]"))
     }
 
     @Test
     fun `isYggdrasilAddress with empty string returns false`() {
-        assertFalse(isYggdrasilAddressTestable(""))
+        assertFalse(isYggdrasilAddress(""))
     }
 
     // ========== formatInterfaceType Tests ==========
 
     @Test
     fun `formatInterfaceType TCPServerInterface returns TCP Server`() {
-        assertEquals("TCP Server", formatInterfaceTypeTestable("TCPServerInterface"))
+        assertEquals("TCP Server", formatInterfaceType("TCPServerInterface"))
     }
 
     @Test
     fun `formatInterfaceType TCPClientInterface returns TCP Client`() {
-        assertEquals("TCP Client", formatInterfaceTypeTestable("TCPClientInterface"))
+        assertEquals("TCP Client", formatInterfaceType("TCPClientInterface"))
     }
 
     @Test
     fun `formatInterfaceType BackboneInterface returns Backbone TCP`() {
-        assertEquals("Backbone (TCP)", formatInterfaceTypeTestable("BackboneInterface"))
+        assertEquals("Backbone (TCP)", formatInterfaceType("BackboneInterface"))
     }
 
     @Test
     fun `formatInterfaceType I2PInterface returns I2P`() {
-        assertEquals("I2P", formatInterfaceTypeTestable("I2PInterface"))
+        assertEquals("I2P", formatInterfaceType("I2PInterface"))
     }
 
     @Test
     fun `formatInterfaceType RNodeInterface returns RNode LoRa`() {
-        assertEquals("RNode (LoRa)", formatInterfaceTypeTestable("RNodeInterface"))
+        assertEquals("RNode (LoRa)", formatInterfaceType("RNodeInterface"))
     }
 
     @Test
     fun `formatInterfaceType WeaveInterface returns Weave LoRa`() {
-        assertEquals("Weave (LoRa)", formatInterfaceTypeTestable("WeaveInterface"))
+        assertEquals("Weave (LoRa)", formatInterfaceType("WeaveInterface"))
     }
 
     @Test
     fun `formatInterfaceType KISSInterface returns KISS`() {
-        assertEquals("KISS", formatInterfaceTypeTestable("KISSInterface"))
+        assertEquals("KISS", formatInterfaceType("KISSInterface"))
     }
 
     @Test
     fun `formatInterfaceType unknown type returns type unchanged`() {
-        assertEquals("UnknownType", formatInterfaceTypeTestable("UnknownType"))
+        assertEquals("UnknownType", formatInterfaceType("UnknownType"))
     }
 
     // ========== InterfaceTypeIcon Tests ==========
@@ -288,38 +285,38 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `formatLastHeard with zero timestamp returns Never`() {
-        assertEquals("Never", formatLastHeardTestable(0L))
+        assertEquals("Never", formatLastHeard(0L))
     }
 
     @Test
     fun `formatLastHeard with recent timestamp returns just now`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("just now", formatLastHeardTestable(now - 30))
+        assertEquals("just now", formatLastHeard(now - 30))
     }
 
     @Test
     fun `formatLastHeard with 5 minutes ago returns min ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("5 min ago", formatLastHeardTestable(now - 300))
+        assertEquals("5 min ago", formatLastHeard(now - 300))
     }
 
     @Test
     fun `formatLastHeard with 2 hours ago returns hours ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("2 hours ago", formatLastHeardTestable(now - 7200))
+        assertEquals("2 hours ago", formatLastHeard(now - 7200))
     }
 
     @Test
     fun `formatLastHeard with 3 days ago returns days ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("3 days ago", formatLastHeardTestable(now - 259200))
+        assertEquals("3 days ago", formatLastHeard(now - 259200))
     }
 
     @Test
     fun `formatLastHeard with old timestamp returns formatted date`() {
         // Use a fixed timestamp from the past (Jan 15, 2024)
         val oldTimestamp = 1705344000L // Jan 15, 2024
-        val result = formatLastHeardTestable(oldTimestamp)
+        val result = formatLastHeard(oldTimestamp)
         // Should return formatted date like "Jan 15"
         assertTrue(result.contains("Jan"))
     }
@@ -329,42 +326,42 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `formatLoraParamsForClipboard includes interface name`() {
         val iface = createTestDiscoveredInterface(name = "Test RNode")
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("Test RNode"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats frequency in MHz`() {
         val iface = createTestDiscoveredInterface(frequency = 915000000L)
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("915.0 MHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats bandwidth in kHz`() {
         val iface = createTestDiscoveredInterface(bandwidth = 125000)
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("125 kHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats spreading factor`() {
         val iface = createTestDiscoveredInterface(spreadingFactor = 10)
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("SF10"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats coding rate`() {
         val iface = createTestDiscoveredInterface(codingRate = 5)
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("4/5"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard includes modulation`() {
         val iface = createTestDiscoveredInterface(modulation = "LoRa")
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertTrue(result.contains("Modulation: LoRa"))
     }
 
@@ -377,7 +374,7 @@ class DiscoveredInterfacesScreenTest {
             codingRate = null,
             modulation = null,
         )
-        val result = formatLoraParamsForClipboardTestable(iface)
+        val result = formatLoraParamsForClipboard(iface)
         assertFalse(result.contains("Frequency"))
         assertFalse(result.contains("Bandwidth"))
         assertFalse(result.contains("Spreading Factor"))
@@ -651,43 +648,6 @@ private fun createTestDiscoveredInterface(
     )
 }
 
-// ========== Testable Helper Functions (recreated from private functions) ==========
-
-/**
- * Testable version of isYggdrasilAddress function from DiscoveredInterfacesScreen.
- * Check if a host address is a Yggdrasil network address (IPv6 in 0200::/7 space).
- */
-private fun isYggdrasilAddressTestable(host: String?): Boolean {
-    // Early exit for null
-    if (host == null) return false
-
-    // Quick check: Yggdrasil addresses start with "2" or "3" after optional brackets
-    val cleanHost = host.trim().removePrefix("[").removeSuffix("]")
-
-    // Check if it's IPv6, parse first segment, and validate range
-    val firstSegment = cleanHost.takeIf { it.contains(":") }?.split(":")?.firstOrNull()
-    val value = firstSegment?.toIntOrNull(16)
-
-    // 0200::/7 means first 7 bits are 0000001, covering 0x0200-0x03FF
-    return value != null && value in 0x0200..0x03FF
-}
-
-/**
- * Testable version of formatInterfaceType function from DiscoveredInterfacesScreen.
- */
-private fun formatInterfaceTypeTestable(type: String): String {
-    return when (type) {
-        "TCPServerInterface" -> "TCP Server"
-        "TCPClientInterface" -> "TCP Client"
-        "BackboneInterface" -> "Backbone (TCP)"
-        "I2PInterface" -> "I2P"
-        "RNodeInterface" -> "RNode (LoRa)"
-        "WeaveInterface" -> "Weave (LoRa)"
-        "KISSInterface" -> "KISS"
-        else -> type
-    }
-}
-
 // ========== Test Wrappers (Composables for testing) ==========
 
 /**
@@ -702,7 +662,7 @@ private fun InterfaceTypeIconTestWrapper(
     // Determine expected icon type based on logic from DiscoveredInterfacesScreen
     val expectedIcon = when (type) {
         "TCPServerInterface", "TCPClientInterface", "BackboneInterface" -> {
-            if (isYggdrasilAddressTestable(host)) "treepine" else "public"
+            if (isYggdrasilAddress(host)) "treepine" else "public"
         }
         "I2PInterface" -> "incognito"
         "RNodeInterface", "WeaveInterface", "KISSInterface" -> "antenna"
@@ -783,52 +743,6 @@ private fun NetworkInfoIconTestWrapper(
             Text(text = "network_info_icon")
         }
     }
-}
-
-/**
- * Testable version of formatLastHeard function from DiscoveredInterfacesScreen.
- */
-private fun formatLastHeardTestable(timestamp: Long): String {
-    if (timestamp == 0L) return "Never"
-
-    val now = System.currentTimeMillis() / 1000
-    val diff = now - timestamp
-
-    return when {
-        diff < 60 -> "just now"
-        diff < 3600 -> "${diff / 60} min ago"
-        diff < 86400 -> "${diff / 3600} hours ago"
-        diff < 604800 -> "${diff / 86400} days ago"
-        else -> {
-            val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
-            sdf.format(Date(timestamp * 1000))
-        }
-    }
-}
-
-/**
- * Testable version of formatLoraParamsForClipboard function from DiscoveredInterfacesScreen.
- */
-private fun formatLoraParamsForClipboardTestable(iface: DiscoveredInterface): String {
-    return buildString {
-        appendLine("LoRa Parameters from: ${iface.name}")
-        appendLine("---")
-        iface.frequency?.let { freq ->
-            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
-        }
-        iface.bandwidth?.let { bw ->
-            appendLine("Bandwidth: ${bw / 1000} kHz")
-        }
-        iface.spreadingFactor?.let { sf ->
-            appendLine("Spreading Factor: SF$sf")
-        }
-        iface.codingRate?.let { cr ->
-            appendLine("Coding Rate: 4/$cr")
-        }
-        iface.modulation?.let { mod ->
-            appendLine("Modulation: $mod")
-        }
-    }.trim()
 }
 
 /**

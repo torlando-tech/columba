@@ -1331,14 +1331,7 @@ fun MessageBubble(
                         )
                         if (isFromMe) {
                             Text(
-                                text =
-                                    when (message.status) {
-                                        "pending" -> "○"
-                                        "sent", "retrying_propagated", "propagated" -> "✓"
-                                        "delivered" -> "✓✓"
-                                        "failed" -> "!"
-                                        else -> ""
-                                    },
+                                text = getMessageStatusIcon(message.status),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                             )
@@ -1605,14 +1598,7 @@ fun MessageBubble(
                             )
                             if (isFromMe) {
                                 Text(
-                                    text =
-                                        when (message.status) {
-                                            "pending" -> "○" // Hollow circle - message created, waiting to send
-                                            "sent", "retrying_propagated", "propagated" -> "✓" // Single check - transmitted/retrying/stored on relay
-                                            "delivered" -> "✓✓" // Double check - delivered and acknowledged by recipient
-                                            "failed" -> "!" // Exclamation - delivery failed
-                                            else -> ""
-                                        },
+                                    text = getMessageStatusIcon(message.status),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                 )
@@ -2344,5 +2330,26 @@ private fun formatFileSize(bytes: Long): String {
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         bytes < 1024 * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
         else -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
+/**
+ * Get the status icon character for a message status.
+ *
+ * @param status The message status string
+ * @return Unicode character representing the status:
+ *   - "○" (hollow circle) for pending - message created, waiting to send
+ *   - "✓" (single check) for sent/retrying_propagated/propagated - transmitted or stored on relay
+ *   - "✓✓" (double check) for delivered - delivered and acknowledged by recipient
+ *   - "!" (exclamation) for failed - delivery failed
+ *   - "" (empty) for unknown status
+ */
+internal fun getMessageStatusIcon(status: String): String {
+    return when (status) {
+        "pending" -> "○"
+        "sent", "retrying_propagated", "propagated" -> "✓"
+        "delivered" -> "✓✓"
+        "failed" -> "!"
+        else -> ""
     }
 }

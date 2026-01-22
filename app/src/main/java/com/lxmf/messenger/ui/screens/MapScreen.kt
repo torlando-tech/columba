@@ -1106,7 +1106,7 @@ private fun FocusInterfaceBottomSheet(
 /**
  * Format LoRa parameters for clipboard.
  */
-private fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): String {
+internal fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): String {
     return buildString {
         appendLine("LoRa Parameters from: ${details.name}")
         appendLine("---")
@@ -1150,7 +1150,7 @@ private fun InterfaceDetailRow(
     }
 }
 
-private fun formatTimeAgo(timestamp: Long): String {
+internal fun formatTimeAgo(timestamp: Long): String {
     val now = System.currentTimeMillis() / 1000
     val diff = now - timestamp
     return when {

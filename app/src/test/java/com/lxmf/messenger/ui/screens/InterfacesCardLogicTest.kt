@@ -1,6 +1,10 @@
 package com.lxmf.messenger.ui.screens
 
+import com.lxmf.messenger.viewmodel.InterfaceIconType
 import com.lxmf.messenger.viewmodel.InterfaceInfo
+import com.lxmf.messenger.viewmodel.getDialogTitle
+import com.lxmf.messenger.viewmodel.getIconType
+import com.lxmf.messenger.viewmodel.isClickable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,41 +19,6 @@ import org.junit.Test
  * - Failed interfaces: red error icon, clickable with error message
  */
 class InterfacesCardLogicTest {
-    /**
-     * Determines the icon type for an interface.
-     * Replicates logic from InterfaceRow in IdentityScreen.kt
-     */
-    private fun getIconType(iface: InterfaceInfo): IconType {
-        val hasFailed = iface.error != null
-        return when {
-            iface.online -> IconType.CHECK_CIRCLE
-            hasFailed -> IconType.ERROR
-            else -> IconType.WARNING
-        }
-    }
-
-    /**
-     * Determines if an interface row should be clickable.
-     * Replicates logic from InterfacesCard in IdentityScreen.kt
-     */
-    private fun isClickable(iface: InterfaceInfo): Boolean {
-        return !iface.online || iface.error != null
-    }
-
-    /**
-     * Determines the dialog title for an interface.
-     * Replicates logic from InterfacesCard AlertDialog in IdentityScreen.kt
-     */
-    private fun getDialogTitle(iface: InterfaceInfo): String {
-        val hasFailed = iface.error != null
-        return if (hasFailed) "Interface Failed" else "Interface Offline"
-    }
-
-    enum class IconType {
-        CHECK_CIRCLE,
-        WARNING,
-        ERROR,
-    }
 
     // ==========================================
     // Online Interface Tests
@@ -64,7 +33,7 @@ class InterfacesCardLogicTest {
                 online = true,
                 error = null,
             )
-        assertEquals(IconType.CHECK_CIRCLE, getIconType(iface))
+        assertEquals(InterfaceIconType.CHECK_CIRCLE, iface.getIconType())
     }
 
     @Test
@@ -76,7 +45,7 @@ class InterfacesCardLogicTest {
                 online = true,
                 error = null,
             )
-        assertFalse(isClickable(iface))
+        assertFalse(iface.isClickable())
     }
 
     // ==========================================
@@ -92,7 +61,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = null,
             )
-        assertEquals(IconType.WARNING, getIconType(iface))
+        assertEquals(InterfaceIconType.WARNING, iface.getIconType())
     }
 
     @Test
@@ -104,7 +73,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = null,
             )
-        assertTrue(isClickable(iface))
+        assertTrue(iface.isClickable())
     }
 
     @Test
@@ -116,7 +85,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = null,
             )
-        assertEquals("Interface Offline", getDialogTitle(iface))
+        assertEquals("Interface Offline", iface.getDialogTitle())
     }
 
     // ==========================================
@@ -132,7 +101,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = "Port 29716 already in use",
             )
-        assertEquals(IconType.ERROR, getIconType(iface))
+        assertEquals(InterfaceIconType.ERROR, iface.getIconType())
     }
 
     @Test
@@ -144,7 +113,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = "Port 29716 already in use",
             )
-        assertTrue(isClickable(iface))
+        assertTrue(iface.isClickable())
     }
 
     @Test
@@ -156,7 +125,7 @@ class InterfacesCardLogicTest {
                 online = false,
                 error = "Port 29716 already in use",
             )
-        assertEquals("Interface Failed", getDialogTitle(iface))
+        assertEquals("Interface Failed", iface.getDialogTitle())
     }
 
     @Test
@@ -188,9 +157,9 @@ class InterfacesCardLogicTest {
                 error = "Some warning",
             )
         // Since online is true, it takes precedence
-        assertEquals(IconType.CHECK_CIRCLE, getIconType(iface))
+        assertEquals(InterfaceIconType.CHECK_CIRCLE, iface.getIconType())
         // But it's still clickable because error != null
-        assertTrue(isClickable(iface))
+        assertTrue(iface.isClickable())
     }
 
     @Test

@@ -10,23 +10,11 @@ import org.junit.Test
  * - pending: hollow circle (○) - message created, waiting to send
  * - sent: single check (✓) - transmitted to network
  * - retrying_propagated: single check (✓) - retrying via propagation node
+ * - propagated: single check (✓) - stored on propagation relay
  * - delivered: double check (✓✓) - delivered and acknowledged
  * - failed: exclamation (!) - delivery failed
  */
 class MessageStatusIconTest {
-    /**
-     * Determines the status icon for a message.
-     * Replicates logic from MessagingScreen.kt message bubble
-     */
-    private fun getStatusIcon(status: String): String {
-        return when (status) {
-            "pending" -> "○" // Hollow circle - message created, waiting to send
-            "sent", "retrying_propagated" -> "✓" // Single check - transmitted/retrying
-            "delivered" -> "✓✓" // Double check - delivered and acknowledged
-            "failed" -> "!" // Exclamation - delivery failed
-            else -> ""
-        }
-    }
 
     // ==========================================
     // Pending Status Tests
@@ -34,7 +22,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `pending status shows hollow circle`() {
-        assertEquals("○", getStatusIcon("pending"))
+        assertEquals("○", getMessageStatusIcon("pending"))
     }
 
     // ==========================================
@@ -43,21 +31,28 @@ class MessageStatusIconTest {
 
     @Test
     fun `sent status shows single checkmark`() {
-        assertEquals("✓", getStatusIcon("sent"))
+        assertEquals("✓", getMessageStatusIcon("sent"))
     }
 
     // ==========================================
-    // Retrying Propagated Status Tests
+    // Propagation Status Tests
     // ==========================================
 
     @Test
     fun `retrying_propagated status shows single checkmark`() {
-        assertEquals("✓", getStatusIcon("retrying_propagated"))
+        assertEquals("✓", getMessageStatusIcon("retrying_propagated"))
     }
 
     @Test
-    fun `sent and retrying_propagated have same icon`() {
-        assertEquals(getStatusIcon("sent"), getStatusIcon("retrying_propagated"))
+    fun `propagated status shows single checkmark`() {
+        assertEquals("✓", getMessageStatusIcon("propagated"))
+    }
+
+    @Test
+    fun `sent and retrying_propagated and propagated have same icon`() {
+        val sentIcon = getMessageStatusIcon("sent")
+        assertEquals(sentIcon, getMessageStatusIcon("retrying_propagated"))
+        assertEquals(sentIcon, getMessageStatusIcon("propagated"))
     }
 
     // ==========================================
@@ -66,7 +61,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `delivered status shows double checkmark`() {
-        assertEquals("✓✓", getStatusIcon("delivered"))
+        assertEquals("✓✓", getMessageStatusIcon("delivered"))
     }
 
     // ==========================================
@@ -75,7 +70,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `failed status shows exclamation`() {
-        assertEquals("!", getStatusIcon("failed"))
+        assertEquals("!", getMessageStatusIcon("failed"))
     }
 
     // ==========================================
@@ -84,17 +79,17 @@ class MessageStatusIconTest {
 
     @Test
     fun `unknown status shows empty string`() {
-        assertEquals("", getStatusIcon("unknown"))
+        assertEquals("", getMessageStatusIcon("unknown"))
     }
 
     @Test
     fun `empty status shows empty string`() {
-        assertEquals("", getStatusIcon(""))
+        assertEquals("", getMessageStatusIcon(""))
     }
 
     @Test
     fun `null-like status shows empty string`() {
-        assertEquals("", getStatusIcon("null"))
+        assertEquals("", getMessageStatusIcon("null"))
     }
 
     // ==========================================
@@ -103,10 +98,10 @@ class MessageStatusIconTest {
 
     @Test
     fun `status icons are distinct for main states`() {
-        val pending = getStatusIcon("pending")
-        val sent = getStatusIcon("sent")
-        val delivered = getStatusIcon("delivered")
-        val failed = getStatusIcon("failed")
+        val pending = getMessageStatusIcon("pending")
+        val sent = getMessageStatusIcon("sent")
+        val delivered = getMessageStatusIcon("delivered")
+        val failed = getMessageStatusIcon("failed")
 
         // All main states should have distinct icons
         val icons = setOf(pending, sent, delivered, failed)
@@ -116,16 +111,16 @@ class MessageStatusIconTest {
     @Test
     fun `normal delivery flow has correct icon progression`() {
         // Normal flow: pending -> sent -> delivered
-        assertEquals("○", getStatusIcon("pending"))
-        assertEquals("✓", getStatusIcon("sent"))
-        assertEquals("✓✓", getStatusIcon("delivered"))
+        assertEquals("○", getMessageStatusIcon("pending"))
+        assertEquals("✓", getMessageStatusIcon("sent"))
+        assertEquals("✓✓", getMessageStatusIcon("delivered"))
     }
 
     @Test
     fun `propagation fallback flow has correct icon progression`() {
         // Propagation fallback: pending -> retrying_propagated -> delivered
-        assertEquals("○", getStatusIcon("pending"))
-        assertEquals("✓", getStatusIcon("retrying_propagated"))
-        assertEquals("✓✓", getStatusIcon("delivered"))
+        assertEquals("○", getMessageStatusIcon("pending"))
+        assertEquals("✓", getMessageStatusIcon("retrying_propagated"))
+        assertEquals("✓✓", getMessageStatusIcon("delivered"))
     }
 }

@@ -224,25 +224,25 @@ class MapScreenTest {
     @Test
     fun `formatTimeAgo with recent timestamp returns Just now`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("Just now", formatTimeAgoTestable(now - 30))
+        assertEquals("Just now", formatTimeAgo(now - 30))
     }
 
     @Test
     fun `formatTimeAgo with 5 minutes ago returns min ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("5 min ago", formatTimeAgoTestable(now - 300))
+        assertEquals("5 min ago", formatTimeAgo(now - 300))
     }
 
     @Test
     fun `formatTimeAgo with 2 hours ago returns hours ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("2 hours ago", formatTimeAgoTestable(now - 7200))
+        assertEquals("2 hours ago", formatTimeAgo(now - 7200))
     }
 
     @Test
     fun `formatTimeAgo with 3 days ago returns days ago`() {
         val now = System.currentTimeMillis() / 1000
-        assertEquals("3 days ago", formatTimeAgoTestable(now - 259200))
+        assertEquals("3 days ago", formatTimeAgo(now - 259200))
     }
 
     // ========== formatLoraParamsForClipboard Tests ==========
@@ -250,42 +250,42 @@ class MapScreenTest {
     @Test
     fun `formatLoraParamsForClipboard includes interface name`() {
         val details = createTestFocusInterfaceDetails(name = "Test RNode")
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("Test RNode"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats frequency in MHz`() {
         val details = createTestFocusInterfaceDetails(frequency = 915000000L)
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("915.0 MHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats bandwidth in kHz`() {
         val details = createTestFocusInterfaceDetails(bandwidth = 125000)
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("125 kHz"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats spreading factor`() {
         val details = createTestFocusInterfaceDetails(spreadingFactor = 10)
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("SF10"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard formats coding rate`() {
         val details = createTestFocusInterfaceDetails(codingRate = 5)
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("4/5"))
     }
 
     @Test
     fun `formatLoraParamsForClipboard includes modulation`() {
         val details = createTestFocusInterfaceDetails(modulation = "LoRa")
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertTrue(result.contains("Modulation: LoRa"))
     }
 
@@ -298,7 +298,7 @@ class MapScreenTest {
             codingRate = null,
             modulation = null,
         )
-        val result = formatLoraParamsForClipboardTestable(details)
+        val result = formatLoraParamsForClipboard(details)
         assertFalse(result.contains("Frequency"))
         assertFalse(result.contains("Bandwidth"))
         assertFalse(result.contains("Spreading Factor"))
@@ -560,45 +560,6 @@ private fun EmptyMapStateCardTestWrapper() {
 // ========== Helper Functions ==========
 
 /**
- * Testable version of formatTimeAgo from MapScreen.
- */
-private fun formatTimeAgoTestable(timestamp: Long): String {
-    val now = System.currentTimeMillis() / 1000
-    val diff = now - timestamp
-    return when {
-        diff < 60 -> "Just now"
-        diff < 3600 -> "${diff / 60} min ago"
-        diff < 86400 -> "${diff / 3600} hours ago"
-        else -> "${diff / 86400} days ago"
-    }
-}
-
-/**
- * Testable version of formatLoraParamsForClipboard from MapScreen.
- */
-private fun formatLoraParamsForClipboardTestable(details: FocusInterfaceDetails): String {
-    return buildString {
-        appendLine("LoRa Parameters from: ${details.name}")
-        appendLine("---")
-        details.frequency?.let { freq ->
-            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
-        }
-        details.bandwidth?.let { bw ->
-            appendLine("Bandwidth: ${bw / 1000} kHz")
-        }
-        details.spreadingFactor?.let { sf ->
-            appendLine("Spreading Factor: SF$sf")
-        }
-        details.codingRate?.let { cr ->
-            appendLine("Coding Rate: 4/$cr")
-        }
-        details.modulation?.let { mod ->
-            appendLine("Modulation: $mod")
-        }
-    }.trim()
-}
-
-/**
  * Create a test FocusInterfaceDetails with specified parameters.
  */
 @Suppress("LongParameterList")
@@ -799,7 +760,7 @@ private fun FocusInterfaceContentTestWrapper(
                 fontWeight = FontWeight.SemiBold,
             )
             details.lastHeard?.let { timestamp ->
-                val timeAgo = formatTimeAgoTestable(timestamp)
+                val timeAgo = formatTimeAgo(timestamp)
                 InterfaceDetailRowTestWrapper(
                     label = "Last Heard",
                     value = timeAgo,

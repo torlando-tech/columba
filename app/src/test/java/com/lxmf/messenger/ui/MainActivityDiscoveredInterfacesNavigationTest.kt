@@ -12,6 +12,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
+import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
+import com.lxmf.messenger.ui.screens.isValidCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -70,7 +72,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with valid coordinates returns details`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = 45.123,
             lon = -122.456,
             label = "Test Interface",
@@ -108,7 +110,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with zero coordinates returns null`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = 0.0,
             lon = 0.0,
             label = "Test",
@@ -119,7 +121,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with null coordinates returns null`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = null,
             lon = null,
             label = "Test",
@@ -130,7 +132,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails converts default values to null`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = 45.0,
             lon = -122.0,
             label = "Test",
@@ -164,7 +166,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with empty label uses Unknown`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = 45.0,
             lon = -122.0,
             label = null,
@@ -177,7 +179,7 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with empty type uses Unknown`() {
-        val details = buildFocusDetailsTestable(
+        val details = buildFocusInterfaceDetails(
             lat = 45.0,
             lon = -122.0,
             label = "Test",
@@ -377,54 +379,4 @@ class MainActivityDiscoveredInterfacesNavigationTest {
         assertEquals(10, capturedSf)
         assertEquals(5, capturedCr)
     }
-}
-
-// ========== Testable Helper Functions ==========
-
-/**
- * Testable version of isValidCoordinate function from MainActivity.
- */
-private fun isValidCoordinate(value: Double?) = value != null && value != 0.0
-
-/**
- * Testable version of building FocusInterfaceDetails from navigation arguments.
- * Mirrors the logic in MainActivity's map_focus route.
- */
-@Suppress("LongParameterList") // Intentionally mirrors MainActivity's parameter extraction
-private fun buildFocusDetailsTestable(
-    lat: Double?,
-    lon: Double?,
-    label: String?,
-    type: String?,
-    height: Double? = null,
-    reachableOn: String? = null,
-    port: Int? = null,
-    frequency: Long? = null,
-    bandwidth: Int? = null,
-    sf: Int? = null,
-    cr: Int? = null,
-    modulation: String? = null,
-    status: String? = null,
-    lastHeard: Long? = null,
-    hops: Int? = null,
-): FocusInterfaceDetails? {
-    if (!isValidCoordinate(lat) || !isValidCoordinate(lon)) return null
-
-    return FocusInterfaceDetails(
-        name = label ?: "Unknown",
-        type = type?.ifEmpty { null } ?: "Unknown",
-        latitude = lat!!,
-        longitude = lon!!,
-        height = if (height?.isNaN() == false) height else null,
-        reachableOn = reachableOn?.ifEmpty { null },
-        port = if (port != -1) port else null,
-        frequency = if (frequency != -1L) frequency else null,
-        bandwidth = if (bandwidth != -1) bandwidth else null,
-        spreadingFactor = if (sf != -1) sf else null,
-        codingRate = if (cr != -1) cr else null,
-        modulation = modulation?.ifEmpty { null },
-        status = status?.ifEmpty { null },
-        lastHeard = if (lastHeard != -1L) lastHeard else null,
-        hops = if (hops != -1) hops else null,
-    )
 }

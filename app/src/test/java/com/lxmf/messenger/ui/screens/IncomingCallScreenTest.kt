@@ -117,7 +117,7 @@ class IncomingCallScreenTest {
         val longHash = "0102030405060708090a0b0c0d0e0f10"
         composeTestRule.setContent {
             TestIncomingCallScreen(
-                callerDisplayName = formatHash(longHash),
+                callerDisplayName = formatIncomingHash(longHash),
                 onAnswer = {},
                 onDecline = {},
             )
@@ -132,7 +132,7 @@ class IncomingCallScreenTest {
         val shortHash = "abc123"
         composeTestRule.setContent {
             TestIncomingCallScreen(
-                callerDisplayName = formatHash(shortHash),
+                callerDisplayName = formatIncomingHash(shortHash),
                 onAnswer = {},
                 onDecline = {},
             )
@@ -147,7 +147,7 @@ class IncomingCallScreenTest {
         val hash = "123456789012"
         composeTestRule.setContent {
             TestIncomingCallScreen(
-                callerDisplayName = formatHash(hash),
+                callerDisplayName = formatIncomingHash(hash),
                 onAnswer = {},
                 onDecline = {},
             )
@@ -162,7 +162,7 @@ class IncomingCallScreenTest {
         val hash = "1234567890123"
         composeTestRule.setContent {
             TestIncomingCallScreen(
-                callerDisplayName = formatHash(hash),
+                callerDisplayName = formatIncomingHash(hash),
                 onAnswer = {},
                 onDecline = {},
             )
@@ -452,19 +452,6 @@ class IncomingCallScreenTest {
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
     }
 
-    // ========== Helper Functions ==========
-
-    /**
-     * Format identity hash the same way as the actual IncomingCallScreen.
-     * Hashes longer than 12 characters are formatted as first 6 + ... + last 6.
-     */
-    private fun formatHash(hash: String): String {
-        return if (hash.length > 12) {
-            "${hash.take(6)}...${hash.takeLast(6)}"
-        } else {
-            hash
-        }
-    }
 }
 
 // ========== Test Composables ==========

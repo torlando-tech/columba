@@ -82,6 +82,7 @@ import com.lxmf.messenger.ui.screens.IncomingCallScreen
 import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
 import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
+import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
@@ -969,26 +970,23 @@ fun ColumbaNavigation(
                         val hops = backStackEntry.arguments?.getInt("hops")
 
                         // Build FocusInterfaceDetails if we have valid lat/lon
-                        fun isValidCoordinate(value: Double?) = value != null && value != 0.0
-                        val focusDetails = if (isValidCoordinate(lat) && isValidCoordinate(lon)) {
-                            FocusInterfaceDetails(
-                                name = label ?: "Unknown",
-                                type = type?.ifEmpty { null } ?: "Unknown",
-                                latitude = lat!!,
-                                longitude = lon!!,
-                                height = if (height?.isNaN() == false) height else null,
-                                reachableOn = reachableOn?.ifEmpty { null },
-                                port = if (port != -1) port else null,
-                                frequency = if (frequency != -1L) frequency else null,
-                                bandwidth = if (bandwidth != -1) bandwidth else null,
-                                spreadingFactor = if (sf != -1) sf else null,
-                                codingRate = if (cr != -1) cr else null,
-                                modulation = modulation?.ifEmpty { null },
-                                status = status?.ifEmpty { null },
-                                lastHeard = if (lastHeard != -1L) lastHeard else null,
-                                hops = if (hops != -1) hops else null,
-                            )
-                        } else null
+                        val focusDetails = buildFocusInterfaceDetails(
+                            lat = lat,
+                            lon = lon,
+                            label = label,
+                            type = type,
+                            height = height,
+                            reachableOn = reachableOn,
+                            port = port,
+                            frequency = frequency,
+                            bandwidth = bandwidth,
+                            sf = sf,
+                            cr = cr,
+                            modulation = modulation,
+                            status = status,
+                            lastHeard = lastHeard,
+                            hops = hops,
+                        )
 
                         MapScreen(
                             onNavigateToConversation = { destinationHash ->

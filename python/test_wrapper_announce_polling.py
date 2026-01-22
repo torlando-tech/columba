@@ -499,6 +499,65 @@ class TestPollReceivedAnnounces(unittest.TestCase):
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
+    def test_interface_name_same_as_class_returns_class_only(self, mock_rns):
+        """Test that when interface.name equals class name, only class name is returned"""
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        mock_identity = MagicMock()
+        mock_identity.hash = dest_hash
+        mock_identity.get_public_key = MagicMock(return_value=b'')
+
+        # Create interface where .name equals class name
+        class AutoInterface:
+            name = "AutoInterface"
+        mock_interface = AutoInterface()
+
+        mock_packet = MagicMock()
+        mock_packet.receiving_interface = mock_interface
+
+        announce_entry = [time.time(), 0, 0, None, 0, mock_packet]
+        mock_rns.Transport.announce_table = {dest_hash: announce_entry}
+        mock_rns.Identity.recall = MagicMock(return_value=mock_identity)
+        mock_rns.Identity.recall_app_data = MagicMock(return_value=b'')
+        mock_rns.Transport.hops_to = MagicMock(return_value=0)
+
+        result = self.wrapper.poll_received_announces()
+
+        self.assertEqual(len(result), 1)
+        # Should return just "AutoInterface", not "AutoInterface[AutoInterface]"
+        self.assertEqual(result[0]['interface'], "AutoInterface")
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
+    def test_interface_with_none_name_returns_class_only(self, mock_rns):
+        """Test that when interface.name is None, only class name is returned"""
+        dest_hash = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10'
+
+        mock_identity = MagicMock()
+        mock_identity.hash = dest_hash
+        mock_identity.get_public_key = MagicMock(return_value=b'')
+
+        # Create interface where .name is None
+        class TCPClientInterface:
+            name = None
+        mock_interface = TCPClientInterface()
+
+        mock_packet = MagicMock()
+        mock_packet.receiving_interface = mock_interface
+
+        announce_entry = [time.time(), 0, 0, None, 0, mock_packet]
+        mock_rns.Transport.announce_table = {dest_hash: announce_entry}
+        mock_rns.Identity.recall = MagicMock(return_value=mock_identity)
+        mock_rns.Identity.recall_app_data = MagicMock(return_value=b'')
+        mock_rns.Transport.hops_to = MagicMock(return_value=0)
+
+        result = self.wrapper.poll_received_announces()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['interface'], "TCPClientInterface")
+
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
+    @patch('reticulum_wrapper.RNS')
     def test_seen_announce_hashes_persistence(self, mock_rns):
         """Test that seen_announce_hashes persists across multiple polls"""
         dest_hash1 = b'\x01' * 16

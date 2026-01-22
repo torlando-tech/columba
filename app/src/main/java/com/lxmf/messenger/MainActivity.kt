@@ -974,8 +974,8 @@ fun ColumbaNavigation(
                             FocusInterfaceDetails(
                                 name = label ?: "Unknown",
                                 type = type?.ifEmpty { null } ?: "Unknown",
-                                latitude = lat,
-                                longitude = lon,
+                                latitude = lat!!,
+                                longitude = lon!!,
                                 height = if (height?.isNaN() == false) height else null,
                                 reachableOn = reachableOn?.ifEmpty { null },
                                 port = if (port != -1) port else null,

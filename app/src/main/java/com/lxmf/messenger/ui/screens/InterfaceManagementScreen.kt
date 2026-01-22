@@ -169,7 +169,7 @@ fun InterfaceManagementScreen(
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     ),
             )
         },
@@ -244,7 +244,6 @@ fun InterfaceManagementScreen(
                                         "${state.discoveredInterfaceCount}",
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.tertiary,
                                     )
                                     Text(
                                         "Discovered",
@@ -567,7 +566,7 @@ fun InterfaceCard(
                         style = MaterialTheme.typography.labelSmall,
                         color =
                             if (interfaceEntity.enabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                MaterialTheme.colorScheme.onSecondaryContainer
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
@@ -775,7 +774,7 @@ fun SuccessMessage(
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -845,7 +844,7 @@ fun InfoMessage(
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -1159,7 +1158,7 @@ internal fun InterfaceTypeOption(
                 fontWeight = FontWeight.Medium,
                 color =
                     if (isHighlighted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                        MaterialTheme.colorScheme.onSecondaryContainer
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -1169,7 +1168,7 @@ internal fun InterfaceTypeOption(
                 style = MaterialTheme.typography.bodySmall,
                 color =
                     if (isHighlighted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     },
@@ -1239,7 +1238,7 @@ fun DiscoveredInterfacesSummaryCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isDiscoveryEnabled) {
-                MaterialTheme.colorScheme.tertiaryContainer
+                MaterialTheme.colorScheme.secondaryContainer
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
             },
@@ -1262,7 +1261,7 @@ fun DiscoveredInterfacesSummaryCard(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                         tint = if (isDiscoveryEnabled) {
-                            MaterialTheme.colorScheme.onTertiaryContainer
+                            MaterialTheme.colorScheme.onSecondaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
@@ -1272,7 +1271,7 @@ fun DiscoveredInterfacesSummaryCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (isDiscoveryEnabled) {
-                            MaterialTheme.colorScheme.onTertiaryContainer
+                            MaterialTheme.colorScheme.onSecondaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
@@ -1284,7 +1283,7 @@ fun DiscoveredInterfacesSummaryCard(
                         Text(
                             text = "$totalCount interfaces found via RNS Discovery",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         // Status breakdown
@@ -1317,7 +1316,7 @@ fun DiscoveredInterfacesSummaryCard(
                         Text(
                             text = "Discovery enabled - no interfaces found yet",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                         )
                     }
                 } else {
@@ -1332,7 +1331,7 @@ fun DiscoveredInterfacesSummaryCard(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "View details",
                 tint = if (isDiscoveryEnabled) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
@@ -1362,7 +1361,7 @@ private fun StatusBadge(
         Text(
             text = "$count $label",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
         )
     }
 }

@@ -46,10 +46,10 @@ fun MapSourcesCard(
     rmspServerCount: Int = 0,
     hasOfflineMaps: Boolean = false,
 ) {
-    // At least one source must be enabled (or have offline maps)
-    // When RMSP is disabled via feature flag, only check hasOfflineMaps for HTTP toggle
+    // Allow disabling HTTP - the map screen now shows a helpful overlay when no sources enabled
+    // This lets users intentionally disable HTTP for offline-only or privacy-conscious use
     val effectiveRmspEnabled = RMSP_FEATURE_ENABLED && rmspEnabled
-    val canDisableHttp = effectiveRmspEnabled || hasOfflineMaps
+    val canDisableHttp = true // Always allow - MapScreen shows overlay when no sources available
     val canDisableRmsp = httpEnabled || hasOfflineMaps
     val showWarning = !httpEnabled && !effectiveRmspEnabled && !hasOfflineMaps
 
@@ -99,7 +99,7 @@ fun MapSourcesCard(
             )
         }
 
-        // Warning when no sources enabled
+        // Info when no sources enabled
         if (showWarning) {
             Row(
                 modifier =
@@ -115,7 +115,7 @@ fun MapSourcesCard(
                     tint = MaterialTheme.colorScheme.error,
                 )
                 Text(
-                    text = "At least one map source must be enabled",
+                    text = "No map tiles will load until a source is enabled or offline maps are downloaded",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

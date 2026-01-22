@@ -216,10 +216,13 @@ class DiscoveredInterfacesViewModel
             val state = _state.value
             val userLat = state.userLatitude ?: return null
             val userLon = state.userLongitude ?: return null
-            val ifaceLat = iface.latitude ?: return null
-            val ifaceLon = iface.longitude ?: return null
 
-            return haversineDistance(userLat, userLon, ifaceLat, ifaceLon)
+            // Use let to combine interface location checks
+            return iface.latitude?.let { lat ->
+                iface.longitude?.let { lon ->
+                    haversineDistance(userLat, userLon, lat, lon)
+                }
+            }
         }
 
         /**
@@ -228,14 +231,12 @@ class DiscoveredInterfacesViewModel
          */
         fun isAutoconnected(iface: DiscoveredInterface): Boolean {
             val endpoints = _state.value.autoconnectedEndpoints
-            if (endpoints.isEmpty()) return false
+            val host = iface.reachableOn
+            val port = iface.port
 
-            // TCP-based interfaces have reachable_on and port
-            val host = iface.reachableOn ?: return false
-            val port = iface.port ?: return false
-            val endpoint = "$host:$port"
-
-            return endpoints.contains(endpoint)
+            // TCP-based interfaces have reachable_on and port; check if endpoint is in set
+            return endpoints.isNotEmpty() && host != null && port != null &&
+                endpoints.contains("$host:$port")
         }
 
         /**

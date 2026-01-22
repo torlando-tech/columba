@@ -2,6 +2,7 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.model.TcpCommunityServer
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
@@ -66,8 +67,8 @@ class TcpClientWizardViewModelTest {
         interfaceRepository = mockk(relaxed = true)
         configManager = mockk(relaxed = true)
 
-        // Mock allInterfaces to return empty list (no duplicates)
-        every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+        // Mock allInterfaceEntities to return empty list (no duplicates)
+        every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
 
         viewModel = TcpClientWizardViewModel(interfaceRepository, configManager)
     }
@@ -808,14 +809,15 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with duplicate interface name`() =
         runTest {
             // Mock existing interfaces with a name that will conflict
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "Test Server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.state.test {
                 awaitItem() // Initial state
@@ -840,14 +842,15 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with case-insensitive duplicate name`() =
         runTest {
             // Mock existing interface with different case
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "test server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.state.test {
                 awaitItem() // Initial state
@@ -870,7 +873,7 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration succeeds with unique interface name`() =
         runTest {
             // Mock no existing interfaces
-            every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
             coEvery { interfaceRepository.insertInterface(any()) } returns 1L
 
             viewModel.state.test {
@@ -892,14 +895,15 @@ class TcpClientWizardViewModelTest {
     @Test
     fun `saveConfiguration does not call repository when duplicate name detected`() =
         runTest {
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "Test Server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.selectServer(testServer)
             advanceUntilIdle()

@@ -978,17 +978,16 @@ private fun LocationDetails(
  * Yggdrasil uses addresses starting with 02xx or 03xx.
  */
 private fun isYggdrasilAddress(host: String?): Boolean {
+    // Early exit for null
     if (host == null) return false
-    // Quick check: Yggdrasil addresses start with "2" or "3" after optional brackets
-    val cleanHost = host.trim().removePrefix("[").removeSuffix("]")
-    if (!cleanHost.contains(":")) return false // Not IPv6
 
-    // Parse first segment of IPv6 address
-    val firstSegment = cleanHost.split(":").firstOrNull() ?: return false
-    val value = firstSegment.toIntOrNull(16) ?: return false
+    // Clean host, check IPv6, parse first segment, and validate range in one chain
+    val cleanHost = host.trim().removePrefix("[").removeSuffix("]")
+    val firstSegment = cleanHost.takeIf { it.contains(":") }?.split(":")?.firstOrNull()
+    val value = firstSegment?.toIntOrNull(16)
 
     // 0200::/7 means first 7 bits are 0000001, covering 0x0200-0x03FF
-    return value in 0x0200..0x03FF
+    return value != null && value in 0x0200..0x03FF
 }
 
 /**

@@ -311,6 +311,34 @@ interface IReticulumService {
      */
     String getInterfaceStats(String interfaceName);
 
+    // ==================== RNS 1.1.x INTERFACE DISCOVERY ====================
+
+    /**
+     * Get list of discovered interfaces from RNS 1.1.x discovery system.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return JSON string containing array of discovered interface info:
+     *         [{"name": "...", "type": "...", "host": "...", "port": ..., "is_online": true}]
+     */
+    String getDiscoveredInterfaces();
+
+    /**
+     * Check if interface discovery and auto-connect is enabled.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return true if RNS is configured to auto-connect discovered interfaces
+     */
+    boolean isDiscoveryEnabled();
+
+    /**
+     * Get list of currently auto-connected interface endpoints.
+     * Auto-connected interfaces are created dynamically by RNS discovery.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return JSON string containing array of endpoint strings like "host:port"
+     */
+    String getAutoconnectedInterfaceEndpoints();
+
     // ==================== PROPAGATION NODE SUPPORT ====================
 
     /**

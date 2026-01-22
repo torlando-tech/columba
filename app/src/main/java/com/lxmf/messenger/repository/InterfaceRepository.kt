@@ -64,6 +64,25 @@ class InterfaceRepository
         val enabledInterfaceCount: Flow<Int> = interfaceDao.getEnabledInterfaceCount()
 
         /**
+         * Get names of enabled interfaces that have bootstrap_only enabled.
+         * These are TCP Client interfaces that will auto-detach once sufficient
+         * discovered interfaces are connected (RNS 1.1.0+ bootstrap feature).
+         */
+        val bootstrapInterfaceNames: Flow<List<String>> =
+            interfaceDao.getEnabledInterfaces()
+                .map { entities ->
+                    entities.filter { entity ->
+                        entity.type == "TCPClient" && entity.enabled &&
+                            try {
+                                org.json.JSONObject(entity.configJson).optBoolean("bootstrap_only", false)
+                            } catch (e: Exception) {
+                                android.util.Log.v("InterfaceRepository", "Failed to parse configJson for ${entity.name}", e)
+                                false
+                            }
+                    }.map { it.name }
+                }
+
+        /**
          * Get total interface count.
          */
         val totalInterfaceCount: Flow<Int> = interfaceDao.getTotalInterfaceCount()
@@ -227,6 +246,7 @@ class InterfaceRepository
                             mode = json.optString("mode", "full"),
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },
+                            bootstrapOnly = json.optBoolean("bootstrap_only", false),
                         )
                     }
 

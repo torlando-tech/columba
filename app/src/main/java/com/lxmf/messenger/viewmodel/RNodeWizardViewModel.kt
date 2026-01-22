@@ -200,6 +200,14 @@ data class RNodeWizardState(
     val isSaving: Boolean = false,
     val saveError: String? = null,
     val saveSuccess: Boolean = false,
+    // Pending LoRa params from discovered interfaces (applied when reaching Review step)
+    val pendingFrequency: Long? = null,
+    val pendingBandwidth: Int? = null,
+    val pendingSpreadingFactor: Int? = null,
+    val pendingCodingRate: Int? = null,
+    val hasPendingParams: Boolean = false,
+    // Track if user skipped region selection (for back navigation)
+    val skippedRegionSelection: Boolean = false,
 )
 
 /**
@@ -438,9 +446,66 @@ class RNodeWizardViewModel
             rssiPollingJob = null
         }
 
+        // ========== PENDING LORA PARAMS ==========
+
+        /**
+         * Set initial LoRa radio params from a discovered interface.
+         * These will be applied when the user reaches the Review step.
+         */
+        fun setInitialRadioParams(
+            frequency: Long?,
+            bandwidth: Int?,
+            spreadingFactor: Int?,
+            codingRate: Int?,
+        ) {
+            _state.update { state ->
+                state.copy(
+                    pendingFrequency = frequency,
+                    pendingBandwidth = bandwidth,
+                    pendingSpreadingFactor = spreadingFactor,
+                    pendingCodingRate = codingRate,
+                    hasPendingParams = frequency != null || bandwidth != null ||
+                        spreadingFactor != null || codingRate != null,
+                )
+            }
+            Log.d(TAG, "Set pending LoRa params: freq=$frequency, bw=$bandwidth, sf=$spreadingFactor, cr=$codingRate")
+        }
+
+        /**
+         * Apply pending LoRa params to the current configuration.
+         * Called when entering the Review step to populate fields with discovered values.
+         */
+        fun applyPendingParams() {
+            val currentState = _state.value
+            if (!currentState.hasPendingParams) return
+
+            _state.update { state ->
+                state.copy(
+                    frequency = state.pendingFrequency?.toString() ?: state.frequency,
+                    bandwidth = state.pendingBandwidth?.toString() ?: state.bandwidth,
+                    spreadingFactor = state.pendingSpreadingFactor?.toString() ?: state.spreadingFactor,
+                    codingRate = state.pendingCodingRate?.toString() ?: state.codingRate,
+                    // Clear pending params after applying
+                    pendingFrequency = null,
+                    pendingBandwidth = null,
+                    pendingSpreadingFactor = null,
+                    pendingCodingRate = null,
+                    hasPendingParams = false,
+                    // Skip region/modem/slot selection - go to custom mode since we have specific params
+                    isCustomMode = true,
+                    showAdvancedSettings = true,
+                )
+            }
+            Log.d(TAG, "Applied pending LoRa params to configuration")
+        }
+
         // ========== NAVIGATION ==========
 
         fun goToStep(step: WizardStep) {
+            // Apply pending params when transitioning to Review step
+            if (step == WizardStep.REVIEW_CONFIGURE) {
+                applyPendingParams()
+            }
             _state.update { it.copy(currentStep = step) }
         }
 
@@ -451,7 +516,13 @@ class RNodeWizardViewModel
                     WizardStep.DEVICE_DISCOVERY -> {
                         // Stop RSSI polling when leaving device discovery to prevent memory leaks
                         stopRssiPolling()
-                        WizardStep.REGION_SELECTION
+                        // If we have pending LoRa params from discovered interface, skip to review
+                        if (currentState.hasPendingParams) {
+                            _state.update { it.copy(skippedRegionSelection = true) }
+                            WizardStep.REVIEW_CONFIGURE
+                        } else {
+                            WizardStep.REGION_SELECTION
+                        }
                     }
                     WizardStep.REGION_SELECTION -> {
                         if (currentState.isCustomMode) {
@@ -485,6 +556,10 @@ class RNodeWizardViewModel
                     }
                     WizardStep.REVIEW_CONFIGURE -> WizardStep.REVIEW_CONFIGURE // Already at end
                 }
+            // Apply pending params when reaching Review step
+            if (nextStep == WizardStep.REVIEW_CONFIGURE) {
+                applyPendingParams()
+            }
             _state.update { it.copy(currentStep = nextStep) }
         }
 
@@ -497,14 +572,22 @@ class RNodeWizardViewModel
                     WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
                     WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
                     WizardStep.REVIEW_CONFIGURE ->
-                        if (currentState.isCustomMode || currentState.selectedPreset != null) {
+                        if (currentState.skippedRegionSelection) {
+                            // Came from discovered interface params: go back to device selection
+                            WizardStep.DEVICE_DISCOVERY
+                        } else if (currentState.isCustomMode || currentState.selectedPreset != null) {
                             // Custom mode or preset: go back to region selection (skipping modem and slot)
                             WizardStep.REGION_SELECTION
                         } else {
                             WizardStep.FREQUENCY_SLOT
                         }
                 }
-            _state.update { it.copy(currentStep = prevStep) }
+            // Reset skippedRegionSelection flag when going back to device discovery
+            if (prevStep == WizardStep.DEVICE_DISCOVERY && currentState.skippedRegionSelection) {
+                _state.update { it.copy(currentStep = prevStep, skippedRegionSelection = false) }
+            } else {
+                _state.update { it.copy(currentStep = prevStep) }
+            }
         }
 
         fun canProceed(): Boolean {

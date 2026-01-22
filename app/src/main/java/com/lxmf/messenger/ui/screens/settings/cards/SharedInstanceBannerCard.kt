@@ -36,6 +36,40 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
+ * Determines if the shared instance banner should be shown.
+ * Banner is shown when:
+ * - Currently using a shared instance
+ * - A shared instance is currently available (can switch to it)
+ * - Was using shared instance but it went offline (informational state)
+ * - Service is restarting
+ */
+internal fun shouldShowSharedInstanceBanner(
+    isSharedInstance: Boolean,
+    sharedInstanceOnline: Boolean,
+    wasUsingSharedInstance: Boolean,
+    isRestarting: Boolean,
+): Boolean {
+    return isSharedInstance || sharedInstanceOnline || wasUsingSharedInstance || isRestarting
+}
+
+/**
+ * Determines if the shared instance toggle should be enabled.
+ * - When using shared (toggle OFF): can always switch to own (toggle ON)
+ * - When using own (toggle ON): can only switch to shared (toggle OFF) if shared is available
+ */
+internal fun isSharedInstanceToggleEnabled(isUsingSharedInstance: Boolean, sharedInstanceOnline: Boolean): Boolean {
+    return isUsingSharedInstance || sharedInstanceOnline
+}
+
+/**
+ * Computes the checked state of the shared instance toggle.
+ * Toggle ON means using own instance (not shared).
+ */
+internal fun computeSharedInstanceToggleChecked(isSharedInstance: Boolean): Boolean {
+    return !isSharedInstance
+}
+
+/**
  * Banner card displayed for shared Reticulum instance management.
  *
  * Shown when:
@@ -59,10 +93,7 @@ fun SharedInstanceBannerCard(
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
 ) {
-    // Toggle enable logic:
-    // - When using shared (toggle OFF): can always switch to own (toggle ON)
-    // - When using own (toggle ON): can only switch to shared (toggle OFF) if shared is available
-    val toggleEnabled = isUsingSharedInstance || sharedInstanceOnline
+    val toggleEnabled = isSharedInstanceToggleEnabled(isUsingSharedInstance, sharedInstanceOnline)
 
     // Determine if this is the informational state (was using shared, now offline)
     // Note: wasUsingSharedInstance is only set when shared went offline while we were using it,

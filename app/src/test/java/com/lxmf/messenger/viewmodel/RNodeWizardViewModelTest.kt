@@ -2426,4 +2426,274 @@ class RNodeWizardViewModelTest {
     // Note: USB ViewModel function tests removed due to test environment issues.
     // The singleton mocking and async state updates cause flaky test behavior.
     // UI tests in DeviceDiscoveryStepTest provide coverage for USB functionality.
+
+    // ========== Pending LoRa Parameters Tests (RNS Discovery) ==========
+
+    @Test
+    fun `initial state has no pending params`() =
+        runTest {
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.hasPendingParams)
+                assertNull(state.pendingFrequency)
+                assertNull(state.pendingBandwidth)
+                assertNull(state.pendingSpreadingFactor)
+                assertNull(state.pendingCodingRate)
+            }
+        }
+
+    @Test
+    fun `setInitialRadioParams stores all parameters`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 915000000L,
+                    bandwidth = 125000,
+                    spreadingFactor = 10,
+                    codingRate = 5,
+                )
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals(915000000L, state.pendingFrequency)
+                assertEquals(125000, state.pendingBandwidth)
+                assertEquals(10, state.pendingSpreadingFactor)
+                assertEquals(5, state.pendingCodingRate)
+                assertTrue(state.hasPendingParams)
+            }
+        }
+
+    @Test
+    fun `setInitialRadioParams with only frequency sets hasPendingParams`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 868100000L,
+                    bandwidth = null,
+                    spreadingFactor = null,
+                    codingRate = null,
+                )
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals(868100000L, state.pendingFrequency)
+                assertNull(state.pendingBandwidth)
+                assertTrue(state.hasPendingParams)
+            }
+        }
+
+    @Test
+    fun `setInitialRadioParams with all null does not set hasPendingParams`() =
+        runTest {
+            viewModel.setInitialRadioParams(
+                frequency = null,
+                bandwidth = null,
+                spreadingFactor = null,
+                codingRate = null,
+            )
+            advanceUntilIdle()
+
+            // Verify state directly - no emission expected since hasPendingParams stays false
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.hasPendingParams)
+                assertNull(state.pendingFrequency)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams populates frequency field`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 915000000L,
+                    bandwidth = null,
+                    spreadingFactor = null,
+                    codingRate = null,
+                )
+                advanceUntilIdle()
+                awaitItem() // State with pending params
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals("915000000", state.frequency)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams populates all LoRa fields`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 868100000L,
+                    bandwidth = 250000,
+                    spreadingFactor = 11,
+                    codingRate = 6,
+                )
+                advanceUntilIdle()
+                awaitItem() // State with pending params
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals("868100000", state.frequency)
+                assertEquals("250000", state.bandwidth)
+                assertEquals("11", state.spreadingFactor)
+                assertEquals("6", state.codingRate)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams clears pending values`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 915000000L,
+                    bandwidth = 125000,
+                    spreadingFactor = 10,
+                    codingRate = 5,
+                )
+                advanceUntilIdle()
+                awaitItem() // State with pending params
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertNull(state.pendingFrequency)
+                assertNull(state.pendingBandwidth)
+                assertNull(state.pendingSpreadingFactor)
+                assertNull(state.pendingCodingRate)
+                assertFalse(state.hasPendingParams)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams enables custom mode`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 915000000L,
+                    bandwidth = 125000,
+                    spreadingFactor = 10,
+                    codingRate = 5,
+                )
+                advanceUntilIdle()
+                awaitItem() // State with pending params
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.isCustomMode)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams shows advanced settings`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialRadioParams(
+                    frequency = 915000000L,
+                    bandwidth = 125000,
+                    spreadingFactor = 10,
+                    codingRate = 5,
+                )
+                advanceUntilIdle()
+                awaitItem() // State with pending params
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.showAdvancedSettings)
+            }
+        }
+
+    @Test
+    fun `applyPendingParams does nothing when hasPendingParams is false`() =
+        runTest {
+            viewModel.state.test {
+                val initialState = awaitItem()
+                assertFalse(initialState.hasPendingParams)
+
+                viewModel.applyPendingParams()
+                advanceUntilIdle()
+
+                // No state change expected
+                expectNoEvents()
+            }
+        }
+
+    @Test
+    fun `applyPendingParams preserves existing values for null pending params`() =
+        runTest {
+            // First set some initial values
+            viewModel.updateFrequency("900000000")
+            viewModel.updateBandwidth("500000")
+            advanceUntilIdle()
+
+            // Set pending params with only frequency (other values null)
+            viewModel.setInitialRadioParams(
+                frequency = 915000000L,
+                bandwidth = null,
+                spreadingFactor = null,
+                codingRate = null,
+            )
+            advanceUntilIdle()
+
+            viewModel.applyPendingParams()
+            advanceUntilIdle()
+
+            // Verify final state
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("915000000", state.frequency) // Updated
+                assertEquals("500000", state.bandwidth) // Preserved
+            }
+        }
+
+    @Test
+    fun `goToStep REVIEW_CONFIGURE applies pending params automatically`() =
+        runTest {
+            viewModel.setInitialRadioParams(
+                frequency = 915000000L,
+                bandwidth = 125000,
+                spreadingFactor = 10,
+                codingRate = 5,
+            )
+            advanceUntilIdle()
+
+            // Navigate to review step
+            viewModel.goToStep(WizardStep.REVIEW_CONFIGURE)
+            advanceUntilIdle()
+
+            // Verify final state
+            viewModel.state.test {
+                val state = awaitItem()
+                // Should have applied pending params
+                assertEquals("915000000", state.frequency)
+                assertEquals("125000", state.bandwidth)
+                assertEquals("10", state.spreadingFactor)
+                assertEquals("5", state.codingRate)
+                assertEquals(WizardStep.REVIEW_CONFIGURE, state.currentStep)
+            }
+        }
 }

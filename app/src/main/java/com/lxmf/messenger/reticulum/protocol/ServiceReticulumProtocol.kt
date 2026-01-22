@@ -1117,6 +1117,7 @@ class ServiceReticulumProtocol(
                     ifaceJson.put("mode", iface.mode)
                     iface.networkName?.let { ifaceJson.put("network_name", it) }
                     iface.passphrase?.let { ifaceJson.put("passphrase", it) }
+                    ifaceJson.put("bootstrap_only", iface.bootstrapOnly)
                 }
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")
@@ -1174,6 +1175,18 @@ class ServiceReticulumProtocol(
 
         // Transport node setting
         json.put("enable_transport", config.enableTransport)
+
+        // RNS 1.1.x Interface Discovery settings
+        json.put("discover_interfaces", config.discoverInterfaces)
+        json.put("autoconnect_discovered_interfaces", config.autoconnectDiscoveredInterfaces)
+        config.interfaceDiscoverySources?.let { sources ->
+            val sourcesArray = JSONArray()
+            sources.forEach { sourcesArray.put(it) }
+            json.put("interface_discovery_sources", sourcesArray)
+        }
+        if (config.requiredDiscoveryValue != 14) {
+            json.put("required_discovery_value", config.requiredDiscoveryValue)
+        }
 
         return json.toString()
     }
@@ -2019,6 +2032,45 @@ class ServiceReticulumProtocol(
         } catch (e: Exception) {
             Log.e(TAG, "Error getting interface stats for $interfaceName", e)
             null
+        }
+    }
+
+    // ==================== RNS 1.1.x INTERFACE DISCOVERY ====================
+
+    override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> {
+        return try {
+            val service = this.service ?: return emptyList()
+            val resultJson = service.discoveredInterfaces
+            DiscoveredInterface.parseFromJson(resultJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting discovered interfaces", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun isDiscoveryEnabled(): Boolean {
+        return try {
+            val service = this.service ?: return false
+            service.isDiscoveryEnabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking discovery enabled status", e)
+            false
+        }
+    }
+
+    override suspend fun getAutoconnectedEndpoints(): Set<String> {
+        return try {
+            val service = this.service ?: return emptySet()
+            val resultJson = service.autoconnectedInterfaceEndpoints
+            val jsonArray = org.json.JSONArray(resultJson)
+            val endpoints = mutableSetOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                endpoints.add(jsonArray.getString(i))
+            }
+            endpoints
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting auto-connected endpoints", e)
+            emptySet()
         }
     }
 

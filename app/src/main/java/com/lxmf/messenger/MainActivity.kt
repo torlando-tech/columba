@@ -79,7 +79,10 @@ import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.IncomingCallScreen
+import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
+import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
+import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
@@ -706,7 +709,6 @@ fun ColumbaNavigation(
             "interface_management",
             "ble_connection_status",
             "theme_management",
-            "tcp_client_wizard",
             "offline_maps",
             "offline_map_download",
         )
@@ -717,6 +719,7 @@ fun ColumbaNavigation(
             "message_detail/",
             "theme_editor",
             "rnode_wizard",
+            "tcp_client_wizard",
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
@@ -871,6 +874,140 @@ fun ColumbaNavigation(
                             onNavigateToOfflineMaps = {
                                 navController.navigate("offline_maps")
                             },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
+                        )
+                    }
+
+                    // Map with focus location (for discovered interfaces)
+                    composable(
+                        route = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
+                            "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
+                            "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
+                        arguments = listOf(
+                            navArgument("lat") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("lon") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("label") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("type") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("height") {
+                                type = NavType.FloatType
+                                defaultValue = Float.NaN
+                            },
+                            navArgument("reachableOn") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("frequency") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("bandwidth") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("sf") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("cr") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("modulation") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("status") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("lastHeard") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("hops") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
+                        val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
+                        val label = backStackEntry.arguments?.getString("label")
+                        val type = backStackEntry.arguments?.getString("type")
+                        val height = backStackEntry.arguments?.getFloat("height")?.toDouble()
+                        val reachableOn = backStackEntry.arguments?.getString("reachableOn")
+                        val port = backStackEntry.arguments?.getInt("port")
+                        val frequency = backStackEntry.arguments?.getLong("frequency")
+                        val bandwidth = backStackEntry.arguments?.getInt("bandwidth")
+                        val sf = backStackEntry.arguments?.getInt("sf")
+                        val cr = backStackEntry.arguments?.getInt("cr")
+                        val modulation = backStackEntry.arguments?.getString("modulation")
+                        val status = backStackEntry.arguments?.getString("status")
+                        val lastHeard = backStackEntry.arguments?.getLong("lastHeard")
+                        val hops = backStackEntry.arguments?.getInt("hops")
+
+                        // Build FocusInterfaceDetails if we have valid lat/lon
+                        val focusDetails = buildFocusInterfaceDetails(
+                            lat = lat,
+                            lon = lon,
+                            label = label,
+                            type = type,
+                            height = height,
+                            reachableOn = reachableOn,
+                            port = port,
+                            frequency = frequency,
+                            bandwidth = bandwidth,
+                            sf = sf,
+                            cr = cr,
+                            modulation = modulation,
+                            status = status,
+                            lastHeard = lastHeard,
+                            hops = hops,
+                        )
+
+                        MapScreen(
+                            onNavigateToConversation = { destinationHash ->
+                                val encodedHash = Uri.encode(destinationHash)
+                                navController.navigate("messaging/$encodedHash/Contact")
+                            },
+                            onNavigateToOfflineMaps = {
+                                navController.navigate("offline_maps")
+                            },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
+                            focusLatitude = if (lat != 0.0) lat else null,
+                            focusLongitude = if (lon != 0.0) lon else null,
+                            focusLabel = label?.ifEmpty { null },
+                            focusInterfaceDetails = focusDetails,
                         )
                     }
 
@@ -950,10 +1087,73 @@ fun ColumbaNavigation(
                             onNavigateToInterfaceStats = { interfaceId ->
                                 navController.navigate("interface_stats/$interfaceId")
                             },
+                            onNavigateToDiscoveredInterfaces = {
+                                navController.navigate("discovered_interfaces")
+                            },
                         )
                     }
 
-                    composable("tcp_client_wizard") {
+                    composable("discovered_interfaces") {
+                        DiscoveredInterfacesScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateToTcpClientWizard = { host, port, name ->
+                                val encodedHost = Uri.encode(host)
+                                val encodedName = Uri.encode(name)
+                                navController.navigate("tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName")
+                            },
+                            onNavigateToMapWithInterface = { details ->
+                                val encodedLabel = Uri.encode(details.name)
+                                val encodedType = Uri.encode(details.type)
+                                val encodedReachableOn = Uri.encode(details.reachableOn ?: "")
+                                val encodedModulation = Uri.encode(details.modulation ?: "")
+                                val encodedStatus = Uri.encode(details.status ?: "")
+                                navController.navigate(
+                                    "map_focus?lat=${details.latitude}&lon=${details.longitude}" +
+                                        "&label=$encodedLabel&type=$encodedType" +
+                                        "&height=${details.height ?: Float.NaN}" +
+                                        "&reachableOn=$encodedReachableOn&port=${details.port ?: -1}" +
+                                        "&frequency=${details.frequency ?: -1L}&bandwidth=${details.bandwidth ?: -1}" +
+                                        "&sf=${details.spreadingFactor ?: -1}&cr=${details.codingRate ?: -1}" +
+                                        "&modulation=$encodedModulation&status=$encodedStatus" +
+                                        "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}"
+                                )
+                            },
+                            onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                navController.navigate(
+                                    "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                        "&loraBandwidth=${bandwidth ?: -1}" +
+                                        "&loraSf=${sf ?: -1}" +
+                                        "&loraCr=${cr ?: -1}"
+                                )
+                            },
+                        )
+                    }
+
+                    composable(
+                        route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}",
+                        arguments = listOf(
+                            navArgument("interfaceId") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("host") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = 0
+                            },
+                            navArgument("name") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                        val host = backStackEntry.arguments?.getString("host") ?: ""
+                        val port = backStackEntry.arguments?.getInt("port") ?: 0
+                        val name = backStackEntry.arguments?.getString("name") ?: ""
                         TcpClientWizardScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
@@ -961,6 +1161,10 @@ fun ColumbaNavigation(
                                     popUpTo("interface_management") { inclusive = true }
                                 }
                             },
+                            interfaceId = if (interfaceId > 0) interfaceId else null,
+                            initialHost = host.ifEmpty { null },
+                            initialPort = if (port > 0) port else null,
+                            initialName = name.ifEmpty { null },
                         )
                     }
 
@@ -970,7 +1174,11 @@ fun ColumbaNavigation(
                             "&usbDeviceId={usbDeviceId}" +
                             "&usbVendorId={usbVendorId}" +
                             "&usbProductId={usbProductId}" +
-                            "&usbDeviceName={usbDeviceName}",
+                            "&usbDeviceName={usbDeviceName}" +
+                            "&loraFrequency={loraFrequency}" +
+                            "&loraBandwidth={loraBandwidth}" +
+                            "&loraSf={loraSf}" +
+                            "&loraCr={loraCr}",
                         arguments =
                             listOf(
                                 navArgument("interfaceId") {
@@ -999,6 +1207,22 @@ fun ColumbaNavigation(
                                     nullable = true
                                     defaultValue = null
                                 },
+                                navArgument("loraFrequency") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                                navArgument("loraBandwidth") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("loraSf") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("loraCr") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
                             ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
@@ -1007,6 +1231,10 @@ fun ColumbaNavigation(
                         val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                         val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                         val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName")
+                        val loraFrequency = backStackEntry.arguments?.getLong("loraFrequency") ?: -1L
+                        val loraBandwidth = backStackEntry.arguments?.getInt("loraBandwidth") ?: -1
+                        val loraSf = backStackEntry.arguments?.getInt("loraSf") ?: -1
+                        val loraCr = backStackEntry.arguments?.getInt("loraCr") ?: -1
                         com.lxmf.messenger.ui.screens.rnode.RNodeWizardScreen(
                             editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
                             preselectedConnectionType = connectionType,
@@ -1014,6 +1242,10 @@ fun ColumbaNavigation(
                             preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,
                             preselectedUsbProductId = if (usbProductId >= 0) usbProductId else null,
                             preselectedUsbDeviceName = usbDeviceName,
+                            preselectedLoraFrequency = if (loraFrequency > 0) loraFrequency else null,
+                            preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
+                            preselectedLoraSf = if (loraSf > 0) loraSf else null,
+                            preselectedLoraCr = if (loraCr > 0) loraCr else null,
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = {
                                 navController.navigate("interface_management") {
@@ -1034,8 +1266,14 @@ fun ColumbaNavigation(
                     ) { backStackEntry ->
                         com.lxmf.messenger.ui.screens.InterfaceStatsScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onNavigateToEdit = { interfaceId ->
-                                navController.navigate("rnode_wizard?interfaceId=$interfaceId")
+                            onNavigateToEdit = { interfaceId, interfaceType ->
+                                // Route to appropriate wizard based on interface type
+                                val route = when (interfaceType) {
+                                    "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
+                                    "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
+                                    else -> "rnode_wizard?interfaceId=$interfaceId"
+                                }
+                                navController.navigate(route)
                             },
                         )
                     }

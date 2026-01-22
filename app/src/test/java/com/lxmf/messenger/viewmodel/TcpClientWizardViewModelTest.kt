@@ -2,6 +2,7 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.model.TcpCommunityServer
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
@@ -66,8 +67,8 @@ class TcpClientWizardViewModelTest {
         interfaceRepository = mockk(relaxed = true)
         configManager = mockk(relaxed = true)
 
-        // Mock allInterfaces to return empty list (no duplicates)
-        every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+        // Mock allInterfaceEntities to return empty list (no duplicates)
+        every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
 
         viewModel = TcpClientWizardViewModel(interfaceRepository, configManager)
     }
@@ -808,14 +809,15 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with duplicate interface name`() =
         runTest {
             // Mock existing interfaces with a name that will conflict
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "Test Server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.state.test {
                 awaitItem() // Initial state
@@ -840,14 +842,15 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration fails with case-insensitive duplicate name`() =
         runTest {
             // Mock existing interface with different case
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "test server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.state.test {
                 awaitItem() // Initial state
@@ -870,7 +873,7 @@ class TcpClientWizardViewModelTest {
     fun `saveConfiguration succeeds with unique interface name`() =
         runTest {
             // Mock no existing interfaces
-            every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
             coEvery { interfaceRepository.insertInterface(any()) } returns 1L
 
             viewModel.state.test {
@@ -892,14 +895,15 @@ class TcpClientWizardViewModelTest {
     @Test
     fun `saveConfiguration does not call repository when duplicate name detected`() =
         runTest {
-            val existingInterface =
-                InterfaceConfig.TCPClient(
+            val existingEntity =
+                InterfaceEntity(
+                    id = 1L,
                     name = "Test Server",
+                    type = "TCPClient",
                     enabled = true,
-                    targetHost = "existing.example.com",
-                    targetPort = 4242,
+                    configJson = "{}",
                 )
-            every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
 
             viewModel.selectServer(testServer)
             advanceUntilIdle()
@@ -929,5 +933,527 @@ class TcpClientWizardViewModelTest {
             assertTrue(servers.any { it.name.isNotBlank() })
             assertTrue(servers.any { it.host.isNotBlank() })
             assertTrue(servers.all { it.port > 0 })
+        }
+
+    // ========== Bootstrap Only Flag Tests ==========
+
+    @Test
+    fun `initial state has bootstrapOnly false`() =
+        runTest {
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.bootstrapOnly)
+            }
+        }
+
+    @Test
+    fun `toggleBootstrapOnly enables bootstrap mode`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.toggleBootstrapOnly(true)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.bootstrapOnly)
+            }
+        }
+
+    @Test
+    fun `toggleBootstrapOnly disables bootstrap mode`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.toggleBootstrapOnly(true)
+                advanceUntilIdle()
+                awaitItem() // Enabled state
+
+                viewModel.toggleBootstrapOnly(false)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertFalse(state.bootstrapOnly)
+            }
+        }
+
+    @Test
+    fun `selectServer with bootstrap server sets bootstrapOnly true`() =
+        runTest {
+            val bootstrapServer = TcpCommunityServer(
+                name = "Bootstrap Server",
+                host = "bootstrap.example.com",
+                port = 4242,
+                isBootstrap = true,
+            )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.selectServer(bootstrapServer)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.bootstrapOnly)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration includes bootstrapOnly flag`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.toggleBootstrapOnly(true)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertTrue(savedConfig.bootstrapOnly)
+        }
+
+    // ========== Load Existing Interface Tests (Edit Mode) ==========
+
+    @Test
+    fun `loadExistingInterface sets editingInterfaceId`() =
+        runTest {
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Existing Server",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"existing.com","targetPort":5000,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Existing Server",
+                enabled = true,
+                targetHost = "existing.com",
+                targetPort = 5000,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals(42L, state.editingInterfaceId)
+            }
+        }
+
+    @Test
+    fun `loadExistingInterface populates fields from existing config`() =
+        runTest {
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Existing Server",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"existing.com","targetPort":5000,"bootstrapOnly":true}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Existing Server",
+                enabled = true,
+                targetHost = "existing.com",
+                targetPort = 5000,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = true,
+            )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals("Existing Server", state.interfaceName)
+                assertEquals("existing.com", state.targetHost)
+                assertEquals("5000", state.targetPort)
+                assertTrue(state.bootstrapOnly)
+            }
+        }
+
+    @Test
+    fun `loadExistingInterface matches community server when host and port match`() =
+        runTest {
+            // Use a known community server's host/port
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Custom Name",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"test.example.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Custom Name",
+                enabled = true,
+                targetHost = "test.example.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                // Should be custom mode since test.example.com isn't a real community server
+                assertTrue(state.isCustomMode)
+            }
+        }
+
+    @Test
+    fun `loadExistingInterface sets custom mode when no community server matches`() =
+        runTest {
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "My Custom Server",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"my-custom.local","targetPort":9999,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "My Custom Server",
+                enabled = true,
+                targetHost = "my-custom.local",
+                targetPort = 9999,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.isCustomMode)
+                assertNull(state.selectedServer)
+            }
+        }
+
+    @Test
+    fun `loadExistingInterface does nothing when entity not found`() =
+        runTest {
+            coEvery { interfaceRepository.getInterfaceByIdOnce(999L) } returns null
+
+            viewModel.state.test {
+                val initialState = awaitItem()
+
+                viewModel.loadExistingInterface(999L)
+                advanceUntilIdle()
+
+                // No state change expected
+                expectNoEvents()
+                assertNull(initialState.editingInterfaceId)
+            }
+        }
+
+    // ========== Set Initial Values Tests (From Discovered Interface) ==========
+
+    @Test
+    fun `setInitialValues populates host and port`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialValues("discovered.host.com", 7777, "Discovered Interface")
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals("discovered.host.com", state.targetHost)
+                assertEquals("7777", state.targetPort)
+            }
+        }
+
+    @Test
+    fun `setInitialValues sets interface name`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialValues("host.com", 4242, "My Discovered Node")
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals("My Discovered Node", state.interfaceName)
+            }
+        }
+
+    @Test
+    fun `setInitialValues skips to REVIEW_CONFIGURE step`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialValues("host.com", 4242, "Name")
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertEquals(TcpClientWizardStep.REVIEW_CONFIGURE, state.currentStep)
+            }
+        }
+
+    @Test
+    fun `setInitialValues enables custom mode when no community server matches`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setInitialValues("unknown-server.com", 9999, "Unknown")
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                assertTrue(state.isCustomMode)
+                assertNull(state.selectedServer)
+            }
+        }
+
+    @Test
+    fun `setInitialValues sets bootstrapOnly from matched community server`() =
+        runTest {
+            // This tests that if a discovered interface matches a bootstrap community server,
+            // the bootstrapOnly flag is set appropriately
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                // Use a custom host that won't match any community server
+                viewModel.setInitialValues("custom.host", 4242, "Custom")
+                advanceUntilIdle()
+
+                val state = awaitItem()
+                // Since no community server matches, bootstrapOnly should be false
+                assertFalse(state.bootstrapOnly)
+            }
+        }
+
+    // ========== Edit Mode Save Configuration Tests ==========
+
+    @Test
+    fun `saveConfiguration in edit mode calls updateInterface instead of insertInterface`() =
+        runTest {
+            // Set up edit mode
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Old Name",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"old.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Old Name",
+                enabled = true,
+                targetHost = "old.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+            coEvery { interfaceRepository.updateInterface(any(), any()) } returns Unit
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+
+            // Modify the interface
+            viewModel.updateInterfaceName("New Name")
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            // Should call updateInterface, not insertInterface
+            coVerify(exactly = 1) { interfaceRepository.updateInterface(42L, any()) }
+            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+        }
+
+    @Test
+    fun `saveConfiguration in edit mode passes correct config to updateInterface`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Old Name",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"old.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Old Name",
+                enabled = true,
+                targetHost = "old.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+            coEvery { interfaceRepository.updateInterface(any(), capture(configSlot)) } returns Unit
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+
+            viewModel.updateInterfaceName("Updated Name")
+            viewModel.updateTargetHost("updated.host.com")
+            viewModel.updateTargetPort("8888")
+            viewModel.toggleBootstrapOnly(true)
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals("Updated Name", savedConfig.name)
+            assertEquals("updated.host.com", savedConfig.targetHost)
+            assertEquals(8888, savedConfig.targetPort)
+            assertTrue(savedConfig.bootstrapOnly)
+        }
+
+    @Test
+    fun `saveConfiguration in edit mode excludes current interface from duplicate name check`() =
+        runTest {
+            // Mock existing interface we're editing
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "My Interface",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"test.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "My Interface",
+                enabled = true,
+                targetHost = "test.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+
+            // Mock all interfaces including the one we're editing
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(existingEntity))
+            coEvery { interfaceRepository.updateInterface(any(), any()) } returns Unit
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+
+            // Save with the same name (should succeed since we're editing this interface)
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.saveSuccess)
+                assertNull(state.saveError)
+            }
+        }
+
+    @Test
+    fun `saveConfiguration in edit mode detects duplicate name from other interfaces`() =
+        runTest {
+            val editingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Interface A",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"a.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            val otherEntity = InterfaceEntity(
+                id = 100L,
+                name = "Interface B",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"b.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns editingEntity
+            every { interfaceRepository.entityToConfig(editingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Interface A",
+                enabled = true,
+                targetHost = "a.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+
+            // Both interfaces exist
+            every { interfaceRepository.allInterfaceEntities } returns flowOf(listOf(editingEntity, otherEntity))
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+
+            // Try to rename to the other interface's name
+            viewModel.updateInterfaceName("Interface B")
+            advanceUntilIdle()
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.saveSuccess)
+                assertNotNull(state.saveError)
+                assertTrue(state.saveError!!.contains("already exists"))
+            }
+        }
+
+    @Test
+    fun `saveConfiguration in edit mode sets saveSuccess on completion`() =
+        runTest {
+            val existingEntity = InterfaceEntity(
+                id = 42L,
+                name = "Test",
+                type = "TCPClient",
+                enabled = true,
+                configJson = """{"targetHost":"test.com","targetPort":4242,"bootstrapOnly":false}""",
+            )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns InterfaceConfig.TCPClient(
+                name = "Test",
+                enabled = true,
+                targetHost = "test.com",
+                targetPort = 4242,
+                kissFraming = false,
+                mode = "full",
+                bootstrapOnly = false,
+            )
+            coEvery { interfaceRepository.updateInterface(any(), any()) } returns Unit
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.loadExistingInterface(42L)
+                advanceUntilIdle()
+                awaitItem() // Loaded state
+
+                viewModel.saveConfiguration()
+                advanceUntilIdle()
+
+                val finalState = expectMostRecentItem()
+                assertTrue(finalState.saveSuccess)
+                assertFalse(finalState.isSaving)
+            }
         }
 }

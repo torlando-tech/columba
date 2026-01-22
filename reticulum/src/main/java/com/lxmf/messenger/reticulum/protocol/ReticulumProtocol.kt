@@ -191,6 +191,33 @@ interface ReticulumProtocol {
      */
     suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>?
 
+    // RNS 1.1.x Interface Discovery
+
+    /**
+     * Get list of discovered interfaces from RNS 1.1.x discovery system.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return List of DiscoveredInterface objects with interface info
+     */
+    suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface>
+
+    /**
+     * Check if interface discovery and auto-connect is enabled.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return true if RNS is configured to auto-connect discovered interfaces
+     */
+    suspend fun isDiscoveryEnabled(): Boolean
+
+    /**
+     * Get list of currently auto-connected interface endpoints.
+     * Auto-connected interfaces are created dynamically by RNS discovery.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return Set of endpoint strings like "host:port" for auto-connected interfaces
+     */
+    suspend fun getAutoconnectedEndpoints(): Set<String>
+
     // Performance optimization
 
     /**
@@ -526,6 +553,123 @@ data class FailedInterface(
             }
             return failedList
         }
+    }
+}
+
+/**
+ * Information about an interface discovered via RNS 1.1.x interface discovery.
+ *
+ * RNS 1.1.0+ interface discovery provides detailed information about interfaces
+ * announced by other nodes on the network, including TCP servers, RNodes, and
+ * other interface types.
+ */
+data class DiscoveredInterface(
+    // Core identification
+    val name: String,
+    val type: String,  // "TCPServerInterface", "RNodeInterface", etc.
+    val transportId: String?,  // Transport identity hash
+    val networkId: String?,  // Network identity hash
+
+    // Status information
+    val status: String,  // "available", "unknown", "stale"
+    val statusCode: Int,  // 1000 = available, 100 = unknown, 0 = stale
+    val lastHeard: Long,  // Unix timestamp in seconds
+    val heardCount: Int,  // Number of times this interface has been discovered
+    val hops: Int,  // Distance in hops from discovery source
+    val stampValue: Int,  // Proof-of-work stamp value
+
+    // TCP-specific fields
+    val reachableOn: String?,  // Host/IP for TCP interfaces or b32 address for I2P
+    val port: Int?,
+
+    // Radio-specific fields (RNode, Weave, KISS)
+    val frequency: Long?,  // Frequency in Hz
+    val bandwidth: Int?,  // Bandwidth in Hz
+    val spreadingFactor: Int?,  // LoRa spreading factor (5-12)
+    val codingRate: Int?,  // LoRa coding rate (5-8)
+    val modulation: String?,  // Modulation type
+    val channel: Int?,  // Channel number (for Weave)
+
+    // Location (optional, for interfaces that share location)
+    val latitude: Double?,
+    val longitude: Double?,
+    val height: Double?,  // Altitude in meters
+) {
+    /**
+     * Returns true if this is a TCP-based interface.
+     * BackboneInterface is the RNS 1.1.x upgraded TCP connection type.
+     */
+    val isTcpInterface: Boolean
+        get() = type in listOf("TCPServerInterface", "TCPClientInterface", "BackboneInterface")
+
+    /**
+     * Returns true if this is a radio-based interface.
+     */
+    val isRadioInterface: Boolean
+        get() = type in listOf("RNodeInterface", "WeaveInterface", "KISSInterface")
+
+    /**
+     * Returns true if location information is available.
+     */
+    val hasLocation: Boolean
+        get() = latitude != null && longitude != null
+
+    companion object {
+        // Status codes matching RNS
+        const val STATUS_AVAILABLE = 1000
+        const val STATUS_UNKNOWN = 100
+        const val STATUS_STALE = 0
+
+        /**
+         * Parse a JSON array string into a list of DiscoveredInterface objects.
+         */
+        fun parseFromJson(jsonString: String): List<DiscoveredInterface> {
+            val jsonArray = org.json.JSONArray(jsonString)
+            return (0 until jsonArray.length()).map { i ->
+                parseItem(jsonArray.getJSONObject(i))
+            }
+        }
+
+        private fun parseItem(item: org.json.JSONObject): DiscoveredInterface {
+            return DiscoveredInterface(
+                // Core identification
+                name = item.optString("name", "Unknown"),
+                type = item.optString("type", "Unknown"),
+                transportId = item.optString("transport_id", "").ifEmpty { null },
+                networkId = item.optString("network_id", "").ifEmpty { null },
+                // Status information
+                status = item.optString("status", "unknown"),
+                statusCode = item.optInt("status_code", STATUS_UNKNOWN),
+                lastHeard = item.optLong("last_heard", 0),
+                heardCount = item.optInt("heard_count", 0),
+                hops = item.optInt("hops", 0),
+                stampValue = item.optInt("stamp_value", 0),
+                // TCP-specific
+                reachableOn = item.optString("reachable_on", "").ifEmpty { null },
+                port = item.optIntOrNull("port"),
+                // Radio-specific
+                frequency = item.optLongOrNull("frequency"),
+                bandwidth = item.optIntOrNull("bandwidth"),
+                spreadingFactor = item.optIntOrNull("spreading_factor"),
+                codingRate = item.optIntOrNull("coding_rate"),
+                modulation = item.optString("modulation", "").ifEmpty { null },
+                channel = item.optIntOrNull("channel"),
+                // Location
+                latitude = item.optDoubleOrNull("latitude"),
+                longitude = item.optDoubleOrNull("longitude"),
+                height = item.optDoubleOrNull("height"),
+            )
+        }
+
+        // JSON extension helpers for nullable values
+        private fun org.json.JSONObject.optIntOrNull(key: String): Int? =
+            if (has(key) && !isNull(key)) getInt(key) else null
+
+        private fun org.json.JSONObject.optLongOrNull(key: String): Long? =
+            if (has(key) && !isNull(key)) getLong(key) else null
+
+        private fun org.json.JSONObject.optDoubleOrNull(key: String): Double? =
+            if (has(key) && !isNull(key)) getDouble(key) else null
     }
 }
 

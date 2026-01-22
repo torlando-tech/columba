@@ -51,6 +51,41 @@ data class InterfaceInfo(
     val error: String? = null,
 )
 
+/**
+ * Determines if an interface row should be clickable in the UI.
+ * Clickable when offline or when it has an error.
+ */
+internal fun InterfaceInfo.isClickable(): Boolean {
+    return !online || error != null
+}
+
+/**
+ * Determines the dialog title for an interface based on its state.
+ */
+internal fun InterfaceInfo.getDialogTitle(): String {
+    return if (error != null) "Interface Failed" else "Interface Offline"
+}
+
+/**
+ * Represents the icon type for interface status display.
+ */
+enum class InterfaceIconType {
+    CHECK_CIRCLE,
+    WARNING,
+    ERROR,
+}
+
+/**
+ * Determines the icon type for an interface based on its state.
+ */
+internal fun InterfaceInfo.getIconType(): InterfaceIconType {
+    return when {
+        online -> InterfaceIconType.CHECK_CIRCLE
+        error != null -> InterfaceIconType.ERROR
+        else -> InterfaceIconType.WARNING
+    }
+}
+
 @androidx.compose.runtime.Immutable
 data class TestAnnounceResult(
     val success: Boolean,

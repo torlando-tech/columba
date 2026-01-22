@@ -326,6 +326,18 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
+    override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> {
+        return emptyList()
+    }
+
+    override suspend fun isDiscoveryEnabled(): Boolean {
+        return false
+    }
+
+    override suspend fun getAutoconnectedEndpoints(): Set<String> {
+        return emptySet()
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
     }

@@ -93,6 +93,7 @@ fun InterfaceManagementScreen(
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
     onNavigateToTcpClientWizard: () -> Unit = {},
     onNavigateToInterfaceStats: (interfaceId: Long) -> Unit = {},
+    onNavigateToDiscoveredInterfaces: () -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -168,7 +169,7 @@ fun InterfaceManagementScreen(
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     ),
             )
         },
@@ -236,8 +237,34 @@ fun InterfaceManagementScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
+                            // Show Discovered count when discovery is enabled and has interfaces
+                            if (state.isDiscoveryEnabled && state.discoveredInterfaceCount > 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        "${state.discoveredInterfaceCount}",
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        "Discovered",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
                         }
                     }
+
+                    // Discovered Interfaces Card - always show to allow navigation to discovery settings
+                    DiscoveredInterfacesSummaryCard(
+                        totalCount = state.discoveredInterfaceCount,
+                        availableCount = state.discoveredAvailableCount,
+                        unknownCount = state.discoveredUnknownCount,
+                        staleCount = state.discoveredStaleCount,
+                        isDiscoveryEnabled = state.isDiscoveryEnabled,
+                        onClick = onNavigateToDiscoveredInterfaces,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Interfaces List
                     if (state.interfaces.isEmpty()) {
@@ -539,7 +566,7 @@ fun InterfaceCard(
                         style = MaterialTheme.typography.labelSmall,
                         color =
                             if (interfaceEntity.enabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                MaterialTheme.colorScheme.onSecondaryContainer
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
@@ -747,7 +774,7 @@ fun SuccessMessage(
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -817,7 +844,7 @@ fun InfoMessage(
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -1131,7 +1158,7 @@ internal fun InterfaceTypeOption(
                 fontWeight = FontWeight.Medium,
                 color =
                     if (isHighlighted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                        MaterialTheme.colorScheme.onSecondaryContainer
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -1141,7 +1168,7 @@ internal fun InterfaceTypeOption(
                 style = MaterialTheme.typography.bodySmall,
                 color =
                     if (isHighlighted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     },
@@ -1190,4 +1217,151 @@ fun InterfaceErrorDialog(
             }
         },
     )
+}
+
+/**
+ * Summary card for discovered interfaces from RNS 1.1.x discovery.
+ * Tappable to navigate to the discovered interfaces detail screen.
+ */
+@Composable
+fun DiscoveredInterfacesSummaryCard(
+    totalCount: Int,
+    availableCount: Int,
+    unknownCount: Int,
+    staleCount: Int,
+    isDiscoveryEnabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDiscoveryEnabled) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isDiscoveryEnabled) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    Text(
+                        text = "Interface Discovery",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDiscoveryEnabled) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                if (isDiscoveryEnabled) {
+                    if (totalCount > 0) {
+                        Text(
+                            text = "$totalCount interfaces found via RNS Discovery",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Status breakdown
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (availableCount > 0) {
+                                StatusBadge(
+                                    count = availableCount,
+                                    label = "available",
+                                    dotColor = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            if (unknownCount > 0) {
+                                StatusBadge(
+                                    count = unknownCount,
+                                    label = "unknown",
+                                    dotColor = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                            if (staleCount > 0) {
+                                StatusBadge(
+                                    count = staleCount,
+                                    label = "stale",
+                                    dotColor = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "Discovery enabled - no interfaces found yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Tap to configure RNS 1.1.x interface discovery",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "View details",
+                tint = if (isDiscoveryEnabled) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Small status badge showing count with colored dot.
+ */
+@Composable
+private fun StatusBadge(
+    count: Int,
+    label: String,
+    dotColor: androidx.compose.ui.graphics.Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Surface(
+            modifier = Modifier.size(8.dp),
+            shape = RoundedCornerShape(50),
+            color = dotColor,
+        ) {}
+        Text(
+            text = "$count $label",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+        )
+    }
 }

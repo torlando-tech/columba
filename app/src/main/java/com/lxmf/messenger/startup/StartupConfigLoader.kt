@@ -32,6 +32,8 @@ class StartupConfigLoader
             val preferOwn: Boolean,
             val rpcKey: String?,
             val transport: Boolean,
+            val discoverInterfaces: Boolean,
+            val autoconnectDiscoveredCount: Int,
         )
 
         /**
@@ -47,6 +49,8 @@ class StartupConfigLoader
                 val preferOwnDeferred = async { settingsRepository.preferOwnInstanceFlow.first() }
                 val rpcKeyDeferred = async { settingsRepository.rpcKeyFlow.first() }
                 val transportDeferred = async { settingsRepository.getTransportNodeEnabled() }
+                val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
+                val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
 
                 StartupConfig(
                     interfaces = interfacesDeferred.await(),
@@ -54,6 +58,8 @@ class StartupConfigLoader
                     preferOwn = preferOwnDeferred.await(),
                     rpcKey = rpcKeyDeferred.await(),
                     transport = transportDeferred.await(),
+                    discoverInterfaces = discoverInterfacesDeferred.await(),
+                    autoconnectDiscoveredCount = autoconnectCountDeferred.await(),
                 )
             }
     }

@@ -48,6 +48,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -245,13 +247,13 @@ fun DiscoveredInterfacesScreen(
  * Card showing discovery settings and status.
  */
 @Composable
-private fun DiscoverySettingsCard(
+internal fun DiscoverySettingsCard(
     isRuntimeEnabled: Boolean,
     isSettingEnabled: Boolean,
-    autoconnectCount: Int,
-    bootstrapInterfaceNames: List<String>,
-    isRestarting: Boolean,
-    onToggleDiscovery: () -> Unit,
+    autoconnectCount: Int = 5,
+    bootstrapInterfaceNames: List<String> = emptyList(),
+    isRestarting: Boolean = false,
+    onToggleDiscovery: () -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -445,7 +447,7 @@ private fun DiscoverySettingsCard(
  * Card shown when no interfaces are discovered.
  */
 @Composable
-private fun EmptyDiscoveredCard() {
+internal fun EmptyDiscoveredCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -484,7 +486,7 @@ private fun EmptyDiscoveredCard() {
  * Summary of discovered interface statuses.
  */
 @Composable
-private fun DiscoveryStatusSummary(
+internal fun DiscoveryStatusSummary(
     totalCount: Int,
     availableCount: Int,
     unknownCount: Int,
@@ -557,7 +559,7 @@ private fun DiscoveryStatusSummary(
  * Card showing details for a single discovered interface.
  */
 @Composable
-private fun DiscoveredInterfaceCard(
+internal fun DiscoveredInterfaceCard(
     iface: DiscoveredInterface,
     distanceKm: Double?,
     isConnected: Boolean,
@@ -858,7 +860,7 @@ private fun DiscoveredInterfaceCard(
  * Details for TCP-based interfaces.
  */
 @Composable
-private fun TcpInterfaceDetails(iface: DiscoveredInterface) {
+internal fun TcpInterfaceDetails(iface: DiscoveredInterface) {
     val hostPort = buildString {
         iface.reachableOn?.let { append(it) }
         iface.port?.let { port ->
@@ -878,7 +880,7 @@ private fun TcpInterfaceDetails(iface: DiscoveredInterface) {
  * Details for I2P interfaces showing the b32 address.
  */
 @Composable
-private fun I2pInterfaceDetails(iface: DiscoveredInterface) {
+internal fun I2pInterfaceDetails(iface: DiscoveredInterface) {
     iface.reachableOn?.let { b32Address ->
         Text(
             text = "${b32Address}.b32.i2p",
@@ -892,7 +894,7 @@ private fun I2pInterfaceDetails(iface: DiscoveredInterface) {
  * Details for radio-based interfaces (RNode, Weave, KISS).
  */
 @Composable
-private fun RadioInterfaceDetails(iface: DiscoveredInterface) {
+internal fun RadioInterfaceDetails(iface: DiscoveredInterface) {
     val parts = mutableListOf<String>()
 
     iface.frequency?.let { freq ->
@@ -928,7 +930,7 @@ private fun RadioInterfaceDetails(iface: DiscoveredInterface) {
  * Location details with optional distance. Tappable to open in maps.
  */
 @Composable
-private fun LocationDetails(
+internal fun LocationDetails(
     latitude: Double,
     longitude: Double,
     height: Double?,
@@ -996,7 +998,7 @@ internal fun isYggdrasilAddress(host: String?): Boolean {
  * TreePine for Yggdrasil, and Material icons for others.
  */
 @Composable
-private fun InterfaceTypeIcon(
+internal fun InterfaceTypeIcon(
     type: String,
     host: String? = null,
     modifier: Modifier = Modifier,
@@ -1009,14 +1011,14 @@ private fun InterfaceTypeIcon(
                 // Use TreePine for Yggdrasil network addresses
                 Icon(
                     imageVector = Lucide.TreePine,
-                    contentDescription = null,
+                    contentDescription = "Yggdrasil network",
                     modifier = modifier.size(size),
                     tint = tint,
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Public,
-                    contentDescription = null,
+                    contentDescription = "TCP network",
                     modifier = modifier.size(size),
                     tint = tint,
                 )
@@ -1031,12 +1033,12 @@ private fun InterfaceTypeIcon(
                     fontFamily = MdiFont,
                     fontSize = (size.value * 1.2f).sp, // MDI icons render slightly smaller
                     color = tint,
-                    modifier = modifier,
+                    modifier = modifier.semantics { contentDescription = "I2P network" },
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = null,
+                    contentDescription = "I2P network",
                     modifier = modifier.size(size),
                     tint = tint,
                 )
@@ -1046,7 +1048,7 @@ private fun InterfaceTypeIcon(
             // Use Lucide Antenna for radio interfaces (matches PeerCard)
             Icon(
                 imageVector = Lucide.Antenna,
-                contentDescription = null,
+                contentDescription = "Radio interface",
                 modifier = modifier.size(size),
                 tint = tint,
             )
@@ -1054,7 +1056,7 @@ private fun InterfaceTypeIcon(
         else -> {
             Icon(
                 imageVector = Icons.Default.Settings,
-                contentDescription = null,
+                contentDescription = "Unknown interface",
                 modifier = modifier.size(size),
                 tint = tint,
             )

@@ -1,43 +1,13 @@
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.Antenna
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.TreePine
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
@@ -175,69 +145,78 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `InterfaceTypeIcon displays Globe for TCP interface with public IP`() {
         composeTestRule.setContent {
-            InterfaceTypeIconTestWrapper(
+            InterfaceTypeIcon(
                 type = "TCPServerInterface",
                 host = "192.168.1.1",
             )
         }
 
-        composeTestRule.onNodeWithText("public_icon").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("TCP network").assertIsDisplayed()
     }
 
     @Test
     fun `InterfaceTypeIcon displays TreePine for Yggdrasil address`() {
         composeTestRule.setContent {
-            InterfaceTypeIconTestWrapper(
+            InterfaceTypeIcon(
                 type = "TCPServerInterface",
                 host = "200:abcd::1",
             )
         }
 
-        composeTestRule.onNodeWithText("treepine_icon").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Yggdrasil network").assertIsDisplayed()
     }
 
     @Test
     fun `InterfaceTypeIcon displays Antenna for RNode interface`() {
         composeTestRule.setContent {
-            InterfaceTypeIconTestWrapper(
+            InterfaceTypeIcon(
                 type = "RNodeInterface",
                 host = null,
             )
         }
 
-        composeTestRule.onNodeWithText("antenna_icon").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Radio interface").assertIsDisplayed()
     }
 
     @Test
     fun `InterfaceTypeIcon displays incognito for I2P interface`() {
         composeTestRule.setContent {
-            InterfaceTypeIconTestWrapper(
+            InterfaceTypeIcon(
                 type = "I2PInterface",
                 host = null,
             )
         }
 
-        composeTestRule.onNodeWithText("incognito_icon").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("I2P network").assertIsDisplayed()
     }
 
     @Test
     fun `InterfaceTypeIcon displays Settings for unknown interface type`() {
         composeTestRule.setContent {
-            InterfaceTypeIconTestWrapper(
+            InterfaceTypeIcon(
                 type = "UnknownInterface",
                 host = null,
             )
         }
 
-        composeTestRule.onNodeWithText("settings_icon").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Unknown interface").assertIsDisplayed()
     }
 
     // ========== Connected Badge Tests ==========
 
     @Test
     fun `Connected badge shown when isConnected true`() {
+        val iface = createTestDiscoveredInterface(name = "Test", type = "RNodeInterface")
         composeTestRule.setContent {
-            ConnectedBadgeTestWrapper(isConnected = true)
+            DiscoveredInterfaceCard(
+                iface = iface,
+                distanceKm = null,
+                isConnected = true,
+                onAddToConfig = {},
+                onOpenLocation = {},
+                onCopyLoraParams = {},
+                onUseForNewRNode = {},
+            )
         }
 
         composeTestRule.onNodeWithText("Connected").assertIsDisplayed()
@@ -245,8 +224,17 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `Connected badge hidden when isConnected false`() {
+        val iface = createTestDiscoveredInterface(name = "Test", type = "RNodeInterface")
         composeTestRule.setContent {
-            ConnectedBadgeTestWrapper(isConnected = false)
+            DiscoveredInterfaceCard(
+                iface = iface,
+                distanceKm = null,
+                isConnected = false,
+                onAddToConfig = {},
+                onOpenLocation = {},
+                onCopyLoraParams = {},
+                onUseForNewRNode = {},
+            )
         }
 
         composeTestRule.onNodeWithText("Connected").assertDoesNotExist()
@@ -256,29 +244,68 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `Info icon shown for Yggdrasil interface`() {
+        val iface = createTestDiscoveredInterface(
+            name = "Yggdrasil Node",
+            type = "TCPServerInterface",
+        ).copy(reachableOn = "200:abcd::1")
         composeTestRule.setContent {
-            NetworkInfoIconTestWrapper(isYggdrasil = true, isI2p = false)
+            DiscoveredInterfaceCard(
+                iface = iface,
+                distanceKm = null,
+                isConnected = false,
+                onAddToConfig = {},
+                onOpenLocation = {},
+                onCopyLoraParams = {},
+                onUseForNewRNode = {},
+            )
         }
 
-        composeTestRule.onNodeWithText("network_info_icon").assertIsDisplayed()
+        // Info icon should be present for Yggdrasil interfaces
+        composeTestRule.onNodeWithContentDescription("Network info").assertIsDisplayed()
     }
 
     @Test
     fun `Info icon shown for I2P interface`() {
+        val iface = createTestDiscoveredInterface(
+            name = "I2P Node",
+            type = "I2PInterface",
+        )
         composeTestRule.setContent {
-            NetworkInfoIconTestWrapper(isYggdrasil = false, isI2p = true)
+            DiscoveredInterfaceCard(
+                iface = iface,
+                distanceKm = null,
+                isConnected = false,
+                onAddToConfig = {},
+                onOpenLocation = {},
+                onCopyLoraParams = {},
+                onUseForNewRNode = {},
+            )
         }
 
-        composeTestRule.onNodeWithText("network_info_icon").assertIsDisplayed()
+        // Info icon should be present for I2P interfaces
+        composeTestRule.onNodeWithContentDescription("Network info").assertIsDisplayed()
     }
 
     @Test
     fun `Info icon hidden for regular TCP interface`() {
+        val iface = createTestDiscoveredInterface(
+            name = "Regular TCP",
+            type = "TCPServerInterface",
+        ).copy(reachableOn = "192.168.1.1")
         composeTestRule.setContent {
-            NetworkInfoIconTestWrapper(isYggdrasil = false, isI2p = false)
+            DiscoveredInterfaceCard(
+                iface = iface,
+                distanceKm = null,
+                isConnected = false,
+                onAddToConfig = {},
+                onOpenLocation = {},
+                onCopyLoraParams = {},
+                onUseForNewRNode = {},
+            )
         }
 
-        composeTestRule.onNodeWithText("network_info_icon").assertDoesNotExist()
+        // Info icon should NOT be present for regular TCP interfaces
+        composeTestRule.onNodeWithContentDescription("Network info").assertDoesNotExist()
     }
 
     // ========== formatLastHeard Tests ==========
@@ -387,7 +414,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `EmptyDiscoveredCard displays title`() {
         composeTestRule.setContent {
-            EmptyDiscoveredCardTestWrapper()
+            EmptyDiscoveredCard()
         }
 
         composeTestRule.onNodeWithText("No Discovered Interfaces").assertIsDisplayed()
@@ -396,7 +423,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `EmptyDiscoveredCard displays help text`() {
         composeTestRule.setContent {
-            EmptyDiscoveredCardTestWrapper()
+            EmptyDiscoveredCard()
         }
 
         composeTestRule.onNodeWithText(
@@ -409,7 +436,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard displays title`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = false,
                 isSettingEnabled = false,
             )
@@ -421,7 +448,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows Disabled when not enabled`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = false,
                 isSettingEnabled = false,
             )
@@ -433,7 +460,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows Active when runtime enabled`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = true,
                 isSettingEnabled = true,
             )
@@ -445,7 +472,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows Restarting message when restarting`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = false,
                 isSettingEnabled = true,
                 isRestarting = true,
@@ -459,7 +486,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows enable help text when disabled`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = false,
                 isSettingEnabled = false,
             )
@@ -473,7 +500,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows autoconnect count when enabled`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = true,
                 isSettingEnabled = true,
                 autoconnectCount = 5,
@@ -488,7 +515,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard displays bootstrap interface names`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = true,
                 isSettingEnabled = true,
                 bootstrapInterfaceNames = listOf("Bootstrap Server 1", "Bootstrap Server 2"),
@@ -503,7 +530,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoverySettingsCard shows bootstrap auto-detach note`() {
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = true,
                 isSettingEnabled = true,
                 bootstrapInterfaceNames = listOf("Test Bootstrap"),
@@ -520,7 +547,7 @@ class DiscoveredInterfacesScreenTest {
         var toggleCalled = false
 
         composeTestRule.setContent {
-            DiscoverySettingsCardTestWrapper(
+            DiscoverySettingsCard(
                 isRuntimeEnabled = false,
                 isSettingEnabled = false,
                 onToggleDiscovery = { toggleCalled = true },
@@ -538,7 +565,7 @@ class DiscoveredInterfacesScreenTest {
     @Test
     fun `DiscoveryStatusSummary displays total count`() {
         composeTestRule.setContent {
-            DiscoveryStatusSummaryTestWrapper(
+            DiscoveryStatusSummary(
                 totalCount = 10,
                 availableCount = 5,
                 unknownCount = 3,
@@ -546,13 +573,15 @@ class DiscoveredInterfacesScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("10 Interfaces Discovered").assertIsDisplayed()
+        // Production UI shows count and label separately
+        composeTestRule.onNodeWithText("10").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Total").assertIsDisplayed()
     }
 
     @Test
     fun `DiscoveryStatusSummary displays available count`() {
         composeTestRule.setContent {
-            DiscoveryStatusSummaryTestWrapper(
+            DiscoveryStatusSummary(
                 totalCount = 5,
                 availableCount = 3,
                 unknownCount = 1,
@@ -560,51 +589,61 @@ class DiscoveredInterfacesScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("3 available").assertIsDisplayed()
+        // Production UI shows count and label separately
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Available").assertIsDisplayed()
     }
 
     @Test
     fun `DiscoveryStatusSummary displays unknown count`() {
         composeTestRule.setContent {
-            DiscoveryStatusSummaryTestWrapper(
-                totalCount = 5,
-                availableCount = 2,
-                unknownCount = 2,
-                staleCount = 1,
+            DiscoveryStatusSummary(
+                totalCount = 10,
+                availableCount = 3,
+                unknownCount = 5,
+                staleCount = 2,
             )
         }
 
-        composeTestRule.onNodeWithText("2 unknown").assertIsDisplayed()
+        // Production UI shows count and label separately
+        composeTestRule.onNodeWithText("5").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unknown").assertIsDisplayed()
     }
 
     @Test
     fun `DiscoveryStatusSummary displays stale count`() {
         composeTestRule.setContent {
-            DiscoveryStatusSummaryTestWrapper(
-                totalCount = 3,
-                availableCount = 1,
-                unknownCount = 1,
-                staleCount = 1,
+            DiscoveryStatusSummary(
+                totalCount = 10,
+                availableCount = 3,
+                unknownCount = 2,
+                staleCount = 5,
             )
         }
 
-        composeTestRule.onNodeWithText("1 stale").assertIsDisplayed()
+        // Production UI shows count and label separately
+        composeTestRule.onNodeWithText("5").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Stale").assertIsDisplayed()
     }
 
     @Test
-    fun `DiscoveryStatusSummary hides zero counts`() {
+    fun `DiscoveryStatusSummary shows all columns including zeros`() {
         composeTestRule.setContent {
-            DiscoveryStatusSummaryTestWrapper(
-                totalCount = 3,
+            DiscoveryStatusSummary(
+                totalCount = 5,
                 availableCount = 3,
                 unknownCount = 0,
-                staleCount = 0,
+                staleCount = 2,
             )
         }
 
-        composeTestRule.onNodeWithText("3 available").assertIsDisplayed()
-        composeTestRule.onNodeWithText("0 unknown").assertDoesNotExist()
-        composeTestRule.onNodeWithText("0 stale").assertDoesNotExist()
+        // Production UI always shows all four columns with labels
+        composeTestRule.onNodeWithText("Total").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Available").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unknown").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Stale").assertIsDisplayed()
+        // Verify zero count is shown (for unknown)
+        composeTestRule.onNodeWithText("0").assertIsDisplayed()
     }
 }
 
@@ -648,383 +687,3 @@ private fun createTestDiscoveredInterface(
     )
 }
 
-// ========== Test Wrappers (Composables for testing) ==========
-
-/**
- * Test wrapper for InterfaceTypeIcon that outputs a text indicator for the icon type.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun InterfaceTypeIconTestWrapper(
-    type: String,
-    host: String?,
-) {
-    // Determine expected icon type based on logic from DiscoveredInterfacesScreen
-    val expectedIcon = when (type) {
-        "TCPServerInterface", "TCPClientInterface", "BackboneInterface" -> {
-            if (isYggdrasilAddress(host)) "treepine" else "public"
-        }
-        "I2PInterface" -> "incognito"
-        "RNodeInterface", "WeaveInterface", "KISSInterface" -> "antenna"
-        else -> "settings"
-    }
-
-    // Render a text indicator for the icon type (for test assertion)
-    Text(text = "${expectedIcon}_icon")
-
-    // Also render the actual icon for visual verification
-    when (expectedIcon) {
-        "public" -> Icon(
-            imageVector = Icons.Default.Public,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-        )
-        "treepine" -> Icon(
-            imageVector = Lucide.TreePine,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-        )
-        "antenna" -> Icon(
-            imageVector = Lucide.Antenna,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-        )
-        "settings" -> Icon(
-            imageVector = Icons.Default.Settings,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-        )
-        "incognito" -> {
-            // For test purposes, just show a text placeholder
-            // Real implementation uses MDI font
-            Text(text = "I2P")
-        }
-    }
-}
-
-/**
- * Test wrapper for Connected badge.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun ConnectedBadgeTestWrapper(isConnected: Boolean) {
-    if (isConnected) {
-        Surface(
-            color = Color.Green.copy(alpha = 0.15f),
-            shape = RoundedCornerShape(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Surface(
-                    modifier = Modifier.size(8.dp),
-                    shape = RoundedCornerShape(50),
-                    color = Color.Green,
-                ) {}
-                Text(text = "Connected")
-            }
-        }
-    }
-}
-
-/**
- * Test wrapper for Network info icon (shown for Yggdrasil/I2P).
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun NetworkInfoIconTestWrapper(
-    isYggdrasil: Boolean,
-    isI2p: Boolean,
-) {
-    Column {
-        if (isYggdrasil || isI2p) {
-            Text(text = "network_info_icon")
-        }
-    }
-}
-
-/**
- * Test wrapper for EmptyDiscoveredCard.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun EmptyDiscoveredCardTestWrapper() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "No Discovered Interfaces",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Interfaces announced by other nodes will appear here once discovery is active.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
-        }
-    }
-}
-
-/**
- * Test wrapper for DiscoverySettingsCard.
- */
-@Suppress("TestFunctionName", "LongParameterList")
-@Composable
-private fun DiscoverySettingsCardTestWrapper(
-    isRuntimeEnabled: Boolean,
-    isSettingEnabled: Boolean,
-    autoconnectCount: Int = 5,
-    bootstrapInterfaceNames: List<String> = emptyList(),
-    isRestarting: Boolean = false,
-    onToggleDiscovery: () -> Unit = {},
-) {
-    val isEnabled = isRuntimeEnabled || isSettingEnabled
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isEnabled) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-        ) {
-            // Discovery toggle row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Surface(
-                        modifier = Modifier.size(12.dp),
-                        shape = RoundedCornerShape(50),
-                        color = if (isRuntimeEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else if (isSettingEnabled) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                    ) {}
-                    Column {
-                        Text(
-                            text = "Interface Discovery",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = if (isRestarting) {
-                                "Restarting..."
-                            } else if (isRuntimeEnabled) {
-                                "Active - discovering interfaces"
-                            } else {
-                                "Disabled"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                Switch(
-                    checked = isSettingEnabled,
-                    onCheckedChange = { onToggleDiscovery() },
-                    enabled = !isRestarting,
-                )
-            }
-
-            // Restarting message
-            if (isRestarting) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Text(
-                            text = "Restarting Reticulum service...",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Info text
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    text = if (isSettingEnabled) {
-                        "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
-                    } else {
-                        "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-
-            // Bootstrap interfaces section
-            if (bootstrapInterfaceNames.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Bootstrap Interfaces",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                bootstrapInterfaceNames.forEach { name ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(vertical = 2.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(6.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
-                        ) {}
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                Text(
-                    text = "These interfaces will auto-detach once discovered interfaces connect.",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
- * Test wrapper for DiscoveryStatusSummary.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun DiscoveryStatusSummaryTestWrapper(
-    totalCount: Int,
-    availableCount: Int,
-    unknownCount: Int,
-    staleCount: Int,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-        ) {
-            Text(
-                text = "$totalCount Interfaces Discovered",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                if (availableCount > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(8.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary,
-                        ) {}
-                        Text(
-                            text = "$availableCount available",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                if (unknownCount > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(8.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.tertiary,
-                        ) {}
-                        Text(
-                            text = "$unknownCount unknown",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                if (staleCount > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(8.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.outline,
-                        ) {}
-                        Text(
-                            text = "$staleCount stale",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}

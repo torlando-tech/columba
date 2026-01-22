@@ -128,30 +128,6 @@ import org.maplibre.geojson.Point
  * - Share location functionality
  * - Contact detail bottom sheets
  */
-/**
- * Data class for discovered interface details to display on map.
- */
-data class FocusInterfaceDetails(
-    val name: String,
-    val type: String,
-    val latitude: Double,
-    val longitude: Double,
-    val height: Double? = null,
-    // TCP-specific
-    val reachableOn: String? = null,
-    val port: Int? = null,
-    // Radio-specific (LoRa)
-    val frequency: Long? = null,
-    val bandwidth: Int? = null,
-    val spreadingFactor: Int? = null,
-    val codingRate: Int? = null,
-    val modulation: String? = null,
-    // Status
-    val status: String? = null,
-    val lastHeard: Long? = null,
-    val hops: Int? = null,
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
@@ -267,33 +243,31 @@ fun MapScreen(
 
     // If focus coordinates are provided, center on them instead of user location
     LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
-        if (!hasInitiallyCentered && mapLibreMap != null && focusLatitude != null && focusLongitude != null) {
-            mapLibreMap?.let { map ->
-                val cameraPosition =
-                    CameraPosition.Builder()
-                        .target(LatLng(focusLatitude, focusLongitude))
-                        .zoom(14.0)
-                        .build()
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
-                hasInitiallyCentered = true
-            }
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val hasFocusCoordinates = focusLatitude != null && focusLongitude != null
+        if (!hasInitiallyCentered && hasFocusCoordinates) {
+            val cameraPosition =
+                CameraPosition.Builder()
+                    .target(LatLng(focusLatitude!!, focusLongitude!!))
+                    .zoom(14.0)
+                    .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+            hasInitiallyCentered = true
         }
     }
 
     // Fall back to user location if no focus coordinates
     LaunchedEffect(mapLibreMap, state.userLocation != null) {
-        if (!hasInitiallyCentered && mapLibreMap != null && state.userLocation != null && focusLatitude == null) {
-            state.userLocation?.let { location ->
-                mapLibreMap?.let { map ->
-                    val cameraPosition =
-                        CameraPosition.Builder()
-                            .target(LatLng(location.latitude, location.longitude))
-                            .zoom(15.0)
-                            .build()
-                    map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
-                    hasInitiallyCentered = true
-                }
-            }
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val location = state.userLocation ?: return@LaunchedEffect
+        if (!hasInitiallyCentered && focusLatitude == null) {
+            val cameraPosition =
+                CameraPosition.Builder()
+                    .target(LatLng(location.latitude, location.longitude))
+                    .zoom(15.0)
+                    .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+            hasInitiallyCentered = true
         }
     }
 

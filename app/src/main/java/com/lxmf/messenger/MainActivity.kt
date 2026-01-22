@@ -969,7 +969,8 @@ fun ColumbaNavigation(
                         val hops = backStackEntry.arguments?.getInt("hops")
 
                         // Build FocusInterfaceDetails if we have valid lat/lon
-                        val focusDetails = if (lat != null && lat != 0.0 && lon != null && lon != 0.0) {
+                        fun isValidCoordinate(value: Double?) = value != null && value != 0.0
+                        val focusDetails = if (isValidCoordinate(lat) && isValidCoordinate(lon)) {
                             FocusInterfaceDetails(
                                 name = label ?: "Unknown",
                                 type = type?.ifEmpty { null } ?: "Unknown",

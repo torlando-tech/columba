@@ -586,21 +586,7 @@ class ColumbaApplication : Application() {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
                     // Restore peer identities from database to enable message sending
-                    applicationScope.launch(Dispatchers.IO) {
-                        try {
-                            val peerIdentities = conversationRepository.getAllPeerIdentities()
-                            if (peerIdentities.isNotEmpty()) {
-                                val result = serviceProtocol.restorePeerIdentities(peerIdentities)
-                                result.onSuccess { count ->
-                                    android.util.Log.d("ColumbaApplication", "initializeReticulumService: Restored $count peer identities")
-                                }.onFailure { error ->
-                                    android.util.Log.e("ColumbaApplication", "initializeReticulumService: Failed to restore peer identities", error)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error restoring peer identities", e)
-                        }
-                    }
+                    restorePeerIdentities(serviceProtocol)
 
                     // Start the message collector and other services after Reticulum is ready
                     messageCollector.startCollecting()
@@ -618,6 +604,25 @@ class ColumbaApplication : Application() {
                 }
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
+        }
+    }
+
+    /** Helper to restore peer identities in background after Reticulum initialization. */
+    private fun restorePeerIdentities(serviceProtocol: ServiceReticulumProtocol) {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                val peerIdentities = conversationRepository.getAllPeerIdentities()
+                if (peerIdentities.isNotEmpty()) {
+                    serviceProtocol.restorePeerIdentities(peerIdentities)
+                        .onSuccess { count ->
+                            android.util.Log.d("ColumbaApplication", "Restored $count peer identities")
+                        }.onFailure { error ->
+                            android.util.Log.e("ColumbaApplication", "Failed to restore peer identities", error)
+                        }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ColumbaApplication", "Error restoring peer identities", e)
+            }
         }
     }
 }

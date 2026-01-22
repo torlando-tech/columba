@@ -76,6 +76,7 @@ class InterfaceRepository
                             try {
                                 org.json.JSONObject(entity.configJson).optBoolean("bootstrap_only", false)
                             } catch (e: Exception) {
+                                android.util.Log.v("InterfaceRepository", "Failed to parse configJson for ${entity.name}", e)
                                 false
                             }
                     }.map { it.name }

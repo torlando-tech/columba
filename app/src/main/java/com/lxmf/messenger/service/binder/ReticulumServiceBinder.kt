@@ -662,6 +662,17 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun getAutoconnectedInterfaceEndpoints(): String {
+        return try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("get_autoconnected_interface_endpoints")?.toString() ?: "[]"
+            } ?: "[]"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting auto-connected interface endpoints", e)
+            "[]"
+        }
+    }
+
     // ===========================================
     // Propagation Node Support
     // ===========================================

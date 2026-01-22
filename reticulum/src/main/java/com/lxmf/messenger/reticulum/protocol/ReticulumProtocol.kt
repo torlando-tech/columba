@@ -209,6 +209,15 @@ interface ReticulumProtocol {
      */
     suspend fun isDiscoveryEnabled(): Boolean
 
+    /**
+     * Get list of currently auto-connected interface endpoints.
+     * Auto-connected interfaces are created dynamically by RNS discovery.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return Set of endpoint strings like "host:port" for auto-connected interfaces
+     */
+    suspend fun getAutoconnectedEndpoints(): Set<String>
+
     // Performance optimization
 
     /**
@@ -588,9 +597,10 @@ data class DiscoveredInterface(
 ) {
     /**
      * Returns true if this is a TCP-based interface.
+     * BackboneInterface is the RNS 1.1.x upgraded TCP connection type.
      */
     val isTcpInterface: Boolean
-        get() = type in listOf("TCPServerInterface", "TCPClientInterface", "I2PInterface")
+        get() = type in listOf("TCPServerInterface", "TCPClientInterface", "BackboneInterface")
 
     /**
      * Returns true if this is a radio-based interface.

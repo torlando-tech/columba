@@ -41,6 +41,8 @@ data class DiscoveredInterfacesState(
     val bootstrapInterfaceNames: List<String> = emptyList(),
     // Service is currently restarting
     val isRestarting: Boolean = false,
+    // Currently auto-connected interface endpoints (e.g., "host:port")
+    val autoconnectedEndpoints: Set<String> = emptySet(),
 )
 
 /**
@@ -80,6 +82,7 @@ class DiscoveredInterfacesViewModel
 
                     val isEnabled = reticulumProtocol.isDiscoveryEnabled()
                     val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                    val autoconnectedEndpoints = reticulumProtocol.getAutoconnectedEndpoints()
                     val availableCount = discovered.count { it.status == "available" }
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
@@ -92,9 +95,10 @@ class DiscoveredInterfacesViewModel
                             unknownCount = unknownCount,
                             staleCount = staleCount,
                             isDiscoveryEnabled = isEnabled,
+                            autoconnectedEndpoints = autoconnectedEndpoints,
                         )
                     }
-                    Log.d(TAG, "Loaded ${discovered.size} discovered interfaces")
+                    Log.d(TAG, "Loaded ${discovered.size} discovered interfaces, ${autoconnectedEndpoints.size} auto-connected")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovered interfaces", e)
                     _state.update {
@@ -216,6 +220,22 @@ class DiscoveredInterfacesViewModel
             val ifaceLon = iface.longitude ?: return null
 
             return haversineDistance(userLat, userLon, ifaceLat, ifaceLon)
+        }
+
+        /**
+         * Check if a discovered interface is currently auto-connected.
+         * Matches by comparing the interface's reachable_on:port with auto-connected endpoints.
+         */
+        fun isAutoconnected(iface: DiscoveredInterface): Boolean {
+            val endpoints = _state.value.autoconnectedEndpoints
+            if (endpoints.isEmpty()) return false
+
+            // TCP-based interfaces have reachable_on and port
+            val host = iface.reachableOn ?: return false
+            val port = iface.port ?: return false
+            val endpoint = "$host:$port"
+
+            return endpoints.contains(endpoint)
         }
 
         /**

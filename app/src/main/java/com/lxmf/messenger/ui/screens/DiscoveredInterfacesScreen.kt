@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -48,19 +48,33 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.composables.icons.lucide.Antenna
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.TreePine
+import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
+import com.lxmf.messenger.ui.theme.MaterialDesignIcons
 import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Material Design Icons font family for custom icons like incognito.
+ */
+private val MdiFont = FontFamily(Font(R.font.materialdesignicons))
 
 /**
  * Screen for displaying discovered interfaces from RNS 1.1.x discovery.
@@ -151,11 +165,12 @@ fun DiscoveredInterfacesScreen(
                                 EmptyDiscoveredCard()
                             }
                         } else {
-                            items(state.interfaces, key = { it.transportId ?: it.name }) { iface ->
+                            items(state.interfaces, key = { "${it.transportId ?: ""}:${it.name}:${it.type}" }) { iface ->
                                 val reachableHost = iface.reachableOn
                                 DiscoveredInterfaceCard(
                                     iface = iface,
                                     distanceKm = viewModel.calculateDistance(iface),
+                                    isConnected = viewModel.isAutoconnected(iface),
                                     onAddToConfig = {
                                         if (iface.isTcpInterface && reachableHost != null) {
                                             onNavigateToTcpClientWizard(
@@ -540,6 +555,7 @@ private fun DiscoveryStatusSummary(
 private fun DiscoveredInterfaceCard(
     iface: DiscoveredInterface,
     distanceKm: Double?,
+    isConnected: Boolean,
     onAddToConfig: () -> Unit,
     onOpenLocation: () -> Unit,
     onCopyLoraParams: () -> Unit,
@@ -571,39 +587,78 @@ private fun DiscoveredInterfaceCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
                 ) {
-                    Icon(
-                        imageVector = getInterfaceIcon(iface.type),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                    InterfaceTypeIcon(
+                        type = iface.type,
+                        host = iface.reachableOn,
+                        size = 20.dp,
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
-                    Text(
-                        text = iface.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                // Status badge
-                Surface(
-                    color = statusColor.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(4.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(8.dp),
-                            shape = RoundedCornerShape(50),
-                            color = statusColor,
-                        ) {}
+                    Column {
                         Text(
-                            text = iface.status.replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusColor,
+                            text = iface.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                         )
+                        Text(
+                            text = formatInterfaceType(iface.type),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // Badges row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Connected badge (shown when auto-connected)
+                    if (isConnected) {
+                        val connectedColor = MaterialTheme.colorScheme.primary
+                        Surface(
+                            color = connectedColor.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(8.dp),
+                                    shape = RoundedCornerShape(50),
+                                    color = connectedColor,
+                                ) {}
+                                Text(
+                                    text = "Connected",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = connectedColor,
+                                )
+                            }
+                        }
+                    }
+                    // Status badge
+                    Surface(
+                        color = statusColor.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(8.dp),
+                                shape = RoundedCornerShape(50),
+                                color = statusColor,
+                            ) {}
+                            Text(
+                                text = iface.status.replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = statusColor,
+                            )
+                        }
                     }
                 }
             }
@@ -625,6 +680,9 @@ private fun DiscoveredInterfaceCard(
 
             // Type-specific details
             when {
+                iface.type == "I2PInterface" -> {
+                    I2pInterfaceDetails(iface)
+                }
                 iface.isTcpInterface -> {
                     TcpInterfaceDetails(iface)
                 }
@@ -715,7 +773,7 @@ private fun DiscoveredInterfaceCard(
                         ),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Radio,
+                            imageVector = Lucide.Antenna,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
@@ -742,6 +800,20 @@ private fun TcpInterfaceDetails(iface: DiscoveredInterface) {
     if (hostPort.isNotEmpty()) {
         Text(
             text = hostPort,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+}
+
+/**
+ * Details for I2P interfaces showing the b32 address.
+ */
+@Composable
+private fun I2pInterfaceDetails(iface: DiscoveredInterface) {
+    iface.reachableOn?.let { b32Address ->
+        Text(
+            text = "${b32Address}.b32.i2p",
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = FontFamily.Monospace,
         )
@@ -830,12 +902,113 @@ private fun LocationDetails(
 
 
 /**
- * Get appropriate icon for interface type.
+ * Renders the appropriate icon for an interface type.
+ * Uses Lucide Antenna for radio interfaces, MDI incognito for I2P, and Material icons for others.
  */
-private fun getInterfaceIcon(type: String): androidx.compose.ui.graphics.vector.ImageVector {
-    // Using Settings as a generic icon for now
-    // Could be expanded with custom icons for different interface types
-    return Icons.Default.Settings
+/**
+ * Check if a host address is a Yggdrasil network address (IPv6 in 0200::/7 space).
+ * Yggdrasil uses addresses starting with 02xx or 03xx.
+ */
+private fun isYggdrasilAddress(host: String?): Boolean {
+    if (host == null) return false
+    // Quick check: Yggdrasil addresses start with "2" or "3" after optional brackets
+    val cleanHost = host.trim().removePrefix("[").removeSuffix("]")
+    if (!cleanHost.contains(":")) return false // Not IPv6
+
+    // Parse first segment of IPv6 address
+    val firstSegment = cleanHost.split(":").firstOrNull() ?: return false
+    val value = firstSegment.toIntOrNull(16) ?: return false
+
+    // 0200::/7 means first 7 bits are 0000001, covering 0x0200-0x03FF
+    return value in 0x0200..0x03FF
+}
+
+/**
+ * Renders the appropriate icon for an interface type.
+ * Uses Lucide Antenna for radio interfaces, MDI incognito for I2P,
+ * TreePine for Yggdrasil, and Material icons for others.
+ */
+@Composable
+private fun InterfaceTypeIcon(
+    type: String,
+    host: String? = null,
+    modifier: Modifier = Modifier,
+    size: Dp = 20.dp,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    when (type) {
+        "TCPServerInterface", "TCPClientInterface", "BackboneInterface" -> {
+            if (isYggdrasilAddress(host)) {
+                // Use TreePine for Yggdrasil network addresses
+                Icon(
+                    imageVector = Lucide.TreePine,
+                    contentDescription = null,
+                    modifier = modifier.size(size),
+                    tint = tint,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = null,
+                    modifier = modifier.size(size),
+                    tint = tint,
+                )
+            }
+        }
+        "I2PInterface" -> {
+            // Use MDI incognito icon for I2P (anonymity network)
+            val codepoint = MaterialDesignIcons.getCodepointOrNull("incognito")
+            if (codepoint != null) {
+                Text(
+                    text = codepoint,
+                    fontFamily = MdiFont,
+                    fontSize = (size.value * 1.2f).sp, // MDI icons render slightly smaller
+                    color = tint,
+                    modifier = modifier,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    modifier = modifier.size(size),
+                    tint = tint,
+                )
+            }
+        }
+        "RNodeInterface", "WeaveInterface", "KISSInterface" -> {
+            // Use Lucide Antenna for radio interfaces (matches PeerCard)
+            Icon(
+                imageVector = Lucide.Antenna,
+                contentDescription = null,
+                modifier = modifier.size(size),
+                tint = tint,
+            )
+        }
+        else -> {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                modifier = modifier.size(size),
+                tint = tint,
+            )
+        }
+    }
+}
+
+/**
+ * Format interface type for display.
+ */
+private fun formatInterfaceType(type: String): String {
+    return when (type) {
+        "TCPServerInterface" -> "TCP Server"
+        "TCPClientInterface" -> "TCP Client"
+        "BackboneInterface" -> "Backbone (TCP)"
+        "I2PInterface" -> "I2P"
+        "RNodeInterface" -> "RNode (LoRa)"
+        "WeaveInterface" -> "Weave (LoRa)"
+        "KISSInterface" -> "KISS"
+        else -> type
+    }
 }
 
 /**

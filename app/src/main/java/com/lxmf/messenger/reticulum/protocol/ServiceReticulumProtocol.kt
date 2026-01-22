@@ -2058,6 +2058,22 @@ class ServiceReticulumProtocol(
         }
     }
 
+    override suspend fun getAutoconnectedEndpoints(): Set<String> {
+        return try {
+            val service = this.service ?: return emptySet()
+            val resultJson = service.autoconnectedInterfaceEndpoints
+            val jsonArray = org.json.JSONArray(resultJson)
+            val endpoints = mutableSetOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                endpoints.add(jsonArray.getString(i))
+            }
+            endpoints
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting auto-connected endpoints", e)
+            emptySet()
+        }
+    }
+
     override fun setConversationActive(active: Boolean) {
         try {
             service?.setConversationActive(active)

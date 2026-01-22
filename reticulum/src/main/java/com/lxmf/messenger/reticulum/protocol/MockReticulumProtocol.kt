@@ -334,6 +334,10 @@ class MockReticulumProtocol : ReticulumProtocol {
         return false
     }
 
+    override suspend fun getAutoconnectedEndpoints(): Set<String> {
+        return emptySet()
+    }
+
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
     }

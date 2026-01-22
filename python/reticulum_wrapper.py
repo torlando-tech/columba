@@ -6871,6 +6871,42 @@ class ReticulumWrapper:
                      f"Error checking discovery status: {e}")
             return False
 
+    def get_autoconnected_interface_endpoints(self) -> str:
+        """
+        Get list of currently auto-connected AND online interface endpoints.
+
+        Auto-connected interfaces are created dynamically by RNS discovery
+        and have the 'autoconnect_hash' attribute set.
+
+        Returns:
+            JSON string containing array of endpoint strings like "host:port"
+            for TCP-based auto-connected interfaces that are currently online.
+        """
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return json.dumps([])
+
+        try:
+            endpoints = []
+            for iface in RNS.Transport.interfaces:
+                # Auto-connected interfaces have autoconnect_hash attribute
+                # Also check that the interface is actually online
+                if hasattr(iface, "autoconnect_hash") and getattr(iface, "online", False):
+                    # For TCP-based interfaces (BackboneInterface, TCPClientInterface)
+                    if hasattr(iface, "target_ip") and hasattr(iface, "target_port"):
+                        endpoint = f"{iface.target_ip}:{iface.target_port}"
+                        endpoints.append(endpoint)
+                        log_debug("ReticulumWrapper", "get_autoconnected_interface_endpoints",
+                                 f"Found auto-connected online interface: {iface.name} -> {endpoint}")
+
+            log_debug("ReticulumWrapper", "get_autoconnected_interface_endpoints",
+                     f"Found {len(endpoints)} auto-connected online endpoints")
+            return json.dumps(endpoints)
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_autoconnected_interface_endpoints",
+                     f"Error getting auto-connected endpoints: {e}")
+            return json.dumps([])
+
     def get_path_table(self) -> List[str]:
         """
         Get list of destination hashes from the RNS path table.

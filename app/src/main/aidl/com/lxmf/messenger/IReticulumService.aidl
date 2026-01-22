@@ -330,6 +330,15 @@ interface IReticulumService {
      */
     boolean isDiscoveryEnabled();
 
+    /**
+     * Get list of currently auto-connected interface endpoints.
+     * Auto-connected interfaces are created dynamically by RNS discovery.
+     * Requires RNS 1.1.0 or later.
+     *
+     * @return JSON string containing array of endpoint strings like "host:port"
+     */
+    String getAutoconnectedInterfaceEndpoints();
+
     // ==================== PROPAGATION NODE SUPPORT ====================
 
     /**

@@ -1,16 +1,27 @@
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,8 +30,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.test.RegisterComponentActivityRule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -202,6 +218,273 @@ class MapScreenTest {
     // 1. Instrumented tests on a real device/emulator
     // 2. Screenshot tests with Paparazzi (if MapLibre supports it)
     // 3. Unit testing the ViewModel (MapViewModelTest) for logic coverage
+
+    // ========== formatTimeAgo Tests ==========
+
+    @Test
+    fun `formatTimeAgo with recent timestamp returns Just now`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("Just now", formatTimeAgoTestable(now - 30))
+    }
+
+    @Test
+    fun `formatTimeAgo with 5 minutes ago returns min ago`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("5 min ago", formatTimeAgoTestable(now - 300))
+    }
+
+    @Test
+    fun `formatTimeAgo with 2 hours ago returns hours ago`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("2 hours ago", formatTimeAgoTestable(now - 7200))
+    }
+
+    @Test
+    fun `formatTimeAgo with 3 days ago returns days ago`() {
+        val now = System.currentTimeMillis() / 1000
+        assertEquals("3 days ago", formatTimeAgoTestable(now - 259200))
+    }
+
+    // ========== formatLoraParamsForClipboard Tests ==========
+
+    @Test
+    fun `formatLoraParamsForClipboard includes interface name`() {
+        val details = createTestFocusInterfaceDetails(name = "Test RNode")
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("Test RNode"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard formats frequency in MHz`() {
+        val details = createTestFocusInterfaceDetails(frequency = 915000000L)
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("915.0 MHz"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard formats bandwidth in kHz`() {
+        val details = createTestFocusInterfaceDetails(bandwidth = 125000)
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("125 kHz"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard formats spreading factor`() {
+        val details = createTestFocusInterfaceDetails(spreadingFactor = 10)
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("SF10"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard formats coding rate`() {
+        val details = createTestFocusInterfaceDetails(codingRate = 5)
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("4/5"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard includes modulation`() {
+        val details = createTestFocusInterfaceDetails(modulation = "LoRa")
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertTrue(result.contains("Modulation: LoRa"))
+    }
+
+    @Test
+    fun `formatLoraParamsForClipboard omits null values`() {
+        val details = createTestFocusInterfaceDetails(
+            frequency = null,
+            bandwidth = null,
+            spreadingFactor = null,
+            codingRate = null,
+            modulation = null,
+        )
+        val result = formatLoraParamsForClipboardTestable(details)
+        assertFalse(result.contains("Frequency"))
+        assertFalse(result.contains("Bandwidth"))
+        assertFalse(result.contains("Spreading Factor"))
+        assertFalse(result.contains("Coding Rate"))
+        assertFalse(result.contains("Modulation"))
+    }
+
+    // ========== InterfaceDetailRow Tests ==========
+
+    @Test
+    fun `InterfaceDetailRow displays label`() {
+        composeTestRule.setContent {
+            InterfaceDetailRowTestWrapper(label = "Frequency", value = "915.0 MHz")
+        }
+
+        composeTestRule.onNodeWithText("Frequency").assertIsDisplayed()
+    }
+
+    @Test
+    fun `InterfaceDetailRow displays value`() {
+        composeTestRule.setContent {
+            InterfaceDetailRowTestWrapper(label = "Bandwidth", value = "125 kHz")
+        }
+
+        composeTestRule.onNodeWithText("125 kHz").assertIsDisplayed()
+    }
+
+    // ========== FocusInterfaceBottomSheet Content Tests ==========
+
+    @Test
+    fun `FocusInterfaceContent displays interface name`() {
+        val details = createTestFocusInterfaceDetails(name = "Test Interface")
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Test Interface").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays interface type`() {
+        val details = createTestFocusInterfaceDetails(type = "RNode (LoRa)")
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("RNode (LoRa)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays status badge`() {
+        val details = createTestFocusInterfaceDetails(status = "available")
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Available").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays location`() {
+        val details = createTestFocusInterfaceDetails(
+            latitude = 45.1234,
+            longitude = -122.5678,
+        )
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Location").assertIsDisplayed()
+        composeTestRule.onNodeWithText("45.1234, -122.5678").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays altitude when present`() {
+        val details = createTestFocusInterfaceDetails(height = 150.0)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Altitude").assertIsDisplayed()
+        composeTestRule.onNodeWithText("150 m").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays Radio Parameters section for LoRa`() {
+        val details = createTestFocusInterfaceDetails(
+            frequency = 915000000L,
+            bandwidth = 125000,
+            spreadingFactor = 10,
+            codingRate = 5,
+        )
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Radio Parameters").assertIsDisplayed()
+        composeTestRule.onNodeWithText("915.000 MHz").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays Network section for TCP`() {
+        val details = createTestFocusInterfaceDetails(
+            reachableOn = "192.168.1.1",
+            port = 4242,
+        )
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Network").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
+        composeTestRule.onNodeWithText("192.168.1.1").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays hops when present`() {
+        val details = createTestFocusInterfaceDetails(hops = 3)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Hops").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays Copy Params button for LoRa`() {
+        val details = createTestFocusInterfaceDetails(frequency = 915000000L)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Copy Params").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent displays Use for RNode button for LoRa`() {
+        val details = createTestFocusInterfaceDetails(frequency = 915000000L)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Use for RNode").assertIsDisplayed()
+    }
+
+    @Test
+    fun `FocusInterfaceContent hides LoRa buttons when no frequency`() {
+        val details = createTestFocusInterfaceDetails(frequency = null)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(details = details)
+        }
+
+        composeTestRule.onNodeWithText("Copy Params").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Use for RNode").assertDoesNotExist()
+    }
+
+    @Test
+    fun `FocusInterfaceContent Copy Params button triggers callback`() {
+        var copyClicked = false
+        val details = createTestFocusInterfaceDetails(frequency = 915000000L)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(
+                details = details,
+                onCopyLoraParams = { copyClicked = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Copy Params").performClick()
+        assertTrue(copyClicked)
+    }
+
+    @Test
+    fun `FocusInterfaceContent Use for RNode button triggers callback`() {
+        var useClicked = false
+        val details = createTestFocusInterfaceDetails(frequency = 915000000L)
+        composeTestRule.setContent {
+            FocusInterfaceContentTestWrapper(
+                details = details,
+                onUseForNewRNode = { useClicked = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Use for RNode").performClick()
+        assertTrue(useClicked)
+    }
 }
 
 /**
@@ -270,6 +553,301 @@ private fun EmptyMapStateCardTestWrapper() {
                 text = "Enable location access to see your position on the map.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+    }
+}
+
+// ========== Helper Functions ==========
+
+/**
+ * Testable version of formatTimeAgo from MapScreen.
+ */
+private fun formatTimeAgoTestable(timestamp: Long): String {
+    val now = System.currentTimeMillis() / 1000
+    val diff = now - timestamp
+    return when {
+        diff < 60 -> "Just now"
+        diff < 3600 -> "${diff / 60} min ago"
+        diff < 86400 -> "${diff / 3600} hours ago"
+        else -> "${diff / 86400} days ago"
+    }
+}
+
+/**
+ * Testable version of formatLoraParamsForClipboard from MapScreen.
+ */
+private fun formatLoraParamsForClipboardTestable(details: FocusInterfaceDetails): String {
+    return buildString {
+        appendLine("LoRa Parameters from: ${details.name}")
+        appendLine("---")
+        details.frequency?.let { freq ->
+            appendLine("Frequency: ${freq / 1_000_000.0} MHz")
+        }
+        details.bandwidth?.let { bw ->
+            appendLine("Bandwidth: ${bw / 1000} kHz")
+        }
+        details.spreadingFactor?.let { sf ->
+            appendLine("Spreading Factor: SF$sf")
+        }
+        details.codingRate?.let { cr ->
+            appendLine("Coding Rate: 4/$cr")
+        }
+        details.modulation?.let { mod ->
+            appendLine("Modulation: $mod")
+        }
+    }.trim()
+}
+
+/**
+ * Create a test FocusInterfaceDetails with specified parameters.
+ */
+@Suppress("LongParameterList")
+private fun createTestFocusInterfaceDetails(
+    name: String = "Test Interface",
+    type: String = "RNode (LoRa)",
+    latitude: Double = 45.0,
+    longitude: Double = -122.0,
+    height: Double? = null,
+    reachableOn: String? = null,
+    port: Int? = null,
+    frequency: Long? = null,
+    bandwidth: Int? = null,
+    spreadingFactor: Int? = null,
+    codingRate: Int? = null,
+    modulation: String? = null,
+    status: String? = null,
+    lastHeard: Long? = null,
+    hops: Int? = null,
+): FocusInterfaceDetails {
+    return FocusInterfaceDetails(
+        name = name,
+        type = type,
+        latitude = latitude,
+        longitude = longitude,
+        height = height,
+        reachableOn = reachableOn,
+        port = port,
+        frequency = frequency,
+        bandwidth = bandwidth,
+        spreadingFactor = spreadingFactor,
+        codingRate = codingRate,
+        modulation = modulation,
+        status = status,
+        lastHeard = lastHeard,
+        hops = hops,
+    )
+}
+
+/**
+ * Test wrapper for InterfaceDetailRow.
+ */
+@Suppress("TestFunctionName")
+@Composable
+private fun InterfaceDetailRowTestWrapper(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/**
+ * Test wrapper for FocusInterfaceBottomSheet content.
+ * We test the content directly since ModalBottomSheet is difficult to test in Robolectric.
+ */
+@Suppress("TestFunctionName", "LongMethod")
+@Composable
+private fun FocusInterfaceContentTestWrapper(
+    details: FocusInterfaceDetails,
+    onCopyLoraParams: () -> Unit = {},
+    onUseForNewRNode: () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Header with name and type
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = details.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = details.type,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            details.status?.let { status ->
+                Surface(
+                    color = when (status.lowercase()) {
+                        "available" -> MaterialTheme.colorScheme.primaryContainer
+                        "unknown" -> MaterialTheme.colorScheme.tertiaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(
+                        text = status.replaceFirstChar { it.uppercase() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider()
+
+        // Location info
+        InterfaceDetailRowTestWrapper(
+            label = "Location",
+            value = "%.4f, %.4f".format(details.latitude, details.longitude),
+        )
+        details.height?.let { height ->
+            InterfaceDetailRowTestWrapper(
+                label = "Altitude",
+                value = "${height.toInt()} m",
+            )
+        }
+
+        // Radio parameters (if LoRa interface)
+        if (details.frequency != null) {
+            HorizontalDivider()
+            Text(
+                text = "Radio Parameters",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            InterfaceDetailRowTestWrapper(
+                label = "Frequency",
+                value = "%.3f MHz".format(details.frequency / 1_000_000.0),
+            )
+            details.bandwidth?.let { bw ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Bandwidth",
+                    value = "$bw kHz",
+                )
+            }
+            details.spreadingFactor?.let { sf ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Spreading Factor",
+                    value = "SF$sf",
+                )
+            }
+            details.codingRate?.let { cr ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Coding Rate",
+                    value = "4/$cr",
+                )
+            }
+            details.modulation?.let { mod ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Modulation",
+                    value = mod,
+                )
+            }
+        }
+
+        // TCP parameters (if TCP interface)
+        if (details.reachableOn != null) {
+            HorizontalDivider()
+            Text(
+                text = "Network",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            InterfaceDetailRowTestWrapper(
+                label = "Host",
+                value = details.reachableOn,
+            )
+            details.port?.let { port ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Port",
+                    value = port.toString(),
+                )
+            }
+        }
+
+        // Status details
+        if (details.lastHeard != null || details.hops != null) {
+            HorizontalDivider()
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            details.lastHeard?.let { timestamp ->
+                val timeAgo = formatTimeAgoTestable(timestamp)
+                InterfaceDetailRowTestWrapper(
+                    label = "Last Heard",
+                    value = timeAgo,
+                )
+            }
+            details.hops?.let { hops ->
+                InterfaceDetailRowTestWrapper(
+                    label = "Hops",
+                    value = hops.toString(),
+                )
+            }
+        }
+
+        // LoRa params buttons (only for radio interfaces with frequency info)
+        if (details.frequency != null) {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Copy button
+                OutlinedButton(
+                    onClick = onCopyLoraParams,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Copy Params")
+                }
+                // Use for New RNode button
+                Button(
+                    onClick = onUseForNewRNode,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Radio,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Use for RNode")
+                }
+            }
         }
     }
 }

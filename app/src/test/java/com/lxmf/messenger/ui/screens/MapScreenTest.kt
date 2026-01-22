@@ -1,38 +1,10 @@
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,7 +43,7 @@ class MapScreenTest {
         composeTestRule.setContent {
             // At very close zoom, metersPerPixel is small
             // 5m bar at 0.05 metersPerPixel = 100px (within 80-140dp range)
-            ScaleBarTestWrapper(metersPerPixel = 0.05)
+            ScaleBar(metersPerPixel = 0.05)
         }
 
         composeTestRule.onNodeWithText("5 m").assertIsDisplayed()
@@ -80,7 +52,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays10mForCloseZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 0.1)
+            ScaleBar(metersPerPixel = 0.1)
         }
 
         composeTestRule.onNodeWithText("10 m").assertIsDisplayed()
@@ -89,7 +61,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays50mForMediumZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 0.5)
+            ScaleBar(metersPerPixel = 0.5)
         }
 
         composeTestRule.onNodeWithText("50 m").assertIsDisplayed()
@@ -98,7 +70,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays100mForStreetLevelZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 1.0)
+            ScaleBar(metersPerPixel = 1.0)
         }
 
         composeTestRule.onNodeWithText("100 m").assertIsDisplayed()
@@ -107,7 +79,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays500mForNeighborhoodZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 5.0)
+            ScaleBar(metersPerPixel = 5.0)
         }
 
         composeTestRule.onNodeWithText("500 m").assertIsDisplayed()
@@ -116,7 +88,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays1kmForCityZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 10.0)
+            ScaleBar(metersPerPixel = 10.0)
         }
 
         composeTestRule.onNodeWithText("1 km").assertIsDisplayed()
@@ -125,7 +97,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays5kmForRegionalZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 50.0)
+            ScaleBar(metersPerPixel = 50.0)
         }
 
         composeTestRule.onNodeWithText("5 km").assertIsDisplayed()
@@ -134,7 +106,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays10kmForCountryZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 100.0)
+            ScaleBar(metersPerPixel = 100.0)
         }
 
         composeTestRule.onNodeWithText("10 km").assertIsDisplayed()
@@ -143,7 +115,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays100kmForContinentZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 1000.0)
+            ScaleBar(metersPerPixel = 1000.0)
         }
 
         composeTestRule.onNodeWithText("100 km").assertIsDisplayed()
@@ -152,7 +124,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displays1000kmForGlobalZoom() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 10000.0)
+            ScaleBar(metersPerPixel = 10000.0)
         }
 
         // At 10000 m/px, 100000m (100km) fits in ~10px which is too small
@@ -163,7 +135,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displaysCorrectFormatForMeters() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 0.2)
+            ScaleBar(metersPerPixel = 0.2)
         }
 
         // Should show meters, not km
@@ -173,7 +145,7 @@ class MapScreenTest {
     @Test
     fun scaleBar_displaysCorrectFormatForKilometers() {
         composeTestRule.setContent {
-            ScaleBarTestWrapper(metersPerPixel = 20.0)
+            ScaleBar(metersPerPixel = 20.0)
         }
 
         // Should show km, not m
@@ -185,7 +157,7 @@ class MapScreenTest {
     @Test
     fun emptyMapStateCard_displaysLocationIcon() {
         composeTestRule.setContent {
-            EmptyMapStateCardTestWrapper()
+            EmptyMapStateCard(contactCount = 0, onDismiss = {})
         }
 
         // The card should be displayed
@@ -195,7 +167,7 @@ class MapScreenTest {
     @Test
     fun emptyMapStateCard_displaysPrimaryText() {
         composeTestRule.setContent {
-            EmptyMapStateCardTestWrapper()
+            EmptyMapStateCard(contactCount = 0, onDismiss = {})
         }
 
         composeTestRule.onNodeWithText("Location permission required").assertIsDisplayed()
@@ -204,7 +176,7 @@ class MapScreenTest {
     @Test
     fun emptyMapStateCard_displaysSecondaryText() {
         composeTestRule.setContent {
-            EmptyMapStateCardTestWrapper()
+            EmptyMapStateCard(contactCount = 0, onDismiss = {})
         }
 
         composeTestRule.onNodeWithText("Enable location access to see your position on the map.").assertIsDisplayed()
@@ -311,7 +283,7 @@ class MapScreenTest {
     @Test
     fun `InterfaceDetailRow displays label`() {
         composeTestRule.setContent {
-            InterfaceDetailRowTestWrapper(label = "Frequency", value = "915.0 MHz")
+            InterfaceDetailRow(label = "Frequency", value = "915.0 MHz")
         }
 
         composeTestRule.onNodeWithText("Frequency").assertIsDisplayed()
@@ -320,7 +292,7 @@ class MapScreenTest {
     @Test
     fun `InterfaceDetailRow displays value`() {
         composeTestRule.setContent {
-            InterfaceDetailRowTestWrapper(label = "Bandwidth", value = "125 kHz")
+            InterfaceDetailRow(label = "Bandwidth", value = "125 kHz")
         }
 
         composeTestRule.onNodeWithText("125 kHz").assertIsDisplayed()
@@ -332,7 +304,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays interface name`() {
         val details = createTestFocusInterfaceDetails(name = "Test Interface")
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Test Interface").assertIsDisplayed()
@@ -342,7 +314,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays interface type`() {
         val details = createTestFocusInterfaceDetails(type = "RNode (LoRa)")
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("RNode (LoRa)").assertIsDisplayed()
@@ -352,7 +324,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays status badge`() {
         val details = createTestFocusInterfaceDetails(status = "available")
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Available").assertIsDisplayed()
@@ -365,7 +337,7 @@ class MapScreenTest {
             longitude = -122.5678,
         )
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Location").assertIsDisplayed()
@@ -376,7 +348,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays altitude when present`() {
         val details = createTestFocusInterfaceDetails(height = 150.0)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Altitude").assertIsDisplayed()
@@ -392,7 +364,7 @@ class MapScreenTest {
             codingRate = 5,
         )
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Radio Parameters").assertIsDisplayed()
@@ -406,7 +378,7 @@ class MapScreenTest {
             port = 4242,
         )
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Network").assertIsDisplayed()
@@ -418,7 +390,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays hops when present`() {
         val details = createTestFocusInterfaceDetails(hops = 3)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Hops").assertIsDisplayed()
@@ -429,7 +401,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays Copy Params button for LoRa`() {
         val details = createTestFocusInterfaceDetails(frequency = 915000000L)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Copy Params").assertIsDisplayed()
@@ -439,7 +411,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent displays Use for RNode button for LoRa`() {
         val details = createTestFocusInterfaceDetails(frequency = 915000000L)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Use for RNode").assertIsDisplayed()
@@ -449,7 +421,7 @@ class MapScreenTest {
     fun `FocusInterfaceContent hides LoRa buttons when no frequency`() {
         val details = createTestFocusInterfaceDetails(frequency = null)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(details = details)
+            FocusInterfaceContent(details = details)
         }
 
         composeTestRule.onNodeWithText("Copy Params").assertDoesNotExist()
@@ -461,7 +433,7 @@ class MapScreenTest {
         var copyClicked = false
         val details = createTestFocusInterfaceDetails(frequency = 915000000L)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(
+            FocusInterfaceContent(
                 details = details,
                 onCopyLoraParams = { copyClicked = true },
             )
@@ -476,7 +448,7 @@ class MapScreenTest {
         var useClicked = false
         val details = createTestFocusInterfaceDetails(frequency = 915000000L)
         composeTestRule.setContent {
-            FocusInterfaceContentTestWrapper(
+            FocusInterfaceContent(
                 details = details,
                 onUseForNewRNode = { useClicked = true },
             )
@@ -484,76 +456,6 @@ class MapScreenTest {
 
         composeTestRule.onNodeWithText("Use for RNode").performClick()
         assertTrue(useClicked)
-    }
-}
-
-/**
- * Test wrapper for ScaleBar to make it accessible for testing.
- * ScaleBar is private in MapScreen, so we recreate it here for testing.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun ScaleBarTestWrapper(metersPerPixel: Double) {
-    // Recreate the ScaleBar logic for testing
-    val density = LocalDensity.current.density
-    val minBarWidthDp = 80f
-    val maxBarWidthDp = 140f
-    val minBarWidthPx = minBarWidthDp * density
-    val maxBarWidthPx = maxBarWidthDp * density
-    val minMeters = metersPerPixel * minBarWidthPx
-    val maxMeters = metersPerPixel * maxBarWidthPx
-
-    val niceDistances =
-        listOf(
-            5, 10, 20, 50, 100, 200, 500,
-            1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
-            100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
-        )
-
-    val selectedDistance =
-        niceDistances.findLast { it >= minMeters && it <= maxMeters }
-            ?: niceDistances.firstOrNull { it >= minMeters }
-            ?: niceDistances.last()
-
-    val distanceText =
-        when {
-            selectedDistance >= 1_000_000 -> "${selectedDistance / 1_000_000} km"
-            selectedDistance >= 1_000 -> "${selectedDistance / 1_000} km"
-            else -> "$selectedDistance m"
-        }
-
-    Text(text = distanceText)
-}
-
-/**
- * Test wrapper for EmptyMapStateCard.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun EmptyMapStateCardTestWrapper() {
-    Card(
-        modifier = Modifier.padding(16.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Location permission required",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Enable location access to see your position on the map.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
     }
 }
 
@@ -599,216 +501,3 @@ private fun createTestFocusInterfaceDetails(
     )
 }
 
-/**
- * Test wrapper for InterfaceDetailRow.
- */
-@Suppress("TestFunctionName")
-@Composable
-private fun InterfaceDetailRowTestWrapper(
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-}
-
-/**
- * Test wrapper for FocusInterfaceBottomSheet content.
- * We test the content directly since ModalBottomSheet is difficult to test in Robolectric.
- */
-@Suppress("TestFunctionName", "LongMethod")
-@Composable
-private fun FocusInterfaceContentTestWrapper(
-    details: FocusInterfaceDetails,
-    onCopyLoraParams: () -> Unit = {},
-    onUseForNewRNode: () -> Unit = {},
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // Header with name and type
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = details.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = details.type,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            details.status?.let { status ->
-                Surface(
-                    color = when (status.lowercase()) {
-                        "available" -> MaterialTheme.colorScheme.primaryContainer
-                        "unknown" -> MaterialTheme.colorScheme.tertiaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(
-                        text = status.replaceFirstChar { it.uppercase() },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-        }
-
-        HorizontalDivider()
-
-        // Location info
-        InterfaceDetailRowTestWrapper(
-            label = "Location",
-            value = "%.4f, %.4f".format(details.latitude, details.longitude),
-        )
-        details.height?.let { height ->
-            InterfaceDetailRowTestWrapper(
-                label = "Altitude",
-                value = "${height.toInt()} m",
-            )
-        }
-
-        // Radio parameters (if LoRa interface)
-        if (details.frequency != null) {
-            HorizontalDivider()
-            Text(
-                text = "Radio Parameters",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            InterfaceDetailRowTestWrapper(
-                label = "Frequency",
-                value = "%.3f MHz".format(details.frequency / 1_000_000.0),
-            )
-            details.bandwidth?.let { bw ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Bandwidth",
-                    value = "$bw kHz",
-                )
-            }
-            details.spreadingFactor?.let { sf ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Spreading Factor",
-                    value = "SF$sf",
-                )
-            }
-            details.codingRate?.let { cr ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Coding Rate",
-                    value = "4/$cr",
-                )
-            }
-            details.modulation?.let { mod ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Modulation",
-                    value = mod,
-                )
-            }
-        }
-
-        // TCP parameters (if TCP interface)
-        if (details.reachableOn != null) {
-            HorizontalDivider()
-            Text(
-                text = "Network",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            InterfaceDetailRowTestWrapper(
-                label = "Host",
-                value = details.reachableOn,
-            )
-            details.port?.let { port ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Port",
-                    value = port.toString(),
-                )
-            }
-        }
-
-        // Status details
-        if (details.lastHeard != null || details.hops != null) {
-            HorizontalDivider()
-            Text(
-                text = "Status",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            details.lastHeard?.let { timestamp ->
-                val timeAgo = formatTimeAgo(timestamp)
-                InterfaceDetailRowTestWrapper(
-                    label = "Last Heard",
-                    value = timeAgo,
-                )
-            }
-            details.hops?.let { hops ->
-                InterfaceDetailRowTestWrapper(
-                    label = "Hops",
-                    value = hops.toString(),
-                )
-            }
-        }
-
-        // LoRa params buttons (only for radio interfaces with frequency info)
-        if (details.frequency != null) {
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Copy button
-                OutlinedButton(
-                    onClick = onCopyLoraParams,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Copy Params")
-                }
-                // Use for New RNode button
-                Button(
-                    onClick = onUseForNewRNode,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Radio,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Use for RNode")
-                }
-            }
-        }
-    }
-}

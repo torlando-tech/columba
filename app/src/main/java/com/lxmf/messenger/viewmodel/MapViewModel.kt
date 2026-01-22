@@ -147,6 +147,13 @@ class MapViewModel
                 }
             }
 
+            // Refresh map style when HTTP setting changes
+            viewModelScope.launch {
+                mapTileSourceManager.httpEnabledFlow.collect {
+                    refreshMapStyle()
+                }
+            }
+
             // Collect location permission sheet dismissal state
             viewModelScope.launch {
                 settingsRepository.hasDismissedLocationPermissionSheetFlow.collect { dismissed ->
@@ -291,6 +298,20 @@ class MapViewModel
         fun refreshMapStyle() {
             val location = _state.value.userLocation
             resolveMapStyle(location?.latitude, location?.longitude)
+        }
+
+        /**
+         * Enable HTTP map source and refresh the map style.
+         * Called from the "No Map Source" overlay.
+         * Clears the "enabled for download" flag since user explicitly wants HTTP enabled.
+         */
+        fun enableHttp() {
+            viewModelScope.launch {
+                // Clear the flag - user is explicitly choosing to enable HTTP
+                settingsRepository.setHttpEnabledForDownload(false)
+                mapTileSourceManager.setHttpEnabled(true)
+                refreshMapStyle()
+            }
         }
 
         /**

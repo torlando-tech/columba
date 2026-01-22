@@ -11,12 +11,15 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
+import com.lxmf.messenger.map.MapTileSourceManager
+import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
@@ -100,6 +103,8 @@ data class OfflineMapDownloadState(
     val isSearchingAddress: Boolean = false,
     val addressSearchError: String? = null,
     val isGeocoderAvailable: Boolean = true, // Checked on init
+    val httpEnabled: Boolean = true, // HTTP map source enabled (needed for downloads)
+    val httpAutoDisabled: Boolean = false, // True when HTTP was auto-disabled after download
 ) {
     /**
      * Check if the location is set.
@@ -143,6 +148,8 @@ class OfflineMapDownloadViewModel
         @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
         private val mapLibreOfflineManager: MapLibreOfflineManager,
+        private val mapTileSourceManager: MapTileSourceManager,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
@@ -164,6 +171,13 @@ class OfflineMapDownloadViewModel
                 val geocoderAvailable = checkGeocoderAvailable()
                 if (!geocoderAvailable) {
                     _state.update { it.copy(isGeocoderAvailable = false) }
+                }
+            }
+
+            // Observe HTTP enabled state - downloads require HTTP to be enabled
+            viewModelScope.launch {
+                mapTileSourceManager.httpEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(httpEnabled = enabled) }
                 }
             }
         }
@@ -299,6 +313,26 @@ class OfflineMapDownloadViewModel
                     addressSearchError = null,
                 )
             }
+        }
+
+        /**
+         * Enable HTTP map source.
+         * Downloads require HTTP to be enabled to fetch tiles from the internet.
+         * Marks that HTTP was enabled specifically for downloading, so it can be
+         * auto-disabled after the download completes.
+         */
+        fun enableHttp() {
+            viewModelScope.launch {
+                settingsRepository.setHttpEnabledForDownload(true)
+                mapTileSourceManager.setHttpEnabled(true)
+            }
+        }
+
+        /**
+         * Dismiss the "HTTP auto-disabled" snackbar notification.
+         */
+        fun dismissHttpAutoDisabledMessage() {
+            _state.update { it.copy(httpAutoDisabled = false) }
         }
 
         private fun formatAddress(address: Address): String {
@@ -567,11 +601,28 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
-                                    _state.update {
-                                        it.copy(
-                                            isComplete = true,
-                                            downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                        )
+                                    // Check if HTTP was enabled specifically for this download
+                                    val wasEnabledForDownload =
+                                        settingsRepository.httpEnabledForDownloadFlow.first()
+                                    if (wasEnabledForDownload) {
+                                        // Auto-disable HTTP and clear the flag
+                                        Log.d(TAG, "Auto-disabling HTTP after download (was enabled for download)")
+                                        mapTileSourceManager.setHttpEnabled(false)
+                                        settingsRepository.setHttpEnabledForDownload(false)
+                                        _state.update {
+                                            it.copy(
+                                                isComplete = true,
+                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
+                                                httpAutoDisabled = true,
+                                            )
+                                        }
+                                    } else {
+                                        _state.update {
+                                            it.copy(
+                                                isComplete = true,
+                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
+                                            )
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to mark region complete in database", e)

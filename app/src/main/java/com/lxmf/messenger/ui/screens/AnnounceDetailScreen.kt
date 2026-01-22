@@ -318,6 +318,9 @@ fun AnnounceDetailScreen(
                 }
 
                 // Show interface information if available
+                // The Python layer now provides the full interface name including user-configured names
+                // (e.g., "TCPInterface[Sideband Server/192.168.1.100:4965]")
+                // getReceivingInterfaceInfo() extracts the friendly name from this string
                 announceNonNull.receivingInterface?.let { interfaceName ->
                     val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
                     InfoCard(

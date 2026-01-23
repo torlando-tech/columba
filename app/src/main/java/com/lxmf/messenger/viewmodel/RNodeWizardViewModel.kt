@@ -1264,6 +1264,10 @@ class RNodeWizardViewModel
          * Request device association via CompanionDeviceManager.
          * On Android 12+, this shows a native system picker for the device.
          *
+         * For devices that were already found in the initial BLE scan (have a BluetoothDevice),
+         * we skip CDM and select directly to avoid discovery_timeout errors caused by
+         * intermittent BLE advertising.
+         *
          * @param device The device to associate
          * @param onFallback Called if CDM is not available (pre-Android 12)
          */
@@ -1275,6 +1279,14 @@ class RNodeWizardViewModel
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || companionDeviceManager == null) {
                 // Fall back to direct selection on older Android
                 onFallback()
+                return
+            }
+
+            // If device was already discovered (has BluetoothDevice), skip CDM to avoid
+            // discovery_timeout when device stops advertising between scans
+            if (device.bluetoothDevice != null) {
+                Log.d(TAG, "Device already discovered, skipping CDM: ${device.name}")
+                selectDevice(device)
                 return
             }
 

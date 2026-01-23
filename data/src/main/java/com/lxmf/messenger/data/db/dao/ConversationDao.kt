@@ -16,14 +16,17 @@ interface ConversationDao {
     fun getAllConversations(identityHash: String): Flow<List<ConversationEntity>>
 
     /**
-     * Get enriched conversations with profile icon data from announces and display names from contacts.
-     * Combines conversation data with icon appearance from announces table and nicknames from contacts.
+     * Get enriched conversations with profile icon data and display names.
+     * Combines conversation data with icon appearance from peer_icons table and nicknames from contacts.
      *
      * Display name priority (via COALESCE):
      * 1. contacts.customNickname - User-set nickname (highest priority)
      * 2. announces.peerName - Network broadcast name
      * 3. conversations.peerName - Snapshot from conversation creation
      * 4. conversations.peerHash - Fallback to hash (never null)
+     *
+     * Icons come from peer_icons table (populated from LXMF messages), not from announces
+     * (which are a Reticulum concept and don't contain icon data).
      */
     @Query(
         """

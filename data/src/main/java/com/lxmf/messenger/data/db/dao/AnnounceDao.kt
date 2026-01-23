@@ -9,8 +9,8 @@ import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.model.EnrichedAnnounce
 import kotlinx.coroutines.flow.Flow
 
-@Suppress("TooManyFunctions") // DAOs naturally have many query methods
 @Dao
+@Suppress("TooManyFunctions") // DAO provides comprehensive query interface for announces + icon enrichment
 interface AnnounceDao {
     /**
      * Insert or update an announce. If the destinationHash already exists,
@@ -186,6 +186,389 @@ interface AnnounceDao {
     )
     suspend fun countReachableAnnounces(pathTableHashes: List<String>): Int
 
+    // ==================== ENRICHED QUERIES (with peer_icons JOIN) ====================
+    // These queries include icon data from peer_icons table for UI display.
+    // Icons are an LXMF concept (Field 4 in messages), not part of Reticulum announces.
+
+    /**
+     * Get all announces with icon data, sorted by most recently seen.
+     * Joins peer_icons to get icon appearance from LXMF messages.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedAnnounces(): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Search announces with icon data by peer name or destination hash.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun searchEnrichedAnnounces(query: String): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Get announces filtered by node types with icon data.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.nodeType IN (:nodeTypes)
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedAnnouncesByTypes(nodeTypes: List<String>): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Get all favorite announces with icon data, sorted by most recently favorited.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.isFavorite = 1
+        ORDER BY a.favoritedTimestamp DESC
+        """,
+    )
+    fun getEnrichedFavoriteAnnounces(): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Search favorite announces with icon data by peer name or destination hash.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.isFavorite = 1
+        AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        ORDER BY a.favoritedTimestamp DESC
+        """,
+    )
+    fun searchEnrichedFavoriteAnnounces(query: String): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Get a specific announce with icon data as Flow.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.destinationHash = :destinationHash
+        """,
+    )
+    fun getEnrichedAnnounceFlow(destinationHash: String): Flow<EnrichedAnnounce?>
+
+    /**
+     * Get top propagation nodes with icon data for relay selection.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.nodeType = 'PROPAGATION_NODE'
+        AND a.stampCostFlexibility IS NOT NULL
+        ORDER BY
+            a.hops ASC,
+            CASE WHEN a.propagationTransferLimitKb IS NULL THEN 1 ELSE 0 END,
+            a.propagationTransferLimitKb DESC,
+            a.lastSeenTimestamp DESC
+        LIMIT :limit
+        """,
+    )
+    fun getEnrichedTopPropagationNodes(limit: Int = 10): Flow<List<EnrichedAnnounce>>
+
+    // Paging3 methods for infinite scroll (with peer_icons JOIN)
+
+    /**
+     * Get all announces with icon data and pagination support.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedAnnouncesPaged(): PagingSource<Int, EnrichedAnnounce>
+
+    /**
+     * Get announces filtered by node types with icon data and pagination support.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.nodeType IN (:nodeTypes)
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, EnrichedAnnounce>
+
+    /**
+     * Search announces with icon data and pagination support.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun searchEnrichedAnnouncesPaged(query: String): PagingSource<Int, EnrichedAnnounce>
+
+    /**
+     * Get announces filtered by node types AND search query with icon data and pagination.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.nodeType IN (:nodeTypes)
+        AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
+        AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
+        ORDER BY a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedAnnouncesByTypesAndSearchPaged(
+        nodeTypes: List<String>,
+        query: String,
+    ): PagingSource<Int, EnrichedAnnounce>
+
     // Paging3 methods for infinite scroll
 
     /**
@@ -267,152 +650,6 @@ interface AnnounceDao {
     @Query("SELECT nodeType, COUNT(*) as count FROM announces GROUP BY nodeType")
     suspend fun getNodeTypeCounts(): List<NodeTypeCount>
 
-    // ========== Enriched queries (with icon data from peer_icons) ==========
-
-    /**
-     * Get all announces with icon data, sorted by most recently seen.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun getEnrichedAnnounces(): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Search announces with icon data by peer name or destination hash.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun searchEnrichedAnnounces(query: String): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Get announces with icon data filtered by node types.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType IN (:nodeTypes)
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun getEnrichedAnnouncesByTypes(nodeTypes: List<String>): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Get top propagation nodes with icon data sorted by hop count.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType = 'PROPAGATION_NODE'
-        ORDER BY a.hops ASC
-        LIMIT :limit
-        """,
-    )
-    fun getEnrichedTopPropagationNodes(limit: Int): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Get favorite announces with icon data.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.isFavorite = 1
-        ORDER BY a.favoritedTimestamp DESC
-        """,
-    )
-    fun getEnrichedFavoriteAnnounces(): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Search favorite announces with icon data.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.isFavorite = 1 AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        ORDER BY a.favoritedTimestamp DESC
-        """,
-    )
-    fun searchEnrichedFavoriteAnnounces(query: String): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Get a specific announce with icon data as Flow.
-     */
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.destinationHash = :destinationHash
-        """,
-    )
-    fun getEnrichedAnnounceFlow(destinationHash: String): Flow<EnrichedAnnounce?>
-
-    // ========== Enriched paged queries ==========
-
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun getEnrichedAnnouncesPaged(): PagingSource<Int, EnrichedAnnounce>
-
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun searchEnrichedAnnouncesPaged(query: String): PagingSource<Int, EnrichedAnnounce>
-
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType IN (:nodeTypes)
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun getEnrichedAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, EnrichedAnnounce>
-
-    @Query(
-        """
-        SELECT a.*, pi.iconName, pi.foregroundColor as iconForegroundColor, pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.nodeType IN (:nodeTypes) AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        ORDER BY a.lastSeenTimestamp DESC
-        """,
-    )
-    fun getEnrichedAnnouncesByTypesAndSearchPaged(
-        nodeTypes: List<String>,
-        query: String,
-    ): PagingSource<Int, EnrichedAnnounce>
 }
 
 /**

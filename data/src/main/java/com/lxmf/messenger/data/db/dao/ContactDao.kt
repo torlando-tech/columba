@@ -29,12 +29,10 @@ interface ContactDao {
     fun getAllContacts(identityHash: String): Flow<List<ContactEntity>>
 
     /**
-     * Get enriched contacts with data from announces, conversations, location sharing, and icons.
-     * Combines contact data with network status, conversation info, location sharing status, and peer icons.
+     * Get enriched contacts with data from announces, conversations, location sharing, and peer icons.
+     * Combines contact data with network status, conversation info, location sharing status, and icons.
+     * Icons come from peer_icons table (populated from LXMF messages), not from announces.
      * Filters by identity hash to ensure data isolation between identities.
-     *
-     * Note: Icons are stored in peer_icons table (LXMF concept from messages), separate from
-     * announces (Reticulum concept for network discovery).
      */
     @Query(
         """

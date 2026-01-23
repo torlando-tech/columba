@@ -1,13 +1,14 @@
 package com.lxmf.messenger.data.model
 
 /**
- * Enriched announce data combining announces table with peer icons.
+ * Enriched announce data combining announces table with peer_icons.
  *
  * This model represents the result of a join query that combines:
- * - Announce data (from announces table - Reticulum concept)
- * - Profile icon (from peer_icons table - LXMF concept)
+ * - Announce data (from announces table - Reticulum network discovery)
+ * - Profile icon (from peer_icons table - LXMF message icon appearances)
  *
- * Used for UI display where announces need icon data.
+ * Icons are an LXMF concept transmitted in message Field 4, while announces
+ * are a Reticulum concept for network peer discovery. This model bridges both.
  */
 data class EnrichedAnnounce(
     val destinationHash: String,
@@ -17,20 +18,21 @@ data class EnrichedAnnounce(
     val hops: Int,
     val lastSeenTimestamp: Long,
     val nodeType: String,
-    val receivingInterface: String? = null,
-    val receivingInterfaceType: String? = null,
-    val aspect: String? = null,
-    val isFavorite: Boolean = false,
-    val favoritedTimestamp: Long? = null,
-    val stampCost: Int? = null,
-    val stampCostFlexibility: Int? = null,
-    val peeringCost: Int? = null,
-    val propagationTransferLimitKb: Int? = null,
+    val receivingInterface: String?,
+    val receivingInterfaceType: String?,
+    val aspect: String?,
+    val isFavorite: Boolean,
+    val favoritedTimestamp: Long?,
+    val stampCost: Int?,
+    val stampCostFlexibility: Int?,
+    val peeringCost: Int?,
+    val propagationTransferLimitKb: Int?,
     // Profile icon (from peer_icons table)
     val iconName: String? = null,
     val iconForegroundColor: String? = null,
     val iconBackgroundColor: String? = null,
 ) {
+    @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

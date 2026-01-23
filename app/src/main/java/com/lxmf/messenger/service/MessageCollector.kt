@@ -1,11 +1,14 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.entity.ContactStatus
+import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
@@ -17,21 +20,21 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.lxmf.messenger.data.repository.Message as DataMessage
 
 /**
- * Application-level service that monitors messages from the Reticulum protocol
- * and shows notifications. Persistence is handled by ServicePersistenceManager
- * in the :reticulum service process.
+ * Application-level service that continuously collects messages and announces from the Reticulum protocol
+ * and saves them to the database. This runs independently of any UI components, ensuring
+ * messages and announces are received and stored even when no screens are open.
  *
- * This class handles:
- * - Notifications for new messages
- * - UI updates via repository flows (triggered by database changes)
- * - Peer name caching from announces
+ * This solves the issue where data was only collected when specific screens were active.
  *
- * IMPORTANT: This class intentionally does NOT persist messages. All message persistence
- * happens in ServicePersistenceManager, which enforces privacy settings like "block unknown senders".
- * EventHandler only broadcasts messages that were successfully persisted, so if we receive a
- * broadcast here, we can trust the message exists in the database.
+ * Note: As of the service-side persistence implementation, announces and messages are now
+ * primarily persisted by ServicePersistenceManager in the :reticulum service process.
+ * This collector serves as a fallback/safety net and handles:
+ * - Notifications for new messages/announces
+ * - UI updates via repository flows
+ * - De-duplication to avoid double-persistence
  */
 @Singleton
 class MessageCollector
@@ -41,7 +44,9 @@ class MessageCollector
         private val conversationRepository: ConversationRepository,
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
+        private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
+        private val peerIconDao: PeerIconDao,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
@@ -84,38 +89,176 @@ class MessageCollector
                             return@collect
                         }
 
-                        // Message was broadcast by EventHandler, which only broadcasts persisted messages.
-                        // If we receive a broadcast, the message exists in the database.
-                        // No need to verify - just add to cache and show notification.
+                        // De-duplicate: Check if message already exists in database
+                        // (may have been persisted by ServicePersistenceManager in service process)
+                        val existingMessage = conversationRepository.getMessageById(receivedMessage.messageHash)
+                        if (existingMessage != null) {
+                            processedMessageIds.add(receivedMessage.messageHash) // Add to cache to avoid repeat DB checks
+                            Log.d(TAG, "Message ${receivedMessage.messageHash.take(16)} already in database - checking if notification needed")
+
+                            // Even though message is persisted, we may still need to show notification
+                            // and save icon appearance (service process can't do these)
+                            val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                            val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+
+                            // Save icon appearance even for already-persisted messages
+                            // (ServicePersistenceManager doesn't have access to icon data)
+                            receivedMessage.iconAppearance?.let { appearance ->
+                                if (appearance.iconName.isNotEmpty() &&
+                                    appearance.foregroundColor.isNotEmpty() &&
+                                    appearance.backgroundColor.isNotEmpty()
+                                ) {
+                                    try {
+                                        peerIconDao.upsertIcon(
+                                            PeerIconEntity(
+                                                destinationHash = sourceHash,
+                                                iconName = appearance.iconName,
+                                                foregroundColor = appearance.foregroundColor,
+                                                backgroundColor = appearance.backgroundColor,
+                                                updatedTimestamp = System.currentTimeMillis(),
+                                            ),
+                                        )
+                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName} (from duplicate message)")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+                                    }
+                                }
+                            }
+
+                            val isFavorite =
+                                try {
+                                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Could not check if peer is favorite", e)
+                                    false
+                                }
+
+                            try {
+                                notificationHelper.notifyMessageReceived(
+                                    destinationHash = sourceHash,
+                                    peerName = peerName,
+                                    messagePreview = receivedMessage.content.take(100),
+                                    isFavorite = isFavorite,
+                                )
+                                Log.d(TAG, "Posted notification for already-persisted message from $peerName")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to post notification for already-persisted message", e)
+                            }
+                            return@collect
+                        }
+
+                        // CRITICAL: Verify the message was sent to the current active identity
+                        // This prevents messages from being saved to the wrong identity after switching
+                        val activeIdentity = identityRepository.getActiveIdentitySync()
+                        if (activeIdentity == null) {
+                            Log.w(TAG, "No active identity - skipping message")
+                            return@collect
+                        }
+
+                        val messageDestHash = receivedMessage.destinationHash.joinToString("") { "%02x".format(it) }
+                        if (messageDestHash != activeIdentity.destinationHash) {
+                            Log.w(
+                                TAG,
+                                "Message destination $messageDestHash doesn't match active identity " +
+                                    "${activeIdentity.destinationHash} - skipping (sent to different identity)",
+                            )
+                            return@collect
+                        }
+
                         processedMessageIds.add(receivedMessage.messageHash)
                         _messagesCollected.value++
 
                         val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
-                        Log.d(TAG, "Received broadcast for message ${receivedMessage.messageHash.take(16)} - posting notification")
+                        Log.d(TAG, "Received new message #${_messagesCollected.value} from $sourceHash")
 
-                        // Get peer name from cache or use fallback
-                        val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+                        // Create data message for storage
+                        val dataMessage =
+                            DataMessage(
+                                id = receivedMessage.messageHash,
+                                // From sender's perspective
+                                destinationHash = sourceHash,
+                                content = receivedMessage.content,
+                                // Use local reception time for consistent ordering
+                                timestamp = System.currentTimeMillis(),
+                                isFromMe = false,
+                                status = "delivered",
+                                // LXMF attachments
+                                fieldsJson = receivedMessage.fieldsJson,
+                                // Routing info (hop count and receiving interface)
+                                receivedHopCount = receivedMessage.receivedHopCount,
+                                receivedInterface = receivedMessage.receivedInterface,
+                            )
 
-                        // Check if sender is a saved peer (favorite)
-                        val isFavorite =
-                            try {
-                                announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Could not check if peer is favorite", e)
-                                false
+                        // Get peer name from cache, existing conversation, or use formatted hash
+                        val peerName = getPeerNameWithFallback(sourceHash)
+
+                        // Save to database - this creates/updates the conversation and adds the message
+                        try {
+                            // Prefer public key from message (directly from RNS identity cache)
+                            // Fall back to peer_identities lookup if not in message
+                            val messagePublicKey = receivedMessage.publicKey
+                            val publicKey =
+                                messagePublicKey
+                                    ?: conversationRepository.getPeerPublicKey(sourceHash)
+
+                            // Store public key to peer_identities if we got it from the message
+                            // This ensures future lookups will find it
+                            if (messagePublicKey != null) {
+                                conversationRepository.updatePeerPublicKey(sourceHash, messagePublicKey)
+                                Log.d(TAG, "Stored sender's public key for $sourceHash")
                             }
 
-                        // Show notification for received message
-                        try {
-                            notificationHelper.notifyMessageReceived(
-                                destinationHash = sourceHash,
-                                peerName = peerName,
-                                messagePreview = receivedMessage.content.take(100),
-                                isFavorite = isFavorite,
-                            )
-                            Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")
+                            // Store sender's icon appearance if present (Sideband/MeshChat interop)
+                            // Icons are stored in peer_icons table (LXMF concept), separate from announces (Reticulum concept)
+                            receivedMessage.iconAppearance?.let { appearance ->
+                                if (appearance.iconName.isNotEmpty() &&
+                                    appearance.foregroundColor.isNotEmpty() &&
+                                    appearance.backgroundColor.isNotEmpty()
+                                ) {
+                                    try {
+                                        peerIconDao.upsertIcon(
+                                            PeerIconEntity(
+                                                destinationHash = sourceHash,
+                                                iconName = appearance.iconName,
+                                                foregroundColor = appearance.foregroundColor,
+                                                backgroundColor = appearance.backgroundColor,
+                                                updatedTimestamp = System.currentTimeMillis(),
+                                            ),
+                                        )
+                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName}")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+                                    }
+                                }
+                            }
+
+                            conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
+                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
+
+                            // Check if sender is a saved peer (favorite)
+                            val isFavorite =
+                                try {
+                                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Could not check if peer is favorite", e)
+                                    false
+                                }
+
+                            // Show notification for received message
+                            try {
+                                notificationHelper.notifyMessageReceived(
+                                    destinationHash = sourceHash,
+                                    peerName = peerName,
+                                    // Truncate preview
+                                    messagePreview = receivedMessage.content.take(100),
+                                    isFavorite = isFavorite,
+                                )
+                                Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to post message notification", e)
+                            }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to post message notification", e)
+                            Log.e(TAG, "Failed to save message to database", e)
                         }
                     }
                 } catch (e: Exception) {
@@ -268,6 +411,57 @@ class MessageCollector
                     Log.e(TAG, "Error observing announces for names", e)
                 }
             }
+        }
+
+        /**
+         * Get a display name for a peer, using cached name or formatted hash
+         */
+        private fun getPeerName(peerHash: String): String {
+            // Check if we have a cached name from announces
+            peerNames[peerHash]?.let { return it }
+
+            // Format the hash as a short, readable identifier
+            return if (peerHash.length >= 8) {
+                "Peer ${peerHash.take(8).uppercase()}"
+            } else {
+                "Unknown Peer"
+            }
+        }
+
+        /**
+         * Get peer name with fallback - checks cache, database, then uses formatted hash
+         */
+        private suspend fun getPeerNameWithFallback(peerHash: String): String {
+            // First check our in-memory cache from announces
+            peerNames[peerHash]?.let {
+                Log.d(TAG, "Found peer name in cache: $it")
+                return it
+            }
+
+            // Check if we have an existing conversation with this peer
+            try {
+                val existingConversation = conversationRepository.getConversation(peerHash)
+                if (existingConversation != null && existingConversation.peerName != "Unknown" &&
+                    !existingConversation.peerName.startsWith("Peer ")
+                ) {
+                    // Cache it for future use
+                    peerNames[peerHash] = existingConversation.peerName
+                    Log.d(TAG, "Found peer name in database: ${existingConversation.peerName}")
+                    return existingConversation.peerName
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error checking database for peer name", e)
+            }
+
+            // Fall back to formatted hash
+            val fallbackName =
+                if (peerHash.length >= 8) {
+                    "Peer ${peerHash.take(8).uppercase()}"
+                } else {
+                    "Unknown Peer"
+                }
+            Log.d(TAG, "Using fallback name for peer: $fallbackName")
+            return fallbackName
         }
 
         /**

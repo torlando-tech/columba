@@ -1,11 +1,11 @@
 package com.lxmf.messenger.data.model
 
 /**
- * Enriched conversation data combining conversations table with announces and contacts.
+ * Enriched conversation data combining conversations table with announces, contacts, and peer icons.
  *
  * This model represents the result of a join query that combines:
  * - Conversation data (from conversations table)
- * - Profile icon (from announces table)
+ * - Profile icon (from peer_icons table - LXMF message appearances)
  * - Display name with priority: nickname > announce name > peer name > hash (from contacts + announces)
  */
 data class EnrichedConversation(
@@ -17,7 +17,7 @@ data class EnrichedConversation(
     val lastMessage: String,
     val lastMessageTimestamp: Long,
     val unreadCount: Int,
-    // Profile icon (from announces table)
+    // Profile icon (from peer_icons table)
     val iconName: String? = null,
     val iconForegroundColor: String? = null,
     val iconBackgroundColor: String? = null,

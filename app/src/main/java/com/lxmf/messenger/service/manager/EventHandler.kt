@@ -271,24 +271,6 @@ class EventHandler(
             // Extract reply_to_message_id from fields
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
 
-            // Extract and persist icon data from Field 4 (LXMF sender appearance)
-            // Field 4 format: {"icon_name": "...", "fg": "RRGGBB", "bg": "RRGGBB"}
-            fieldsJson?.optJSONObject("4")?.let { field4 ->
-                val iconName = field4.optString("icon_name", "").takeIf { it.isNotBlank() }
-                val foregroundColor = field4.optString("fg", "").takeIf { it.isNotBlank() }
-                val backgroundColor = field4.optString("bg", "").takeIf { it.isNotBlank() }
-
-                if (iconName != null && foregroundColor != null && backgroundColor != null) {
-                    Log.d(TAG, "Saving peer icon from message: $iconName for $sourceHashHex")
-                    persistenceManager?.persistPeerIcon(
-                        destinationHash = sourceHashHex,
-                        iconName = iconName,
-                        foregroundColor = foregroundColor,
-                        backgroundColor = backgroundColor,
-                    )
-                }
-            }
-
             // Persist to database and only broadcast if successful
             // This ensures blocked messages don't trigger notifications in the app process
             if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
@@ -382,7 +364,6 @@ class EventHandler(
             val propagationTransferLimitKb = propagationMetadata?.transferLimitKb
 
             // Persist to database first (survives app process death)
-            // Note: Icon appearance is stored separately in peer_icons table (LXMF concept from messages)
             if (persistenceManager != null && publicKey != null) {
                 persistenceManager.persistAnnounce(
                     destinationHash = destinationHashHex,
@@ -528,24 +509,6 @@ class EventHandler(
 
             // Extract reply_to_message_id from fields (LXMF field 9)
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
-
-            // Extract and persist icon data from Field 4 (LXMF sender appearance)
-            // Field 4 format: {"icon_name": "...", "fg": "RRGGBB", "bg": "RRGGBB"}
-            fieldsJson?.optJSONObject("4")?.let { field4 ->
-                val iconName = field4.optString("icon_name", "").takeIf { it.isNotBlank() }
-                val foregroundColor = field4.optString("fg", "").takeIf { it.isNotBlank() }
-                val backgroundColor = field4.optString("bg", "").takeIf { it.isNotBlank() }
-
-                if (iconName != null && foregroundColor != null && backgroundColor != null) {
-                    Log.d(TAG, "Saving peer icon from message event: $iconName for $sourceHashHex")
-                    persistenceManager?.persistPeerIcon(
-                        destinationHash = sourceHashHex,
-                        iconName = iconName,
-                        foregroundColor = foregroundColor,
-                        backgroundColor = backgroundColor,
-                    )
-                }
-            }
 
             // Extract delivery method if available
             val deliveryMethod = event.getDictValue("delivery_method")?.toString()?.takeIf { it != "None" }

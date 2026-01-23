@@ -29,8 +29,9 @@ data class AnnounceEntity(
     val stampCost: Int? = null,
     val stampCostFlexibility: Int? = null,
     val peeringCost: Int? = null,
+    // Note: Icon fields removed - icons are now stored in peer_icons table (LXMF concept)
+    // The old columns remain in the DB but are no longer used (Room ignores extra columns)
     val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
-    // Note: Icon fields moved to peer_icons table (LXMF concept, not Reticulum)
 ) {
     @Suppress("CyclomaticComplexMethod") // Equals must compare all fields for correctness
     override fun equals(other: Any?): Boolean {

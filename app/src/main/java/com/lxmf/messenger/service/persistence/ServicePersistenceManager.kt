@@ -6,7 +6,6 @@ import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
-import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import kotlinx.coroutines.CoroutineScope
@@ -70,14 +69,12 @@ class ServicePersistenceManager(
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
-    private val peerIconDao by lazy { database.peerIconDao() }
 
     /**
      * Persist an announce to the database.
      * Called from EventHandler.handleAnnounceEvent() in the service process.
      *
-     * This preserves existing favorite status. Note: Icon data is stored separately
-     * in peer_icons table (LXMF concept from messages), not in announces (Reticulum concept).
+     * This preserves existing favorite status and icon appearance.
      */
     @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
     fun persistAnnounce(
@@ -99,6 +96,7 @@ class ServicePersistenceManager(
         scope.launch {
             try {
                 // Preserve favorite status if announce already exists
+                // Note: Icons are stored separately in peer_icons table (from LXMF messages)
                 val existing = announceDao.getAnnounce(destinationHash)
 
                 val entity =
@@ -125,36 +123,6 @@ class ServicePersistenceManager(
                 Log.d(TAG, "Service persisted announce: $peerName ($destinationHash)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
-            }
-        }
-    }
-
-    /**
-     * Persist a peer's icon appearance to the database.
-     * Called when we receive a message with icon data (Field 4 in LXMF).
-     *
-     * Icons are an LXMF concept (transmitted in messages), separate from Reticulum announces.
-     * This UPSERT operation always succeeds, even if no announce exists for this peer.
-     */
-    fun persistPeerIcon(
-        destinationHash: String,
-        iconName: String,
-        foregroundColor: String,
-        backgroundColor: String,
-    ) {
-        scope.launch {
-            try {
-                val entity = PeerIconEntity(
-                    destinationHash = destinationHash,
-                    iconName = iconName,
-                    foregroundColor = foregroundColor,
-                    backgroundColor = backgroundColor,
-                    updatedTimestamp = System.currentTimeMillis(),
-                )
-                peerIconDao.upsertIcon(entity)
-                Log.d(TAG, "Service persisted peer icon: $destinationHash ($iconName)")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting peer icon in service: $destinationHash", e)
             }
         }
     }

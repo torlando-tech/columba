@@ -1,8 +1,10 @@
 package com.lxmf.messenger.service
 
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -33,7 +35,9 @@ class MessageCollectorTest {
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
+    private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
+    private lateinit var peerIconDao: PeerIconDao
     private lateinit var messageCollector: MessageCollector
 
     // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
@@ -49,7 +53,9 @@ class MessageCollectorTest {
         conversationRepository = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
+        identityRepository = mockk()
         notificationHelper = mockk(relaxed = true)
+        peerIconDao = mockk(relaxed = true)
 
         messageFlow = MutableSharedFlow(extraBufferCapacity = 10)
 
@@ -64,9 +70,15 @@ class MessageCollectorTest {
         coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
         coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.updatePeerName(any(), any()) } just Runs
+        coEvery { conversationRepository.getMessageById(any()) } returns null
 
         // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null
+
+        // Mock identity repository - return a mock active identity matching test destination
+        coEvery { identityRepository.getActiveIdentitySync() } returns mockk {
+            every { destinationHash } returns testDestHash.joinToString("") { "%02x".format(it) }
+        }
 
         messageCollector =
             MessageCollector(
@@ -74,7 +86,9 @@ class MessageCollectorTest {
                 conversationRepository = conversationRepository,
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,
+                identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
+                peerIconDao = peerIconDao,
             )
     }
 
@@ -102,6 +116,9 @@ class MessageCollectorTest {
                     fieldsJson = null,
                     publicKey = null,
                 )
+
+            // Mock that message already exists in database (persisted by ServicePersistenceManager)
+            coEvery { conversationRepository.getMessageById("persisted_message") } returns mockk()
 
             // When: Start collecting and emit message
             messageCollector.startCollecting()

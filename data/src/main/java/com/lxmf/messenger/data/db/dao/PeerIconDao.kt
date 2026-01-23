@@ -8,14 +8,10 @@ import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for peer icons stored from LXMF messages (Field 4 - icon appearance).
+ * Data Access Object for peer icon appearances.
  *
- * Icons are stored separately from announces because:
- * - Announces are a Reticulum concept (network peer discovery)
- * - Icons are an LXMF concept (transmitted in message field 4)
- *
- * All UI queries (conversations, announces, contacts) JOIN this table
- * to display icons wherever a peer is rendered.
+ * Icons are received via LXMF messages (Field 4) and stored here for consistent
+ * display across all UI components (chats, announces, contacts).
  */
 @Dao
 interface PeerIconDao {
@@ -33,10 +29,10 @@ interface PeerIconDao {
     suspend fun getIcon(destinationHash: String): PeerIconEntity?
 
     /**
-     * Get a peer's icon as a Flow for reactive updates.
+     * Observe a peer's icon for reactive UI updates.
      */
     @Query("SELECT * FROM peer_icons WHERE destinationHash = :destinationHash")
-    fun getIconFlow(destinationHash: String): Flow<PeerIconEntity?>
+    fun observeIcon(destinationHash: String): Flow<PeerIconEntity?>
 
     /**
      * Delete a peer's icon.
@@ -45,14 +41,8 @@ interface PeerIconDao {
     suspend fun deleteIcon(destinationHash: String)
 
     /**
-     * Get all peer icons (for debugging/export).
+     * Delete all peer icons (for testing/debugging).
      */
-    @Query("SELECT * FROM peer_icons ORDER BY updatedTimestamp DESC")
-    suspend fun getAllIcons(): List<PeerIconEntity>
-
-    /**
-     * Get count of stored icons.
-     */
-    @Query("SELECT COUNT(*) FROM peer_icons")
-    suspend fun getIconCount(): Int
+    @Query("DELETE FROM peer_icons")
+    suspend fun deleteAllIcons()
 }

@@ -4,13 +4,14 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Entity for storing peer icon appearances from LXMF messages (Field 4).
+ * Entity for storing peer icon appearances received via LXMF messages.
  *
- * Icons are an LXMF concept (transmitted in messages), separate from announces
- * (which are a Reticulum concept for network peer discovery).
+ * Icons are transmitted in LXMF Field 4 (FIELD_ICON_APPEARANCE) and represent
+ * the user's chosen visual identity. This is separate from announces (Reticulum
+ * network discovery) - icons are an LXMF-layer concept.
  *
- * This table is joined by UI queries (conversations, announces, contacts) to
- * display icons wherever a peer is rendered.
+ * This table is the single source of truth for peer icons and is joined
+ * by conversations, announces, and contacts queries to display icons consistently.
  */
 @Entity(tableName = "peer_icons")
 data class PeerIconEntity(

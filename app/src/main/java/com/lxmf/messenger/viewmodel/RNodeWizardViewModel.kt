@@ -2453,6 +2453,34 @@ class RNodeWizardViewModel
          */
         fun exitUsbBluetoothPairingMode() {
             viewModelScope.launch {
+                // Stop any active BLE scans
+                pairingScanCallback?.let {
+                    try {
+                        bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to stop pairing BLE scan", e)
+                    }
+                    pairingScanCallback = null
+                }
+                earlyBleScanCallback?.let {
+                    try {
+                        bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to stop early BLE scan", e)
+                    }
+                    earlyBleScanCallback = null
+                }
+                // Stop Classic BT discovery and unregister receiver
+                bluetoothAdapter?.cancelDiscovery()
+                classicDiscoveryReceiver?.let {
+                    try {
+                        context.unregisterReceiver(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to unregister discovery receiver", e)
+                    }
+                    classicDiscoveryReceiver = null
+                }
+
                 withContext(Dispatchers.IO) {
                     // Send command to exit pairing mode: stop BT (0x00), then start BT (0x01)
                     // CMD_BT_CTRL = 0x46

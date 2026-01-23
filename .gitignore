@@ -57,6 +57,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+!**/jniLibs/**/*.so
 .Python
 env/
 venv/

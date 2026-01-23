@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
 import com.lxmf.messenger.data.model.DiscoveredUsbDevice
@@ -422,15 +423,12 @@ private fun BluetoothDeviceDiscovery(
             Spacer(Modifier.height(16.dp))
         }
 
-        // USB-assisted pairing progress/device selection
-        if (state.isUsbAssistedPairingActive) {
-            UsbAssistedPairingCard(
-                devices = state.usbAssistedPairingDevices,
-                pin = state.usbAssistedPairingPin,
-                status = state.usbAssistedPairingStatus,
-                isPairing = state.isPairingInProgress,
-                onDeviceSelected = { viewModel.selectDeviceForUsbPairing(it) },
-                onCancel = { viewModel.cancelUsbAssistedPairing() },
+        // USB-assisted pairing card - shows the same UI as the USB tab
+        // This uses shared state (isUsbPairingMode, showManualPinEntry, etc.)
+        if (state.isUsbPairingMode) {
+            UsbBluetoothPairingCard(
+                state = state,
+                viewModel = viewModel,
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -1060,68 +1058,9 @@ private fun UsbDeviceDiscovery(
             Spacer(Modifier.height(16.dp))
         }
 
-        // Bluetooth pairing mode card
+        // Bluetooth pairing mode card (shared with Bluetooth tab's "Pair via USB")
         if (state.isUsbPairingMode) {
-            Card(
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        "Bluetooth Pairing Mode",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    if (state.usbBluetoothPin != null) {
-                        Text(
-                            "PIN Code:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            state.usbBluetoothPin,
-                            style = MaterialTheme.typography.displayMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Open Android Bluetooth settings and pair with your RNode using this PIN.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                "Waiting for PIN from RNode...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { viewModel.exitUsbBluetoothPairingMode() }) {
-                        Text("Exit Pairing Mode")
-                    }
-                }
-            }
+            UsbBluetoothPairingCard(state = state, viewModel = viewModel)
             Spacer(Modifier.height(16.dp))
         }
 
@@ -1494,6 +1433,134 @@ private fun UsbAssistedPairingCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Shared composable for USB Bluetooth pairing mode card.
+ * Used by both the USB tab and Bluetooth tab's "Pair via USB" feature.
+ */
+@Composable
+private fun UsbBluetoothPairingCard(
+    state: RNodeWizardState,
+    viewModel: RNodeWizardViewModel,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Bluetooth Pairing Mode",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Spacer(Modifier.height(8.dp))
+
+            if (state.usbBluetoothPin != null) {
+                Text(
+                    "PIN Code:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    state.usbBluetoothPin,
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(Modifier.height(8.dp))
+                // Show pairing status if auto-pairing is in progress
+                if (state.usbPairingStatus != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            state.usbPairingStatus,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                } else {
+                    Text(
+                        "Scanning for RNodes to pair...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            } else if (state.showManualPinEntry) {
+                // Manual PIN entry for devices that don't send PIN over serial
+                Text(
+                    "Enter the 6-digit PIN shown on your RNode's display:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.manualPinInput,
+                    onValueChange = { viewModel.updateManualPinInput(it) },
+                    label = { Text("PIN Code") },
+                    placeholder = { Text("000000") },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+                    ),
+                    modifier = Modifier.width(150.dp),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        letterSpacing = 4.sp,
+                    ),
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = { viewModel.cancelManualPinEntry() }) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = { viewModel.submitManualPin() },
+                        enabled = state.manualPinInput.length == 6,
+                    ) {
+                        Text("Submit")
+                    }
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        state.usbPairingStatus ?: "Waiting for PIN from RNode...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = { viewModel.exitUsbBluetoothPairingMode() }) {
+                Text("Exit Pairing Mode")
             }
         }
     }

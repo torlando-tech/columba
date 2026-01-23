@@ -211,7 +211,21 @@ data class RNodeWizardState(
     val hasPendingParams: Boolean = false,
     // Track if user skipped region selection (for back navigation)
     val skippedRegionSelection: Boolean = false,
-)
+) {
+    /**
+     * Returns the appropriate interface name for a device.
+     * If user hasn't customized the name (still default), generates "RNode <identifier> <BLE|BT>".
+     * Otherwise preserves the user's custom name.
+     */
+    fun defaultInterfaceNameFor(device: DiscoveredRNode): String =
+        if (interfaceName == DEFAULT_INTERFACE_NAME) {
+            val identifier = device.name.removePrefix("RNode ").trim().ifEmpty { device.name }
+            val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
+            "RNode $identifier $suffix"
+        } else {
+            interfaceName
+        }
+}
 
 /**
  * ViewModel for the RNode setup wizard.
@@ -1002,18 +1016,16 @@ class RNodeWizardViewModel
             deviceClassifier.cacheDeviceType(device.address, type)
             val updatedDevice = device.copy(type = type)
             _state.update { state ->
-                val newSelected =
-                    if (state.selectedDevice?.address == device.address) {
-                        updatedDevice
-                    } else {
-                        state.selectedDevice
-                    }
+                val isSelected = state.selectedDevice?.address == device.address
+                val newSelected = if (isSelected) updatedDevice else state.selectedDevice
                 state.copy(
                     discoveredDevices =
                         state.discoveredDevices.map {
                             if (it.address == device.address) updatedDevice else it
                         },
                     selectedDevice = newSelected,
+                    // Update interface name suffix if selected device type changed
+                    interfaceName = if (isSelected) state.defaultInterfaceNameFor(updatedDevice) else state.interfaceName,
                 )
             }
         }
@@ -1195,27 +1207,10 @@ class RNodeWizardViewModel
 
         fun selectDevice(device: DiscoveredRNode) {
             _state.update {
-                // Auto-generate interface name if user hasn't customized it
-                val newInterfaceName =
-                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
-                        // Extract identifier from device name (e.g., "RNode E16A" -> "E16A")
-                        val identifier =
-                            if (device.name.startsWith("RNode ")) {
-                                device.name.removePrefix("RNode ").trim()
-                            } else {
-                                device.name
-                            }
-                        // Add BLE/BT suffix based on device type
-                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
-                        "RNode $identifier $suffix"
-                    } else {
-                        it.interfaceName
-                    }
-
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
-                    interfaceName = newInterfaceName,
+                    interfaceName = it.defaultInterfaceNameFor(device),
                 )
             }
         }
@@ -1329,29 +1324,12 @@ class RNodeWizardViewModel
 
                             // Device is now associated - select it and update interface name
                             _state.update {
-                                // Auto-generate interface name if user hasn't customized it
-                                val newInterfaceName =
-                                    if (it.interfaceName == DEFAULT_INTERFACE_NAME) {
-                                        // Extract identifier from device name (e.g., "RNode 958F" -> "958F")
-                                        val identifier =
-                                            if (device.name.startsWith("RNode ")) {
-                                                device.name.removePrefix("RNode ").trim()
-                                            } else {
-                                                device.name
-                                            }
-                                        // Add BLE/BT suffix based on device type
-                                        val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
-                                        "RNode $identifier $suffix"
-                                    } else {
-                                        it.interfaceName
-                                    }
-
                                 it.copy(
                                     selectedDevice = device,
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
                                     showManualEntry = false,
-                                    interfaceName = newInterfaceName,
+                                    interfaceName = it.defaultInterfaceNameFor(device),
                                 )
                             }
                             // Cache the device type since it's now confirmed
@@ -2036,6 +2014,7 @@ class RNodeWizardViewModel
                                         emptyList()
                                     },
                                     selectedDevice = discoveredNode,
+                                    interfaceName = state.defaultInterfaceNameFor(discoveredNode),
                                 )
                             }
                         }
@@ -2626,6 +2605,7 @@ class RNodeWizardViewModel
                                         // Add to discovered devices and auto-select it
                                         discoveredDevices = state.discoveredDevices.filter { it.address != device.address } + discoveredNode,
                                         selectedDevice = discoveredNode,
+                                        interfaceName = state.defaultInterfaceNameFor(discoveredNode),
                                     )
                                 }
                             }
@@ -3183,6 +3163,7 @@ class RNodeWizardViewModel
                                 } else {
                                     emptyList()
                                 },
+                                interfaceName = state.defaultInterfaceNameFor(pairedDevice),
                             )
                         }
                     } else {
@@ -3395,6 +3376,7 @@ class RNodeWizardViewModel
                                             state.discoveredDevices.map {
                                                 if (it.address == device.address) updatedDevice else it
                                             },
+                                        interfaceName = state.defaultInterfaceNameFor(updatedDevice),
                                     )
                                 }
                                 Log.d(TAG, "Pairing successful for ${device.name}")

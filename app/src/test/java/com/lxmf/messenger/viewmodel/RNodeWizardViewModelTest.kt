@@ -19,9 +19,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkObject
 import io.mockk.slot
-import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2694,6 +2692,288 @@ class RNodeWizardViewModelTest {
                 assertEquals("10", state.spreadingFactor)
                 assertEquals("5", state.codingRate)
                 assertEquals(WizardStep.REVIEW_CONFIGURE, state.currentStep)
+            }
+        }
+
+    // ========== Interface Name Generation Tests ==========
+
+    @Test
+    fun `defaultInterfaceNameFor generates BLE suffix for BLE device`() =
+        runTest {
+            val bleDevice =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+            val state = RNodeWizardState()
+
+            val interfaceName = state.defaultInterfaceNameFor(bleDevice)
+
+            assertEquals("RNode E517 BLE", interfaceName)
+        }
+
+    @Test
+    fun `defaultInterfaceNameFor generates BT suffix for Classic device`() =
+        runTest {
+            val classicDevice =
+                DiscoveredRNode(
+                    name = "RNode A1B2",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.CLASSIC,
+                    rssi = -70,
+                    isPaired = true,
+                )
+            val state = RNodeWizardState()
+
+            val interfaceName = state.defaultInterfaceNameFor(classicDevice)
+
+            assertEquals("RNode A1B2 BT", interfaceName)
+        }
+
+    @Test
+    fun `defaultInterfaceNameFor removes RNode prefix before adding suffix`() =
+        runTest {
+            val device =
+                DiscoveredRNode(
+                    name = "RNode 1234",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+            val state = RNodeWizardState()
+
+            val interfaceName = state.defaultInterfaceNameFor(device)
+
+            assertEquals("RNode 1234 BLE", interfaceName)
+        }
+
+    @Test
+    fun `defaultInterfaceNameFor preserves custom interface name`() =
+        runTest {
+            val device =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+            val state = RNodeWizardState(interfaceName = "My Custom Name")
+
+            val interfaceName = state.defaultInterfaceNameFor(device)
+
+            assertEquals("My Custom Name", interfaceName)
+        }
+
+    @Test
+    fun `defaultInterfaceNameFor handles device without RNode prefix`() =
+        runTest {
+            val device =
+                DiscoveredRNode(
+                    name = "CustomDevice",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+            val state = RNodeWizardState()
+
+            val interfaceName = state.defaultInterfaceNameFor(device)
+
+            assertEquals("RNode CustomDevice BLE", interfaceName)
+        }
+
+    @Test
+    fun `selectDevice sets interface name with BLE suffix`() =
+        runTest {
+            val bleDevice =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+
+            viewModel.selectDevice(bleDevice)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(bleDevice, state.selectedDevice)
+                assertEquals("RNode E517 BLE", state.interfaceName)
+            }
+        }
+
+    @Test
+    fun `selectDevice sets interface name with BT suffix for Classic`() =
+        runTest {
+            val classicDevice =
+                DiscoveredRNode(
+                    name = "RNode A1B2",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.CLASSIC,
+                    rssi = -70,
+                    isPaired = true,
+                )
+
+            viewModel.selectDevice(classicDevice)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(classicDevice, state.selectedDevice)
+                assertEquals("RNode A1B2 BT", state.interfaceName)
+            }
+        }
+
+    // ========== USB-Assisted Pairing State Tests ==========
+
+    @Test
+    fun `updateManualPinInput updates state correctly`() =
+        runTest {
+            viewModel.updateManualPinInput("1234")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("1234", state.manualPinInput)
+            }
+        }
+
+    @Test
+    fun `updateManualPinInput trims to 6 digits`() =
+        runTest {
+            viewModel.updateManualPinInput("12345678")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("123456", state.manualPinInput)
+            }
+        }
+
+    @Test
+    fun `updateManualPinInput filters non-digits`() =
+        runTest {
+            viewModel.updateManualPinInput("12ab34")
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("1234", state.manualPinInput)
+            }
+        }
+
+    @Test
+    fun `setDeviceType preserves interface name when already customized`() =
+        runTest {
+            val bleDevice =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+
+            // First select the device - this auto-generates interface name
+            viewModel.selectDevice(bleDevice)
+            advanceUntilIdle()
+
+            // Verify initial interface name has BLE suffix
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("RNode E517 BLE", state.interfaceName)
+            }
+
+            // Change device type to Classic
+            // Since interface name is already customized (not DEFAULT_INTERFACE_NAME),
+            // it should be preserved
+            viewModel.setDeviceType(bleDevice, BluetoothType.CLASSIC)
+            advanceUntilIdle()
+
+            // Verify interface name is preserved (not changed to BT)
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals("RNode E517 BLE", state.interfaceName)
+            }
+        }
+
+    @Test
+    fun `setDeviceType updates discovered devices list`() =
+        runTest {
+            val bleDevice =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = -70,
+                    isPaired = true,
+                )
+
+            // Add device to discovered list via selection
+            viewModel.selectDevice(bleDevice)
+            advanceUntilIdle()
+
+            // Change device type to Classic
+            viewModel.setDeviceType(bleDevice, BluetoothType.CLASSIC)
+            advanceUntilIdle()
+
+            // Verify selected device type is updated
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(BluetoothType.CLASSIC, state.selectedDevice?.type)
+            }
+        }
+
+    @Test
+    fun `setConnectionType to BLUETOOTH enables Bluetooth tab`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(RNodeConnectionType.BLUETOOTH, state.connectionType)
+            }
+        }
+
+    @Test
+    fun `setConnectionType to USB enables USB tab`() =
+        runTest {
+            viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(RNodeConnectionType.USB_SERIAL, state.connectionType)
+            }
+        }
+
+    @Test
+    fun `setConnectionType clears selected device when switching from Bluetooth`() =
+        runTest {
+            // First select a device in Bluetooth mode
+            viewModel.selectDevice(testBleDevice)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNotNull(state.selectedDevice)
+            }
+
+            // Switch to USB mode
+            viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.selectedDevice)
             }
         }
 }

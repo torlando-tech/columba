@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.model.EnrichedAnnounce
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.map.MapStyleResult
@@ -169,7 +170,7 @@ class MapViewModel
                 combine(
                     receivedLocationDao.getLatestLocationsPerSenderUnfiltered(),
                     contacts,
-                    announceDao.getAllAnnounces(),
+                    announceDao.getEnrichedAnnounces(),
                     _refreshTrigger,
                 ) { locations, contactList, announceList, _ ->
                     val currentTime = System.currentTimeMillis()

@@ -44,7 +44,8 @@ class ServicePersistenceManager(
      * Persist an announce to the database.
      * Called from EventHandler.handleAnnounceEvent() in the service process.
      *
-     * This preserves existing favorite status and icon appearance.
+     * This preserves existing favorite status.
+     * Note: Icons are stored separately in peer_icons table (from LXMF messages).
      */
     @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
     fun persistAnnounce(
@@ -61,14 +62,11 @@ class ServicePersistenceManager(
         stampCost: Int?,
         stampCostFlexibility: Int?,
         peeringCost: Int?,
-        iconName: String?,
-        iconForegroundColor: String?,
-        iconBackgroundColor: String?,
         propagationTransferLimitKb: Int?,
     ) {
         scope.launch {
             try {
-                // Preserve favorite status and existing icon appearance if announce already exists
+                // Preserve favorite status if announce already exists
                 val existing = announceDao.getAnnounce(destinationHash)
 
                 val entity =
@@ -88,10 +86,6 @@ class ServicePersistenceManager(
                         stampCost = stampCost,
                         stampCostFlexibility = stampCostFlexibility,
                         peeringCost = peeringCost,
-                        // Prefer new icon appearance if provided, otherwise preserve existing
-                        iconName = iconName ?: existing?.iconName,
-                        iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
-                        iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
                         propagationTransferLimitKb = propagationTransferLimitKb,
                     )
 

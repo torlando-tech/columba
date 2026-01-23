@@ -1,7 +1,9 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.entity.ContactStatus
+import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
@@ -44,6 +46,7 @@ class MessageCollector
         private val contactRepository: ContactRepository,
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
+        private val peerIconDao: PeerIconDao,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
@@ -94,9 +97,34 @@ class MessageCollector
                             Log.d(TAG, "Message ${receivedMessage.messageHash.take(16)} already in database - checking if notification needed")
 
                             // Even though message is persisted, we may still need to show notification
-                            // (EventHandler in service process persists messages but can't show notifications)
+                            // and save icon appearance (service process can't do these)
                             val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
                             val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+
+                            // Save icon appearance even for already-persisted messages
+                            // (ServicePersistenceManager doesn't have access to icon data)
+                            receivedMessage.iconAppearance?.let { appearance ->
+                                if (appearance.iconName.isNotEmpty() &&
+                                    appearance.foregroundColor.isNotEmpty() &&
+                                    appearance.backgroundColor.isNotEmpty()
+                                ) {
+                                    try {
+                                        peerIconDao.upsertIcon(
+                                            PeerIconEntity(
+                                                destinationHash = sourceHash,
+                                                iconName = appearance.iconName,
+                                                foregroundColor = appearance.foregroundColor,
+                                                backgroundColor = appearance.backgroundColor,
+                                                updatedTimestamp = System.currentTimeMillis(),
+                                            ),
+                                        )
+                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName} (from duplicate message)")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+                                    }
+                                }
+                            }
+
                             val isFavorite =
                                 try {
                                     announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
@@ -181,17 +209,26 @@ class MessageCollector
                             }
 
                             // Store sender's icon appearance if present (Sideband/MeshChat interop)
+                            // Icons are stored in peer_icons table (LXMF concept), separate from announces (Reticulum concept)
                             receivedMessage.iconAppearance?.let { appearance ->
-                                try {
-                                    announceRepository.updateIconAppearance(
-                                        destinationHash = sourceHash,
-                                        iconName = appearance.iconName,
-                                        foregroundColor = appearance.foregroundColor,
-                                        backgroundColor = appearance.backgroundColor,
-                                    )
-                                    Log.d(TAG, "Updated icon appearance for $sourceHash: ${appearance.iconName}")
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Failed to update icon appearance for $sourceHash", e)
+                                if (appearance.iconName.isNotEmpty() &&
+                                    appearance.foregroundColor.isNotEmpty() &&
+                                    appearance.backgroundColor.isNotEmpty()
+                                ) {
+                                    try {
+                                        peerIconDao.upsertIcon(
+                                            PeerIconEntity(
+                                                destinationHash = sourceHash,
+                                                iconName = appearance.iconName,
+                                                foregroundColor = appearance.foregroundColor,
+                                                backgroundColor = appearance.backgroundColor,
+                                                updatedTimestamp = System.currentTimeMillis(),
+                                            ),
+                                        )
+                                        Log.d(TAG, "Saved icon appearance for $sourceHash: ${appearance.iconName}")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to save icon appearance for $sourceHash", e)
+                                    }
                                 }
                             }
 

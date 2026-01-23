@@ -379,10 +379,6 @@ class EventHandler(
                     stampCost = stampCost,
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
-                    // Icon appearance updated via message field 4
-                    iconName = null,
-                    iconForegroundColor = null,
-                    iconBackgroundColor = null,
                     propagationTransferLimitKb = propagationTransferLimitKb,
                 )
 

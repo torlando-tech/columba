@@ -16,14 +16,17 @@ interface ConversationDao {
     fun getAllConversations(identityHash: String): Flow<List<ConversationEntity>>
 
     /**
-     * Get enriched conversations with profile icon data from announces and display names from contacts.
-     * Combines conversation data with icon appearance from announces table and nicknames from contacts.
+     * Get enriched conversations with profile icon data and display names.
+     * Combines conversation data with icon appearance from peer_icons table and nicknames from contacts.
      *
      * Display name priority (via COALESCE):
      * 1. contacts.customNickname - User-set nickname (highest priority)
      * 2. announces.peerName - Network broadcast name
      * 3. conversations.peerName - Snapshot from conversation creation
      * 4. conversations.peerHash - Fallback to hash (never null)
+     *
+     * Icons come from peer_icons table (populated from LXMF messages), not from announces
+     * (which are a Reticulum concept and don't contain icon data).
      */
     @Query(
         """
@@ -35,12 +38,13 @@ interface ConversationDao {
             c.lastMessage,
             c.lastMessageTimestamp,
             c.unreadCount,
-            a.iconName as iconName,
-            a.iconForegroundColor as iconForegroundColor,
-            a.iconBackgroundColor as iconBackgroundColor
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
+        LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
         ORDER BY c.lastMessageTimestamp DESC
         """,
@@ -61,12 +65,13 @@ interface ConversationDao {
             c.lastMessage,
             c.lastMessageTimestamp,
             c.unreadCount,
-            a.iconName as iconName,
-            a.iconForegroundColor as iconForegroundColor,
-            a.iconBackgroundColor as iconBackgroundColor
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
+        LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
             AND (ct.customNickname LIKE '%' || :query || '%'
                 OR a.peerName LIKE '%' || :query || '%'

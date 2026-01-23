@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
@@ -65,6 +66,7 @@ object DatabaseModule {
             MIGRATION_29_30,
             MIGRATION_30_31,
             MIGRATION_31_32,
+            MIGRATION_32_33,
         )
     }
 
@@ -1249,10 +1251,46 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 30 to 31: Add signal quality fields to messages
-    // Stores RSSI and SNR captured when messages are received via radio interfaces
+    // Migration from version 30 to 31: Create peer_icons table for reliable icon persistence
+    // Icons are stored separately from announces because:
+    // - Announces are a Reticulum concept (network peer discovery)
+    // - Icons are an LXMF concept (transmitted in message field 4)
+    // This migration is aligned with v0.6.x to ensure clean upgrade paths
     private val MIGRATION_30_31 =
         object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create peer_icons table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS peer_icons (
+                        destinationHash TEXT NOT NULL PRIMARY KEY,
+                        iconName TEXT NOT NULL,
+                        foregroundColor TEXT NOT NULL,
+                        backgroundColor TEXT NOT NULL,
+                        updatedTimestamp INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+
+                // Migrate existing icon data from announces table to peer_icons
+                // Only migrate rows where all three icon fields are non-null
+                database.execSQL(
+                    """
+                    INSERT OR REPLACE INTO peer_icons (destinationHash, iconName, foregroundColor, backgroundColor, updatedTimestamp)
+                    SELECT destinationHash, iconName, iconForegroundColor, iconBackgroundColor, lastSeenTimestamp
+                    FROM announces
+                    WHERE iconName IS NOT NULL
+                      AND iconForegroundColor IS NOT NULL
+                      AND iconBackgroundColor IS NOT NULL
+                    """.trimIndent(),
+                )
+            }
+        }
+
+    // Migration from version 31 to 32: Add signal quality fields to messages
+    // Stores RSSI and SNR captured when messages are received via radio interfaces
+    private val MIGRATION_31_32 =
+        object : Migration(31, 32) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Add receivedRssi column (nullable INTEGER for RSSI in dBm)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
@@ -1261,11 +1299,11 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 31 to 32: Add received message info fields
+    // Migration from version 32 to 33: Add received message info fields
     // Stores hop count and receiving interface captured when messages are received
     // Also ensures all columns from previous migrations exist (handles pre-release build edge cases)
-    private val MIGRATION_31_32 =
-        object : Migration(31, 32) {
+    private val MIGRATION_32_33 =
+        object : Migration(32, 33) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Check existing columns in messages table to make migration idempotent
                 // (handles devices that had pre-release builds with these columns at different versions)
@@ -1284,11 +1322,11 @@ object DatabaseModule {
                 if ("receivedInterface" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
                 }
-                // Add receivedRssi column (should have been added in 30→31, but may be missing on some devices)
+                // Add receivedRssi column (should have been added in 31→32, but may be missing on some devices)
                 if ("receivedRssi" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
                 }
-                // Add receivedSnr column (should have been added in 30→31, but may be missing on some devices)
+                // Add receivedSnr column (should have been added in 31→32, but may be missing on some devices)
                 if ("receivedSnr" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedSnr REAL DEFAULT NULL")
                 }
@@ -1342,6 +1380,11 @@ object DatabaseModule {
     @Provides
     fun providePeerIdentityDao(database: ColumbaDatabase): PeerIdentityDao {
         return database.peerIdentityDao()
+    }
+
+    @Provides
+    fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao {
+        return database.peerIconDao()
     }
 
     @Provides

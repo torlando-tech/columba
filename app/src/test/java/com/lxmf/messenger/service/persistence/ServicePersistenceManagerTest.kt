@@ -7,6 +7,7 @@ import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
@@ -50,6 +51,7 @@ class ServicePersistenceManagerTest {
     private lateinit var conversationDao: ConversationDao
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
+    private lateinit var peerIconDao: PeerIconDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
@@ -69,6 +71,7 @@ class ServicePersistenceManagerTest {
         conversationDao = mockk(relaxed = true)
         localIdentityDao = mockk(relaxed = true)
         peerIdentityDao = mockk(relaxed = true)
+        peerIconDao = mockk(relaxed = true)
         settingsAccessor = mockk(relaxed = true)
 
         // Mock database DAOs
@@ -78,6 +81,7 @@ class ServicePersistenceManagerTest {
         every { database.conversationDao() } returns conversationDao
         every { database.localIdentityDao() } returns localIdentityDao
         every { database.peerIdentityDao() } returns peerIdentityDao
+        every { database.peerIconDao() } returns peerIconDao
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)
@@ -117,9 +121,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 
@@ -162,9 +163,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 
@@ -174,114 +172,6 @@ class ServicePersistenceManagerTest {
                 announceDao.upsertAnnounce(
                     match { entity ->
                         entity.isFavorite && entity.peerName == "New Name"
-                    },
-                )
-            }
-        }
-
-    @Test
-    fun `persistAnnounce preserves existing icon appearance when not provided`() =
-        runTest {
-            val existingAnnounce =
-                AnnounceEntity(
-                    destinationHash = testDestinationHash,
-                    peerName = "Test Peer",
-                    publicKey = testPublicKey,
-                    appData = null,
-                    hops = 1,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                    nodeType = "LXMF_PEER",
-                    receivingInterface = "BLE",
-                    iconName = "home",
-                    iconForegroundColor = "#FFFFFF",
-                    iconBackgroundColor = "#000000",
-                )
-
-            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
-
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = null,
-                hops = 2,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
-                propagationTransferLimitKb = null,
-            )
-
-            testScope.advanceUntilIdle()
-
-            coVerify {
-                announceDao.upsertAnnounce(
-                    match { entity ->
-                        entity.iconName == "home" &&
-                            entity.iconForegroundColor == "#FFFFFF" &&
-                            entity.iconBackgroundColor == "#000000"
-                    },
-                )
-            }
-        }
-
-    @Test
-    fun `persistAnnounce updates icon appearance when provided`() =
-        runTest {
-            val existingAnnounce =
-                AnnounceEntity(
-                    destinationHash = testDestinationHash,
-                    peerName = "Test Peer",
-                    publicKey = testPublicKey,
-                    appData = null,
-                    hops = 1,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                    nodeType = "LXMF_PEER",
-                    receivingInterface = "BLE",
-                    iconName = "home",
-                    iconForegroundColor = "#FFFFFF",
-                    iconBackgroundColor = "#000000",
-                )
-
-            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
-
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = null,
-                hops = 2,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                iconName = "work",
-                iconForegroundColor = "#FF0000",
-                iconBackgroundColor = "#00FF00",
-                propagationTransferLimitKb = null,
-            )
-
-            testScope.advanceUntilIdle()
-
-            coVerify {
-                announceDao.upsertAnnounce(
-                    match { entity ->
-                        entity.iconName == "work" &&
-                            entity.iconForegroundColor == "#FF0000" &&
-                            entity.iconBackgroundColor == "#00FF00"
                     },
                 )
             }
@@ -307,9 +197,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 

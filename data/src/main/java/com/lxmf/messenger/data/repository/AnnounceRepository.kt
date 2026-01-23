@@ -6,9 +6,10 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.model.EnrichedAnnounce
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import java.security.MessageDigest
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -107,51 +108,55 @@ class AnnounceRepository
         /**
          * Get all announces as a Flow, sorted by most recently seen.
          * Automatically updates UI when announces are added or updated.
+         * Includes icon data from peer_icons table (LXMF message appearances).
          */
         fun getAnnounces(): Flow<List<Announce>> {
-            return announceDao.getAllAnnounces().map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.getEnrichedAnnounces().map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
         /**
          * Search announces by peer name or destination hash.
          * Automatically updates UI when matching announces are added or updated.
+         * Includes icon data from peer_icons table.
          */
         fun searchAnnounces(query: String): Flow<List<Announce>> {
-            return announceDao.searchAnnounces(query).map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.searchEnrichedAnnounces(query).map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
         /**
          * Get announces filtered by node types as a Flow, sorted by most recently seen.
          * Automatically updates UI when announces are added or updated.
+         * Includes icon data from peer_icons table.
          * @param nodeTypes List of node types to include (e.g., ["PEER", "NODE"])
          */
         fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<Announce>> {
-            return announceDao.getAnnouncesByTypes(nodeTypes).map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.getEnrichedAnnouncesByTypes(nodeTypes).map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
         /**
          * Get top propagation nodes sorted by hop count (ascending).
          * Optimized query with LIMIT in SQL - only fetches the requested number of rows.
-         * Used for relay selection UI.
+         * Used for relay selection UI. Includes icon data from peer_icons table.
          *
          * @param limit Maximum number of nodes to return (default 10)
          * @return Flow of propagation node announces sorted by nearest first
          */
         fun getTopPropagationNodes(limit: Int = 10): Flow<List<Announce>> {
-            return announceDao.getTopPropagationNodes(limit).map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.getEnrichedTopPropagationNodes(limit).map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
         /**
          * Get announces with pagination support. Combines node type filtering and search query.
          * Initial load: 30 items, Page size: 30 items, Prefetch distance: 10 items.
+         * Includes icon data from peer_icons table.
          *
          * @param nodeTypes List of node types to filter by (empty = all types)
          * @param searchQuery Search query (empty = no search filter)
@@ -173,20 +178,20 @@ class AnnounceRepository
                     when {
                         // Filter by node types AND search query
                         nodeTypes.isNotEmpty() && searchQuery.isNotEmpty() ->
-                            announceDao.getAnnouncesByTypesAndSearchPaged(nodeTypes, searchQuery)
+                            announceDao.getEnrichedAnnouncesByTypesAndSearchPaged(nodeTypes, searchQuery)
                         // Filter by node types only
                         nodeTypes.isNotEmpty() ->
-                            announceDao.getAnnouncesByTypesPaged(nodeTypes)
+                            announceDao.getEnrichedAnnouncesByTypesPaged(nodeTypes)
                         // Filter by search query only
                         searchQuery.isNotEmpty() ->
-                            announceDao.searchAnnouncesPaged(searchQuery)
+                            announceDao.searchEnrichedAnnouncesPaged(searchQuery)
                         // No filters
                         else ->
-                            announceDao.getAllAnnouncesPaged()
+                            announceDao.getEnrichedAnnouncesPaged()
                     }
                 },
             ).flow.map { pagingData ->
-                pagingData.map { entity -> entity.toAnnounce() }
+                pagingData.map { enriched -> enriched.toAnnounce() }
             }
         }
 
@@ -199,13 +204,8 @@ class AnnounceRepository
 
         /**
          * Find an announce by identity hash.
-         * This is useful for LXST voice calls where we receive the caller's identity hash
-         * rather than their destination hash (which differs by aspect).
-         *
-         * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
-         *
-         * @param identityHash The 32-character hex identity hash to search for
-         * @return The matching announce, or null if not found
+         * Identity hash is the first 16 bytes of SHA256(public_key).
+         * This is useful for LXST calls where we receive identity hash instead of destination hash.
          */
         suspend fun findByIdentityHash(identityHash: String): Announce? {
             val allAnnounces = announceDao.getAllAnnouncesSync()
@@ -258,12 +258,10 @@ class AnnounceRepository
             stampCost: Int? = null,
             stampCostFlexibility: Int? = null,
             peeringCost: Int? = null,
-            iconName: String? = null,
-            iconForegroundColor: String? = null,
-            iconBackgroundColor: String? = null,
             propagationTransferLimitKb: Int? = null,
         ) {
-            // Preserve favorite status and icon appearance if announce already exists
+            // Preserve favorite status if announce already exists
+            // Note: Icons are stored separately in peer_icons table (from LXMF messages)
             val existing = announceDao.getAnnounce(destinationHash)
 
             val entity =
@@ -283,9 +281,6 @@ class AnnounceRepository
                     stampCost = stampCost,
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
-                    iconName = iconName ?: existing?.iconName,
-                    iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
-                    iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
                     propagationTransferLimitKb = propagationTransferLimitKb,
                 )
             announceDao.upsertAnnounce(entity)
@@ -336,20 +331,22 @@ class AnnounceRepository
         /**
          * Get all favorite announces as a Flow, sorted by most recently favorited.
          * Automatically updates UI when favorites are added or removed.
+         * Includes icon data from peer_icons table.
          */
         fun getFavoriteAnnounces(): Flow<List<Announce>> {
-            return announceDao.getFavoriteAnnounces().map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.getEnrichedFavoriteAnnounces().map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
         /**
          * Search favorite announces by peer name or destination hash.
          * Automatically updates UI when matching favorites are added or removed.
+         * Includes icon data from peer_icons table.
          */
         fun searchFavoriteAnnounces(query: String): Flow<List<Announce>> {
-            return announceDao.searchFavoriteAnnounces(query).map { entities ->
-                entities.map { it.toAnnounce() }
+            return announceDao.searchEnrichedFavoriteAnnounces(query).map { enriched ->
+                enriched.map { it.toAnnounce() }
             }
         }
 
@@ -385,10 +382,11 @@ class AnnounceRepository
 
         /**
          * Get a specific announce as Flow (for observing favorite status changes).
+         * Includes icon data from peer_icons table.
          */
         fun getAnnounceFlow(destinationHash: String): Flow<Announce?> {
-            return announceDao.getAnnounceFlow(destinationHash).map { entity ->
-                entity?.toAnnounce()
+            return announceDao.getEnrichedAnnounceFlow(destinationHash).map { enriched ->
+                enriched?.toAnnounce()
             }
         }
 
@@ -408,23 +406,32 @@ class AnnounceRepository
             return announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
         }
 
-        /**
-         * Update the icon appearance for an announce.
-         * @param destinationHash The destination hash of the announce
-         * @param iconName The icon name (e.g., Material icon name)
-         * @param foregroundColor Hex RGB color for icon foreground (e.g., "FFFFFF")
-         * @param backgroundColor Hex RGB color for icon background (e.g., "1E88E5")
-         */
-        suspend fun updateIconAppearance(
-            destinationHash: String,
-            iconName: String?,
-            foregroundColor: String?,
-            backgroundColor: String?,
-        ) {
-            announceDao.updateIconAppearance(destinationHash, iconName, foregroundColor, backgroundColor)
-        }
-
+        // Note: This mapping is only used for non-UI operations (export, toggle favorite, etc.)
+        // For UI display, use enriched queries that join peer_icons for icon data
         private fun AnnounceEntity.toAnnounce() =
+            Announce(
+                destinationHash = destinationHash,
+                peerName = peerName,
+                publicKey = publicKey,
+                appData = appData,
+                hops = hops,
+                lastSeenTimestamp = lastSeenTimestamp,
+                nodeType = nodeType,
+                receivingInterface = receivingInterface,
+                receivingInterfaceType = receivingInterfaceType,
+                aspect = aspect,
+                isFavorite = isFavorite,
+                favoritedTimestamp = favoritedTimestamp,
+                stampCost = stampCost,
+                stampCostFlexibility = stampCostFlexibility,
+                peeringCost = peeringCost,
+                iconName = null, // Icon data now comes from peer_icons table via enriched queries
+                iconForegroundColor = null,
+                iconBackgroundColor = null,
+                propagationTransferLimitKb = propagationTransferLimitKb,
+            )
+
+        private fun EnrichedAnnounce.toAnnounce() =
             Announce(
                 destinationHash = destinationHash,
                 peerName = peerName,

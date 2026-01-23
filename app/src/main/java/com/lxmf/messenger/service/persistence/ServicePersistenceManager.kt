@@ -91,14 +91,12 @@ class ServicePersistenceManager(
         stampCost: Int?,
         stampCostFlexibility: Int?,
         peeringCost: Int?,
-        iconName: String?,
-        iconForegroundColor: String?,
-        iconBackgroundColor: String?,
         propagationTransferLimitKb: Int?,
     ) {
         scope.launch {
             try {
-                // Preserve favorite status and existing icon appearance if announce already exists
+                // Preserve favorite status if announce already exists
+                // Note: Icons are stored separately in peer_icons table (from LXMF messages)
                 val existing = announceDao.getAnnounce(destinationHash)
 
                 val entity =
@@ -118,10 +116,6 @@ class ServicePersistenceManager(
                         stampCost = stampCost,
                         stampCostFlexibility = stampCostFlexibility,
                         peeringCost = peeringCost,
-                        // Prefer new icon appearance if provided, otherwise preserve existing
-                        iconName = iconName ?: existing?.iconName,
-                        iconForegroundColor = iconForegroundColor ?: existing?.iconForegroundColor,
-                        iconBackgroundColor = iconBackgroundColor ?: existing?.iconBackgroundColor,
                         propagationTransferLimitKb = propagationTransferLimitKb,
                     )
 

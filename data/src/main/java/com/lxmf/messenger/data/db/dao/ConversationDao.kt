@@ -35,12 +35,13 @@ interface ConversationDao {
             c.lastMessage,
             c.lastMessageTimestamp,
             c.unreadCount,
-            a.iconName as iconName,
-            a.iconForegroundColor as iconForegroundColor,
-            a.iconBackgroundColor as iconBackgroundColor
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
+        LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
         ORDER BY c.lastMessageTimestamp DESC
         """,
@@ -61,12 +62,13 @@ interface ConversationDao {
             c.lastMessage,
             c.lastMessageTimestamp,
             c.unreadCount,
-            a.iconName as iconName,
-            a.iconForegroundColor as iconForegroundColor,
-            a.iconBackgroundColor as iconBackgroundColor
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
         FROM conversations c
         LEFT JOIN announces a ON c.peerHash = a.destinationHash
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
+        LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
             AND (ct.customNickname LIKE '%' || :query || '%'
                 OR a.peerName LIKE '%' || :query || '%'

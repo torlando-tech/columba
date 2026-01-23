@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
@@ -65,6 +66,7 @@ object DatabaseModule {
             MIGRATION_29_30,
             MIGRATION_30_31,
             MIGRATION_31_32,
+            MIGRATION_32_33,
         )
     }
 
@@ -1308,6 +1310,83 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 32 to 33: Create peer_icons table and migrate icon data
+    // Icons are stored separately from announces because:
+    // - Announces are a Reticulum concept (network peer discovery)
+    // - Icons are an LXMF concept (transmitted in message field 4)
+    private val MIGRATION_32_33 =
+        object : Migration(32, 33) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create peer_icons table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS peer_icons (
+                        destinationHash TEXT PRIMARY KEY NOT NULL,
+                        iconName TEXT NOT NULL,
+                        foregroundColor TEXT NOT NULL,
+                        backgroundColor TEXT NOT NULL,
+                        updatedTimestamp INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+
+                // Migrate existing icon data from announces table to peer_icons
+                database.execSQL(
+                    """
+                    INSERT OR IGNORE INTO peer_icons (destinationHash, iconName, foregroundColor, backgroundColor, updatedTimestamp)
+                    SELECT destinationHash, iconName, iconForegroundColor, iconBackgroundColor, lastSeenTimestamp
+                    FROM announces
+                    WHERE iconName IS NOT NULL AND iconName != ''
+                    """.trimIndent(),
+                )
+
+                // Remove icon columns from announces table
+                // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+                database.execSQL(
+                    """
+                    CREATE TABLE announces_new (
+                        destinationHash TEXT PRIMARY KEY NOT NULL,
+                        peerName TEXT NOT NULL,
+                        publicKey BLOB NOT NULL,
+                        appData BLOB,
+                        hops INTEGER NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL,
+                        nodeType TEXT NOT NULL,
+                        receivingInterface TEXT,
+                        receivingInterfaceType TEXT,
+                        aspect TEXT,
+                        isFavorite INTEGER NOT NULL DEFAULT 0,
+                        favoritedTimestamp INTEGER,
+                        stampCost INTEGER,
+                        stampCostFlexibility INTEGER,
+                        peeringCost INTEGER,
+                        propagationTransferLimitKb INTEGER
+                    )
+                    """.trimIndent(),
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO announces_new (
+                        destinationHash, peerName, publicKey, appData, hops, lastSeenTimestamp,
+                        nodeType, receivingInterface, receivingInterfaceType, aspect,
+                        isFavorite, favoritedTimestamp, stampCost, stampCostFlexibility,
+                        peeringCost, propagationTransferLimitKb
+                    )
+                    SELECT
+                        destinationHash, peerName, publicKey, appData, hops, lastSeenTimestamp,
+                        nodeType, receivingInterface, receivingInterfaceType, aspect,
+                        isFavorite, favoritedTimestamp, stampCost, stampCostFlexibility,
+                        peeringCost, propagationTransferLimitKb
+                    FROM announces
+                    """.trimIndent(),
+                )
+
+                database.execSQL("DROP TABLE announces")
+                database.execSQL("ALTER TABLE announces_new RENAME TO announces")
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1342,6 +1421,11 @@ object DatabaseModule {
     @Provides
     fun providePeerIdentityDao(database: ColumbaDatabase): PeerIdentityDao {
         return database.peerIdentityDao()
+    }
+
+    @Provides
+    fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao {
+        return database.peerIconDao()
     }
 
     @Provides

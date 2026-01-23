@@ -29,10 +29,8 @@ data class AnnounceEntity(
     val stampCost: Int? = null,
     val stampCostFlexibility: Int? = null,
     val peeringCost: Int? = null,
-    val iconName: String? = null,
-    val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
-    val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
     val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
+    // Note: Icon fields moved to peer_icons table (LXMF concept, not Reticulum)
 ) {
     @Suppress("CyclomaticComplexMethod") // Equals must compare all fields for correctness
     override fun equals(other: Any?): Boolean {
@@ -54,9 +52,6 @@ data class AnnounceEntity(
             stampCost == other.stampCost &&
             stampCostFlexibility == other.stampCostFlexibility &&
             peeringCost == other.peeringCost &&
-            iconName == other.iconName &&
-            iconForegroundColor == other.iconForegroundColor &&
-            iconBackgroundColor == other.iconBackgroundColor &&
             propagationTransferLimitKb == other.propagationTransferLimitKb
     }
 
@@ -84,9 +79,6 @@ data class AnnounceEntity(
         result = 31 * result + (stampCost?.hashCode() ?: 0)
         result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
         result = 31 * result + (peeringCost?.hashCode() ?: 0)
-        result = 31 * result + (iconName?.hashCode() ?: 0)
-        result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
-        result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
         result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
         return result
     }

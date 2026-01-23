@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
+import com.lxmf.messenger.data.model.EnrichedAnnounce
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
@@ -77,7 +78,7 @@ class MapViewModelTest {
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
-        every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+        every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
@@ -811,7 +812,7 @@ class MapViewModelTest {
         runTest {
             val announces =
                 listOf(
-                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                    EnrichedAnnounce(
                         destinationHash = "hash1",
                         peerName = "Announce Name",
                         publicKey = ByteArray(64),
@@ -820,7 +821,17 @@ class MapViewModelTest {
                         lastSeenTimestamp = System.currentTimeMillis(),
                         nodeType = "peer",
                         receivingInterface = null,
+                        receivingInterfaceType = null,
                         aspect = "lxmf.delivery",
+                        isFavorite = false,
+                        favoritedTimestamp = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                        iconName = null,
+                        iconForegroundColor = null,
+                        iconBackgroundColor = null,
                     ),
                 )
             val receivedLocations =
@@ -839,7 +850,7 @@ class MapViewModelTest {
             // Empty contacts - no match
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
@@ -869,7 +880,7 @@ class MapViewModelTest {
             // No contacts or announces
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
@@ -893,7 +904,7 @@ class MapViewModelTest {
                 )
             val announces =
                 listOf(
-                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                    EnrichedAnnounce(
                         destinationHash = "hash1",
                         peerName = "Announce Name",
                         publicKey = ByteArray(64),
@@ -902,7 +913,17 @@ class MapViewModelTest {
                         lastSeenTimestamp = System.currentTimeMillis(),
                         nodeType = "peer",
                         receivingInterface = null,
+                        receivingInterfaceType = null,
                         aspect = "lxmf.delivery",
+                        isFavorite = false,
+                        favoritedTimestamp = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                        iconName = null,
+                        iconForegroundColor = null,
+                        iconBackgroundColor = null,
                     ),
                 )
             val receivedLocations =
@@ -920,7 +941,7 @@ class MapViewModelTest {
                 )
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
@@ -939,7 +960,7 @@ class MapViewModelTest {
         runTest {
             val announces =
                 listOf(
-                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                    EnrichedAnnounce(
                         destinationHash = "hash1",
                         peerName = "Test User",
                         publicKey = ByteArray(64) { it.toByte() },
@@ -948,7 +969,14 @@ class MapViewModelTest {
                         lastSeenTimestamp = System.currentTimeMillis(),
                         nodeType = "peer",
                         receivingInterface = null,
+                        receivingInterfaceType = null,
                         aspect = "lxmf.delivery",
+                        isFavorite = false,
+                        favoritedTimestamp = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
                         iconName = "account",
                         iconForegroundColor = "FFFFFF",
                         iconBackgroundColor = "1E88E5",
@@ -969,7 +997,7 @@ class MapViewModelTest {
                 )
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
@@ -989,7 +1017,7 @@ class MapViewModelTest {
         runTest {
             val announces =
                 listOf(
-                    com.lxmf.messenger.data.db.entity.AnnounceEntity(
+                    EnrichedAnnounce(
                         destinationHash = "hash1",
                         peerName = "Test User",
                         publicKey = ByteArray(64),
@@ -998,8 +1026,15 @@ class MapViewModelTest {
                         lastSeenTimestamp = System.currentTimeMillis(),
                         nodeType = "peer",
                         receivingInterface = null,
+                        receivingInterfaceType = null,
                         aspect = "lxmf.delivery",
-                        // No icon set on this announce
+                        isFavorite = false,
+                        favoritedTimestamp = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                        // No icon set - peer_icons table has no entry for this peer
                         iconName = null,
                         iconForegroundColor = null,
                         iconBackgroundColor = null,
@@ -1020,7 +1055,7 @@ class MapViewModelTest {
                 )
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(announces)
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
@@ -1057,10 +1092,10 @@ class MapViewModelTest {
                         receivedAt = System.currentTimeMillis(),
                     ),
                 )
-            // Contact exists but no announce with icon
+            // Contact exists but no announce with icon (peer_icons table has no entry)
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
-            every { announceDao.getAllAnnounces() } returns flowOf(emptyList())
+            every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
 
             viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 

@@ -29,9 +29,12 @@ interface ContactDao {
     fun getAllContacts(identityHash: String): Flow<List<ContactEntity>>
 
     /**
-     * Get enriched contacts with data from announces, conversations, and location sharing.
-     * Combines contact data with network status, conversation info, and location sharing status.
+     * Get enriched contacts with data from announces, conversations, location sharing, and icons.
+     * Combines contact data with network status, conversation info, location sharing status, and peer icons.
      * Filters by identity hash to ensure data isolation between identities.
+     *
+     * Note: Icons are stored in peer_icons table (LXMF concept from messages), separate from
+     * announces (Reticulum concept for network discovery).
      */
     @Query(
         """
@@ -57,12 +60,13 @@ interface ContactDao {
             a.nodeType,
             CASE WHEN loc.senderHash IS NOT NULL THEN 1 ELSE 0 END as isReceivingLocationFrom,
             loc.expiresAt as locationSharingExpiresAt,
-            a.iconName as iconName,
-            a.iconForegroundColor as iconForegroundColor,
-            a.iconBackgroundColor as iconBackgroundColor
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
+        LEFT JOIN peer_icons pi ON c.destinationHash = pi.destinationHash
         LEFT JOIN (
             SELECT rl.senderHash, rl.expiresAt
             FROM received_locations rl

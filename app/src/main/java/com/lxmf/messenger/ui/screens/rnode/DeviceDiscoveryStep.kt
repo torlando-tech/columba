@@ -1271,173 +1271,6 @@ private fun UsbDeviceCard(
     }
 }
 
-@Composable
-private fun UsbAssistedPairingCard(
-    devices: List<DiscoveredRNode>,
-    pin: String?,
-    status: String?,
-    isPairing: Boolean,
-    onDeviceSelected: (DiscoveredRNode) -> Unit,
-    onCancel: () -> Unit,
-) {
-    Card(
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Default.Usb,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "USB-Assisted Pairing",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Status message
-            status?.let {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (devices.isEmpty() && !isPairing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
-
-            // Show PIN if received
-            if (pin != null) {
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "PIN: ",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                    )
-                    Text(
-                        pin,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
-
-            // Device selection list (when multiple RNodes found)
-            if (devices.isNotEmpty() && !isPairing) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Select your RNode:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                )
-                Spacer(Modifier.height(8.dp))
-
-                devices.forEach { device ->
-                    OutlinedCard(
-                        onClick = { onDeviceSelected(device) },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                        colors =
-                            CardDefaults.outlinedCardColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Default.Bluetooth,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    device.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                device.rssi?.let { rssi ->
-                                    Text(
-                                        "Signal: ${rssi}dBm",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Pairing in progress indicator
-            if (isPairing) {
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Pairing...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(
-                    onClick = onCancel,
-                    enabled = !isPairing,
-                ) {
-                    Text(
-                        "Cancel",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
-        }
-    }
-}
-
 /**
  * Shared composable for USB Bluetooth pairing mode card.
  * Used by both the USB tab and Bluetooth tab's "Pair via USB" feature.
@@ -1448,9 +1281,10 @@ private fun UsbBluetoothPairingCard(
     viewModel: RNodeWizardViewModel,
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -1518,14 +1352,16 @@ private fun UsbBluetoothPairingCard(
                     label = { Text("PIN Code") },
                     placeholder = { Text("000000") },
                     singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
-                    ),
+                    keyboardOptions =
+                        androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+                        ),
                     modifier = Modifier.width(150.dp),
-                    textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        letterSpacing = 4.sp,
-                    ),
+                    textStyle =
+                        MaterialTheme.typography.headlineMedium.copy(
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            letterSpacing = 4.sp,
+                        ),
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(

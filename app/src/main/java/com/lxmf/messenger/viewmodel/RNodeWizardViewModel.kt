@@ -2633,6 +2633,9 @@ class RNodeWizardViewModel
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to unregister bond receiver", e)
                             }
+                            // Cleanup pairing handler
+                            pairingHandler?.unregister()
+                            pairingHandler = null
                         }
                         BluetoothDevice.BOND_BONDING -> {
                             Log.d(TAG, "Bonding in progress with ${device.name}...")

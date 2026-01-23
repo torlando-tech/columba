@@ -108,9 +108,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 
@@ -153,9 +150,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 
@@ -170,113 +164,8 @@ class ServicePersistenceManagerTest {
             }
         }
 
-    @Test
-    fun `persistAnnounce preserves existing icon appearance when not provided`() =
-        runTest {
-            val existingAnnounce =
-                AnnounceEntity(
-                    destinationHash = testDestinationHash,
-                    peerName = "Test Peer",
-                    publicKey = testPublicKey,
-                    appData = null,
-                    hops = 1,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                    nodeType = "LXMF_PEER",
-                    receivingInterface = "BLE",
-                    iconName = "home",
-                    iconForegroundColor = "#FFFFFF",
-                    iconBackgroundColor = "#000000",
-                )
-
-            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
-
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = null,
-                hops = 2,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
-                propagationTransferLimitKb = null,
-            )
-
-            testScope.advanceUntilIdle()
-
-            coVerify {
-                announceDao.upsertAnnounce(
-                    match { entity ->
-                        entity.iconName == "home" &&
-                            entity.iconForegroundColor == "#FFFFFF" &&
-                            entity.iconBackgroundColor == "#000000"
-                    },
-                )
-            }
-        }
-
-    @Test
-    fun `persistAnnounce updates icon appearance when provided`() =
-        runTest {
-            val existingAnnounce =
-                AnnounceEntity(
-                    destinationHash = testDestinationHash,
-                    peerName = "Test Peer",
-                    publicKey = testPublicKey,
-                    appData = null,
-                    hops = 1,
-                    lastSeenTimestamp = System.currentTimeMillis(),
-                    nodeType = "LXMF_PEER",
-                    receivingInterface = "BLE",
-                    iconName = "home",
-                    iconForegroundColor = "#FFFFFF",
-                    iconBackgroundColor = "#000000",
-                )
-
-            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
-
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = null,
-                hops = 2,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                iconName = "work",
-                iconForegroundColor = "#FF0000",
-                iconBackgroundColor = "#00FF00",
-                propagationTransferLimitKb = null,
-            )
-
-            testScope.advanceUntilIdle()
-
-            coVerify {
-                announceDao.upsertAnnounce(
-                    match { entity ->
-                        entity.iconName == "work" &&
-                            entity.iconForegroundColor == "#FF0000" &&
-                            entity.iconBackgroundColor == "#00FF00"
-                    },
-                )
-            }
-        }
+    // Note: Icon appearance tests removed - icons are now stored in peer_icons table,
+    // not on AnnounceEntity. See PeerIconDao for icon storage tests.
 
     @Test
     fun `persistAnnounce handles database exception gracefully`() =
@@ -298,9 +187,6 @@ class ServicePersistenceManagerTest {
                 stampCost = null,
                 stampCostFlexibility = null,
                 peeringCost = null,
-                iconName = null,
-                iconForegroundColor = null,
-                iconBackgroundColor = null,
                 propagationTransferLimitKb = null,
             )
 

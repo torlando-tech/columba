@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
@@ -63,6 +64,7 @@ object DatabaseModule {
             MIGRATION_27_28,
             MIGRATION_28_29,
             MIGRATION_29_30,
+            MIGRATION_30_31,
         )
     }
 
@@ -1250,6 +1252,42 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 30 to 31: Add peer_icons table
+    // Creates dedicated table for peer icon appearances received via LXMF messages.
+    // Icons are an LXMF concept (Field 4) and should be stored separately from announces
+    // (which are a Reticulum concept). This ensures icons display consistently across
+    // chats, contacts, and announces screens even when no announce has been received.
+    private val MIGRATION_30_31 =
+        object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create peer_icons table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS peer_icons (
+                        destinationHash TEXT NOT NULL PRIMARY KEY,
+                        iconName TEXT NOT NULL,
+                        foregroundColor TEXT NOT NULL,
+                        backgroundColor TEXT NOT NULL,
+                        updatedTimestamp INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+
+                // Migrate existing icon data from announces table to peer_icons
+                // Only migrate rows where all three icon fields are non-null
+                database.execSQL(
+                    """
+                    INSERT OR REPLACE INTO peer_icons (destinationHash, iconName, foregroundColor, backgroundColor, updatedTimestamp)
+                    SELECT destinationHash, iconName, iconForegroundColor, iconBackgroundColor, lastSeenTimestamp
+                    FROM announces
+                    WHERE iconName IS NOT NULL
+                      AND iconForegroundColor IS NOT NULL
+                      AND iconBackgroundColor IS NOT NULL
+                    """.trimIndent(),
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1314,6 +1352,11 @@ object DatabaseModule {
     @Provides
     fun provideRmspServerDao(database: ColumbaDatabase): RmspServerDao {
         return database.rmspServerDao()
+    }
+
+    @Provides
+    fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao {
+        return database.peerIconDao()
     }
 
     @Provides

@@ -1,5 +1,6 @@
 package com.lxmf.messenger.service
 
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
@@ -33,6 +34,7 @@ class MessageCollectorTest {
     private lateinit var contactRepository: ContactRepository
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
+    private lateinit var peerIconDao: PeerIconDao
     private lateinit var messageCollector: MessageCollector
 
     // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
@@ -52,6 +54,7 @@ class MessageCollectorTest {
         contactRepository = mockk()
         identityRepository = mockk()
         notificationHelper = mockk(relaxed = true)
+        peerIconDao = mockk(relaxed = true)
 
         messageFlow = MutableSharedFlow(extraBufferCapacity = 10)
 
@@ -90,6 +93,7 @@ class MessageCollectorTest {
                 contactRepository = contactRepository,
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
+                peerIconDao = peerIconDao,
             )
     }
 

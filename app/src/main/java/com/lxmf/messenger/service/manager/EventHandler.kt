@@ -341,6 +341,7 @@ class EventHandler(
             val propagationTransferLimitKb = propagationMetadata?.transferLimitKb
 
             // Persist to database first (survives app process death)
+            // Note: Icons are stored separately in peer_icons table (from LXMF messages)
             if (persistenceManager != null && publicKey != null) {
                 persistenceManager.persistAnnounce(
                     destinationHash = destinationHashHex,
@@ -356,10 +357,6 @@ class EventHandler(
                     stampCost = stampCost,
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
-                    // Icon appearance updated via message field 4
-                    iconName = null,
-                    iconForegroundColor = null,
-                    iconBackgroundColor = null,
                     propagationTransferLimitKb = propagationTransferLimitKb,
                 )
 

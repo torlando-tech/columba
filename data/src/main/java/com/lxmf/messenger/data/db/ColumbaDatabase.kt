@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
@@ -19,6 +20,7 @@ import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
+import com.lxmf.messenger.data.db.entity.PeerIconEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.db.entity.RmspServerEntity
@@ -35,8 +37,9 @@ import com.lxmf.messenger.data.db.entity.RmspServerEntity
         ReceivedLocationEntity::class,
         OfflineMapRegionEntity::class,
         RmspServerEntity::class,
+        PeerIconEntity::class,
     ],
-    version = 30,
+    version = 31,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -59,4 +62,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun offlineMapRegionDao(): OfflineMapRegionDao
 
     abstract fun rmspServerDao(): RmspServerDao
+
+    abstract fun peerIconDao(): PeerIconDao
 }

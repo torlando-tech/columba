@@ -1941,6 +1941,39 @@ class RNodeWizardViewModel
         private var pairingScanCallback: ScanCallback? = null
 
         /**
+         * Stop all active pairing-related scans and unregister receivers.
+         * Called when exiting pairing mode or cancelling manual PIN entry.
+         */
+        @SuppressLint("MissingPermission")
+        private fun stopAllPairingScans() {
+            pairingScanCallback?.let {
+                try {
+                    bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to stop pairing BLE scan", e)
+                }
+                pairingScanCallback = null
+            }
+            earlyBleScanCallback?.let {
+                try {
+                    bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to stop early BLE scan", e)
+                }
+                earlyBleScanCallback = null
+            }
+            bluetoothAdapter?.cancelDiscovery()
+            classicDiscoveryReceiver?.let {
+                try {
+                    context.unregisterReceiver(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unregister discovery receiver", e)
+                }
+                classicDiscoveryReceiver = null
+            }
+        }
+
+        /**
          * Start BLE scan to find RNode devices for pairing.
          * RNodes advertise the Nordic UART Service (NUS) UUID.
          */
@@ -2453,33 +2486,7 @@ class RNodeWizardViewModel
          */
         fun exitUsbBluetoothPairingMode() {
             viewModelScope.launch {
-                // Stop any active BLE scans
-                pairingScanCallback?.let {
-                    try {
-                        bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to stop pairing BLE scan", e)
-                    }
-                    pairingScanCallback = null
-                }
-                earlyBleScanCallback?.let {
-                    try {
-                        bluetoothAdapter?.bluetoothLeScanner?.stopScan(it)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to stop early BLE scan", e)
-                    }
-                    earlyBleScanCallback = null
-                }
-                // Stop Classic BT discovery and unregister receiver
-                bluetoothAdapter?.cancelDiscovery()
-                classicDiscoveryReceiver?.let {
-                    try {
-                        context.unregisterReceiver(it)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to unregister discovery receiver", e)
-                    }
-                    classicDiscoveryReceiver = null
-                }
+                stopAllPairingScans()
 
                 withContext(Dispatchers.IO) {
                     // Send command to exit pairing mode: stop BT (0x00), then start BT (0x01)
@@ -2713,6 +2720,8 @@ class RNodeWizardViewModel
          */
         fun cancelManualPinEntry() {
             viewModelScope.launch {
+                stopAllPairingScans()
+
                 _state.update {
                     it.copy(
                         showManualPinEntry = false,

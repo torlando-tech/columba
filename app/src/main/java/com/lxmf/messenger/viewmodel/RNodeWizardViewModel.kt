@@ -276,42 +276,46 @@ class RNodeWizardViewModel
         private val deviceTypePrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         // Device classifier for determining BLE vs Classic device types
-        private val deviceClassifier = DeviceClassifier(
-            deviceTypeCache = object : DeviceTypeCache {
-                override fun getCachedType(address: String): BluetoothType? {
-                    val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-                    return try {
-                        val jsonObj = org.json.JSONObject(json)
-                        if (!jsonObj.has(address)) return null
-                        when (jsonObj.optString(address)) {
-                            "CLASSIC" -> BluetoothType.CLASSIC
-                            "BLE" -> BluetoothType.BLE
-                            else -> null
+        private val deviceClassifier =
+            DeviceClassifier(
+                deviceTypeCache =
+                    object : DeviceTypeCache {
+                        override fun getCachedType(address: String): BluetoothType? {
+                            val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                            return try {
+                                val jsonObj = org.json.JSONObject(json)
+                                if (!jsonObj.has(address)) return null
+                                when (jsonObj.optString(address)) {
+                                    "CLASSIC" -> BluetoothType.CLASSIC
+                                    "BLE" -> BluetoothType.BLE
+                                    else -> null
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to read device type cache", e)
+                                null
+                            }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to read device type cache", e)
-                        null
-                    }
-                }
 
-                override fun cacheType(address: String, type: BluetoothType) {
-                    try {
-                        val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
-                        val obj = org.json.JSONObject(json)
-                        obj.put(address, type.name)
-                        deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
-                        Log.d(TAG, "Cached device type: $address -> $type")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to cache device type", e)
-                    }
-                }
-            },
-        )
+                        override fun cacheType(
+                            address: String,
+                            type: BluetoothType,
+                        ) {
+                            try {
+                                val json = deviceTypePrefs.getString(KEY_DEVICE_TYPES, "{}") ?: "{}"
+                                val obj = org.json.JSONObject(json)
+                                obj.put(address, type.name)
+                                deviceTypePrefs.edit().putString(KEY_DEVICE_TYPES, obj.toString()).apply()
+                                Log.d(TAG, "Cached device type: $address -> $type")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to cache device type", e)
+                            }
+                        }
+                    },
+            )
 
         // Track user-modified fields to preserve state during navigation
         // When user explicitly modifies a field, we don't overwrite it with region defaults
         private val userModifiedFields = mutableSetOf<String>()
-
 
         // ========== INITIALIZATION ==========
 
@@ -436,7 +440,7 @@ class RNodeWizardViewModel
         private fun startRssiPolling() {
             rssiPollingJob?.cancel()
             if (!enableRssiPolling) {
-                return  // Skip during tests
+                return // Skip during tests
             }
             rssiPollingJob =
                 viewModelScope.launch {
@@ -481,8 +485,9 @@ class RNodeWizardViewModel
                     pendingBandwidth = bandwidth,
                     pendingSpreadingFactor = spreadingFactor,
                     pendingCodingRate = codingRate,
-                    hasPendingParams = frequency != null || bandwidth != null ||
-                        spreadingFactor != null || codingRate != null,
+                    hasPendingParams =
+                        frequency != null || bandwidth != null ||
+                            spreadingFactor != null || codingRate != null,
                 )
             }
             Log.d(TAG, "Set pending LoRa params: freq=$frequency, bw=$bandwidth, sf=$spreadingFactor, cr=$codingRate")
@@ -1477,10 +1482,11 @@ class RNodeWizardViewModel
             _state.update {
                 // Auto-generate interface name based on connection type if not manually customized
                 // Update if it's the default or matches an auto-generated pattern
-                val isAutoGeneratedName = it.interfaceName == DEFAULT_INTERFACE_NAME ||
-                    it.interfaceName == "RNode TCP" ||
-                    it.interfaceName == "RNode USB" ||
-                    it.interfaceName.matches(Regex("RNode .+ (BLE|BT)"))
+                val isAutoGeneratedName =
+                    it.interfaceName == DEFAULT_INTERFACE_NAME ||
+                        it.interfaceName == "RNode TCP" ||
+                        it.interfaceName == "RNode USB" ||
+                        it.interfaceName.matches(Regex("RNode .+ (BLE|BT)"))
 
                 val newInterfaceName =
                     if (isAutoGeneratedName) {
@@ -1762,17 +1768,18 @@ class RNodeWizardViewModel
                 } else {
                     // If not found in scan, create a placeholder device
                     // (permission will be requested when selected)
-                    val placeholderDevice = com.lxmf.messenger.data.model.DiscoveredUsbDevice(
-                        deviceId = deviceId,
-                        vendorId = vendorId,
-                        productId = productId,
-                        deviceName = deviceName,
-                        manufacturerName = null,
-                        productName = "USB RNode",
-                        serialNumber = null,
-                        driverType = "Unknown",
-                        hasPermission = false,
-                    )
+                    val placeholderDevice =
+                        com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                            deviceId = deviceId,
+                            vendorId = vendorId,
+                            productId = productId,
+                            deviceName = deviceName,
+                            manufacturerName = null,
+                            productName = "USB RNode",
+                            serialNumber = null,
+                            driverType = "Unknown",
+                            hasPermission = false,
+                        )
                     _state.update {
                         it.copy(
                             usbDevices = listOf(placeholderDevice) + it.usbDevices,
@@ -1791,6 +1798,7 @@ class RNodeWizardViewModel
          * Sends CMD_BT_CTRL command to RNode to enter pairing mode.
          * RNode will respond with CMD_BT_PIN containing the 6-digit PIN.
          */
+        @Suppress("LongMethod")
         fun enterUsbBluetoothPairingMode() {
             val device = _state.value.selectedUsbDevice ?: return
 
@@ -1919,10 +1927,11 @@ class RNodeWizardViewModel
             pairingHandler?.unregister()
 
             // Create and register pairing handler with the PIN
-            val handler = BlePairingHandler(context).apply {
-                setAutoPairPin(pin)
-                register()
-            }
+            val handler =
+                BlePairingHandler(context).apply {
+                    setAutoPairPin(pin)
+                    register()
+                }
             pairingHandler = handler
 
             try {
@@ -2006,108 +2015,118 @@ class RNodeWizardViewModel
 
             // Don't filter by service UUID - RNode in pairing mode may not advertise NUS
             // We'll filter by device name in the callback instead
-            val scanSettings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
+            val scanSettings =
+                ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
 
-            val callback = object : ScanCallback() {
-                override fun onScanResult(callbackType: Int, result: ScanResult) {
-                    val device = result.device
-                    val deviceName = device.name ?: return
+            val callback =
+                object : ScanCallback() {
+                    override fun onScanResult(
+                        callbackType: Int,
+                        result: ScanResult,
+                    ) {
+                        val device = result.device
+                        val deviceName = device.name ?: return
 
-                    // Only log and process RNode devices to reduce noise
-                    if (!deviceName.startsWith("RNode", ignoreCase = true)) return
+                        // Only log and process RNode devices to reduce noise
+                        if (!deviceName.startsWith("RNode", ignoreCase = true)) return
 
-                    val isAlreadyBonded = bondedAddresses.contains(device.address)
+                        val isAlreadyBonded = bondedAddresses.contains(device.address)
 
-                    Log.d(
-                        TAG,
-                        "BLE scan found: $deviceName (${device.address}), " +
-                            "bondState=${device.bondState}, isAlreadyBonded=$isAlreadyBonded",
-                    )
-
-                    // Stop the scan - we found an RNode
-                    try {
-                        scanner.stopScan(this)
-                        pairingScanCallback = null
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to stop BLE scan", e)
-                    }
-
-                    if (isAlreadyBonded) {
-                        // RNode is already paired - no need to pair again, just add it to discovered devices
-                        Log.i(TAG, "Found already-bonded RNode via BLE: $deviceName - adding to discovered devices")
-                        val discoveredNode = DiscoveredRNode(
-                            name = deviceName,
-                            address = device.address,
-                            type = BluetoothType.BLE,
-                            rssi = result.rssi,
-                            isPaired = true,
-                            bluetoothDevice = device,
+                        Log.d(
+                            TAG,
+                            "BLE scan found: $deviceName (${device.address}), " +
+                                "bondState=${device.bondState}, isAlreadyBonded=$isAlreadyBonded",
                         )
-                        viewModelScope.launch {
-                            _state.update { state ->
-                                state.copy(
-                                    usbPairingStatus = "$deviceName is already paired!",
-                                    isUsbPairingMode = false,
-                                    usbBluetoothPin = null,
-                                    // Add to discovered devices and auto-select it
-                                    discoveredDevices = state.discoveredDevices.map {
-                                        if (it.address == device.address) discoveredNode else it
-                                    } + if (state.discoveredDevices.none { it.address == device.address }) {
-                                        listOf(discoveredNode)
-                                    } else {
-                                        emptyList()
-                                    },
-                                    selectedDevice = discoveredNode,
-                                    interfaceName = state.defaultInterfaceNameFor(discoveredNode),
-                                )
-                            }
+
+                        // Stop the scan - we found an RNode
+                        try {
+                            scanner.stopScan(this)
+                            pairingScanCallback = null
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to stop BLE scan", e)
                         }
-                    } else {
-                        // RNode is not bonded - initiate pairing
-                        Log.i(TAG, "Discovered unbonded RNode via BLE: $deviceName")
 
-                        // Set the target device for the pairing handler
-                        pairingHandler?.setAutoPairPin(pin, device.address)
-
-                        viewModelScope.launch {
-                            _state.update {
-                                it.copy(usbPairingStatus = "Found $deviceName, pairing...")
-                            }
-
-                            // Initiate bonding with BLE transport
-                            try {
-                                val createBondMethod = BluetoothDevice::class.java.getMethod(
-                                    "createBond",
-                                    Int::class.javaPrimitiveType
+                        if (isAlreadyBonded) {
+                            // RNode is already paired - no need to pair again, just add it to discovered devices
+                            Log.i(TAG, "Found already-bonded RNode via BLE: $deviceName - adding to discovered devices")
+                            val discoveredNode =
+                                DiscoveredRNode(
+                                    name = deviceName,
+                                    address = device.address,
+                                    type = BluetoothType.BLE,
+                                    rssi = result.rssi,
+                                    isPaired = true,
+                                    bluetoothDevice = device,
                                 )
-                                // TRANSPORT_LE = 2 for BLE
-                                createBondMethod.invoke(device, 2)
-                                Log.d(TAG, "createBond(TRANSPORT_LE) called for RNode")
-                            } catch (e: Exception) {
-                                Log.w(TAG, "createBond with transport failed, using default", e)
-                                device.createBond()
+                            viewModelScope.launch {
+                                _state.update { state ->
+                                    state.copy(
+                                        usbPairingStatus = "$deviceName is already paired!",
+                                        isUsbPairingMode = false,
+                                        usbBluetoothPin = null,
+                                        // Add to discovered devices and auto-select it
+                                        discoveredDevices =
+                                            state.discoveredDevices.map {
+                                                if (it.address == device.address) discoveredNode else it
+                                            } +
+                                                if (state.discoveredDevices.none { it.address == device.address }) {
+                                                    listOf(discoveredNode)
+                                                } else {
+                                                    emptyList()
+                                                },
+                                        selectedDevice = discoveredNode,
+                                        interfaceName = state.defaultInterfaceNameFor(discoveredNode),
+                                    )
+                                }
+                            }
+                        } else {
+                            // RNode is not bonded - initiate pairing
+                            Log.i(TAG, "Discovered unbonded RNode via BLE: $deviceName")
+
+                            // Set the target device for the pairing handler
+                            pairingHandler?.setAutoPairPin(pin, device.address)
+
+                            viewModelScope.launch {
+                                _state.update {
+                                    it.copy(usbPairingStatus = "Found $deviceName, pairing...")
+                                }
+
+                                // Initiate bonding with BLE transport
+                                try {
+                                    val createBondMethod =
+                                        BluetoothDevice::class.java.getMethod(
+                                            "createBond",
+                                            Int::class.javaPrimitiveType,
+                                        )
+                                    // TRANSPORT_LE = 2 for BLE
+                                    createBondMethod.invoke(device, 2)
+                                    Log.d(TAG, "createBond(TRANSPORT_LE) called for RNode")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "createBond with transport failed, using default", e)
+                                    device.createBond()
+                                }
                             }
                         }
                     }
-                }
 
-                override fun onScanFailed(errorCode: Int) {
-                    Log.e(TAG, "BLE pairing scan failed: $errorCode")
-                    pairingScanCallback = null
-                    val errorMessage = when (errorCode) {
-                        1 -> "BLE scan failed: already started"
-                        2 -> "BLE scan failed: app not registered"
-                        3 -> "BLE scan failed: internal error"
-                        4 -> "BLE scan failed: feature unsupported"
-                        5 -> "BLE scan failed: out of hardware resources"
-                        6 -> "BLE scan failed: scanning too frequently"
-                        else -> "BLE scan failed: error code $errorCode"
+                    override fun onScanFailed(errorCode: Int) {
+                        Log.e(TAG, "BLE pairing scan failed: $errorCode")
+                        pairingScanCallback = null
+                        val errorMessage =
+                            when (errorCode) {
+                                1 -> "BLE scan failed: already started"
+                                2 -> "BLE scan failed: app not registered"
+                                3 -> "BLE scan failed: internal error"
+                                4 -> "BLE scan failed: feature unsupported"
+                                5 -> "BLE scan failed: out of hardware resources"
+                                6 -> "BLE scan failed: scanning too frequently"
+                                else -> "BLE scan failed: error code $errorCode"
+                            }
+                        _state.update { it.copy(usbPairingStatus = errorMessage) }
                     }
-                    _state.update { it.copy(usbPairingStatus = errorMessage) }
                 }
-            }
 
             pairingScanCallback = callback
             Log.d(TAG, "Starting BLE scan for RNode pairing (no UUID filter)")
@@ -2221,10 +2240,11 @@ class RNodeWizardViewModel
 
                                             // Initiate bonding
                                             try {
-                                                val createBondMethod = BluetoothDevice::class.java.getMethod(
-                                                    "createBond",
-                                                    Int::class.javaPrimitiveType,
-                                                )
+                                                val createBondMethod =
+                                                    BluetoothDevice::class.java.getMethod(
+                                                        "createBond",
+                                                        Int::class.javaPrimitiveType,
+                                                    )
                                                 // TRANSPORT_BREDR = 1 for Classic Bluetooth
                                                 createBondMethod.invoke(it, 1)
                                                 Log.d(TAG, "createBond(TRANSPORT_BREDR) called for RNode")
@@ -2345,7 +2365,7 @@ class RNodeWizardViewModel
                                     if (deviceName.startsWith("RNode", ignoreCase = true) && !isAlreadyBonded) {
                                         Log.i(TAG, "Early discovery found unbonded RNode: $deviceName - storing for later pairing")
                                         discoveredPairingDevice = it
-                                        discoveredPairingTransport = 1  // TRANSPORT_BREDR
+                                        discoveredPairingTransport = 1 // TRANSPORT_BREDR
                                         bluetoothAdapter?.cancelDiscovery()
 
                                         // Update UI to indicate device was found
@@ -2432,57 +2452,62 @@ class RNodeWizardViewModel
             }
 
             // Don't filter by service UUID - RNode in pairing mode may not advertise NUS
-            val scanSettings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
+            val scanSettings =
+                ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
 
-            val callback = object : ScanCallback() {
-                override fun onScanResult(callbackType: Int, result: ScanResult) {
-                    val device = result.device
-                    val deviceName = device.name ?: return
+            val callback =
+                object : ScanCallback() {
+                    override fun onScanResult(
+                        callbackType: Int,
+                        result: ScanResult,
+                    ) {
+                        val device = result.device
+                        val deviceName = device.name ?: return
 
-                    // Only process RNode devices
-                    if (!deviceName.startsWith("RNode", ignoreCase = true)) return
+                        // Only process RNode devices
+                        if (!deviceName.startsWith("RNode", ignoreCase = true)) return
 
-                    val isAlreadyBonded = bondedAddresses.contains(device.address)
+                        val isAlreadyBonded = bondedAddresses.contains(device.address)
 
-                    Log.d(
-                        TAG,
-                        "Early BLE scan found: $deviceName (${device.address}), " +
-                            "bondState=${device.bondState}, isAlreadyBonded=$isAlreadyBonded",
-                    )
+                        Log.d(
+                            TAG,
+                            "Early BLE scan found: $deviceName (${device.address}), " +
+                                "bondState=${device.bondState}, isAlreadyBonded=$isAlreadyBonded",
+                        )
 
-                    // Store unbonded RNode for later pairing (when PIN is submitted)
-                    if (!isAlreadyBonded) {
-                        Log.i(TAG, "Early BLE scan found unbonded RNode: $deviceName (RSSI: ${result.rssi}) - storing for later pairing")
-                        discoveredPairingDevice = device
-                        discoveredPairingTransport = 2  // TRANSPORT_LE
-                        discoveredPairingRssi = result.rssi
+                        // Store unbonded RNode for later pairing (when PIN is submitted)
+                        if (!isAlreadyBonded) {
+                            Log.i(TAG, "Early BLE scan found unbonded RNode: $deviceName (RSSI: ${result.rssi}) - storing for later pairing")
+                            discoveredPairingDevice = device
+                            discoveredPairingTransport = 2 // TRANSPORT_LE
+                            discoveredPairingRssi = result.rssi
 
-                        // Stop the scan - we found our device
-                        try {
-                            scanner.stopScan(this)
-                            earlyBleScanCallback = null
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to stop early BLE scan", e)
-                        }
+                            // Stop the scan - we found our device
+                            try {
+                                scanner.stopScan(this)
+                                earlyBleScanCallback = null
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to stop early BLE scan", e)
+                            }
 
-                        // Also stop Classic BT discovery if running
-                        bluetoothAdapter?.cancelDiscovery()
+                            // Also stop Classic BT discovery if running
+                            bluetoothAdapter?.cancelDiscovery()
 
-                        // Update UI to indicate device was found
-                        viewModelScope.launch {
-                            _state.update { state ->
-                                state.copy(usbPairingStatus = "Found $deviceName - enter PIN to pair")
+                            // Update UI to indicate device was found
+                            viewModelScope.launch {
+                                _state.update { state ->
+                                    state.copy(usbPairingStatus = "Found $deviceName - enter PIN to pair")
+                                }
                             }
                         }
                     }
-                }
 
-                override fun onScanFailed(errorCode: Int) {
-                    Log.e(TAG, "Early BLE scan failed with error code: $errorCode")
+                    override fun onScanFailed(errorCode: Int) {
+                        Log.e(TAG, "Early BLE scan failed with error code: $errorCode")
+                    }
                 }
-            }
 
             earlyBleScanCallback = callback
 
@@ -2518,20 +2543,22 @@ class RNodeWizardViewModel
                 withContext(Dispatchers.IO) {
                     // Send command to exit pairing mode: stop BT (0x00), then start BT (0x01)
                     // CMD_BT_CTRL = 0x46
-                    val stopPairingCmd = byteArrayOf(
-                        0xC0.toByte(),  // FEND
-                        0x46.toByte(),  // CMD_BT_CTRL
-                        0x00.toByte(),  // Stop Bluetooth (exits pairing mode)
-                        0xC0.toByte(),  // FEND
-                    )
-                    val restartBtCmd = byteArrayOf(
-                        0xC0.toByte(),  // FEND
-                        0x46.toByte(),  // CMD_BT_CTRL
-                        0x01.toByte(),  // Start Bluetooth
-                        0xC0.toByte(),  // FEND
-                    )
+                    val stopPairingCmd =
+                        byteArrayOf(
+                            0xC0.toByte(), // FEND
+                            0x46.toByte(), // CMD_BT_CTRL
+                            0x00.toByte(), // Stop Bluetooth (exits pairing mode)
+                            0xC0.toByte(), // FEND
+                        )
+                    val restartBtCmd =
+                        byteArrayOf(
+                            0xC0.toByte(), // FEND
+                            0x46.toByte(), // CMD_BT_CTRL
+                            0x01.toByte(), // Start Bluetooth
+                            0xC0.toByte(), // FEND
+                        )
                     usbBridge.write(stopPairingCmd)
-                    delay(100)  // Brief delay between commands
+                    delay(100) // Brief delay between commands
                     usbBridge.write(restartBtCmd)
                     delay(100)
                     usbBridge.disconnect()
@@ -2610,7 +2637,10 @@ class RNodeWizardViewModel
          * Pair with a previously discovered RNode device using the given PIN.
          */
         @SuppressLint("MissingPermission")
-        private fun pairWithDiscoveredDevice(device: BluetoothDevice, pin: String) {
+        private fun pairWithDiscoveredDevice(
+            device: BluetoothDevice,
+            pin: String,
+        ) {
             val deviceName = device.name ?: "RNode"
             Log.d(TAG, "Pairing with pre-discovered device: $deviceName (${device.address})")
 
@@ -2620,93 +2650,99 @@ class RNodeWizardViewModel
             pairingHandler?.unregister()
 
             // Create and register pairing handler with the PIN
-            val handler = BlePairingHandler(context).apply {
-                setAutoPairPin(pin, device.address)
-                register()
-            }
+            val handler =
+                BlePairingHandler(context).apply {
+                    setAutoPairPin(pin, device.address)
+                    register()
+                }
             pairingHandler = handler
 
             // Register bond state change listener BEFORE calling createBond
-            bondReceiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context, intent: Intent) {
-                    if (intent.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
+            bondReceiver =
+                object : BroadcastReceiver() {
+                    override fun onReceive(
+                        ctx: Context,
+                        intent: Intent,
+                    ) {
+                        if (intent.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
 
-                    val bondedDevice: BluetoothDevice? =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                        }
+                        val bondedDevice: BluetoothDevice? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                            }
 
-                    // Only process events for our target device
-                    if (bondedDevice?.address != device.address) return
+                        // Only process events for our target device
+                        if (bondedDevice?.address != device.address) return
 
-                    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
-                    val prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.BOND_NONE)
-                    Log.d(TAG, "Bond state changed for ${device.name}: $prevState -> $bondState")
+                        val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
+                        val prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.BOND_NONE)
+                        Log.d(TAG, "Bond state changed for ${device.name}: $prevState -> $bondState")
 
-                    when (bondState) {
-                        BluetoothDevice.BOND_BONDED -> {
-                            Log.i(TAG, "Successfully paired with ${device.name}!")
-                            viewModelScope.launch {
-                                // Create DiscoveredRNode for the paired device
-                                val discoveredNode = DiscoveredRNode(
-                                    name = deviceName,
-                                    address = device.address,
-                                    type = if (device.type == BluetoothDevice.DEVICE_TYPE_LE) BluetoothType.BLE else BluetoothType.CLASSIC,
-                                    rssi = discoveredPairingRssi,
-                                    isPaired = true,
-                                    bluetoothDevice = device,
-                                )
-                                _state.update { state ->
-                                    state.copy(
-                                        usbPairingStatus = "Successfully paired with $deviceName!",
-                                        isUsbPairingMode = false,
-                                        usbBluetoothPin = null,
-                                        // Add to discovered devices and auto-select it
-                                        discoveredDevices = state.discoveredDevices.filter { it.address != device.address } + discoveredNode,
-                                        selectedDevice = discoveredNode,
-                                        interfaceName = state.defaultInterfaceNameFor(discoveredNode),
-                                    )
+                        when (bondState) {
+                            BluetoothDevice.BOND_BONDED -> {
+                                Log.i(TAG, "Successfully paired with ${device.name}!")
+                                viewModelScope.launch {
+                                    // Create DiscoveredRNode for the paired device
+                                    val discoveredNode =
+                                        DiscoveredRNode(
+                                            name = deviceName,
+                                            address = device.address,
+                                            type = if (device.type == BluetoothDevice.DEVICE_TYPE_LE) BluetoothType.BLE else BluetoothType.CLASSIC,
+                                            rssi = discoveredPairingRssi,
+                                            isPaired = true,
+                                            bluetoothDevice = device,
+                                        )
+                                    _state.update { state ->
+                                        state.copy(
+                                            usbPairingStatus = "Successfully paired with $deviceName!",
+                                            isUsbPairingMode = false,
+                                            usbBluetoothPin = null,
+                                            // Add to discovered devices and auto-select it
+                                            discoveredDevices = state.discoveredDevices.filter { it.address != device.address } + discoveredNode,
+                                            selectedDevice = discoveredNode,
+                                            interfaceName = state.defaultInterfaceNameFor(discoveredNode),
+                                        )
+                                    }
                                 }
-                            }
-                            // Unregister receiver
-                            try {
-                                context.unregisterReceiver(this)
-                                bondReceiver = null
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to unregister bond receiver", e)
-                            }
-                            // Cleanup pairing handler
-                            pairingHandler?.unregister()
-                            pairingHandler = null
-                        }
-                        BluetoothDevice.BOND_NONE -> {
-                            // Pairing failed
-                            Log.e(TAG, "Pairing failed with ${device.name}")
-                            viewModelScope.launch {
-                                _state.update {
-                                    it.copy(usbPairingStatus = "Pairing failed with $deviceName")
+                                // Unregister receiver
+                                try {
+                                    context.unregisterReceiver(this)
+                                    bondReceiver = null
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister bond receiver", e)
                                 }
+                                // Cleanup pairing handler
+                                pairingHandler?.unregister()
+                                pairingHandler = null
                             }
-                            // Unregister receiver
-                            try {
-                                context.unregisterReceiver(this)
-                                bondReceiver = null
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to unregister bond receiver", e)
+                            BluetoothDevice.BOND_NONE -> {
+                                // Pairing failed
+                                Log.e(TAG, "Pairing failed with ${device.name}")
+                                viewModelScope.launch {
+                                    _state.update {
+                                        it.copy(usbPairingStatus = "Pairing failed with $deviceName")
+                                    }
+                                }
+                                // Unregister receiver
+                                try {
+                                    context.unregisterReceiver(this)
+                                    bondReceiver = null
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to unregister bond receiver", e)
+                                }
+                                // Cleanup pairing handler
+                                pairingHandler?.unregister()
+                                pairingHandler = null
                             }
-                            // Cleanup pairing handler
-                            pairingHandler?.unregister()
-                            pairingHandler = null
-                        }
-                        BluetoothDevice.BOND_BONDING -> {
-                            Log.d(TAG, "Bonding in progress with ${device.name}...")
+                            BluetoothDevice.BOND_BONDING -> {
+                                Log.d(TAG, "Bonding in progress with ${device.name}...")
+                            }
                         }
                     }
                 }
-            }
 
             val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -2719,19 +2755,21 @@ class RNodeWizardViewModel
             // Initiate bonding with the appropriate transport based on device type
             viewModelScope.launch {
                 try {
-                    val createBondMethod = BluetoothDevice::class.java.getMethod(
-                        "createBond",
-                        Int::class.javaPrimitiveType,
-                    )
+                    val createBondMethod =
+                        BluetoothDevice::class.java.getMethod(
+                            "createBond",
+                            Int::class.javaPrimitiveType,
+                        )
                     // TRANSPORT_BREDR = 1 for Classic Bluetooth, TRANSPORT_LE = 2 for BLE
                     // Use the transport from discovery (how we actually found the device),
                     // falling back to device.type only if discovery transport is unknown
-                    val transport = discoveredPairingTransport ?: when (device.type) {
-                        BluetoothDevice.DEVICE_TYPE_LE -> 2  // TRANSPORT_LE
-                        BluetoothDevice.DEVICE_TYPE_CLASSIC -> 1  // TRANSPORT_BREDR
-                        BluetoothDevice.DEVICE_TYPE_DUAL -> 2  // Prefer LE for dual-mode devices
-                        else -> 1  // Default to Classic
-                    }
+                    val transport =
+                        discoveredPairingTransport ?: when (device.type) {
+                            BluetoothDevice.DEVICE_TYPE_LE -> 2 // TRANSPORT_LE
+                            BluetoothDevice.DEVICE_TYPE_CLASSIC -> 1 // TRANSPORT_BREDR
+                            BluetoothDevice.DEVICE_TYPE_DUAL -> 2 // Prefer LE for dual-mode devices
+                            else -> 1 // Default to Classic
+                        }
                     val transportName = if (transport == 2) "TRANSPORT_LE" else "TRANSPORT_BREDR"
                     val source = if (discoveredPairingTransport != null) "discovery" else "device.type"
                     Log.d(TAG, "Using $transportName (from $source, device.type=${device.type})")
@@ -2790,23 +2828,25 @@ class RNodeWizardViewModel
 
                 try {
                     // Scan for USB devices
-                    val devices = withContext(Dispatchers.IO) {
-                        usbBridge.getConnectedUsbDevices()
-                    }
+                    val devices =
+                        withContext(Dispatchers.IO) {
+                            usbBridge.getConnectedUsbDevices()
+                        }
 
-                    val usbDevices = devices.map { device ->
-                        com.lxmf.messenger.data.model.DiscoveredUsbDevice(
-                            deviceId = device.deviceId,
-                            vendorId = device.vendorId,
-                            productId = device.productId,
-                            deviceName = device.deviceName,
-                            manufacturerName = device.manufacturerName,
-                            productName = device.productName,
-                            serialNumber = device.serialNumber,
-                            driverType = device.driverType,
-                            hasPermission = usbBridge.hasPermission(device.deviceId),
-                        )
-                    }
+                    val usbDevices =
+                        devices.map { device ->
+                            com.lxmf.messenger.data.model.DiscoveredUsbDevice(
+                                deviceId = device.deviceId,
+                                vendorId = device.vendorId,
+                                productId = device.productId,
+                                deviceName = device.deviceName,
+                                manufacturerName = device.manufacturerName,
+                                productName = device.productName,
+                                serialNumber = device.serialNumber,
+                                driverType = device.driverType,
+                                hasPermission = usbBridge.hasPermission(device.deviceId),
+                            )
+                        }
 
                     if (usbDevices.isEmpty()) {
                         _state.update {
@@ -2866,7 +2906,6 @@ class RNodeWizardViewModel
                 }
             }
         }
-
 
         // Pairing handler to auto-confirm Just Works pairing
         private var pairingHandler: BlePairingHandler? = null

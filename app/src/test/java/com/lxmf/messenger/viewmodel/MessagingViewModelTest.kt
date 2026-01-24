@@ -157,18 +157,19 @@ class MessagingViewModelTest {
      */
     private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
         runTest {
-            viewModel = MessagingViewModel(
-                reticulumProtocol,
-                conversationRepository,
-                announceRepository,
-                contactRepository,
-                activeConversationManager,
-                settingsRepository,
-                propagationNodeManager,
-                locationSharingManager,
-                identityRepository,
-                conversationLinkManager,
-            )
+            viewModel =
+                MessagingViewModel(
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                )
             advanceUntilIdle()
             testBody()
         }
@@ -194,7 +195,6 @@ class MessagingViewModelTest {
     @Test
     fun `initial state has empty messages`() =
         runViewModelTest {
-
             // Before loadMessages is called, the messages flow returns empty PagingData
             // Verify the repository method is not called until loadMessages() is invoked
             coVerify(exactly = 0) { conversationRepository.getMessagesPaged(any()) }
@@ -203,7 +203,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadMessages updates current conversation and triggers flow`() =
         runViewModelTest {
-
             // Act: Load messages for conversation
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
@@ -225,7 +224,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadMessages marks conversation as read`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -235,7 +233,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage success saves message to database with sent status`() =
         runViewModelTest {
-
             // Setup: Mock successful LXMF send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -285,7 +282,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage failure saves message to database with failed status`() =
         runViewModelTest {
-
             // Setup: Mock failed LXMF send
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
@@ -315,7 +311,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage converts destination hash to bytes correctly`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -362,7 +357,6 @@ class MessagingViewModelTest {
     @Test
     fun `markAsRead calls repository`() =
         runViewModelTest {
-
             viewModel.markAsRead(testPeerHash)
             advanceUntilIdle()
 
@@ -372,7 +366,6 @@ class MessagingViewModelTest {
     @Test
     fun `switching conversations updates message flow`() =
         runViewModelTest {
-
             val conversation1Hash = "peer1"
             val conversation2Hash = "peer2"
 
@@ -406,7 +399,6 @@ class MessagingViewModelTest {
     @Test
     fun `identity loads successfully on init`() =
         runViewModelTest {
-
             // Identity loading is now lazy - happens when sending messages, not during init
             // This avoids crashes when LXMF router isn't ready yet
             // Send a message to trigger identity loading
@@ -488,7 +480,6 @@ class MessagingViewModelTest {
     @Test
     fun `messages flow updates when database changes`() =
         runViewModelTest {
-
             // Create a mutable flow to simulate database changes (using PagingData)
             val messagesFlow = MutableStateFlow<PagingData<DataMessage>>(PagingData.empty())
             coEvery { conversationRepository.getMessagesPaged(testPeerHash) } returns messagesFlow
@@ -522,7 +513,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with invalid destination hash does not send or save`() =
         runViewModelTest {
-
             val invalidHash = "invalid!hash@123" // Contains invalid characters
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -546,7 +536,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with non-hex destination hash does not send`() =
         runViewModelTest {
-
             val nonHexHash = "ghijklmn" // Valid characters but not hex
 
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -569,7 +558,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with empty content does not send`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -591,7 +579,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with whitespace-only content does not send`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -613,7 +600,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with too-long content does not send`() =
         runViewModelTest {
-
             // Create message longer than MAX_MESSAGE_LENGTH (10000 chars)
             val tooLongMessage = "a".repeat(10001)
 
@@ -638,7 +624,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage sanitizes content before sending`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -688,7 +673,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage accepts valid message at max length`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -726,7 +710,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with valid hex hash succeeds`() =
         runViewModelTest {
-
             val validHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
             val destHashBytes = validHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -771,7 +754,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with empty content but image attached succeeds`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -822,7 +804,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage clears image after successful send`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -1377,7 +1358,6 @@ class MessagingViewModelTest {
     @Test
     fun `isContactSaved returns false when contact not saved`() =
         runViewModelTest {
-
             // Setup: Contact is not saved (default mock behavior)
             every { contactRepository.hasContactFlow(testPeerHash) } returns flowOf(false)
 
@@ -1392,7 +1372,6 @@ class MessagingViewModelTest {
     @Test
     fun `isContactSaved has initial value of false before loading conversation`() =
         runViewModelTest {
-
             // Assert: Before loading any conversation, isContactSaved is false
             assertEquals(false, viewModel.isContactSaved.value)
         }
@@ -1400,7 +1379,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact adds contact when not saved`() =
         runViewModelTest {
-
             // Setup: Contact is not saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             val testPublicKey = ByteArray(64) { it.toByte() }
@@ -1428,7 +1406,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact removes contact when already saved`() =
         runViewModelTest {
-
             // Setup: Contact is already saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns true
 
@@ -1454,7 +1431,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact does nothing when no conversation loaded`() =
         runViewModelTest {
-
             // Don't load any conversation - _currentConversation is null
 
             // Act: Toggle contact (should do nothing)
@@ -1476,7 +1452,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact handles missing public key gracefully`() =
         runViewModelTest {
-
             // Setup: Contact is not saved, but public key is not available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
@@ -1503,7 +1478,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact handles repository exception gracefully`() =
         runViewModelTest {
-
             // Setup: Contact is not saved, repository throws exception
             coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
 
@@ -1527,7 +1501,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Added result when contact successfully added`() =
         runViewModelTest {
-
             // Setup: Contact is not saved, public key is available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             val testPublicKey = ByteArray(64) { it.toByte() }
@@ -1556,7 +1529,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Removed result when contact successfully removed`() =
         runViewModelTest {
-
             // Setup: Contact is already saved
             coEvery { contactRepository.hasContact(testPeerHash) } returns true
 
@@ -1583,7 +1555,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Error result when public key unavailable`() =
         runViewModelTest {
-
             // Setup: Contact is not saved, but public key is not available
             coEvery { contactRepository.hasContact(testPeerHash) } returns false
             coEvery { conversationRepository.getPeerPublicKey(testPeerHash) } returns null
@@ -1612,7 +1583,6 @@ class MessagingViewModelTest {
     @Test
     fun `toggleContact emits Error result on repository exception`() =
         runViewModelTest {
-
             // Setup: Contact is not saved, repository throws exception
             coEvery { contactRepository.hasContact(testPeerHash) } throws RuntimeException("Database error")
 
@@ -1644,7 +1614,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadImageAsync does not crash on null fieldsJson`() =
         runViewModelTest {
-
             // Call with null fieldsJson - should not crash
             viewModel.loadImageAsync("test-msg", null)
             advanceUntilIdle()
@@ -1656,7 +1625,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadImageAsync does not crash on invalid JSON`() =
         runViewModelTest {
-
             // Call with invalid JSON - should not crash
             viewModel.loadImageAsync("test-msg", "not valid json")
             advanceUntilIdle()
@@ -1668,7 +1636,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadedImageIds initial state is empty`() =
         runViewModelTest {
-
             // Assert: Initial state is empty set
             assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }
@@ -1754,7 +1721,6 @@ class MessagingViewModelTest {
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(uri) } returns outputStream
 
-
             // Act
             val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
 
@@ -1776,7 +1742,6 @@ class MessagingViewModelTest {
             val contentResolver = mockk<android.content.ContentResolver>()
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(uri) } returns null
-
 
             // Act
             val result = viewModel.saveReceivedFileAttachment(context, "test-id", 0, uri)
@@ -1817,7 +1782,6 @@ class MessagingViewModelTest {
             val contentResolver = mockk<android.content.ContentResolver>()
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(uri) } returns outputStream
-
 
             // Act - Request index 1 (second attachment)
             val result = viewModel.saveReceivedFileAttachment(context, "test-id", 1, uri)
@@ -1891,7 +1855,6 @@ class MessagingViewModelTest {
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(uri) } returns outputStream
 
-
             // Act
             val result = viewModel.saveImage(context, "test-id", uri)
 
@@ -1913,7 +1876,6 @@ class MessagingViewModelTest {
             val contentResolver = mockk<android.content.ContentResolver>()
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(uri) } returns null
-
 
             // Act
             val result = viewModel.saveImage(context, "test-id", uri)
@@ -2001,7 +1963,6 @@ class MessagingViewModelTest {
                 androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
             } returns mockUri
 
-
             // Act
             val result = viewModel.getImageShareUri(context, "test-id")
 
@@ -2040,7 +2001,6 @@ class MessagingViewModelTest {
             every {
                 androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
             } returns mockUri
-
 
             // Act
             val result = viewModel.getImageShareUri(context, "test-id")
@@ -2095,7 +2055,6 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
-
             // Act
             val result = viewModel.getImageExtension("test-id")
 
@@ -2111,7 +2070,6 @@ class MessagingViewModelTest {
             val fieldsJson = """{"6": "$jpegHex"}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
-
 
             // Act
             val result = viewModel.getImageExtension("test-id")
@@ -2138,7 +2096,6 @@ class MessagingViewModelTest {
     @Test
     fun `addFileAttachment adds file to selectedFileAttachments`() =
         runViewModelTest {
-
             val attachment =
                 FileAttachment(
                     filename = "test.pdf",
@@ -2157,7 +2114,6 @@ class MessagingViewModelTest {
     @Test
     fun `addFileAttachment adds multiple files`() =
         runViewModelTest {
-
             val attachment1 =
                 FileAttachment(
                     filename = "test1.pdf",
@@ -2185,7 +2141,6 @@ class MessagingViewModelTest {
     @Test
     fun `removeFileAttachment removes file at index`() =
         runViewModelTest {
-
             // Add two files
             val attachment1 = FileAttachment("file1.pdf", ByteArray(100), "application/pdf", 100)
             val attachment2 = FileAttachment("file2.txt", ByteArray(200), "text/plain", 200)
@@ -2205,7 +2160,6 @@ class MessagingViewModelTest {
     @Test
     fun `removeFileAttachment does nothing for invalid index`() =
         runViewModelTest {
-
             val attachment = FileAttachment("file.pdf", ByteArray(100), "application/pdf", 100)
             viewModel.addFileAttachment(attachment)
             advanceUntilIdle()
@@ -2219,7 +2173,6 @@ class MessagingViewModelTest {
     @Test
     fun `removeFileAttachment handles negative index`() =
         runViewModelTest {
-
             val attachment = FileAttachment("file.pdf", ByteArray(100), "application/pdf", 100)
             viewModel.addFileAttachment(attachment)
             advanceUntilIdle()
@@ -2233,7 +2186,6 @@ class MessagingViewModelTest {
     @Test
     fun `clearFileAttachments removes all files`() =
         runViewModelTest {
-
             // Add multiple files
             viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(100), "application/pdf", 100))
             viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(200), "text/plain", 200))
@@ -2251,7 +2203,6 @@ class MessagingViewModelTest {
     @Test
     fun `totalAttachmentSize reflects sum of file sizes when files are added`() =
         runViewModelTest {
-
             viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
             advanceUntilIdle()
 
@@ -2267,7 +2218,6 @@ class MessagingViewModelTest {
     @Test
     fun `totalAttachmentSize reflects sum of file sizes when files are removed`() =
         runViewModelTest {
-
             viewModel.addFileAttachment(FileAttachment("file1.pdf", ByteArray(1000), "application/pdf", 1000))
             viewModel.addFileAttachment(FileAttachment("file2.txt", ByteArray(500), "text/plain", 500))
             advanceUntilIdle()
@@ -2286,7 +2236,6 @@ class MessagingViewModelTest {
     @Test
     fun `setProcessingFile updates isProcessingFile state`() =
         runViewModelTest {
-
             assertEquals(false, viewModel.isProcessingFile.value)
 
             viewModel.setProcessingFile(true)
@@ -2301,7 +2250,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with empty content but file attached succeeds`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -2348,7 +2296,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage clears file attachments after successful send`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -2390,7 +2337,6 @@ class MessagingViewModelTest {
     @Test
     fun `syncFromPropagationNode triggers sync`() =
         runViewModelTest {
-
             coEvery { propagationNodeManager.triggerSync() } just Runs
 
             viewModel.syncFromPropagationNode()
@@ -2563,7 +2509,6 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
-
             // Create temp directory for test
             val tempDir =
                 java.io.File.createTempFile("test", "dir").apply {
@@ -2612,7 +2557,6 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
-
             val tempDir =
                 java.io.File.createTempFile("test", "dir").apply {
                     delete()
@@ -2655,7 +2599,6 @@ class MessagingViewModelTest {
             ]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
-
 
             val tempDir =
                 java.io.File.createTempFile("test", "dir").apply {
@@ -2703,7 +2646,6 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
-
             // Create temp directory but NOT the attachments subdirectory
             val tempDir =
                 java.io.File.createTempFile("test", "dir").apply {
@@ -2750,7 +2692,6 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
-
             val tempDir =
                 java.io.File.createTempFile("test", "dir").apply {
                     delete()
@@ -2788,7 +2729,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReplyTo sets pending reply when message found`() =
         runViewModelTest {
-
             // Setup: Mock reply preview exists
             val replyPreview =
                 ReplyPreview(
@@ -2820,7 +2760,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReplyTo does not set pending reply when message not found`() =
         runViewModelTest {
-
             // Setup: Mock reply preview not found
             coEvery { conversationRepository.getReplyPreview("unknown-msg", any()) } returns null
 
@@ -2839,7 +2778,6 @@ class MessagingViewModelTest {
     @Test
     fun `clearReplyTo clears pending reply`() =
         runViewModelTest {
-
             // Setup: Set a pending reply first
             val replyPreview =
                 ReplyPreview(
@@ -2872,7 +2810,6 @@ class MessagingViewModelTest {
     @Test
     fun `pendingReplyTo initial state is null`() =
         runViewModelTest {
-
             // Assert: Initial state is null
             assertNull(viewModel.pendingReplyTo.value)
         }
@@ -2880,7 +2817,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadReplyPreviewAsync caches reply preview`() =
         runViewModelTest {
-
             // Setup: Mock reply preview exists
             val replyPreview =
                 ReplyPreview(
@@ -2914,7 +2850,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadReplyPreviewAsync does not reload if already cached`() =
         runViewModelTest {
-
             // Setup: Mock reply preview exists
             val replyPreview =
                 ReplyPreview(
@@ -2948,7 +2883,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadReplyPreviewAsync handles deleted message gracefully`() =
         runViewModelTest {
-
             // Setup: Reply target message not found
             coEvery { conversationRepository.getReplyPreview("deleted-msg", any()) } returns null
 
@@ -2971,7 +2905,6 @@ class MessagingViewModelTest {
     @Test
     fun `replyPreviewCache initial state is empty`() =
         runViewModelTest {
-
             // Assert: Initial state is empty map
             assertTrue(viewModel.replyPreviewCache.value.isEmpty())
         }
@@ -2979,7 +2912,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with pending reply includes replyToMessageId`() =
         runViewModelTest {
-
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -3033,7 +2965,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage clears pending reply after successful send`() =
         runViewModelTest {
-
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -3085,7 +3016,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage without pending reply does not include replyToMessageId`() =
         runViewModelTest {
-
             // Setup: Mock successful send
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -3123,7 +3053,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReplyTo handles exception gracefully`() =
         runViewModelTest {
-
             // Setup: Repository throws exception
             coEvery { conversationRepository.getReplyPreview(any(), any()) } throws RuntimeException("DB error")
 
@@ -3141,7 +3070,6 @@ class MessagingViewModelTest {
     @Test
     fun `loadReplyPreviewAsync handles exception gracefully`() =
         runViewModelTest {
-
             // Setup: Repository throws exception
             coEvery { conversationRepository.getReplyPreview(any(), any()) } throws RuntimeException("DB error")
 
@@ -3159,7 +3087,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReplyTo with image attachment sets hasImage correctly`() =
         runViewModelTest {
-
             // Setup: Reply preview has image
             val replyPreview =
                 ReplyPreview(
@@ -3188,7 +3115,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReplyTo with file attachment sets hasFileAttachment correctly`() =
         runViewModelTest {
-
             // Setup: Reply preview has file attachment
             val replyPreview =
                 ReplyPreview(
@@ -3220,7 +3146,6 @@ class MessagingViewModelTest {
     @Test
     fun `reactionModeState initial state is null`() =
         runViewModelTest {
-
             // Assert: Initial state is null
             assertNull(viewModel.reactionModeState.value)
         }
@@ -3228,7 +3153,6 @@ class MessagingViewModelTest {
     @Test
     fun `enterReactionMode sets state with isMessageHidden true by default`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3254,7 +3178,6 @@ class MessagingViewModelTest {
     @Test
     fun `enterReactionMode generates unique instanceId`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3290,7 +3213,6 @@ class MessagingViewModelTest {
     @Test
     fun `exitReactionMode clears state`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3314,7 +3236,6 @@ class MessagingViewModelTest {
     @Test
     fun `showOriginalMessage sets isMessageHidden to false`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3342,7 +3263,6 @@ class MessagingViewModelTest {
     @Test
     fun `showOriginalMessage does nothing when state is null`() =
         runViewModelTest {
-
             // Verify initial state is null
             assertNull(viewModel.reactionModeState.value)
 
@@ -3357,7 +3277,6 @@ class MessagingViewModelTest {
     @Test
     fun `showOriginalMessage preserves instanceId`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3382,7 +3301,6 @@ class MessagingViewModelTest {
     @Test
     fun `enterReactionMode with failed message sets isFailed correctly`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3406,7 +3324,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction returns early when message not found`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3424,7 +3341,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction sends reaction via protocol when message exists`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3473,7 +3389,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction updates message fieldsJson in database`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3524,7 +3439,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction clears reaction UI state after sending`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3569,7 +3483,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction handles protocol send failure gracefully`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3614,7 +3527,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction adds reaction to existing fieldsJson with reply_to`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3666,7 +3578,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendReaction adds sender to existing emoji reaction`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -3872,7 +3783,6 @@ class MessagingViewModelTest {
     @Test
     fun `selectImage sets image data and format`() =
         runViewModelTest {
-
             val imageData = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
             viewModel.selectImage(imageData, "png")
@@ -3886,7 +3796,6 @@ class MessagingViewModelTest {
     @Test
     fun `selectImage with animated flag sets isAnimated`() =
         runViewModelTest {
-
             val gifData = byteArrayOf(0x47, 0x49, 0x46) // GIF header
 
             viewModel.selectImage(gifData, "gif", isAnimated = true)
@@ -3900,7 +3809,6 @@ class MessagingViewModelTest {
     @Test
     fun `clearSelectedImage clears image state`() =
         runViewModelTest {
-
             // Set an image first
             viewModel.selectImage(byteArrayOf(1, 2, 3), "jpg")
             advanceUntilIdle()
@@ -3919,7 +3827,6 @@ class MessagingViewModelTest {
     @Test
     fun `setProcessingImage updates isProcessingImage state`() =
         runViewModelTest {
-
             assertFalse(viewModel.isProcessingImage.value)
 
             viewModel.setProcessingImage(true)
@@ -3936,7 +3843,6 @@ class MessagingViewModelTest {
     @Test
     fun `setReactionTarget sets pending reaction message id and shows picker`() =
         runViewModelTest {
-
             viewModel.setReactionTarget("msg-123")
             advanceUntilIdle()
 
@@ -3947,7 +3853,6 @@ class MessagingViewModelTest {
     @Test
     fun `clearReactionTarget clears pending reaction and hides picker`() =
         runViewModelTest {
-
             // Set target first
             viewModel.setReactionTarget("msg-123")
             advanceUntilIdle()
@@ -3963,7 +3868,6 @@ class MessagingViewModelTest {
     @Test
     fun `dismissReactionPicker hides picker but keeps target`() =
         runViewModelTest {
-
             // Set target first
             viewModel.setReactionTarget("msg-123")
             advanceUntilIdle()
@@ -3983,14 +3887,12 @@ class MessagingViewModelTest {
     @Test
     fun `pendingReactionMessageId initial state is null`() =
         runViewModelTest {
-
             assertNull(viewModel.pendingReactionMessageId.value)
         }
 
     @Test
     fun `showReactionPicker initial state is false`() =
         runViewModelTest {
-
             assertFalse(viewModel.showReactionPicker.value)
         }
 
@@ -3999,7 +3901,6 @@ class MessagingViewModelTest {
     @Test
     fun `startSharingWithPeer calls location sharing manager`() =
         runViewModelTest {
-
             val duration = com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES
 
             viewModel.startSharingWithPeer(testPeerHash, testPeerName, duration)
@@ -4017,7 +3918,6 @@ class MessagingViewModelTest {
     @Test
     fun `stopSharingWithPeer calls location sharing manager`() =
         runViewModelTest {
-
             viewModel.stopSharingWithPeer(testPeerHash)
             advanceUntilIdle()
 
@@ -4029,14 +3929,12 @@ class MessagingViewModelTest {
     @Test
     fun `isSending initial state is false`() =
         runViewModelTest {
-
             assertFalse(viewModel.isSending.value)
         }
 
     @Test
     fun `isSending is true during message send and false after`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -4067,7 +3965,6 @@ class MessagingViewModelTest {
     @Test
     fun `isSending is false after failed send`() =
         runViewModelTest {
-
             coEvery {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
@@ -4089,7 +3986,6 @@ class MessagingViewModelTest {
     @Test
     fun `retryFailedMessage does nothing when message not found`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -4107,7 +4003,6 @@ class MessagingViewModelTest {
     @Test
     fun `retryFailedMessage does nothing when message is not failed`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -4135,7 +4030,6 @@ class MessagingViewModelTest {
     @Test
     fun `retryFailedMessage retries message when status is failed`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -4191,7 +4085,6 @@ class MessagingViewModelTest {
     @Test
     fun `retryFailedMessage restores failed status on retry failure`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -4229,7 +4122,6 @@ class MessagingViewModelTest {
     @Test
     fun `retryFailedMessage handles invalid destination hash`() =
         runViewModelTest {
-
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
@@ -4259,7 +4151,6 @@ class MessagingViewModelTest {
     @Test
     fun `fetchPendingFile triggers sync with increased size limit`() =
         runViewModelTest {
-
             // Mock settings to return current limit
             coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
 
@@ -4288,7 +4179,6 @@ class MessagingViewModelTest {
     @Test
     fun `fetchPendingFile reverts size limit after sync`() =
         runViewModelTest {
-
             val originalLimit = 500
             coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns originalLimit
 
@@ -4360,14 +4250,12 @@ class MessagingViewModelTest {
     @Test
     fun `totalAttachmentSize initial value is zero`() =
         runViewModelTest {
-
             assertEquals(0, viewModel.totalAttachmentSize.value)
         }
 
     @Test
     fun `totalAttachmentSize is zero when no files attached`() =
         runViewModelTest {
-
             // Make sure no files are attached
             viewModel.clearFileAttachments()
             advanceUntilIdle()
@@ -4380,7 +4268,6 @@ class MessagingViewModelTest {
     @Test
     fun `sendMessage with file attachment calls protocol with file data`() =
         runViewModelTest {
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
                 MessageReceipt(
@@ -4429,7 +4316,6 @@ class MessagingViewModelTest {
     @Test
     fun `myIdentityHash is set after identity loads`() =
         runViewModelTest {
-
             // Identity is loaded lazily, trigger by sending a message
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val testReceipt =
@@ -4459,7 +4345,6 @@ class MessagingViewModelTest {
     @Test
     fun `decodedImages initial state is empty`() =
         runViewModelTest {
-
             assertTrue(viewModel.decodedImages.value.isEmpty())
         }
 
@@ -4468,7 +4353,6 @@ class MessagingViewModelTest {
     @Test
     fun `announceInfo returns null when no conversation loaded`() =
         runViewModelTest {
-
             // Before loading any conversation
             assertNull(viewModel.announceInfo.value)
         }

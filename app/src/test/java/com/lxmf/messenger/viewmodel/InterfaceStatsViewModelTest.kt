@@ -55,7 +55,9 @@ class InterfaceStatsViewModelTest {
             name = "Test RNode",
             type = "RNode",
             enabled = true,
-            configJson = """{"connection_mode":"classic","target_device_name":"RNode A1B2","frequency":915000000,"bandwidth":125000,"spreading_factor":7,"tx_power":17,"coding_rate":5,"mode":"full"}""",
+            configJson = """{"connection_mode":"classic","target_device_name":"RNode A1B2",""" +
+                """"frequency":915000000,"bandwidth":125000,"spreading_factor":7,""" +
+                """"tx_power":17,"coding_rate":5,"mode":"full"}""",
             displayOrder = 0,
         )
 

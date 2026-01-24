@@ -65,6 +65,7 @@ object DatabaseModule {
             MIGRATION_28_29,
             MIGRATION_29_30,
             MIGRATION_30_31,
+            MIGRATION_31_32,
         )
     }
 
@@ -1285,6 +1286,57 @@ object DatabaseModule {
                       AND iconBackgroundColor IS NOT NULL
                     """.trimIndent(),
                 )
+            }
+        }
+
+    // Migration from version 31 to 32: Drop orphaned icon columns from announces table
+    // The icon columns were migrated to peer_icons table in version 31, but the columns
+    // were not dropped from announces, causing Room schema validation failures.
+    // SQLite doesn't support DROP COLUMN directly, so we recreate the table without them.
+    private val MIGRATION_31_32 =
+        object : Migration(31, 32) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Recreate announces table without icon columns
+                database.execSQL("ALTER TABLE announces RENAME TO announces_old")
+                database.execSQL(
+                    """
+                    CREATE TABLE announces (
+                        destinationHash TEXT NOT NULL PRIMARY KEY,
+                        peerName TEXT NOT NULL,
+                        publicKey BLOB NOT NULL,
+                        appData BLOB,
+                        hops INTEGER NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL,
+                        nodeType TEXT NOT NULL,
+                        receivingInterface TEXT,
+                        receivingInterfaceType TEXT,
+                        aspect TEXT,
+                        isFavorite INTEGER NOT NULL,
+                        favoritedTimestamp INTEGER,
+                        stampCost INTEGER,
+                        stampCostFlexibility INTEGER,
+                        peeringCost INTEGER,
+                        propagationTransferLimitKb INTEGER
+                    )
+                    """.trimIndent(),
+                )
+                // Copy data from old table (excluding icon columns)
+                database.execSQL(
+                    """
+                    INSERT INTO announces
+                    SELECT destinationHash, peerName, publicKey, appData, hops,
+                           lastSeenTimestamp, nodeType, receivingInterface, receivingInterfaceType,
+                           aspect, isFavorite, favoritedTimestamp, stampCost, stampCostFlexibility,
+                           peeringCost, propagationTransferLimitKb
+                    FROM announces_old
+                    """.trimIndent(),
+                )
+                database.execSQL("DROP TABLE announces_old")
+
+                // Recreate indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_lastSeenTimestamp ON announces(lastSeenTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_isFavorite_favoritedTimestamp ON announces(isFavorite, favoritedTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_nodeType_lastSeenTimestamp ON announces(nodeType, lastSeenTimestamp)")
             }
         }
 

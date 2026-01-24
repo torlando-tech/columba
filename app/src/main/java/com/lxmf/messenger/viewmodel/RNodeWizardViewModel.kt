@@ -2150,6 +2150,9 @@ class RNodeWizardViewModel
         /** Device discovered during early Classic BT discovery (before PIN entry) */
         private var discoveredPairingDevice: BluetoothDevice? = null
 
+        /** Transport used to discover the device: 1 = BREDR (Classic), 2 = LE (BLE) */
+        private var discoveredPairingTransport: Int? = null
+
         /**
          * Start Classic Bluetooth discovery to find RNode devices in pairing mode.
          * RNode advertises via Classic Bluetooth when in pairing mode, NOT via BLE.
@@ -2289,6 +2292,7 @@ class RNodeWizardViewModel
         private fun startClassicBluetoothDiscoveryForPairing() {
             // Clear any previously discovered device
             discoveredPairingDevice = null
+            discoveredPairingTransport = null
 
             // Get bonded device addresses - we'll skip these during discovery
             val bondedDevices = bluetoothAdapter?.bondedDevices ?: emptySet()
@@ -2337,6 +2341,7 @@ class RNodeWizardViewModel
                                     if (deviceName.startsWith("RNode", ignoreCase = true) && !isAlreadyBonded) {
                                         Log.i(TAG, "Early discovery found unbonded RNode: $deviceName - storing for later pairing")
                                         discoveredPairingDevice = it
+                                        discoveredPairingTransport = 1  // TRANSPORT_BREDR
                                         bluetoothAdapter?.cancelDiscovery()
 
                                         // Update UI to indicate device was found
@@ -2447,6 +2452,7 @@ class RNodeWizardViewModel
                     if (!isAlreadyBonded) {
                         Log.i(TAG, "Early BLE scan found unbonded RNode: $deviceName - storing for later pairing")
                         discoveredPairingDevice = device
+                        discoveredPairingTransport = 2  // TRANSPORT_LE
 
                         // Stop the scan - we found our device
                         try {
@@ -2713,14 +2719,17 @@ class RNodeWizardViewModel
                         Int::class.javaPrimitiveType,
                     )
                     // TRANSPORT_BREDR = 1 for Classic Bluetooth, TRANSPORT_LE = 2 for BLE
-                    val transport = when (device.type) {
+                    // Use the transport from discovery (how we actually found the device),
+                    // falling back to device.type only if discovery transport is unknown
+                    val transport = discoveredPairingTransport ?: when (device.type) {
                         BluetoothDevice.DEVICE_TYPE_LE -> 2  // TRANSPORT_LE
                         BluetoothDevice.DEVICE_TYPE_CLASSIC -> 1  // TRANSPORT_BREDR
                         BluetoothDevice.DEVICE_TYPE_DUAL -> 2  // Prefer LE for dual-mode devices
                         else -> 1  // Default to Classic
                     }
                     val transportName = if (transport == 2) "TRANSPORT_LE" else "TRANSPORT_BREDR"
-                    Log.d(TAG, "Device type: ${device.type}, using $transportName")
+                    val source = if (discoveredPairingTransport != null) "discovery" else "device.type"
+                    Log.d(TAG, "Using $transportName (from $source, device.type=${device.type})")
                     createBondMethod.invoke(device, transport)
                     Log.d(TAG, "createBond($transportName) called for pre-discovered RNode")
                 } catch (e: Exception) {
@@ -2731,6 +2740,7 @@ class RNodeWizardViewModel
 
             // Clear the pre-discovered device reference
             discoveredPairingDevice = null
+            discoveredPairingTransport = null
         }
 
         /**

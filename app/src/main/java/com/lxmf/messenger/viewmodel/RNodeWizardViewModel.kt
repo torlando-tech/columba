@@ -2153,6 +2153,9 @@ class RNodeWizardViewModel
         /** Transport used to discover the device: 1 = BREDR (Classic), 2 = LE (BLE) */
         private var discoveredPairingTransport: Int? = null
 
+        /** RSSI at time of discovery (null if unknown, e.g. Classic BT doesn't report RSSI) */
+        private var discoveredPairingRssi: Int? = null
+
         /**
          * Start Classic Bluetooth discovery to find RNode devices in pairing mode.
          * RNode advertises via Classic Bluetooth when in pairing mode, NOT via BLE.
@@ -2293,6 +2296,7 @@ class RNodeWizardViewModel
             // Clear any previously discovered device
             discoveredPairingDevice = null
             discoveredPairingTransport = null
+            discoveredPairingRssi = null
 
             // Get bonded device addresses - we'll skip these during discovery
             val bondedDevices = bluetoothAdapter?.bondedDevices ?: emptySet()
@@ -2450,9 +2454,10 @@ class RNodeWizardViewModel
 
                     // Store unbonded RNode for later pairing (when PIN is submitted)
                     if (!isAlreadyBonded) {
-                        Log.i(TAG, "Early BLE scan found unbonded RNode: $deviceName - storing for later pairing")
+                        Log.i(TAG, "Early BLE scan found unbonded RNode: $deviceName (RSSI: ${result.rssi}) - storing for later pairing")
                         discoveredPairingDevice = device
                         discoveredPairingTransport = 2  // TRANSPORT_LE
+                        discoveredPairingRssi = result.rssi
 
                         // Stop the scan - we found our device
                         try {
@@ -2650,7 +2655,7 @@ class RNodeWizardViewModel
                                     name = deviceName,
                                     address = device.address,
                                     type = if (device.type == BluetoothDevice.DEVICE_TYPE_LE) BluetoothType.BLE else BluetoothType.CLASSIC,
-                                    rssi = -50,  // Unknown RSSI
+                                    rssi = discoveredPairingRssi,
                                     isPaired = true,
                                     bluetoothDevice = device,
                                 )
@@ -2741,6 +2746,7 @@ class RNodeWizardViewModel
             // Clear the pre-discovered device reference
             discoveredPairingDevice = null
             discoveredPairingTransport = null
+            discoveredPairingRssi = null
         }
 
         /**

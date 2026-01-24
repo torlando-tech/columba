@@ -109,8 +109,6 @@ class RNodeWizardViewModelTest {
 
     @After
     fun tearDown() {
-        // Wait for pending IO coroutines to complete before resetting dispatcher
-        Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
 

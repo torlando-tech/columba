@@ -2658,7 +2658,7 @@ class RNodeWizardViewModel
             pairingHandler = handler
 
             // Register bond state change listener BEFORE calling createBond
-            bondReceiver =
+            val receiver =
                 object : BroadcastReceiver() {
                     override fun onReceive(
                         ctx: Context,
@@ -2743,13 +2743,14 @@ class RNodeWizardViewModel
                         }
                     }
                 }
+            bondReceiver = receiver
 
             val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(bondReceiver, filter, Context.RECEIVER_EXPORTED)
+                context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(bondReceiver, filter)
+                context.registerReceiver(receiver, filter)
             }
 
             // Initiate bonding with the appropriate transport based on device type

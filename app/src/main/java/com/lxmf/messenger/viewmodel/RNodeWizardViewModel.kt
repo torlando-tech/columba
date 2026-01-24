@@ -1971,6 +1971,14 @@ class RNodeWizardViewModel
                 }
                 classicDiscoveryReceiver = null
             }
+            bondReceiver?.let {
+                try {
+                    context.unregisterReceiver(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unregister bond receiver", e)
+                }
+                bondReceiver = null
+            }
         }
 
         /**
@@ -2130,6 +2138,9 @@ class RNodeWizardViewModel
 
         /** Broadcast receiver for Classic Bluetooth discovery during manual PIN pairing */
         private var classicDiscoveryReceiver: BroadcastReceiver? = null
+
+        /** Broadcast receiver for bond state changes during USB-assisted pairing */
+        private var bondReceiver: BroadcastReceiver? = null
 
         /** Device discovered during early Classic BT discovery (before PIN entry) */
         private var discoveredPairingDevice: BluetoothDevice? = null
@@ -2600,7 +2611,7 @@ class RNodeWizardViewModel
             pairingHandler = handler
 
             // Register bond state change listener BEFORE calling createBond
-            val bondReceiver = object : BroadcastReceiver() {
+            bondReceiver = object : BroadcastReceiver() {
                 override fun onReceive(ctx: Context, intent: Intent) {
                     if (intent.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
 
@@ -2647,6 +2658,7 @@ class RNodeWizardViewModel
                             // Unregister receiver
                             try {
                                 context.unregisterReceiver(this)
+                                bondReceiver = null
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to unregister bond receiver", e)
                             }
@@ -2665,6 +2677,7 @@ class RNodeWizardViewModel
                             // Unregister receiver
                             try {
                                 context.unregisterReceiver(this)
+                                bondReceiver = null
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to unregister bond receiver", e)
                             }

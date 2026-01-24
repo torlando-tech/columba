@@ -109,6 +109,10 @@ class RNodeWizardViewModelTest {
 
     @After
     fun tearDown() {
+        // Required: Allow pending IO coroutines to complete before resetting dispatcher
+        // Without this, UncaughtExceptionsBeforeTest errors occur due to coroutines
+        // accessing Dispatchers.Main after resetMain() is called
+        Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
 

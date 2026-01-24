@@ -566,34 +566,30 @@ data class FailedInterface(
 data class DiscoveredInterface(
     // Core identification
     val name: String,
-    val type: String,  // "TCPServerInterface", "RNodeInterface", etc.
-    val transportId: String?,  // Transport identity hash
-    val networkId: String?,  // Network identity hash
-
+    val type: String, // "TCPServerInterface", "RNodeInterface", etc.
+    val transportId: String?, // Transport identity hash
+    val networkId: String?, // Network identity hash
     // Status information
-    val status: String,  // "available", "unknown", "stale"
-    val statusCode: Int,  // 1000 = available, 100 = unknown, 0 = stale
-    val lastHeard: Long,  // Unix timestamp in seconds
-    val heardCount: Int,  // Number of times this interface has been discovered
-    val hops: Int,  // Distance in hops from discovery source
-    val stampValue: Int,  // Proof-of-work stamp value
-
+    val status: String, // "available", "unknown", "stale"
+    val statusCode: Int, // 1000 = available, 100 = unknown, 0 = stale
+    val lastHeard: Long, // Unix timestamp in seconds
+    val heardCount: Int, // Number of times this interface has been discovered
+    val hops: Int, // Distance in hops from discovery source
+    val stampValue: Int, // Proof-of-work stamp value
     // TCP-specific fields
-    val reachableOn: String?,  // Host/IP for TCP interfaces or b32 address for I2P
+    val reachableOn: String?, // Host/IP for TCP interfaces or b32 address for I2P
     val port: Int?,
-
     // Radio-specific fields (RNode, Weave, KISS)
-    val frequency: Long?,  // Frequency in Hz
-    val bandwidth: Int?,  // Bandwidth in Hz
-    val spreadingFactor: Int?,  // LoRa spreading factor (5-12)
-    val codingRate: Int?,  // LoRa coding rate (5-8)
-    val modulation: String?,  // Modulation type
-    val channel: Int?,  // Channel number (for Weave)
-
+    val frequency: Long?, // Frequency in Hz
+    val bandwidth: Int?, // Bandwidth in Hz
+    val spreadingFactor: Int?, // LoRa spreading factor (5-12)
+    val codingRate: Int?, // LoRa coding rate (5-8)
+    val modulation: String?, // Modulation type
+    val channel: Int?, // Channel number (for Weave)
     // Location (optional, for interfaces that share location)
     val latitude: Double?,
     val longitude: Double?,
-    val height: Double?,  // Altitude in meters
+    val height: Double?, // Altitude in meters
 ) {
     /**
      * Returns true if this is a TCP-based interface.
@@ -662,14 +658,11 @@ data class DiscoveredInterface(
         }
 
         // JSON extension helpers for nullable values
-        private fun org.json.JSONObject.optIntOrNull(key: String): Int? =
-            if (has(key) && !isNull(key)) getInt(key) else null
+        private fun org.json.JSONObject.optIntOrNull(key: String): Int? = if (has(key) && !isNull(key)) getInt(key) else null
 
-        private fun org.json.JSONObject.optLongOrNull(key: String): Long? =
-            if (has(key) && !isNull(key)) getLong(key) else null
+        private fun org.json.JSONObject.optLongOrNull(key: String): Long? = if (has(key) && !isNull(key)) getLong(key) else null
 
-        private fun org.json.JSONObject.optDoubleOrNull(key: String): Double? =
-            if (has(key) && !isNull(key)) getDouble(key) else null
+        private fun org.json.JSONObject.optDoubleOrNull(key: String): Double? = if (has(key) && !isNull(key)) getDouble(key) else null
     }
 }
 

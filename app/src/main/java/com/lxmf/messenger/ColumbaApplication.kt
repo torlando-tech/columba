@@ -83,7 +83,6 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
-
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Main for lifecycle operations and UI coordination
     // SupervisorJob ensures failures don't crash the entire app
@@ -539,7 +538,10 @@ class ColumbaApplication : Application() {
             val discoverInterfaces = startupConfig.discoverInterfaces
             val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loaded ${enabledInterfaces.size} enabled interface(s)")
-            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
+            android.util.Log.d(
+                "ColumbaApplication",
+                "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount",
+            )
 
             // Ensure identity file exists (recover from keyData if missing)
             var identityPath: String? = null

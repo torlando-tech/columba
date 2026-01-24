@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -56,6 +57,17 @@ class RNodeWizardViewModelTest {
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var viewModel: RNodeWizardViewModel
+
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
+            advanceUntilIdle()
+            testBody()
+        }
 
     private val usRegion = FrequencyRegions.findById("us_915")!!
     private val euRegionP = FrequencyRegions.findById("eu_868_p")!!
@@ -93,12 +105,12 @@ class RNodeWizardViewModelTest {
 
         // Mock allInterfaces to return empty list (no duplicates)
         every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
-
-        viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
     }
 
     @After
     fun tearDown() {
+        // Wait for pending IO coroutines to complete before resetting dispatcher
+        Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
 
@@ -110,7 +122,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `initial state is DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val state = awaitItem()
                 assertEquals(WizardStep.DEVICE_DISCOVERY, state.currentStep)
@@ -119,7 +133,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToNextStep from DEVICE_DISCOVERY goes to REGION_SELECTION`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -133,7 +149,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToNextStep from REGION_SELECTION goes to MODEM_PRESET`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
@@ -149,7 +167,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToNextStep from MODEM_PRESET goes to FREQUENCY_SLOT`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Set up required state
             viewModel.selectFrequencyRegion(usRegion)
             viewModel.goToStep(WizardStep.MODEM_PRESET)
@@ -166,7 +186,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToNextStep from FREQUENCY_SLOT goes to REVIEW_CONFIGURE`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Set up required state
             viewModel.selectFrequencyRegion(usRegion)
             viewModel.goToStep(WizardStep.FREQUENCY_SLOT)
@@ -183,7 +205,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToPreviousStep from REGION_SELECTION goes to DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -201,7 +225,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToPreviousStep at DEVICE_DISCOVERY stays at DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -217,14 +243,18 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `canProceed false when no device selected on DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Initial state - no device
             assertFalse(viewModel.canProceed())
         }
 
     @Test
     fun `canProceed true when device selected on DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()
 
@@ -233,7 +263,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `canProceed true with manual device name on DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.showManualEntry()
             advanceUntilIdle()
 
@@ -245,7 +277,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `canProceed false when no region selected on REGION_SELECTION`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
@@ -254,7 +288,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `canProceed true when region selected on REGION_SELECTION`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
@@ -266,7 +302,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `canProceed true when popular preset selected on REGION_SELECTION`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
@@ -291,7 +329,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToNextStep skips to REVIEW_CONFIGURE when preset selected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
@@ -320,7 +360,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToPreviousStep returns to REGION_SELECTION from REVIEW when preset selected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
@@ -354,7 +396,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectFrequencyRegion updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -364,20 +408,28 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
-    fun `getFrequencyRegions returns all regions`() {
-        val regions = viewModel.getFrequencyRegions()
-        assertEquals(21, regions.size)
-    }
+    fun `getFrequencyRegions returns all regions`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val regions = viewModel.getFrequencyRegions()
+            assertEquals(21, regions.size)
+        }
 
     @Test
-    fun `getRegionLimits returns null when no region selected`() {
-        val limits = viewModel.getRegionLimits()
-        assertNull(limits)
-    }
+    fun `getRegionLimits returns null when no region selected`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val limits = viewModel.getRegionLimits()
+            assertNull(limits)
+        }
 
     @Test
     fun `getRegionLimits returns correct limits for US region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -392,7 +444,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getRegionLimits returns correct limits for EU 868-P`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(euRegionP)
             advanceUntilIdle()
 
@@ -409,7 +463,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectModemPreset updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -422,14 +478,19 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
-    fun `getModemPresets returns all 8 presets`() {
-        val presets = viewModel.getModemPresets()
-        assertEquals(8, presets.size)
-    }
+    fun `getModemPresets returns all 8 presets`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val presets = viewModel.getModemPresets()
+            assertEquals(8, presets.size)
+        }
 
     @Test
     fun `default modem preset is LONG_FAST`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val state = awaitItem()
                 assertEquals(ModemPreset.LONG_FAST, state.selectedModemPreset)
@@ -439,13 +500,18 @@ class RNodeWizardViewModelTest {
     // ========== Frequency Slot Tests ==========
 
     @Test
-    fun `getNumSlots returns 0 when no region selected`() {
-        assertEquals(0, viewModel.getNumSlots())
-    }
+    fun `getNumSlots returns 0 when no region selected`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.getNumSlots())
+        }
 
     @Test
     fun `getNumSlots returns correct count for US region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -456,7 +522,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getFrequencyForSlot calculates correctly`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -467,7 +535,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectSlot updates state and clears custom frequency`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -488,7 +558,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateInterfaceName clears error on valid name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -503,7 +575,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateFrequency sets error for frequency below min`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -521,7 +595,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateFrequency sets error for frequency above max`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -538,7 +614,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateFrequency clears error for valid frequency`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -551,7 +629,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `changing region clears frequency validation error from previous region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Select Brazil 902 region (902-907.5 MHz range)
             viewModel.selectFrequencyRegion(brazilRegion)
             advanceUntilIdle()
@@ -578,7 +658,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateBandwidth sets error for bandwidth below 7800`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -592,7 +674,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateBandwidth sets error for bandwidth above 1625000`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -606,7 +690,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateSpreadingFactor sets error for SF below 7`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -620,7 +706,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateSpreadingFactor sets error for SF above 12`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -634,7 +722,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateCodingRate sets error for CR below 5`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -648,7 +738,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateCodingRate sets error for CR above 8`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -662,7 +754,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateTxPower sets error when exceeding region max`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion) // Max 30 dBm
             advanceUntilIdle()
 
@@ -678,7 +772,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateStAlock sets error when exceeding duty cycle limit`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(euRegionP) // 10% duty cycle
             advanceUntilIdle()
 
@@ -696,7 +792,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateLtAlock sets error when exceeding 100 percent`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -712,7 +810,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectDevice updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -727,7 +827,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `showManualEntry clears selected device`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()
 
@@ -745,7 +847,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `hideManualEntry updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.showManualEntry()
             advanceUntilIdle()
 
@@ -762,7 +866,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateManualBluetoothType updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.showManualEntry()
             advanceUntilIdle()
 
@@ -781,7 +887,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getEffectiveDeviceName returns selected device name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()
 
@@ -790,7 +898,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getEffectiveDeviceName returns manual name when no device selected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("Custom RNode")
             advanceUntilIdle()
@@ -800,13 +910,17 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getEffectiveDeviceName returns fallback when nothing set`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             assertEquals("No device selected", viewModel.getEffectiveDeviceName())
         }
 
     @Test
     fun `getEffectiveBluetoothType returns selected device type`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()
 
@@ -815,7 +929,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getEffectiveBluetoothType returns manual type when no device selected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.showManualEntry()
             viewModel.updateManualBluetoothType(BluetoothType.CLASSIC)
             advanceUntilIdle()
@@ -827,7 +943,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `toggleAdvancedSettings updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val initial = awaitItem()
                 assertFalse(initial.showAdvancedSettings)
@@ -848,7 +966,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateEnableFramebuffer updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val initial = awaitItem()
                 assertTrue(initial.enableFramebuffer) // Default true
@@ -863,7 +983,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateInterfaceMode updates state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial
 
@@ -879,7 +1001,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `scan error state can be set and cleared`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -901,7 +1025,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection sets error when host is blank`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateTcpHost("")
             advanceUntilIdle()
 
@@ -918,7 +1044,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection sets error when port below 1`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateTcpHost("192.168.1.100")
             viewModel.updateTcpPort("0")
             advanceUntilIdle()
@@ -936,7 +1064,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection sets error when port above 65535`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateTcpHost("192.168.1.100")
             viewModel.updateTcpPort("70000")
             advanceUntilIdle()
@@ -954,7 +1084,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection sets success on valid host and port`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateTcpHost("127.0.0.1")
             viewModel.updateTcpPort("8080")
             advanceUntilIdle()
@@ -980,7 +1112,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection updates isTcpValidating state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateTcpHost("127.0.0.1")
             viewModel.updateTcpPort("7633")
             advanceUntilIdle()
@@ -1007,7 +1141,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateManualDeviceName returns error for name over 32 chars`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val longName = "RNode Very Long Device Name That Exceeds Limit"
             assertTrue(longName.length > 32)
 
@@ -1023,7 +1159,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateManualDeviceName returns warning for non-RNode name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualDeviceName("Arduino Nano")
             advanceUntilIdle()
 
@@ -1037,7 +1175,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateManualDeviceName returns null for valid name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualDeviceName("RNode A1B2")
             advanceUntilIdle()
 
@@ -1050,7 +1190,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateManualDeviceName handles empty string`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualDeviceName("")
             advanceUntilIdle()
 
@@ -1065,7 +1207,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `retryPairing does nothing when lastPairingDeviceAddress is null`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // State should have no last pairing address
             val initialState = viewModel.state.value
             assertNull(initialState.lastPairingDeviceAddress)
@@ -1081,7 +1225,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `clearPairingError clears error state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Mock SharedPreferences Editor
             val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { sharedPreferences.edit() } returns mockEditor
@@ -1112,7 +1258,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `onAssociationIntentLaunched clears pending intent`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Mock SharedPreferences Editor
             val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { sharedPreferences.edit() } returns mockEditor
@@ -1140,7 +1288,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `onAssociationCancelled clears associating state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Mock SharedPreferences Editor
             val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { sharedPreferences.edit() } returns mockEditor
@@ -1175,7 +1325,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns empty when no region selected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // No region selected by default
             val presets = viewModel.getPopularPresetsForRegion()
             assertTrue(presets.isEmpty())
@@ -1183,7 +1335,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns US presets for US region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -1195,7 +1349,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns AU presets for Australia region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val auRegion = FrequencyRegions.findById("au_915")!!
             viewModel.selectFrequencyRegion(auRegion)
             advanceUntilIdle()
@@ -1208,7 +1364,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns EU_L presets for EU 868 L region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(euRegionL)
             advanceUntilIdle()
 
@@ -1220,7 +1378,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns EU_M presets for EU 868 M region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val euRegionM = FrequencyRegions.findById("eu_868_m")!!
             viewModel.selectFrequencyRegion(euRegionM)
             advanceUntilIdle()
@@ -1233,7 +1393,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns EU_P presets for EU 868 P region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(euRegionP)
             advanceUntilIdle()
 
@@ -1245,7 +1407,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns EU_Q presets for EU 868 Q region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val euRegionQ = FrequencyRegions.findById("eu_868_q")!!
             viewModel.selectFrequencyRegion(euRegionQ)
             advanceUntilIdle()
@@ -1258,7 +1422,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns 433 MHz presets for EU 433 region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val eu433Region = FrequencyRegions.findById("eu_433")!!
             viewModel.selectFrequencyRegion(eu433Region)
             advanceUntilIdle()
@@ -1271,7 +1437,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns 2_4 GHz presets for lora_24 region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val lora24Region = FrequencyRegions.findById("lora_24")!!
             viewModel.selectFrequencyRegion(lora24Region)
             advanceUntilIdle()
@@ -1284,7 +1452,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns empty for Brazil region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(brazilRegion)
             advanceUntilIdle()
 
@@ -1294,7 +1464,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns empty for Russia region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val ruRegion = FrequencyRegions.findById("ru_868")!!
             viewModel.selectFrequencyRegion(ruRegion)
             advanceUntilIdle()
@@ -1305,7 +1477,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns empty for Japan region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val jpRegion = FrequencyRegions.findById("jp_920")!!
             viewModel.selectFrequencyRegion(jpRegion)
             advanceUntilIdle()
@@ -1316,7 +1490,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns Asia-Pacific presets for Malaysia region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val myRegion = FrequencyRegions.findById("my_919")!!
             viewModel.selectFrequencyRegion(myRegion)
             advanceUntilIdle()
@@ -1329,7 +1505,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion returns Asia-Pacific presets for Singapore region`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val sgRegion = FrequencyRegions.findById("sg_923")!!
             viewModel.selectFrequencyRegion(sgRegion)
             advanceUntilIdle()
@@ -1342,7 +1520,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion excludes 433 MHz from non-433 regions`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -1353,7 +1533,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getPopularPresetsForRegion excludes 2_4 GHz from non-2_4 regions`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             advanceUntilIdle()
 
@@ -1366,7 +1548,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig loads TCP RNode configuration correctly`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 1L
             val entity =
                 InterfaceEntity(
@@ -1410,7 +1594,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig loads Classic Bluetooth RNode and sets edit mode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 2L
             val entity =
                 InterfaceEntity(
@@ -1454,7 +1640,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig handles interface not found`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 999L
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(null)
@@ -1472,7 +1660,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig handles non-RNode interface type`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 4L
             val entity =
                 InterfaceEntity(
@@ -1506,7 +1696,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig sets custom mode when no matching preset found`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 5L
             val entity =
                 InterfaceEntity(
@@ -1550,7 +1742,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig populates all configuration fields`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 6L
             val entity =
                 InterfaceEntity(
@@ -1603,7 +1797,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `loadExistingConfig handles exception gracefully`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 7L
 
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } throws RuntimeException("Database error")
@@ -1623,7 +1819,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `validateTcpConnection sets error for empty host`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
             advanceUntilIdle()
 
@@ -1642,7 +1840,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration calls insertInterface for new config`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Setup: Configure a valid RNode
             viewModel.selectDevice(testBleDevice)
             viewModel.selectFrequencyRegion(usRegion)
@@ -1658,7 +1858,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration uses editingInterfaceId in edit mode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 10L
             val entity =
                 InterfaceEntity(
@@ -1698,7 +1900,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration returns early when validation fails`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Setup: Leave interface name empty (required field)
             viewModel.updateInterfaceName("")
             advanceUntilIdle()
@@ -1718,7 +1922,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration TCP mode uses tcp connectionMode and calls insertInterface`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1743,7 +1949,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration TCP mode uses custom port when valid`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1763,7 +1971,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration TCP mode defaults port to 7633 when invalid`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1783,7 +1993,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration BLE device uses ble connectionMode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1813,7 +2025,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration Classic device uses classic connectionMode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1842,7 +2056,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration Unknown device type defaults to classic`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1870,7 +2086,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration manual entry BLE uses ble connectionMode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1892,7 +2110,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration manual entry Classic uses classic connectionMode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1914,7 +2134,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration manual entry Unknown defaults to classic`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val configSlot = slot<InterfaceConfig>()
             coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
 
@@ -1935,7 +2157,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration calls updateInterface in edit mode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 42L
             val entity =
                 InterfaceEntity(
@@ -1977,7 +2201,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration sets saveError on repository exception`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             coEvery { interfaceRepository.insertInterface(any()) } throws RuntimeException("Database error")
 
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
@@ -2002,7 +2228,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration fails with duplicate interface name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Mock existing interface with conflicting name
             val existingInterface =
                 InterfaceConfig.RNode(
@@ -2040,7 +2268,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration fails with case-insensitive duplicate name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // Mock existing interface with different case name
             val existingInterface =
                 InterfaceConfig.RNode(
@@ -2076,7 +2306,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration succeeds with unique interface name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
             coEvery { interfaceRepository.insertInterface(any()) } returns 1L
 
@@ -2098,7 +2330,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration does not call repository when duplicate name detected`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val existingInterface =
                 InterfaceConfig.RNode(
                     name = "Duplicate RNode",
@@ -2130,7 +2364,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `saveConfiguration succeeds in edit mode with same name`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val interfaceId = 42L
             val entity =
                 InterfaceEntity(
@@ -2179,7 +2415,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setConnectionType to TCP_WIFI updates connectionType state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
             advanceUntilIdle()
 
@@ -2191,7 +2429,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setConnectionType to BLUETOOTH updates connectionType state`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             advanceUntilIdle()
 
@@ -2203,7 +2443,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `isTcpMode returns true for TCP_WIFI connection type`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
             advanceUntilIdle()
 
@@ -2212,7 +2454,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `isTcpMode returns false for BLUETOOTH connection type`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             advanceUntilIdle()
 
@@ -2223,7 +2467,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectSlot updates frequency based on region and slot`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             viewModel.selectModemPreset(ModemPreset.LONG_FAST)
             advanceUntilIdle()
@@ -2244,7 +2490,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `getFrequencyForSlot returns valid frequency within region bounds`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.selectFrequencyRegion(usRegion)
             viewModel.selectModemPreset(ModemPreset.LONG_FAST)
             advanceUntilIdle()
@@ -2258,7 +2506,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `toggleAdvancedSettings flips showAdvancedSettings state twice`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 var state = awaitItem()
                 assertFalse(state.showAdvancedSettings)
@@ -2279,7 +2529,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateEnableFramebuffer to false disables framebuffer`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 var state = awaitItem()
                 assertTrue(state.enableFramebuffer) // Default is true
@@ -2294,7 +2546,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateInterfaceMode to gateway changes mode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 var state = awaitItem()
                 assertEquals("boundary", state.interfaceMode) // Default
@@ -2429,7 +2683,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `initial state has no pending params`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.hasPendingParams)
@@ -2442,7 +2698,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setInitialRadioParams stores all parameters`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2465,7 +2723,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setInitialRadioParams with only frequency sets hasPendingParams`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2486,7 +2746,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setInitialRadioParams with all null does not set hasPendingParams`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setInitialRadioParams(
                 frequency = null,
                 bandwidth = null,
@@ -2505,7 +2767,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams populates frequency field`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2528,7 +2792,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams populates all LoRa fields`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2554,7 +2820,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams clears pending values`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2581,7 +2849,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams enables custom mode`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2604,7 +2874,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams shows advanced settings`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -2627,7 +2899,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams does nothing when hasPendingParams is false`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.state.test {
                 val initialState = awaitItem()
                 assertFalse(initialState.hasPendingParams)
@@ -2642,7 +2916,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `applyPendingParams preserves existing values for null pending params`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // First set some initial values
             viewModel.updateFrequency("900000000")
             viewModel.updateBandwidth("500000")
@@ -2670,7 +2946,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `goToStep REVIEW_CONFIGURE applies pending params automatically`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setInitialRadioParams(
                 frequency = 915000000L,
                 bandwidth = 125000,
@@ -2698,98 +2976,95 @@ class RNodeWizardViewModelTest {
     // ========== Interface Name Generation Tests ==========
 
     @Test
-    fun `defaultInterfaceNameFor generates BLE suffix for BLE device`() =
-        runTest {
-            val bleDevice =
-                DiscoveredRNode(
-                    name = "RNode E517",
-                    address = "AA:BB:CC:DD:EE:FF",
-                    type = BluetoothType.BLE,
-                    rssi = -70,
-                    isPaired = true,
-                )
-            val state = RNodeWizardState()
+    fun `defaultInterfaceNameFor generates BLE suffix for BLE device`() {
+        val bleDevice =
+            DiscoveredRNode(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.BLE,
+                rssi = -70,
+                isPaired = true,
+            )
+        val state = RNodeWizardState()
 
-            val interfaceName = state.defaultInterfaceNameFor(bleDevice)
+        val interfaceName = state.defaultInterfaceNameFor(bleDevice)
 
-            assertEquals("RNode E517 BLE", interfaceName)
-        }
-
-    @Test
-    fun `defaultInterfaceNameFor generates BT suffix for Classic device`() =
-        runTest {
-            val classicDevice =
-                DiscoveredRNode(
-                    name = "RNode A1B2",
-                    address = "AA:BB:CC:DD:EE:FF",
-                    type = BluetoothType.CLASSIC,
-                    rssi = -70,
-                    isPaired = true,
-                )
-            val state = RNodeWizardState()
-
-            val interfaceName = state.defaultInterfaceNameFor(classicDevice)
-
-            assertEquals("RNode A1B2 BT", interfaceName)
-        }
+        assertEquals("RNode E517 BLE", interfaceName)
+    }
 
     @Test
-    fun `defaultInterfaceNameFor removes RNode prefix before adding suffix`() =
-        runTest {
-            val device =
-                DiscoveredRNode(
-                    name = "RNode 1234",
-                    address = "AA:BB:CC:DD:EE:FF",
-                    type = BluetoothType.BLE,
-                    rssi = -70,
-                    isPaired = true,
-                )
-            val state = RNodeWizardState()
+    fun `defaultInterfaceNameFor generates BT suffix for Classic device`() {
+        val classicDevice =
+            DiscoveredRNode(
+                name = "RNode A1B2",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.CLASSIC,
+                rssi = -70,
+                isPaired = true,
+            )
+        val state = RNodeWizardState()
 
-            val interfaceName = state.defaultInterfaceNameFor(device)
+        val interfaceName = state.defaultInterfaceNameFor(classicDevice)
 
-            assertEquals("RNode 1234 BLE", interfaceName)
-        }
-
-    @Test
-    fun `defaultInterfaceNameFor preserves custom interface name`() =
-        runTest {
-            val device =
-                DiscoveredRNode(
-                    name = "RNode E517",
-                    address = "AA:BB:CC:DD:EE:FF",
-                    type = BluetoothType.BLE,
-                    rssi = -70,
-                    isPaired = true,
-                )
-            val state = RNodeWizardState(interfaceName = "My Custom Name")
-
-            val interfaceName = state.defaultInterfaceNameFor(device)
-
-            assertEquals("My Custom Name", interfaceName)
-        }
+        assertEquals("RNode A1B2 BT", interfaceName)
+    }
 
     @Test
-    fun `defaultInterfaceNameFor handles device without RNode prefix`() =
-        runTest {
-            val device =
-                DiscoveredRNode(
-                    name = "CustomDevice",
-                    address = "AA:BB:CC:DD:EE:FF",
-                    type = BluetoothType.BLE,
-                    rssi = -70,
-                    isPaired = true,
-                )
-            val state = RNodeWizardState()
+    fun `defaultInterfaceNameFor removes RNode prefix before adding suffix`() {
+        val device =
+            DiscoveredRNode(
+                name = "RNode 1234",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.BLE,
+                rssi = -70,
+                isPaired = true,
+            )
+        val state = RNodeWizardState()
 
-            val interfaceName = state.defaultInterfaceNameFor(device)
+        val interfaceName = state.defaultInterfaceNameFor(device)
 
-            assertEquals("RNode CustomDevice BLE", interfaceName)
-        }
+        assertEquals("RNode 1234 BLE", interfaceName)
+    }
+
+    @Test
+    fun `defaultInterfaceNameFor preserves custom interface name`() {
+        val device =
+            DiscoveredRNode(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.BLE,
+                rssi = -70,
+                isPaired = true,
+            )
+        val state = RNodeWizardState(interfaceName = "My Custom Name")
+
+        val interfaceName = state.defaultInterfaceNameFor(device)
+
+        assertEquals("My Custom Name", interfaceName)
+    }
+
+    @Test
+    fun `defaultInterfaceNameFor handles device without RNode prefix`() {
+        val device =
+            DiscoveredRNode(
+                name = "CustomDevice",
+                address = "AA:BB:CC:DD:EE:FF",
+                type = BluetoothType.BLE,
+                rssi = -70,
+                isPaired = true,
+            )
+        val state = RNodeWizardState()
+
+        val interfaceName = state.defaultInterfaceNameFor(device)
+
+        assertEquals("RNode CustomDevice BLE", interfaceName)
+    }
 
     @Test
     fun `selectDevice sets interface name with BLE suffix`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val bleDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
@@ -2811,7 +3086,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `selectDevice sets interface name with BT suffix for Classic`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val classicDevice =
                 DiscoveredRNode(
                     name = "RNode A1B2",
@@ -2835,7 +3112,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateManualPinInput updates state correctly`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualPinInput("1234")
             advanceUntilIdle()
 
@@ -2847,7 +3126,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateManualPinInput trims to 6 digits`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualPinInput("12345678")
             advanceUntilIdle()
 
@@ -2859,7 +3140,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `updateManualPinInput filters non-digits`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.updateManualPinInput("12ab34")
             advanceUntilIdle()
 
@@ -2871,7 +3154,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setDeviceType preserves interface name when already customized`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val bleDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
@@ -2906,7 +3191,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setDeviceType updates discovered devices list`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             val bleDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
@@ -2933,7 +3220,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setConnectionType to BLUETOOTH enables Bluetooth tab`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH)
             advanceUntilIdle()
 
@@ -2945,7 +3234,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setConnectionType to USB enables USB tab`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL)
             advanceUntilIdle()
 
@@ -2957,7 +3248,9 @@ class RNodeWizardViewModelTest {
 
     @Test
     fun `setConnectionType clears selected device when switching from Bluetooth`() =
-        runTest {
+        runViewModelTest {
+            advanceUntilIdle()
+
             // First select a device in Bluetooth mode
             viewModel.selectDevice(testBleDevice)
             advanceUntilIdle()

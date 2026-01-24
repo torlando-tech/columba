@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
-import com.lxmf.messenger.data.model.EnrichedAnnounce
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.map.MapStyleResult

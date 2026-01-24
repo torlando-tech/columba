@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -53,8 +54,8 @@ class MessagingViewModelTest {
     @get:Rule
     val instantExecutorRule = InstantTaskExecutorRule()
 
-    // Use UnconfinedTestDispatcher to avoid race conditions in ViewModel init coroutines
-    private val testDispatcher = UnconfinedTestDispatcher()
+    // Create fresh dispatcher per test to avoid exception leakage between tests
+    private lateinit var testDispatcher: TestDispatcher
 
     private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
@@ -78,6 +79,8 @@ class MessagingViewModelTest {
 
     @Before
     fun setup() {
+        // Create fresh UnconfinedTestDispatcher per test to avoid exception leakage
+        testDispatcher = UnconfinedTestDispatcher()
         Dispatchers.setMain(testDispatcher)
 
         reticulumProtocol = mockk()

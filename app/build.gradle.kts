@@ -41,9 +41,10 @@ plugins {
 fun getVersionFromTag(): Pair<Int, String> {
     return try {
         // Try exact tag match first (release build)
-        val tagName = providers.exec {
-            commandLine("git", "describe", "--tags", "--exact-match")
-        }.standardOutput.asText.get().trim()
+        val tagName =
+            providers.exec {
+                commandLine("git", "describe", "--tags", "--exact-match")
+            }.standardOutput.asText.get().trim()
 
         val versionString = tagName.removePrefix("v")
         val parts = versionString.split(".")
@@ -57,9 +58,10 @@ fun getVersionFromTag(): Pair<Int, String> {
     } catch (e: Exception) {
         // Not on exact tag - get nearest tag + commit count
         try {
-            val describe = providers.exec {
-                commandLine("git", "describe", "--tags", "--long")
-            }.standardOutput.asText.get().trim()
+            val describe =
+                providers.exec {
+                    commandLine("git", "describe", "--tags", "--long")
+                }.standardOutput.asText.get().trim()
 
             // Format: v0.6.4-beta-5-g1234abc or v0.6.4-5-g1234abc
             val parts = describe.removePrefix("v").split("-")

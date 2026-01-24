@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -78,6 +79,28 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var viewModel: MessagingViewModel
 
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = MessagingViewModel(
+                reticulumProtocol = reticulumProtocol,
+                conversationRepository = conversationRepository,
+                announceRepository = announceRepository,
+                contactRepository = contactRepository,
+                activeConversationManager = activeConversationManager,
+                settingsRepository = settingsRepository,
+                propagationNodeManager = propagationNodeManager,
+                locationSharingManager = locationSharingManager,
+                identityRepository = identityRepository,
+                conversationLinkManager = conversationLinkManager,
+            )
+            advanceUntilIdle()
+            testBody()
+        }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -116,26 +139,13 @@ class MessagingViewModelImageLoadingTest {
         every { reticulumProtocol.setConversationActive(any()) } just Runs
         every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
         every { reticulumProtocol.reactionReceivedFlow } returns MutableSharedFlow()
-
-        viewModel =
-            MessagingViewModel(
-                reticulumProtocol = reticulumProtocol,
-                conversationRepository = conversationRepository,
-                announceRepository = announceRepository,
-                contactRepository = contactRepository,
-                activeConversationManager = activeConversationManager,
-                settingsRepository = settingsRepository,
-                propagationNodeManager = propagationNodeManager,
-                locationSharingManager = locationSharingManager,
-                identityRepository = identityRepository,
-                conversationLinkManager = conversationLinkManager,
-            )
     }
 
     @After
     fun tearDown() {
         // Wait for any pending IO work to complete before resetting dispatcher
-        Thread.sleep(50)
+        // Must be long enough for withContext(Dispatchers.IO) work to complete
+        Thread.sleep(300)
         ImageCache.clear()
         clearAllMocks()
         Dispatchers.resetMain()
@@ -143,7 +153,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync skips when image is already in cache`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "cached-image-msg"
 
             // Pre-populate the ImageCache
@@ -166,40 +177,42 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync skips when image is already being loaded`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "loading-image-msg"
 
-            // First call - will start loading (will fail decode but that's ok)
+            // First call - will start loading (will fail decode but hasImageField=true)
             viewModel.loadImageAsync(messageId, """{"6": "invalid"}""")
 
-            // Don't advance yet - the first call is "in progress"
-            // Second call should check _loadedImageIds and skip
-            // But since we haven't advanced, the first call hasn't completed
+            // Complete first load - decode fails but since hasImageField=true,
+            // the messageId IS added to loadedImageIds (to stop the spinner)
+            // Wait for IO dispatcher work to complete (withContext(Dispatchers.IO) uses real threads)
+            advanceUntilIdle()
+            Thread.sleep(200) // Allow real IO work to complete
+            advanceUntilIdle()
 
-            // Actually, let's test this differently - manually add to loadedImageIds first
-            // by completing a load, then try to load again
-
-            advanceUntilIdle() // Complete first load (will fail)
-
-            // Now loadedImageIds doesn't contain it because decode failed
-            // Let's test the cache path instead by pre-caching
-
-            val testBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-            ImageCache.put(messageId, testBitmap.asImageBitmap())
+            // Verify first load added to loadedImageIds (because image field existed)
+            assertTrue(
+                "First load should add to loadedImageIds even on decode failure when image field exists",
+                viewModel.loadedImageIds.value.contains(messageId),
+            )
 
             val initialIds = viewModel.loadedImageIds.value
 
-            // Second call - should skip due to cache
+            // Second call - should skip because messageId is already in loadedImageIds
             viewModel.loadImageAsync(messageId, """{"6": "ffd8ffe0"}""")
             advanceUntilIdle()
+            Thread.sleep(200)
+            advanceUntilIdle()
 
-            // loadedImageIds unchanged
+            // loadedImageIds unchanged - second call was skipped
             assertEquals(initialIds, viewModel.loadedImageIds.value)
         }
 
     @Test
     fun `loadImageAsync marks loading complete on decode failure to stop spinner`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "decode-fail-msg"
 
             // Ensure cache is empty
@@ -222,7 +235,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync handles null fieldsJson gracefully`() =
-        runTest {
+        runViewModelTest {
+
             viewModel.loadImageAsync("test-msg", null)
             advanceUntilIdle()
 
@@ -232,7 +246,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync handles invalid JSON gracefully`() =
-        runTest {
+        runViewModelTest {
+
             viewModel.loadImageAsync("test-msg", "not valid json {{{")
             advanceUntilIdle()
 
@@ -242,13 +257,15 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadedImageIds initial state is empty`() =
-        runTest {
+        runViewModelTest {
+
             assertEquals(emptySet<String>(), viewModel.loadedImageIds.value)
         }
 
     @Test
     fun `loadImageAsync with empty fieldsJson does not crash`() =
-        runTest {
+        runViewModelTest {
+
             viewModel.loadImageAsync("test-msg", "")
             advanceUntilIdle()
 
@@ -257,7 +274,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync with missing field 6 does not update loadedImageIds`() =
-        runTest {
+        runViewModelTest {
+
             viewModel.loadImageAsync("test-msg", """{"1": "some text"}""")
             advanceUntilIdle()
 
@@ -267,7 +285,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `multiple concurrent loadImageAsync calls for same message only load once`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "concurrent-test"
 
             // Fire multiple calls without waiting
@@ -284,7 +303,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync updates loadedImageIds on successful decode`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "success-decode-msg"
 
             // Create a minimal valid PNG image (1x1 red pixel)
@@ -314,7 +334,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync with missing file reference marks loading complete`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "file-ref-msg"
 
             // Test with file reference format - file doesn't exist
@@ -334,7 +355,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync with empty string field 6 does not update loadedImageIds`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "empty-field6-msg"
 
             viewModel.loadImageAsync(messageId, """{"6": ""}""")
@@ -346,7 +368,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync with nested JSON in field 6 but missing file_ref does not update loadedImageIds`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "nested-json-msg"
 
             // JSON object in field 6 but without _file_ref key - not a valid image reference
@@ -362,7 +385,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync processes different messages independently`() =
-        runTest {
+        runViewModelTest {
+
             val messageId1 = "msg-1"
             val messageId2 = "msg-2"
 
@@ -377,7 +401,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync skips when messageId is already in loadedImageIds set`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "already-loaded-msg"
 
             // Pre-populate loadedImageIds by processing once
@@ -401,7 +426,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync skips when messageId in loadedImageIds but not in cache`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "in-loaded-ids-msg"
 
             // Manually add to loadedImageIds without putting in cache
@@ -431,7 +457,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync early return when ImageCache contains messageId`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "cache-check-msg"
 
             // Pre-populate cache
@@ -451,7 +478,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync with valid hex triggers decode path`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "hex-decode-msg"
 
             // Use a valid-looking JPEG header hex
@@ -468,7 +496,8 @@ class MessagingViewModelImageLoadingTest {
 
     @Test
     fun `loadImageAsync launches coroutine for new message`() =
-        runTest {
+        runViewModelTest {
+
             val messageId = "new-msg-coroutine"
 
             // Ensure not in cache or loadedImageIds

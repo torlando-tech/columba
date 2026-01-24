@@ -35,9 +35,13 @@ import kotlin.coroutines.resume
  */
 sealed class TelemetrySendResult {
     data object Success : TelemetrySendResult()
+
     data class Error(val message: String) : TelemetrySendResult()
+
     data object NoCollectorConfigured : TelemetrySendResult()
+
     data object NoLocationAvailable : TelemetrySendResult()
+
     data object NetworkNotReady : TelemetrySendResult()
 }
 
@@ -46,8 +50,11 @@ sealed class TelemetrySendResult {
  */
 sealed class TelemetryRequestResult {
     data object Success : TelemetryRequestResult()
+
     data class Error(val message: String) : TelemetryRequestResult()
+
     data object NoCollectorConfigured : TelemetryRequestResult()
+
     data object NetworkNotReady : TelemetryRequestResult()
 }
 
@@ -90,6 +97,7 @@ class TelemetryCollectorManager
     ) {
         private val fusedLocationClient: FusedLocationProviderClient =
             LocationServices.getFusedLocationProviderClient(context)
+
         companion object {
             private const val TAG = "TelemetryCollectorManager"
         }
@@ -148,11 +156,12 @@ class TelemetryCollectorManager
             Log.d(TAG, "Starting TelemetryCollectorManager")
 
             // Observe settings changes
-            settingsObserverJob = scope.launch {
-                launchSendSettingsObservers()
-                launchRequestSettingsObservers()
-                launchHostModeObservers()
-            }
+            settingsObserverJob =
+                scope.launch {
+                    launchSendSettingsObservers()
+                    launchRequestSettingsObservers()
+                    launchHostModeObservers()
+                }
 
             // Start periodic sending and requesting
             restartPeriodicSend()
@@ -438,49 +447,50 @@ class TelemetryCollectorManager
                 return
             }
 
-            periodicSendJob = scope.launch {
-                // Wait for any in-progress send to complete before starting new schedule
-                while (_isSending.value) {
-                    delay(100)
-                }
-
-                // Wait for network to be ready before starting periodic sends
-                reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
-                Log.d(TAG, "Network ready, starting periodic telemetry sends")
-
-                while (true) {
-                    val intervalSeconds = _sendIntervalSeconds.value
-                    val lastSend = _lastSendTime.value ?: 0L
-                    val now = System.currentTimeMillis()
-                    val nextSendTime = lastSend + (intervalSeconds * 1000L)
-
-                    if (now >= nextSendTime) {
-                        // Time to send - capture address to avoid race condition
-                        val currentCollector = _collectorAddress.value
-                        if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
-                            Log.d(TAG, "📡 Periodic telemetry send to collector")
-                            val result = sendTelemetryToCollector(currentCollector)
-                            when (result) {
-                                is TelemetrySendResult.Success ->
-                                    Log.i(TAG, "✅ Periodic telemetry sent successfully")
-                                is TelemetrySendResult.Error ->
-                                    Log.w(TAG, "❌ Periodic telemetry send failed: ${result.message}")
-                                else ->
-                                    Log.d(TAG, "Periodic send skipped: $result")
-                            }
-                        } else if (currentCollector == null) {
-                            Log.d(TAG, "No collector configured, skipping periodic send")
-                        } else {
-                            Log.d(TAG, "Network not ready, skipping periodic send")
-                        }
+            periodicSendJob =
+                scope.launch {
+                    // Wait for any in-progress send to complete before starting new schedule
+                    while (_isSending.value) {
+                        delay(100)
                     }
 
-                    // Calculate time until next send, cap at 30 seconds for responsiveness
-                    val timeUntilNextSend = maxOf(0L, nextSendTime - System.currentTimeMillis())
-                    val delayTime = minOf(timeUntilNextSend, 30_000L)
-                    delay(if (delayTime > 0) delayTime else 30_000L)
+                    // Wait for network to be ready before starting periodic sends
+                    reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                    Log.d(TAG, "Network ready, starting periodic telemetry sends")
+
+                    while (true) {
+                        val intervalSeconds = _sendIntervalSeconds.value
+                        val lastSend = _lastSendTime.value ?: 0L
+                        val now = System.currentTimeMillis()
+                        val nextSendTime = lastSend + (intervalSeconds * 1000L)
+
+                        if (now >= nextSendTime) {
+                            // Time to send - capture address to avoid race condition
+                            val currentCollector = _collectorAddress.value
+                            if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                                Log.d(TAG, "📡 Periodic telemetry send to collector")
+                                val result = sendTelemetryToCollector(currentCollector)
+                                when (result) {
+                                    is TelemetrySendResult.Success ->
+                                        Log.i(TAG, "✅ Periodic telemetry sent successfully")
+                                    is TelemetrySendResult.Error ->
+                                        Log.w(TAG, "❌ Periodic telemetry send failed: ${result.message}")
+                                    else ->
+                                        Log.d(TAG, "Periodic send skipped: $result")
+                                }
+                            } else if (currentCollector == null) {
+                                Log.d(TAG, "No collector configured, skipping periodic send")
+                            } else {
+                                Log.d(TAG, "Network not ready, skipping periodic send")
+                            }
+                        }
+
+                        // Calculate time until next send, cap at 30 seconds for responsiveness
+                        val timeUntilNextSend = maxOf(0L, nextSendTime - System.currentTimeMillis())
+                        val delayTime = minOf(timeUntilNextSend, 30_000L)
+                        delay(if (delayTime > 0) delayTime else 30_000L)
+                    }
                 }
-            }
         }
 
         /**
@@ -497,49 +507,50 @@ class TelemetryCollectorManager
                 return
             }
 
-            periodicRequestJob = scope.launch {
-                // Wait for any in-progress request to complete before starting new schedule
-                while (_isRequesting.value) {
-                    delay(100)
-                }
-
-                // Wait for network to be ready before starting periodic requests
-                reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
-                Log.d(TAG, "Network ready, starting periodic telemetry requests")
-
-                while (true) {
-                    val intervalSeconds = _requestIntervalSeconds.value
-                    val lastRequest = _lastRequestTime.value ?: 0L
-                    val now = System.currentTimeMillis()
-                    val nextRequestTime = lastRequest + (intervalSeconds * 1000L)
-
-                    if (now >= nextRequestTime) {
-                        // Time to request - capture address to avoid race condition
-                        val currentCollector = _collectorAddress.value
-                        if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
-                            Log.d(TAG, "📡 Periodic telemetry request from collector")
-                            val result = requestTelemetryFromCollector(currentCollector)
-                            when (result) {
-                                is TelemetryRequestResult.Success ->
-                                    Log.i(TAG, "✅ Periodic telemetry request sent successfully")
-                                is TelemetryRequestResult.Error ->
-                                    Log.w(TAG, "❌ Periodic telemetry request failed: ${result.message}")
-                                else ->
-                                    Log.d(TAG, "Periodic request skipped: $result")
-                            }
-                        } else if (currentCollector == null) {
-                            Log.d(TAG, "No collector configured, skipping periodic request")
-                        } else {
-                            Log.d(TAG, "Network not ready, skipping periodic request")
-                        }
+            periodicRequestJob =
+                scope.launch {
+                    // Wait for any in-progress request to complete before starting new schedule
+                    while (_isRequesting.value) {
+                        delay(100)
                     }
 
-                    // Calculate time until next request, cap at 30 seconds for responsiveness
-                    val timeUntilNextRequest = maxOf(0L, nextRequestTime - System.currentTimeMillis())
-                    val delayTime = minOf(timeUntilNextRequest, 30_000L)
-                    delay(if (delayTime > 0) delayTime else 30_000L)
+                    // Wait for network to be ready before starting periodic requests
+                    reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                    Log.d(TAG, "Network ready, starting periodic telemetry requests")
+
+                    while (true) {
+                        val intervalSeconds = _requestIntervalSeconds.value
+                        val lastRequest = _lastRequestTime.value ?: 0L
+                        val now = System.currentTimeMillis()
+                        val nextRequestTime = lastRequest + (intervalSeconds * 1000L)
+
+                        if (now >= nextRequestTime) {
+                            // Time to request - capture address to avoid race condition
+                            val currentCollector = _collectorAddress.value
+                            if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                                Log.d(TAG, "📡 Periodic telemetry request from collector")
+                                val result = requestTelemetryFromCollector(currentCollector)
+                                when (result) {
+                                    is TelemetryRequestResult.Success ->
+                                        Log.i(TAG, "✅ Periodic telemetry request sent successfully")
+                                    is TelemetryRequestResult.Error ->
+                                        Log.w(TAG, "❌ Periodic telemetry request failed: ${result.message}")
+                                    else ->
+                                        Log.d(TAG, "Periodic request skipped: $result")
+                                }
+                            } else if (currentCollector == null) {
+                                Log.d(TAG, "No collector configured, skipping periodic request")
+                            } else {
+                                Log.d(TAG, "Network not ready, skipping periodic request")
+                            }
+                        }
+
+                        // Calculate time until next request, cap at 30 seconds for responsiveness
+                        val timeUntilNextRequest = maxOf(0L, nextRequestTime - System.currentTimeMillis())
+                        val delayTime = minOf(timeUntilNextRequest, 30_000L)
+                        delay(if (delayTime > 0) delayTime else 30_000L)
+                    }
                 }
-            }
         }
 
         /**
@@ -563,38 +574,42 @@ class TelemetryCollectorManager
                 }
 
                 // Get LXMF identity
-                val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-                    ?: return TelemetrySendResult.Error("Protocol not available")
+                val serviceProtocol =
+                    reticulumProtocol as? ServiceReticulumProtocol
+                        ?: return TelemetrySendResult.Error("Protocol not available")
 
-                val sourceIdentity = try {
-                    serviceProtocol.getLxmfIdentity().getOrNull()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to get LXMF identity", e)
-                    null
-                } ?: return TelemetrySendResult.Error("No LXMF identity")
+                val sourceIdentity =
+                    try {
+                        serviceProtocol.getLxmfIdentity().getOrNull()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to get LXMF identity", e)
+                        null
+                    } ?: return TelemetrySendResult.Error("No LXMF identity")
 
                 // Build location JSON using the location's actual capture time
                 // Fallback to current time if location.time is 0 (unknown)
-                val telemetryData = LocationTelemetryData(
-                    lat = location.latitude,
-                    lng = location.longitude,
-                    acc = location.accuracy,
-                    ts = if (location.time > 0) location.time else System.currentTimeMillis(),
-                    altitude = location.altitude,
-                    speed = location.speed,
-                    bearing = location.bearing,
-                )
+                val telemetryData =
+                    LocationTelemetryData(
+                        lat = location.latitude,
+                        lng = location.longitude,
+                        acc = location.accuracy,
+                        ts = if (location.time > 0) location.time else System.currentTimeMillis(),
+                        altitude = location.altitude,
+                        speed = location.speed,
+                        bearing = location.bearing,
+                    )
                 val locationJson = Json.encodeToString(telemetryData)
 
                 // Convert collector hash to bytes
                 val collectorBytes = collectorHash.hexToByteArray()
 
                 // Send via protocol
-                val result = reticulumProtocol.sendLocationTelemetry(
-                    destinationHash = collectorBytes,
-                    locationJson = locationJson,
-                    sourceIdentity = sourceIdentity,
-                )
+                val result =
+                    reticulumProtocol.sendLocationTelemetry(
+                        destinationHash = collectorBytes,
+                        locationJson = locationJson,
+                        sourceIdentity = sourceIdentity,
+                    )
 
                 return if (result.isSuccess) {
                     // Update last send time
@@ -627,15 +642,17 @@ class TelemetryCollectorManager
 
             try {
                 // Get LXMF identity
-                val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-                    ?: return TelemetryRequestResult.Error("Protocol not available")
+                val serviceProtocol =
+                    reticulumProtocol as? ServiceReticulumProtocol
+                        ?: return TelemetryRequestResult.Error("Protocol not available")
 
-                val sourceIdentity = try {
-                    serviceProtocol.getLxmfIdentity().getOrNull()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to get LXMF identity", e)
-                    null
-                } ?: return TelemetryRequestResult.Error("No LXMF identity")
+                val sourceIdentity =
+                    try {
+                        serviceProtocol.getLxmfIdentity().getOrNull()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to get LXMF identity", e)
+                        null
+                    } ?: return TelemetryRequestResult.Error("No LXMF identity")
 
                 // Convert collector hash to bytes
                 val collectorBytes = collectorHash.hexToByteArray()
@@ -645,12 +662,13 @@ class TelemetryCollectorManager
                 val timebase = _lastRequestTime.value
 
                 // Send telemetry request via protocol
-                val result = reticulumProtocol.sendTelemetryRequest(
-                    destinationHash = collectorBytes,
-                    sourceIdentity = sourceIdentity,
-                    timebase = timebase,
-                    isCollectorRequest = true,
-                )
+                val result =
+                    reticulumProtocol.sendTelemetryRequest(
+                        destinationHash = collectorBytes,
+                        sourceIdentity = sourceIdentity,
+                        timebase = timebase,
+                        isCollectorRequest = true,
+                    )
 
                 return if (result.isSuccess) {
                     // Update last request time

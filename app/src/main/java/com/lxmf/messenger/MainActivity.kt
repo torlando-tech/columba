@@ -63,12 +63,10 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.util.CrashReportManager
-import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallState
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
@@ -76,13 +74,11 @@ import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
 import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
+import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
 import com.lxmf.messenger.ui.screens.IdentityManagerScreen
 import com.lxmf.messenger.ui.screens.IdentityScreen
 import com.lxmf.messenger.ui.screens.IncomingCallScreen
-import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
 import com.lxmf.messenger.ui.screens.InterfaceManagementScreen
-import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
-import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.MapScreen
 import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
@@ -94,11 +90,14 @@ import com.lxmf.messenger.ui.screens.SettingsScreen
 import com.lxmf.messenger.ui.screens.ThemeEditorScreen
 import com.lxmf.messenger.ui.screens.ThemeManagementScreen
 import com.lxmf.messenger.ui.screens.VoiceCallScreen
+import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
+import com.lxmf.messenger.util.CrashReportManager
+import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -126,7 +125,6 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
 
-
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
@@ -139,43 +137,49 @@ class MainActivity : ComponentActivity() {
     private val USB_DEBOUNCE_MS = 5000L // 5 second window to ignore duplicate USB events
 
     // USB device attached/detached receiver
-    private val usbReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            Log.d(TAG, "🔌 USB BroadcastReceiver onReceive: action=${intent.action}")
-            when (intent.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    @Suppress("DEPRECATION")
-                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    } else {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+    private val usbReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                Log.d(TAG, "🔌 USB BroadcastReceiver onReceive: action=${intent.action}")
+                when (intent.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                        @Suppress("DEPRECATION")
+                        val usbDevice: UsbDevice? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                            } else {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                            }
+                        if (usbDevice != null) {
+                            Log.d(TAG, "🔌 USB device attached via receiver: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                            handleUsbDeviceAttached(usbDevice)
+                        }
                     }
-                    if (usbDevice != null) {
-                        Log.d(TAG, "🔌 USB device attached via receiver: ${usbDevice.deviceName} (${usbDevice.deviceId})")
-                        handleUsbDeviceAttached(usbDevice)
-                    }
-                }
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    @Suppress("DEPRECATION")
-                    val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    } else {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                    }
-                    if (usbDevice != null) {
-                        Log.d(TAG, "🔌 USB device detached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
-                        // Clear debounce state for this device so re-plug will be handled
-                        if (usbDevice.deviceId == lastHandledUsbDeviceId) {
-                            Log.d(TAG, "🔌 Clearing debounce state for detached device")
-                            lastHandledUsbDeviceId = -1
-                            lastHandledUsbTimestamp = 0
-                            lastUsbReconnectAttempted = false
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        @Suppress("DEPRECATION")
+                        val usbDevice: UsbDevice? =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                            } else {
+                                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                            }
+                        if (usbDevice != null) {
+                            Log.d(TAG, "🔌 USB device detached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                            // Clear debounce state for this device so re-plug will be handled
+                            if (usbDevice.deviceId == lastHandledUsbDeviceId) {
+                                Log.d(TAG, "🔌 Clearing debounce state for detached device")
+                                lastHandledUsbDeviceId = -1
+                                lastHandledUsbTimestamp = 0
+                                lastUsbReconnectAttempted = false
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()
@@ -201,10 +205,11 @@ class MainActivity : ComponentActivity() {
         processIntent(intent)
 
         // Register USB receiver to catch USB device attachments while app is running
-        val usbFilter = IntentFilter().apply {
-            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
-            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        }
+        val usbFilter =
+            IntentFilter().apply {
+                addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -305,11 +310,12 @@ class MainActivity : ComponentActivity() {
             UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
                 Log.d(TAG, "🔌 USB_DEVICE_ATTACHED action matched!")
                 @Suppress("DEPRECATION")
-                val usbDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                } else {
-                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                }
+                val usbDevice: UsbDevice? =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
                 if (usbDevice != null) {
                     Log.d(TAG, "🔌 USB device attached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
                     handleUsbDeviceAttached(usbDevice)
@@ -344,7 +350,12 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             try {
-                Log.d(TAG, "🔌 Looking up USB device: VID=${usbDevice.vendorId} (0x${usbDevice.vendorId.toString(16)}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})")
+                Log.d(
+                    TAG,
+                    "🔌 Looking up USB device: VID=${usbDevice.vendorId} (0x${usbDevice.vendorId.toString(
+                        16,
+                    )}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})",
+                )
                 // Check if this USB device is already configured as an RNode interface
                 // Use VID/PID matching since they are stable hardware identifiers (unlike device IDs which change)
                 val existingInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
@@ -381,12 +392,13 @@ class MainActivity : ComponentActivity() {
                 } else {
                     // Device is not configured - navigate to RNode wizard with USB pre-selected
                     Log.d(TAG, "🔌 USB device is not configured - launching RNode wizard")
-                    pendingNavigation.value = PendingNavigation.RNodeWizardWithUsb(
-                        usbDeviceId = usbDevice.deviceId,
-                        vendorId = usbDevice.vendorId,
-                        productId = usbDevice.productId,
-                        deviceName = usbDevice.deviceName,
-                    )
+                    pendingNavigation.value =
+                        PendingNavigation.RNodeWizardWithUsb(
+                            usbDeviceId = usbDevice.deviceId,
+                            vendorId = usbDevice.vendorId,
+                            productId = usbDevice.productId,
+                            deviceName = usbDevice.deviceName,
+                        )
                     Log.d(TAG, "🔌 pendingNavigation set to RNodeWizardWithUsb")
                 }
                 Log.d(TAG, "🔌 pendingNavigation.value is now: ${pendingNavigation.value}")
@@ -469,13 +481,14 @@ fun ColumbaNavigation(
     // the startDestination would be recalculated when onboardingState loads
     // asynchronously from DataStore, which causes NavHost to reset to the
     // new startDestination and discard any pending navigation.
-    val startDestination = remember {
-        if (onboardingState.hasCompletedOnboarding) {
-            Screen.Chats.route
-        } else {
-            Screen.Welcome.route
+    val startDestination =
+        remember {
+            if (onboardingState.hasCompletedOnboarding) {
+                Screen.Chats.route
+            } else {
+                Screen.Welcome.route
+            }
         }
-    }
 
     // Handle edge case: user completed onboarding but we started at Welcome
     // because onboardingState was still loading when startDestination was computed
@@ -568,11 +581,12 @@ fun ColumbaNavigation(
                 }
                 is PendingNavigation.RNodeWizardWithUsb -> {
                     // Navigate to RNode wizard with USB pre-selected
-                    val route = "rnode_wizard?connectionType=usb" +
-                        "&usbDeviceId=${navigation.usbDeviceId}" +
-                        "&usbVendorId=${navigation.vendorId}" +
-                        "&usbProductId=${navigation.productId}" +
-                        "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                    val route =
+                        "rnode_wizard?connectionType=usb" +
+                            "&usbDeviceId=${navigation.usbDeviceId}" +
+                            "&usbVendorId=${navigation.vendorId}" +
+                            "&usbProductId=${navigation.productId}" +
+                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
                     navController.navigate(route)
                     Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
                 }
@@ -879,7 +893,7 @@ fun ColumbaNavigation(
                                     "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
                                         "&loraBandwidth=${bandwidth ?: -1}" +
                                         "&loraSf=${sf ?: -1}" +
-                                        "&loraCr=${cr ?: -1}"
+                                        "&loraCr=${cr ?: -1}",
                                 )
                             },
                         )
@@ -887,71 +901,73 @@ fun ColumbaNavigation(
 
                     // Map with focus location (for discovered interfaces)
                     composable(
-                        route = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
-                            "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
-                            "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
-                        arguments = listOf(
-                            navArgument("lat") {
-                                type = NavType.FloatType
-                                defaultValue = 0f
-                            },
-                            navArgument("lon") {
-                                type = NavType.FloatType
-                                defaultValue = 0f
-                            },
-                            navArgument("label") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("type") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("height") {
-                                type = NavType.FloatType
-                                defaultValue = Float.NaN
-                            },
-                            navArgument("reachableOn") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("port") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("frequency") {
-                                type = NavType.LongType
-                                defaultValue = -1L
-                            },
-                            navArgument("bandwidth") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("sf") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("cr") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("modulation") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("status") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("lastHeard") {
-                                type = NavType.LongType
-                                defaultValue = -1L
-                            },
-                            navArgument("hops") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                        ),
+                        route =
+                            "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
+                                "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
+                                "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
+                        arguments =
+                            listOf(
+                                navArgument("lat") {
+                                    type = NavType.FloatType
+                                    defaultValue = 0f
+                                },
+                                navArgument("lon") {
+                                    type = NavType.FloatType
+                                    defaultValue = 0f
+                                },
+                                navArgument("label") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("type") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("height") {
+                                    type = NavType.FloatType
+                                    defaultValue = Float.NaN
+                                },
+                                navArgument("reachableOn") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("port") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("frequency") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                                navArgument("bandwidth") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("sf") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("cr") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("modulation") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("status") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("lastHeard") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                                navArgument("hops") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                            ),
                     ) { backStackEntry ->
                         val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
                         val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
@@ -970,23 +986,24 @@ fun ColumbaNavigation(
                         val hops = backStackEntry.arguments?.getInt("hops")
 
                         // Build FocusInterfaceDetails if we have valid lat/lon
-                        val focusDetails = buildFocusInterfaceDetails(
-                            lat = lat,
-                            lon = lon,
-                            label = label,
-                            type = type,
-                            height = height,
-                            reachableOn = reachableOn,
-                            port = port,
-                            frequency = frequency,
-                            bandwidth = bandwidth,
-                            sf = sf,
-                            cr = cr,
-                            modulation = modulation,
-                            status = status,
-                            lastHeard = lastHeard,
-                            hops = hops,
-                        )
+                        val focusDetails =
+                            buildFocusInterfaceDetails(
+                                lat = lat,
+                                lon = lon,
+                                label = label,
+                                type = type,
+                                height = height,
+                                reachableOn = reachableOn,
+                                port = port,
+                                frequency = frequency,
+                                bandwidth = bandwidth,
+                                sf = sf,
+                                cr = cr,
+                                modulation = modulation,
+                                status = status,
+                                lastHeard = lastHeard,
+                                hops = hops,
+                            )
 
                         MapScreen(
                             onNavigateToConversation = { destinationHash ->
@@ -1001,7 +1018,7 @@ fun ColumbaNavigation(
                                     "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
                                         "&loraBandwidth=${bandwidth ?: -1}" +
                                         "&loraSf=${sf ?: -1}" +
-                                        "&loraCr=${cr ?: -1}"
+                                        "&loraCr=${cr ?: -1}",
                                 )
                             },
                             focusLatitude = if (lat != 0.0) lat else null,
@@ -1115,7 +1132,7 @@ fun ColumbaNavigation(
                                         "&frequency=${details.frequency ?: -1L}&bandwidth=${details.bandwidth ?: -1}" +
                                         "&sf=${details.spreadingFactor ?: -1}&cr=${details.codingRate ?: -1}" +
                                         "&modulation=$encodedModulation&status=$encodedStatus" +
-                                        "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}"
+                                        "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}",
                                 )
                             },
                             onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
@@ -1123,7 +1140,7 @@ fun ColumbaNavigation(
                                     "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
                                         "&loraBandwidth=${bandwidth ?: -1}" +
                                         "&loraSf=${sf ?: -1}" +
-                                        "&loraCr=${cr ?: -1}"
+                                        "&loraCr=${cr ?: -1}",
                                 )
                             },
                         )
@@ -1131,24 +1148,25 @@ fun ColumbaNavigation(
 
                     composable(
                         route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}",
-                        arguments = listOf(
-                            navArgument("interfaceId") {
-                                type = NavType.LongType
-                                defaultValue = -1L
-                            },
-                            navArgument("host") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("port") {
-                                type = NavType.IntType
-                                defaultValue = 0
-                            },
-                            navArgument("name") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                        ),
+                        arguments =
+                            listOf(
+                                navArgument("interfaceId") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                                navArgument("host") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                                navArgument("port") {
+                                    type = NavType.IntType
+                                    defaultValue = 0
+                                },
+                                navArgument("name") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                },
+                            ),
                     ) { backStackEntry ->
                         val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                         val host = backStackEntry.arguments?.getString("host") ?: ""
@@ -1169,16 +1187,17 @@ fun ColumbaNavigation(
                     }
 
                     composable(
-                        route = "rnode_wizard?interfaceId={interfaceId}" +
-                            "&connectionType={connectionType}" +
-                            "&usbDeviceId={usbDeviceId}" +
-                            "&usbVendorId={usbVendorId}" +
-                            "&usbProductId={usbProductId}" +
-                            "&usbDeviceName={usbDeviceName}" +
-                            "&loraFrequency={loraFrequency}" +
-                            "&loraBandwidth={loraBandwidth}" +
-                            "&loraSf={loraSf}" +
-                            "&loraCr={loraCr}",
+                        route =
+                            "rnode_wizard?interfaceId={interfaceId}" +
+                                "&connectionType={connectionType}" +
+                                "&usbDeviceId={usbDeviceId}" +
+                                "&usbVendorId={usbVendorId}" +
+                                "&usbProductId={usbProductId}" +
+                                "&usbDeviceName={usbDeviceName}" +
+                                "&loraFrequency={loraFrequency}" +
+                                "&loraBandwidth={loraBandwidth}" +
+                                "&loraSf={loraSf}" +
+                                "&loraCr={loraCr}",
                         arguments =
                             listOf(
                                 navArgument("interfaceId") {
@@ -1268,11 +1287,12 @@ fun ColumbaNavigation(
                             onNavigateBack = { navController.popBackStack() },
                             onNavigateToEdit = { interfaceId, interfaceType ->
                                 // Route to appropriate wizard based on interface type
-                                val route = when (interfaceType) {
-                                    "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
-                                    "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
-                                    else -> "rnode_wizard?interfaceId=$interfaceId"
-                                }
+                                val route =
+                                    when (interfaceType) {
+                                        "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
+                                        "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
+                                        else -> "rnode_wizard?interfaceId=$interfaceId"
+                                    }
                                 navController.navigate(route)
                             },
                         )

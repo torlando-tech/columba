@@ -83,12 +83,13 @@ fun RNodeWizardScreen(
 
     // Apply LoRa params pre-selection if provided (from discovered interfaces)
     LaunchedEffect(preselectedLoraFrequency, preselectedLoraBandwidth, preselectedLoraSf, preselectedLoraCr) {
-        val hasLoraParams = listOfNotNull(
-            preselectedLoraFrequency,
-            preselectedLoraBandwidth,
-            preselectedLoraSf,
-            preselectedLoraCr,
-        ).isNotEmpty()
+        val hasLoraParams =
+            listOfNotNull(
+                preselectedLoraFrequency,
+                preselectedLoraBandwidth,
+                preselectedLoraSf,
+                preselectedLoraCr,
+            ).isNotEmpty()
         if (hasLoraParams) {
             viewModel.setInitialRadioParams(
                 frequency = preselectedLoraFrequency,

@@ -84,9 +84,10 @@ class TcpClientWizardViewModel
                     }
 
                     // Try to find a matching community server
-                    val matchingServer = TcpCommunityServers.servers.find { server ->
-                        server.host == config.targetHost && server.port == config.targetPort
-                    }
+                    val matchingServer =
+                        TcpCommunityServers.servers.find { server ->
+                            server.host == config.targetHost && server.port == config.targetPort
+                        }
 
                     _state.update {
                         it.copy(
@@ -110,11 +111,16 @@ class TcpClientWizardViewModel
         /**
          * Set initial values when creating from a discovered interface.
          */
-        fun setInitialValues(host: String, port: Int, name: String) {
+        fun setInitialValues(
+            host: String,
+            port: Int,
+            name: String,
+        ) {
             // Check if this matches a community server
-            val matchingServer = TcpCommunityServers.servers.find { server ->
-                server.host == host && server.port == port
-            }
+            val matchingServer =
+                TcpCommunityServers.servers.find { server ->
+                    server.host == host && server.port == port
+                }
 
             _state.update {
                 it.copy(
@@ -251,9 +257,10 @@ class TcpClientWizardViewModel
                     // Check for duplicate interface names before saving
                     // Exclude current interface when editing
                     val existingInterfaces = interfaceRepository.allInterfaceEntities.first()
-                    val existingNames = existingInterfaces
-                        .filter { it.id != currentState.editingInterfaceId }
-                        .map { it.name }
+                    val existingNames =
+                        existingInterfaces
+                            .filter { it.id != currentState.editingInterfaceId }
+                            .map { it.name }
                     when (
                         val uniqueResult =
                             InputValidator.validateInterfaceNameUniqueness(

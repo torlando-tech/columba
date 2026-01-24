@@ -161,7 +161,10 @@ interface InterfaceDao {
         LIMIT 1
         """,
     )
-    suspend fun findRNodeByUsbVidPid(vendorId: Int, productId: Int): InterfaceEntity?
+    suspend fun findRNodeByUsbVidPid(
+        vendorId: Int,
+        productId: Int,
+    ): InterfaceEntity?
 
     /**
      * Get an interface by ID (suspend version for one-shot queries).

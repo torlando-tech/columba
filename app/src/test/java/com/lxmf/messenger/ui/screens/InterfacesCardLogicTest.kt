@@ -19,7 +19,6 @@ import org.junit.Test
  * - Failed interfaces: red error icon, clickable with error message
  */
 class InterfacesCardLogicTest {
-
     // ==========================================
     // Online Interface Tests
     // ==========================================

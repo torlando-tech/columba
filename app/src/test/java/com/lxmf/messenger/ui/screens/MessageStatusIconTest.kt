@@ -15,7 +15,6 @@ import org.junit.Test
  * - failed: exclamation (!) - delivery failed
  */
 class MessageStatusIconTest {
-
     // ==========================================
     // Pending Status Tests
     // ==========================================

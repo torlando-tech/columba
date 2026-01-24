@@ -57,7 +57,10 @@ internal fun shouldShowSharedInstanceBanner(
  * - When using shared (toggle OFF): can always switch to own (toggle ON)
  * - When using own (toggle ON): can only switch to shared (toggle OFF) if shared is available
  */
-internal fun isSharedInstanceToggleEnabled(isUsingSharedInstance: Boolean, sharedInstanceOnline: Boolean): Boolean {
+internal fun isSharedInstanceToggleEnabled(
+    isUsingSharedInstance: Boolean,
+    sharedInstanceOnline: Boolean,
+): Boolean {
     return isUsingSharedInstance || sharedInstanceOnline
 }
 

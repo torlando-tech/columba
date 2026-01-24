@@ -14,6 +14,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -63,6 +64,17 @@ class RNodeWizardViewModelReconnectTest {
             isPaired = false,
         )
 
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
+            advanceUntilIdle()
+            testBody()
+        }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -79,8 +91,6 @@ class RNodeWizardViewModelReconnectTest {
 
         // Mock BluetoothManager as null to avoid actual Bluetooth calls
         every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns null
-
-        viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
     }
 
     @After
@@ -93,7 +103,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `initial state has isWaitingForReconnect as false`() =
-        runTest {
+        runViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.isWaitingForReconnect)
@@ -102,7 +112,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `initial state has reconnectDeviceName as null`() =
-        runTest {
+        runViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertNull(state.reconnectDeviceName)
@@ -113,7 +123,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `cancelReconnectScan sets isWaitingForReconnect to false`() =
-        runTest {
+        runViewModelTest {
             // Call cancelReconnectScan and verify the resulting state
             viewModel.cancelReconnectScan()
             advanceUntilIdle()
@@ -124,7 +134,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `cancelReconnectScan sets reconnectDeviceName to null`() =
-        runTest {
+        runViewModelTest {
             viewModel.cancelReconnectScan()
             advanceUntilIdle()
 
@@ -134,7 +144,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `cancelReconnectScan sets isPairingInProgress to false`() =
-        runTest {
+        runViewModelTest {
             viewModel.cancelReconnectScan()
             advanceUntilIdle()
 
@@ -146,7 +156,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `initiateBluetoothPairing with no bluetooth adapter does not crash`() =
-        runTest {
+        runViewModelTest {
             // BluetoothManager is mocked as null, so bluetoothAdapter will be null
             viewModel.state.test {
                 awaitItem() // initial state
@@ -163,7 +173,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `classic device pairing failure shows not in pairing mode error`() =
-        runTest {
+        runViewModelTest {
             // For Classic devices, when pairing fails, should show standard error
             // (not trigger reconnect scan)
             viewModel.state.test {
@@ -218,7 +228,7 @@ class RNodeWizardViewModelReconnectTest {
 
     @Test
     fun `multiple cancelReconnectScan calls are idempotent`() =
-        runTest {
+        runViewModelTest {
             // Call cancel multiple times
             viewModel.cancelReconnectScan()
             viewModel.cancelReconnectScan()

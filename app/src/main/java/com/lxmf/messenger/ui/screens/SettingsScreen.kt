@@ -24,7 +24,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -32,6 +31,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
@@ -58,9 +59,8 @@ import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
-import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
-import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 import com.lxmf.messenger.util.CrashReport
@@ -104,16 +104,17 @@ fun SettingsScreen(
     var pendingTelemetryAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     // Permission launcher for telemetry collector
-    val telemetryPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-    ) { permissions ->
-        val granted = permissions.values.any { it }
-        if (granted) {
-            // Execute pending action (enable toggle or send now)
-            pendingTelemetryAction?.invoke()
+    val telemetryPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            val granted = permissions.values.any { it }
+            if (granted) {
+                // Execute pending action (enable toggle or send now)
+                pendingTelemetryAction?.invoke()
+            }
+            pendingTelemetryAction = null
         }
-        pendingTelemetryAction = null
-    }
 
     // Check for pending crash report on launch
     LaunchedEffect(Unit) {
@@ -173,12 +174,13 @@ fun SettingsScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                val showSharedInstanceBanner = shouldShowSharedInstanceBanner(
-                    isSharedInstance = state.isSharedInstance,
-                    sharedInstanceOnline = state.sharedInstanceOnline,
-                    wasUsingSharedInstance = state.wasUsingSharedInstance,
-                    isRestarting = state.isRestarting,
-                )
+                val showSharedInstanceBanner =
+                    shouldShowSharedInstanceBanner(
+                        isSharedInstance = state.isSharedInstance,
+                        sharedInstanceOnline = state.sharedInstanceOnline,
+                        wasUsingSharedInstance = state.wasUsingSharedInstance,
+                        isRestarting = state.isRestarting,
+                    )
                 if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
                         isExpanded = state.isSharedInstanceBannerExpanded,
@@ -526,9 +528,10 @@ fun SettingsScreen(
                     )
                 },
                 sheetState = telemetryPermissionSheetState,
-                rationale = "Group Tracker shares your location with a group host " +
-                    "so everyone can see where each other is.\n\n" +
-                    "Your location is encrypted and only readable by the group host you configure.",
+                rationale =
+                    "Group Tracker shares your location with a group host " +
+                        "so everyone can see where each other is.\n\n" +
+                        "Your location is encrypted and only readable by the group host you configure.",
                 primaryActionLabel = "Grant Location Access",
             )
         }

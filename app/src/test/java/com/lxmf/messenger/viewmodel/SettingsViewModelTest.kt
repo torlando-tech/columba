@@ -6,7 +6,6 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
-import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
@@ -15,6 +14,7 @@ import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
 import io.mockk.clearAllMocks
 import io.mockk.coEvery

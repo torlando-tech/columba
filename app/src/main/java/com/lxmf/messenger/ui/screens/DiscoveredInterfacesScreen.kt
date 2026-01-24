@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -41,15 +42,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,6 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -118,17 +118,19 @@ fun DiscoveredInterfacesScreen(
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
             )
         },
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             when {
                 state.isLoading -> {
@@ -197,23 +199,24 @@ fun DiscoveredInterfacesScreen(
                                         // Open in Columba's map with focus on this location
                                         val lat = iface.latitude ?: return@DiscoveredInterfaceCard
                                         val lon = iface.longitude ?: return@DiscoveredInterfaceCard
-                                        val details = FocusInterfaceDetails(
-                                            name = iface.name,
-                                            type = iface.type,
-                                            latitude = lat,
-                                            longitude = lon,
-                                            height = iface.height,
-                                            reachableOn = iface.reachableOn,
-                                            port = iface.port,
-                                            frequency = iface.frequency,
-                                            bandwidth = iface.bandwidth,
-                                            spreadingFactor = iface.spreadingFactor,
-                                            codingRate = iface.codingRate,
-                                            modulation = iface.modulation,
-                                            status = iface.status,
-                                            lastHeard = iface.lastHeard,
-                                            hops = iface.hops,
-                                        )
+                                        val details =
+                                            FocusInterfaceDetails(
+                                                name = iface.name,
+                                                type = iface.type,
+                                                latitude = lat,
+                                                longitude = lon,
+                                                height = iface.height,
+                                                reachableOn = iface.reachableOn,
+                                                port = iface.port,
+                                                frequency = iface.frequency,
+                                                bandwidth = iface.bandwidth,
+                                                spreadingFactor = iface.spreadingFactor,
+                                                codingRate = iface.codingRate,
+                                                modulation = iface.modulation,
+                                                status = iface.status,
+                                                lastHeard = iface.lastHeard,
+                                                hops = iface.hops,
+                                            )
                                         onNavigateToMapWithInterface(details)
                                     },
                                     onCopyLoraParams = {
@@ -259,18 +262,21 @@ internal fun DiscoverySettingsCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isEnabled) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isEnabled) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
         ) {
             // Discovery toggle row
             Row(
@@ -286,39 +292,43 @@ internal fun DiscoverySettingsCard(
                     Surface(
                         modifier = Modifier.size(12.dp),
                         shape = RoundedCornerShape(50),
-                        color = if (isRuntimeEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else if (isSettingEnabled) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
+                        color =
+                            if (isRuntimeEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else if (isSettingEnabled) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
                     ) {}
                     Column {
                         Text(
                             text = "Interface Discovery",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (isEnabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            color =
+                                if (isEnabled) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         )
                         Text(
-                            text = if (isRestarting) {
-                                "Restarting..."
-                            } else if (isRuntimeEnabled) {
-                                "Active - discovering interfaces"
-                            } else {
-                                "Disabled"
-                            },
+                            text =
+                                if (isRestarting) {
+                                    "Restarting..."
+                                } else if (isRuntimeEnabled) {
+                                    "Active - discovering interfaces"
+                                } else {
+                                    "Disabled"
+                                },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isEnabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            },
+                            color =
+                                if (isEnabled) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                },
                         )
                     }
                 }
@@ -367,24 +377,27 @@ internal fun DiscoverySettingsCard(
                     imageVector = Icons.Default.Info,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = if (isEnabled) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
+                    tint =
+                        if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
                 )
                 Text(
-                    text = if (isSettingEnabled) {
-                        "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
-                    } else {
-                        "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
-                    },
+                    text =
+                        if (isSettingEnabled) {
+                            "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                        } else {
+                            "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
+                        },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isEnabled) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
+                    color =
+                        if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
                 )
             }
 
@@ -395,11 +408,12 @@ internal fun DiscoverySettingsCard(
                     text = "Bootstrap Interfaces",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isEnabled) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 bootstrapInterfaceNames.forEach { name ->
@@ -411,31 +425,34 @@ internal fun DiscoverySettingsCard(
                         Surface(
                             modifier = Modifier.size(6.dp),
                             shape = RoundedCornerShape(50),
-                            color = if (isEnabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            },
+                            color =
+                                if (isEnabled) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                },
                         ) {}
                         Text(
                             text = name,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isEnabled) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            },
+                            color =
+                                if (isEnabled) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                },
                         )
                     }
                 }
                 Text(
                     text = "These interfaces will auto-detach once discovered interfaces connect.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isEnabled) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    },
+                    color =
+                        if (isEnabled) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
@@ -450,14 +467,16 @@ internal fun DiscoverySettingsCard(
 internal fun EmptyDiscoveredCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
@@ -494,14 +513,16 @@ internal fun DiscoveryStatusSummary(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -568,11 +589,12 @@ internal fun DiscoveredInterfaceCard(
     onCopyLoraParams: () -> Unit,
     onUseForNewRNode: () -> Unit,
 ) {
-    val statusColor = when (iface.status) {
-        "available" -> MaterialTheme.colorScheme.primary
-        "unknown" -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.outline
-    }
+    val statusColor =
+        when (iface.status) {
+            "available" -> MaterialTheme.colorScheme.primary
+            "unknown" -> MaterialTheme.colorScheme.tertiary
+            else -> MaterialTheme.colorScheme.outline
+        }
 
     // Check if this is a special network type that needs explanation
     val isYggdrasil = iface.isTcpInterface && isYggdrasilAddress(iface.reachableOn)
@@ -589,8 +611,8 @@ internal fun DiscoveredInterfaceCard(
                     text = {
                         Text(
                             "Yggdrasil is an encrypted IPv6 mesh network. To connect to this " +
-                            "interface, you need the Yggdrasil app installed and running on your device. " +
-                            "It's available on F-Droid and Google Play."
+                                "interface, you need the Yggdrasil app installed and running on your device. " +
+                                "It's available on F-Droid and Google Play.",
                         )
                     },
                     confirmButton = {
@@ -607,8 +629,8 @@ internal fun DiscoveredInterfaceCard(
                     text = {
                         Text(
                             "I2P (Invisible Internet Project) is an anonymous overlay network. To connect " +
-                            "to this interface, you need an I2P daemon running on your device. Install the " +
-                            "I2P or i2pd app from F-Droid and start it before connecting."
+                                "to this interface, you need an I2P daemon running on your device. Install the " +
+                                "I2P or i2pd app from F-Droid and start it before connecting.",
                         )
                     },
                     confirmButton = {
@@ -623,14 +645,16 @@ internal fun DiscoveredInterfaceCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
         ) {
             // Header: Name and Status
             Row(
@@ -669,9 +693,10 @@ internal fun DiscoveredInterfaceCard(
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Network info",
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clickable { showNetworkInfoDialog = true },
+                                    modifier =
+                                        Modifier
+                                            .size(14.dp)
+                                            .clickable { showNetworkInfoDialog = true },
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
                             }
@@ -800,9 +825,10 @@ internal fun DiscoveredInterfaceCard(
                 Button(
                     onClick = onAddToConfig,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -838,9 +864,10 @@ internal fun DiscoveredInterfaceCard(
                     Button(
                         onClick = onUseForNewRNode,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                        ),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                            ),
                     ) {
                         Icon(
                             imageVector = Lucide.Antenna,
@@ -861,12 +888,13 @@ internal fun DiscoveredInterfaceCard(
  */
 @Composable
 internal fun TcpInterfaceDetails(iface: DiscoveredInterface) {
-    val hostPort = buildString {
-        iface.reachableOn?.let { append(it) }
-        iface.port?.let { port ->
-            if (isNotEmpty()) append(":$port") else append("port $port")
+    val hostPort =
+        buildString {
+            iface.reachableOn?.let { append(it) }
+            iface.port?.let { port ->
+                if (isNotEmpty()) append(":$port") else append("port $port")
+            }
         }
-    }
     if (hostPort.isNotEmpty()) {
         Text(
             text = hostPort,
@@ -883,7 +911,7 @@ internal fun TcpInterfaceDetails(iface: DiscoveredInterface) {
 internal fun I2pInterfaceDetails(iface: DiscoveredInterface) {
     iface.reachableOn?.let { b32Address ->
         Text(
-            text = "${b32Address}.b32.i2p",
+            text = "$b32Address.b32.i2p",
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = FontFamily.Monospace,
         )
@@ -899,7 +927,7 @@ internal fun RadioInterfaceDetails(iface: DiscoveredInterface) {
 
     iface.frequency?.let { freq ->
         val mhz = freq / 1_000_000.0
-        parts.add("${mhz} MHz")
+        parts.add("$mhz MHz")
     }
     iface.bandwidth?.let { bw ->
         val khz = bw / 1000
@@ -948,33 +976,35 @@ internal fun LocationDetails(
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
-        val locationText = buildString {
-            append("%.4f, %.4f".format(latitude, longitude))
-            height?.let { append(" (${it.toInt()}m)") }
-            distanceKm?.let { dist ->
-                append(" - ")
-                if (dist < 1.0) {
-                    append("${(dist * 1000).toInt()}m away")
-                } else {
-                    append("%.1f km away".format(dist))
+        val locationText =
+            buildString {
+                append("%.4f, %.4f".format(latitude, longitude))
+                height?.let { append(" (${it.toInt()}m)") }
+                distanceKm?.let { dist ->
+                    append(" - ")
+                    if (dist < 1.0) {
+                        append("${(dist * 1000).toInt()}m away")
+                    } else {
+                        append("%.1f km away".format(dist))
+                    }
                 }
             }
-        }
         Text(
             text = locationText,
-            style = MaterialTheme.typography.bodySmall.copy(
-                textDecoration = TextDecoration.Underline,
-            ),
+            style =
+                MaterialTheme.typography.bodySmall.copy(
+                    textDecoration = TextDecoration.Underline,
+                ),
             color = MaterialTheme.colorScheme.primary,
         )
     }
 }
 
-
 /**
  * Renders the appropriate icon for an interface type.
  * Uses Lucide Antenna for radio interfaces, MDI incognito for I2P, and Material icons for others.
  */
+
 /**
  * Check if a host address is a Yggdrasil network address (IPv6 in 0200::/7 space).
  * Yggdrasil uses addresses starting with 02xx or 03xx.

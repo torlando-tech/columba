@@ -441,7 +441,10 @@ class InterfaceRepository
          * This is the preferred method for matching USB devices since VID/PID are stable
          * hardware identifiers, unlike device IDs which are runtime IDs that can change.
          */
-        suspend fun findRNodeByUsbVidPid(vendorId: Int, productId: Int): InterfaceEntity? {
+        suspend fun findRNodeByUsbVidPid(
+            vendorId: Int,
+            productId: Int,
+        ): InterfaceEntity? {
             Log.d(TAG, "findRNodeByUsbVidPid: looking for VID=$vendorId (0x${vendorId.toString(16)}), PID=$productId (0x${productId.toString(16)})")
             val result = interfaceDao.findRNodeByUsbVidPid(vendorId, productId)
             if (result != null) {

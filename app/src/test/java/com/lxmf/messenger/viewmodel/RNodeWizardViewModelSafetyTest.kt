@@ -12,6 +12,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -40,6 +41,17 @@ class RNodeWizardViewModelSafetyTest {
     private lateinit var mockBluetoothAdapter: BluetoothAdapter
     private lateinit var mockSharedPreferences: SharedPreferences
 
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = RNodeWizardViewModel(mockContext, mockInterfaceRepository, mockConfigManager)
+            advanceUntilIdle()
+            testBody()
+        }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -60,8 +72,6 @@ class RNodeWizardViewModelSafetyTest {
             mockContext.getSharedPreferences("rnode_device_types", Context.MODE_PRIVATE)
         } returns mockSharedPreferences
         every { mockSharedPreferences.edit() } returns mockk(relaxed = true)
-
-        viewModel = RNodeWizardViewModel(mockContext, mockInterfaceRepository, mockConfigManager)
     }
 
     @After
@@ -73,7 +83,7 @@ class RNodeWizardViewModelSafetyTest {
 
     @Test
     fun `startDeviceScan sets error when bluetooth adapter is null`() =
-        runTest {
+        runViewModelTest {
             viewModel.state.test {
                 awaitItem() // Initial state
 
@@ -90,7 +100,7 @@ class RNodeWizardViewModelSafetyTest {
 
     @Test
     fun `rssiPollingJob is cancelled when onCleared is called`() =
-        runTest {
+        runViewModelTest {
             // Access private rssiPollingJob field via reflection
             val rssiPollingJobField =
                 RNodeWizardViewModel::class.java.getDeclaredField("rssiPollingJob")
@@ -126,7 +136,7 @@ class RNodeWizardViewModelSafetyTest {
 
     @Test
     fun `rssiPollingJob is cancelled when navigating away from DEVICE_DISCOVERY`() =
-        runTest {
+        runViewModelTest {
             // Access private rssiPollingJob field via reflection
             val rssiPollingJobField =
                 RNodeWizardViewModel::class.java.getDeclaredField("rssiPollingJob")

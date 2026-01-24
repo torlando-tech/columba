@@ -263,13 +263,14 @@ class MapScreenTest {
 
     @Test
     fun `formatLoraParamsForClipboard omits null values`() {
-        val details = createTestFocusInterfaceDetails(
-            frequency = null,
-            bandwidth = null,
-            spreadingFactor = null,
-            codingRate = null,
-            modulation = null,
-        )
+        val details =
+            createTestFocusInterfaceDetails(
+                frequency = null,
+                bandwidth = null,
+                spreadingFactor = null,
+                codingRate = null,
+                modulation = null,
+            )
         val result = formatLoraParamsForClipboard(details)
         assertFalse(result.contains("Frequency"))
         assertFalse(result.contains("Bandwidth"))
@@ -332,10 +333,11 @@ class MapScreenTest {
 
     @Test
     fun `FocusInterfaceContent displays location`() {
-        val details = createTestFocusInterfaceDetails(
-            latitude = 45.1234,
-            longitude = -122.5678,
-        )
+        val details =
+            createTestFocusInterfaceDetails(
+                latitude = 45.1234,
+                longitude = -122.5678,
+            )
         composeTestRule.setContent {
             FocusInterfaceContent(details = details)
         }
@@ -357,12 +359,13 @@ class MapScreenTest {
 
     @Test
     fun `FocusInterfaceContent displays Radio Parameters section for LoRa`() {
-        val details = createTestFocusInterfaceDetails(
-            frequency = 915000000L,
-            bandwidth = 125000,
-            spreadingFactor = 10,
-            codingRate = 5,
-        )
+        val details =
+            createTestFocusInterfaceDetails(
+                frequency = 915000000L,
+                bandwidth = 125000,
+                spreadingFactor = 10,
+                codingRate = 5,
+            )
         composeTestRule.setContent {
             FocusInterfaceContent(details = details)
         }
@@ -373,10 +376,11 @@ class MapScreenTest {
 
     @Test
     fun `FocusInterfaceContent displays Network section for TCP`() {
-        val details = createTestFocusInterfaceDetails(
-            reachableOn = "192.168.1.1",
-            port = 4242,
-        )
+        val details =
+            createTestFocusInterfaceDetails(
+                reachableOn = "192.168.1.1",
+                port = 4242,
+            )
         composeTestRule.setContent {
             FocusInterfaceContent(details = details)
         }
@@ -500,4 +504,3 @@ private fun createTestFocusInterfaceDetails(
         hops = hops,
     )
 }
-

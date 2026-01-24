@@ -76,9 +76,10 @@ class MessageCollectorTest {
         coEvery { announceRepository.getAnnounce(any()) } returns null
 
         // Mock identity repository - return a mock active identity matching test destination
-        coEvery { identityRepository.getActiveIdentitySync() } returns mockk {
-            every { destinationHash } returns testDestHash.joinToString("") { "%02x".format(it) }
-        }
+        coEvery { identityRepository.getActiveIdentitySync() } returns
+            mockk {
+                every { destinationHash } returns testDestHash.joinToString("") { "%02x".format(it) }
+            }
 
         messageCollector =
             MessageCollector(

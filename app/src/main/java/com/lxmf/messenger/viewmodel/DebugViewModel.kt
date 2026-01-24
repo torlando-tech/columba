@@ -596,11 +596,12 @@ class DebugViewModel
          */
         suspend fun findInterfaceIdByName(name: String): Long? {
             // Extract the name from brackets if present (e.g., "ColumbaRNodeInterface[RNode LoRa]" -> "RNode LoRa")
-            val dbName = if (name.contains("[") && name.contains("]")) {
-                name.substringAfter("[").substringBefore("]")
-            } else {
-                name
-            }
+            val dbName =
+                if (name.contains("[") && name.contains("]")) {
+                    name.substringAfter("[").substringBefore("]")
+                } else {
+                    name
+                }
             Log.d(TAG, "Looking up interface by name: '$name' -> '$dbName'")
             val entity = interfaceRepository.findInterfaceByName(dbName)
             Log.d(TAG, "Found interface: ${entity?.id} (name='${entity?.name}')")

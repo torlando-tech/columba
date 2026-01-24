@@ -10,7 +10,6 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -200,10 +199,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // When
-            val iface = createTestDiscoveredInterface(
-                reachableOn = "192.168.1.1",
-                port = 4242,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = 4242,
+                )
 
             // Then
             assertFalse(viewModel.isAutoconnected(iface))
@@ -218,10 +218,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // When
-            val iface = createTestDiscoveredInterface(
-                reachableOn = null,
-                port = 4242,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = null,
+                    port = 4242,
+                )
 
             // Then
             assertFalse(viewModel.isAutoconnected(iface))
@@ -236,10 +237,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // When
-            val iface = createTestDiscoveredInterface(
-                reachableOn = "192.168.1.1",
-                port = null,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = null,
+                )
 
             // Then
             assertFalse(viewModel.isAutoconnected(iface))
@@ -254,10 +256,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // When: Different IP address
-            val iface = createTestDiscoveredInterface(
-                reachableOn = "192.168.2.2",
-                port = 4242,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.2.2",
+                    port = 4242,
+                )
 
             // Then
             assertFalse(viewModel.isAutoconnected(iface))
@@ -272,10 +275,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // When
-            val iface = createTestDiscoveredInterface(
-                reachableOn = "192.168.1.1",
-                port = 4242,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = 4242,
+                )
 
             // Then
             assertTrue(viewModel.isAutoconnected(iface))
@@ -369,10 +373,11 @@ class DiscoveredInterfacesViewModelTest {
     fun `loadDiscoveredInterfaces - updates interfaces list`() =
         runTest {
             // Given
-            val interfaces = listOf(
-                createTestDiscoveredInterface(name = "Interface1"),
-                createTestDiscoveredInterface(name = "Interface2"),
-            )
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Interface1"),
+                    createTestDiscoveredInterface(name = "Interface2"),
+                )
             coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
 
             // When
@@ -391,12 +396,13 @@ class DiscoveredInterfacesViewModelTest {
     fun `loadDiscoveredInterfaces - calculates status counts`() =
         runTest {
             // Given
-            val interfaces = listOf(
-                createTestDiscoveredInterface(name = "Available1", status = "available"),
-                createTestDiscoveredInterface(name = "Available2", status = "available"),
-                createTestDiscoveredInterface(name = "Unknown1", status = "unknown"),
-                createTestDiscoveredInterface(name = "Stale1", status = "stale"),
-            )
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Available1", status = "available"),
+                    createTestDiscoveredInterface(name = "Available2", status = "available"),
+                    createTestDiscoveredInterface(name = "Unknown1", status = "unknown"),
+                    createTestDiscoveredInterface(name = "Stale1", status = "stale"),
+                )
             coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
 
             // When
@@ -459,10 +465,11 @@ class DiscoveredInterfacesViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
-            val iface = createTestDiscoveredInterface(
-                latitude = 45.5,
-                longitude = -122.5,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = 45.5,
+                    longitude = -122.5,
+                )
 
             // Then
             assertNull(viewModel.calculateDistance(iface))
@@ -476,10 +483,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
             viewModel.setUserLocation(45.0, -122.0)
 
-            val iface = createTestDiscoveredInterface(
-                latitude = null,
-                longitude = null,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = null,
+                    longitude = null,
+                )
 
             // Then
             assertNull(viewModel.calculateDistance(iface))
@@ -493,10 +501,11 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
             viewModel.setUserLocation(45.0, -122.0)
 
-            val iface = createTestDiscoveredInterface(
-                latitude = 45.5,
-                longitude = -122.5,
-            )
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = 45.5,
+                    longitude = -122.5,
+                )
 
             // Then
             val distance = viewModel.calculateDistance(iface)
@@ -540,11 +549,12 @@ class DiscoveredInterfacesViewModelTest {
             transportId = "test_transport_id",
             networkId = "test_network_id",
             status = status,
-            statusCode = when (status) {
-                "available" -> 1000
-                "unknown" -> 100
-                else -> 0
-            },
+            statusCode =
+                when (status) {
+                    "available" -> 1000
+                    "unknown" -> 100
+                    else -> 0
+                },
             lastHeard = System.currentTimeMillis() / 1000,
             heardCount = 1,
             hops = 1,

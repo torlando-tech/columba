@@ -896,8 +896,9 @@ class ReticulumServiceBinder(
             Log.d(TAG, "📡 Setting telemetry allowed requesters: ${allowedList.size} contacts")
             wrapperManager.withWrapper { wrapper ->
                 // Convert to Python list (Java ArrayList doesn't serialize properly to Python)
-                val pyList = com.chaquo.python.Python.getInstance()
-                    .builtins.callAttr("list", allowedList.toTypedArray())
+                val pyList =
+                    com.chaquo.python.Python.getInstance()
+                        .builtins.callAttr("list", allowedList.toTypedArray())
                 val result = wrapper.callAttr("set_telemetry_allowed_requesters", pyList)
                 result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
             } ?: """{"success": false, "error": "Wrapper not available"}"""

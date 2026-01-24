@@ -62,16 +62,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,6 +75,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -351,25 +349,26 @@ fun MapScreen(
     // Proper MapView lifecycle management
     // This ensures the map survives tab switches while properly handling lifecycle events
     DisposableEffect(lifecycleOwner, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            val view = mapView ?: return@LifecycleEventObserver
-            when (event) {
-                Lifecycle.Event.ON_START -> view.onStart()
-                Lifecycle.Event.ON_RESUME -> view.onResume()
-                Lifecycle.Event.ON_PAUSE -> view.onPause()
-                Lifecycle.Event.ON_STOP -> view.onStop()
-                Lifecycle.Event.ON_DESTROY -> {
-                    // Disable location component before destroying map to prevent crashes
-                    mapLibreMap?.locationComponent?.let { locationComponent ->
-                        if (locationComponent.isLocationComponentActivated) {
-                            locationComponent.isLocationComponentEnabled = false
+        val observer =
+            LifecycleEventObserver { _, event ->
+                val view = mapView ?: return@LifecycleEventObserver
+                when (event) {
+                    Lifecycle.Event.ON_START -> view.onStart()
+                    Lifecycle.Event.ON_RESUME -> view.onResume()
+                    Lifecycle.Event.ON_PAUSE -> view.onPause()
+                    Lifecycle.Event.ON_STOP -> view.onStop()
+                    Lifecycle.Event.ON_DESTROY -> {
+                        // Disable location component before destroying map to prevent crashes
+                        mapLibreMap?.locationComponent?.let { locationComponent ->
+                            if (locationComponent.isLocationComponentActivated) {
+                                locationComponent.isLocationComponentEnabled = false
+                            }
                         }
+                        view.onDestroy()
                     }
-                    view.onDestroy()
+                    else -> {}
                 }
-                else -> {}
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -410,9 +409,10 @@ fun MapScreen(
 
                         // Control MapLibre's network connectivity based on style result
                         // When Offline or Unavailable, prevent any network requests for tiles
-                        val allowNetwork = styleResult is MapStyleResult.Online ||
-                            styleResult is MapStyleResult.Rmsp ||
-                            styleResult == null // Default to online if not yet resolved
+                        val allowNetwork =
+                            styleResult is MapStyleResult.Online ||
+                                styleResult is MapStyleResult.Rmsp ||
+                                styleResult == null // Default to online if not yet resolved
                         MapLibre.setConnected(allowNetwork)
                         Log.d("MapScreen", "Initial MapLibre network connectivity: $allowNetwork")
 
@@ -442,10 +442,11 @@ fun MapScreen(
                             val screenPoint = map.projection.toScreenLocation(latLng)
 
                             // Check for focus marker click first
-                            val focusFeatures = map.queryRenderedFeatures(
-                                screenPoint,
-                                "focus-marker-layer",
-                            )
+                            val focusFeatures =
+                                map.queryRenderedFeatures(
+                                    screenPoint,
+                                    "focus-marker-layer",
+                                )
                             if (focusFeatures.isNotEmpty() && focusInterfaceDetails != null) {
                                 showFocusInterfaceSheet = true
                                 Log.d("MapScreen", "Focus marker tapped: ${focusInterfaceDetails.name}")
@@ -665,22 +666,24 @@ fun MapScreen(
             if (style.getImage(imageId) == null) {
                 val label = focusLabel ?: "Location"
                 val initial = label.firstOrNull() ?: 'L'
-                val bitmap = MarkerBitmapFactory.createInitialMarker(
-                    initial = initial,
-                    displayName = label,
-                    backgroundColor = android.graphics.Color.parseColor("#E91E63"), // Pink/Magenta for visibility
-                    density = screenDensity,
-                )
+                val bitmap =
+                    MarkerBitmapFactory.createInitialMarker(
+                        initial = initial,
+                        displayName = label,
+                        backgroundColor = android.graphics.Color.parseColor("#E91E63"), // Pink/Magenta for visibility
+                        density = screenDensity,
+                    )
                 style.addImage(imageId, bitmap)
             }
 
             // Create GeoJSON feature for the focus marker
-            val feature = Feature.fromGeometry(
-                Point.fromLngLat(focusLongitude, focusLatitude),
-            ).apply {
-                addStringProperty("name", focusLabel ?: "Location")
-                addStringProperty("imageId", imageId)
-            }
+            val feature =
+                Feature.fromGeometry(
+                    Point.fromLngLat(focusLongitude, focusLatitude),
+                ).apply {
+                    addStringProperty("name", focusLabel ?: "Location")
+                    addStringProperty("imageId", imageId)
+                }
             val featureCollection = FeatureCollection.fromFeatures(listOf(feature))
 
             // Update or create the source
@@ -939,8 +942,9 @@ fun MapScreen(
             onDismiss = { showFocusInterfaceSheet = false },
             onCopyLoraParams = {
                 val params = formatLoraParamsForClipboard(focusInterfaceDetails)
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                    as android.content.ClipboardManager
+                val clipboard =
+                    context.getSystemService(Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
                 val clip = android.content.ClipData.newPlainText("LoRa Parameters", params)
                 clipboard.setPrimaryClip(clip)
                 Toast.makeText(context, "LoRa parameters copied", Toast.LENGTH_SHORT).show()
@@ -995,188 +999,192 @@ internal fun FocusInterfaceContent(
     onUseForNewRNode: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 32.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-            // Header with name and type
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = details.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = details.type,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                details.status?.let { status ->
-                    Surface(
-                        color = when (status.lowercase()) {
+        // Header with name and type
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = details.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = details.type,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            details.status?.let { status ->
+                Surface(
+                    color =
+                        when (status.lowercase()) {
                             "available" -> MaterialTheme.colorScheme.primaryContainer
                             "unknown" -> MaterialTheme.colorScheme.tertiaryContainer
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         },
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text(
-                            text = status.replaceFirstChar { it.uppercase() },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = when (status.lowercase()) {
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(
+                        text = status.replaceFirstChar { it.uppercase() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color =
+                            when (status.lowercase()) {
                                 "available" -> MaterialTheme.colorScheme.onPrimaryContainer
                                 "unknown" -> MaterialTheme.colorScheme.onTertiaryContainer
                                 else -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            // Location info
-            InterfaceDetailRow(
-                label = "Location",
-                value = "%.4f, %.4f".format(details.latitude, details.longitude),
-            )
-            details.height?.let { height ->
-                InterfaceDetailRow(
-                    label = "Altitude",
-                    value = "${height.toInt()} m",
-                )
-            }
-
-            // Radio parameters (if LoRa interface)
-            if (details.frequency != null) {
-                HorizontalDivider()
-                Text(
-                    text = "Radio Parameters",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                InterfaceDetailRow(
-                    label = "Frequency",
-                    value = "%.3f MHz".format(details.frequency / 1_000_000.0),
-                )
-                details.bandwidth?.let { bw ->
-                    InterfaceDetailRow(
-                        label = "Bandwidth",
-                        value = "$bw kHz",
                     )
-                }
-                details.spreadingFactor?.let { sf ->
-                    InterfaceDetailRow(
-                        label = "Spreading Factor",
-                        value = "SF$sf",
-                    )
-                }
-                details.codingRate?.let { cr ->
-                    InterfaceDetailRow(
-                        label = "Coding Rate",
-                        value = "4/$cr",
-                    )
-                }
-                details.modulation?.let { mod ->
-                    InterfaceDetailRow(
-                        label = "Modulation",
-                        value = mod,
-                    )
-                }
-            }
-
-            // TCP parameters (if TCP interface)
-            if (details.reachableOn != null) {
-                HorizontalDivider()
-                Text(
-                    text = "Network",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                InterfaceDetailRow(
-                    label = "Host",
-                    value = details.reachableOn,
-                )
-                details.port?.let { port ->
-                    InterfaceDetailRow(
-                        label = "Port",
-                        value = port.toString(),
-                    )
-                }
-            }
-
-            // Status details
-            if (details.lastHeard != null || details.hops != null) {
-                HorizontalDivider()
-                Text(
-                    text = "Status",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                details.lastHeard?.let { timestamp ->
-                    val timeAgo = formatTimeAgo(timestamp)
-                    InterfaceDetailRow(
-                        label = "Last Heard",
-                        value = timeAgo,
-                    )
-                }
-                details.hops?.let { hops ->
-                    InterfaceDetailRow(
-                        label = "Hops",
-                        value = hops.toString(),
-                    )
-                }
-            }
-
-            // LoRa params buttons (only for radio interfaces with frequency info)
-            if (details.frequency != null) {
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // Copy button
-                    OutlinedButton(
-                        onClick = onCopyLoraParams,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Copy Params")
-                    }
-                    // Use for New RNode button
-                    Button(
-                        onClick = onUseForNewRNode,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Radio,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Use for RNode")
-                    }
                 }
             }
         }
+
+        HorizontalDivider()
+
+        // Location info
+        InterfaceDetailRow(
+            label = "Location",
+            value = "%.4f, %.4f".format(details.latitude, details.longitude),
+        )
+        details.height?.let { height ->
+            InterfaceDetailRow(
+                label = "Altitude",
+                value = "${height.toInt()} m",
+            )
+        }
+
+        // Radio parameters (if LoRa interface)
+        if (details.frequency != null) {
+            HorizontalDivider()
+            Text(
+                text = "Radio Parameters",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            InterfaceDetailRow(
+                label = "Frequency",
+                value = "%.3f MHz".format(details.frequency / 1_000_000.0),
+            )
+            details.bandwidth?.let { bw ->
+                InterfaceDetailRow(
+                    label = "Bandwidth",
+                    value = "$bw kHz",
+                )
+            }
+            details.spreadingFactor?.let { sf ->
+                InterfaceDetailRow(
+                    label = "Spreading Factor",
+                    value = "SF$sf",
+                )
+            }
+            details.codingRate?.let { cr ->
+                InterfaceDetailRow(
+                    label = "Coding Rate",
+                    value = "4/$cr",
+                )
+            }
+            details.modulation?.let { mod ->
+                InterfaceDetailRow(
+                    label = "Modulation",
+                    value = mod,
+                )
+            }
+        }
+
+        // TCP parameters (if TCP interface)
+        if (details.reachableOn != null) {
+            HorizontalDivider()
+            Text(
+                text = "Network",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            InterfaceDetailRow(
+                label = "Host",
+                value = details.reachableOn,
+            )
+            details.port?.let { port ->
+                InterfaceDetailRow(
+                    label = "Port",
+                    value = port.toString(),
+                )
+            }
+        }
+
+        // Status details
+        if (details.lastHeard != null || details.hops != null) {
+            HorizontalDivider()
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            details.lastHeard?.let { timestamp ->
+                val timeAgo = formatTimeAgo(timestamp)
+                InterfaceDetailRow(
+                    label = "Last Heard",
+                    value = timeAgo,
+                )
+            }
+            details.hops?.let { hops ->
+                InterfaceDetailRow(
+                    label = "Hops",
+                    value = hops.toString(),
+                )
+            }
+        }
+
+        // LoRa params buttons (only for radio interfaces with frequency info)
+        if (details.frequency != null) {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Copy button
+                OutlinedButton(
+                    onClick = onCopyLoraParams,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Copy Params")
+                }
+                // Use for New RNode button
+                Button(
+                    onClick = onUseForNewRNode,
+                    modifier = Modifier.weight(1f),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Radio,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Use for RNode")
+                }
+            }
+        }
+    }
 }
 
 /**

@@ -2,8 +2,6 @@ package com.lxmf.messenger.ui.screens
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -244,10 +242,11 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `Info icon shown for Yggdrasil interface`() {
-        val iface = createTestDiscoveredInterface(
-            name = "Yggdrasil Node",
-            type = "TCPServerInterface",
-        ).copy(reachableOn = "200:abcd::1")
+        val iface =
+            createTestDiscoveredInterface(
+                name = "Yggdrasil Node",
+                type = "TCPServerInterface",
+            ).copy(reachableOn = "200:abcd::1")
         composeTestRule.setContent {
             DiscoveredInterfaceCard(
                 iface = iface,
@@ -266,10 +265,11 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `Info icon shown for I2P interface`() {
-        val iface = createTestDiscoveredInterface(
-            name = "I2P Node",
-            type = "I2PInterface",
-        )
+        val iface =
+            createTestDiscoveredInterface(
+                name = "I2P Node",
+                type = "I2PInterface",
+            )
         composeTestRule.setContent {
             DiscoveredInterfaceCard(
                 iface = iface,
@@ -288,10 +288,11 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `Info icon hidden for regular TCP interface`() {
-        val iface = createTestDiscoveredInterface(
-            name = "Regular TCP",
-            type = "TCPServerInterface",
-        ).copy(reachableOn = "192.168.1.1")
+        val iface =
+            createTestDiscoveredInterface(
+                name = "Regular TCP",
+                type = "TCPServerInterface",
+            ).copy(reachableOn = "192.168.1.1")
         composeTestRule.setContent {
             DiscoveredInterfaceCard(
                 iface = iface,
@@ -394,13 +395,14 @@ class DiscoveredInterfacesScreenTest {
 
     @Test
     fun `formatLoraParamsForClipboard omits null values`() {
-        val iface = createTestDiscoveredInterface(
-            frequency = null,
-            bandwidth = null,
-            spreadingFactor = null,
-            codingRate = null,
-            modulation = null,
-        )
+        val iface =
+            createTestDiscoveredInterface(
+                frequency = null,
+                bandwidth = null,
+                spreadingFactor = null,
+                codingRate = null,
+                modulation = null,
+            )
         val result = formatLoraParamsForClipboard(iface)
         assertFalse(result.contains("Frequency"))
         assertFalse(result.contains("Bandwidth"))
@@ -686,4 +688,3 @@ private fun createTestDiscoveredInterface(
         height = null,
     )
 }
-

@@ -54,16 +54,14 @@ private fun extractFriendlyName(interfaceName: String): String? {
 /**
  * Check if a string looks like a network address (IP, IPv6, or contains port).
  */
-private fun looksLikeAddress(value: String): Boolean =
-    value.contains(":") || value.contains(".") || value.startsWith("fe80")
+private fun looksLikeAddress(value: String): Boolean = value.contains(":") || value.contains(".") || value.startsWith("fe80")
 
 /**
  * Extract the interface type/class name from an interface string.
  * - "TCPClientInterface[Sideband Server/192.168.1.100:4965]" -> "TCPClientInterface"
  * - "AutoInterface" -> "AutoInterface"
  */
-private fun extractInterfaceType(interfaceName: String): String =
-    interfaceName.substringBefore("[").ifEmpty { interfaceName }
+private fun extractInterfaceType(interfaceName: String): String = interfaceName.substringBefore("[").ifEmpty { interfaceName }
 
 /**
  * Determine the interface category based on the interface name.
@@ -90,10 +88,11 @@ fun getReceivingInterfaceInfo(interfaceName: String): ReceivingInterfaceInfo {
     val interfaceType = extractInterfaceType(interfaceName)
     val category = categorizeInterface(interfaceName)
 
-    val displayText = when (category) {
-        InterfaceCategory.UNKNOWN -> friendlyName ?: interfaceName.take(30)
-        else -> friendlyName ?: category.defaultText
-    }
+    val displayText =
+        when (category) {
+            InterfaceCategory.UNKNOWN -> friendlyName ?: interfaceName.take(30)
+            else -> friendlyName ?: category.defaultText
+        }
 
     return ReceivingInterfaceInfo(
         icon = category.icon,

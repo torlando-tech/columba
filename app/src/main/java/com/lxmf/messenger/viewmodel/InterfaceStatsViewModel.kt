@@ -90,22 +90,26 @@ class InterfaceStatsViewModel
         }
 
         // Broadcast receiver for USB permission results
-        private val usbPermissionReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.action == ACTION_USB_PERMISSION) {
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    Log.d(TAG, "USB permission result received: granted=$granted")
-                    if (granted) {
-                        // Permission granted - trigger reconnect
-                        viewModelScope.launch {
-                            Log.d(TAG, "Triggering RNode reconnect after permission granted")
-                            signalReconnecting()
-                            reticulumProtocol.reconnectRNodeInterface()
+        private val usbPermissionReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    ctx: Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action == ACTION_USB_PERMISSION) {
+                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        Log.d(TAG, "USB permission result received: granted=$granted")
+                        if (granted) {
+                            // Permission granted - trigger reconnect
+                            viewModelScope.launch {
+                                Log.d(TAG, "Triggering RNode reconnect after permission granted")
+                                signalReconnecting()
+                                reticulumProtocol.reconnectRNodeInterface()
+                            }
                         }
                     }
                 }
             }
-        }
 
         private var receiverRegistered = false
 
@@ -215,15 +219,16 @@ class InterfaceStatsViewModel
                 // 1. Interface is enabled and offline
                 // 2. Interface hasn't been online yet during this session (so we're waiting for initial connection)
                 // 3. We haven't exceeded the timeout (avoid showing spinner forever)
-                val isConnecting = if (entity.enabled && !isOnline && !hasEverBeenOnline) {
-                    val now = System.currentTimeMillis()
-                    if (connectingStartTime == 0L) {
-                        connectingStartTime = now
+                val isConnecting =
+                    if (entity.enabled && !isOnline && !hasEverBeenOnline) {
+                        val now = System.currentTimeMillis()
+                        if (connectingStartTime == 0L) {
+                            connectingStartTime = now
+                        }
+                        (now - connectingStartTime) < CONNECTING_TIMEOUT_MS
+                    } else {
+                        false
                     }
-                    (now - connectingStartTime) < CONNECTING_TIMEOUT_MS
-                } else {
-                    false
-                }
 
                 // For RNode interfaces, also get RSSI if available
                 var rssi: Int? = null
@@ -235,16 +240,17 @@ class InterfaceStatsViewModel
                 }
 
                 // Check USB permission for USB-mode RNode interfaces that are offline
-                val needsUsbPermission = if (!isOnline && _state.value.connectionMode == "usb") {
-                    val usbDeviceId = _state.value.usbDeviceId
-                    if (usbDeviceId != null) {
-                        checkNeedsUsbPermission(usbDeviceId)
+                val needsUsbPermission =
+                    if (!isOnline && _state.value.connectionMode == "usb") {
+                        val usbDeviceId = _state.value.usbDeviceId
+                        if (usbDeviceId != null) {
+                            checkNeedsUsbPermission(usbDeviceId)
+                        } else {
+                            false
+                        }
                     } else {
                         false
                     }
-                } else {
-                    false
-                }
 
                 _state.update {
                     it.copy(
@@ -322,14 +328,16 @@ class InterfaceStatsViewModel
                 Log.d(TAG, "Registered USB permission receiver")
             }
 
-            val intent = Intent(ACTION_USB_PERMISSION).apply {
-                setPackage(context.packageName)
-            }
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
+            val intent =
+                Intent(ACTION_USB_PERMISSION).apply {
+                    setPackage(context.packageName)
+                }
+            val flags =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
             val permissionIntent = PendingIntent.getBroadcast(context, 0, intent, flags)
 
             Log.d(TAG, "Requesting USB permission for device $usbDeviceId")
@@ -373,36 +381,43 @@ class InterfaceStatsViewModel
         )
 
         @Suppress("SwallowedException")
-        private fun parseConfigJson(configJson: String, type: String): ParsedConfig {
+        private fun parseConfigJson(
+            configJson: String,
+            type: String,
+        ): ParsedConfig {
             return try {
                 val json = JSONObject(configJson)
                 when (type) {
-                    "RNode" -> ParsedConfig(
-                        connectionMode = json.optString("connection_mode", "classic"),
-                        targetDeviceName = json.optString("target_device_name", "").ifEmpty { null },
-                        tcpHost = json.optString("tcp_host", "").ifEmpty { null },
-                        tcpPort = if (json.has("tcp_port")) json.getInt("tcp_port") else null,
-                        usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null,
-                        frequency = json.optLong("frequency", 0).takeIf { it > 0 },
-                        bandwidth = json.optInt("bandwidth", 0).takeIf { it > 0 },
-                        spreadingFactor = json.optInt("spreading_factor", 0).takeIf { it > 0 },
-                        txPower = json.optInt("tx_power", 0).takeIf { it > 0 },
-                        codingRate = json.optInt("coding_rate", 0).takeIf { it > 0 },
-                        interfaceMode = json.optString("mode", "full"),
-                    )
-                    "TCPClient" -> ParsedConfig(
-                        tcpHost = json.optString("target_host", ""),
-                        tcpPort = json.optInt("target_port", 4242),
-                        interfaceMode = json.optString("mode", "full"),
-                    )
-                    "TCPServer" -> ParsedConfig(
-                        tcpHost = json.optString("listen_ip", "0.0.0.0"),
-                        tcpPort = json.optInt("listen_port", 4242),
-                        interfaceMode = json.optString("mode", "full"),
-                    )
-                    else -> ParsedConfig(
-                        interfaceMode = json.optString("mode", "full"),
-                    )
+                    "RNode" ->
+                        ParsedConfig(
+                            connectionMode = json.optString("connection_mode", "classic"),
+                            targetDeviceName = json.optString("target_device_name", "").ifEmpty { null },
+                            tcpHost = json.optString("tcp_host", "").ifEmpty { null },
+                            tcpPort = if (json.has("tcp_port")) json.getInt("tcp_port") else null,
+                            usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null,
+                            frequency = json.optLong("frequency", 0).takeIf { it > 0 },
+                            bandwidth = json.optInt("bandwidth", 0).takeIf { it > 0 },
+                            spreadingFactor = json.optInt("spreading_factor", 0).takeIf { it > 0 },
+                            txPower = json.optInt("tx_power", 0).takeIf { it > 0 },
+                            codingRate = json.optInt("coding_rate", 0).takeIf { it > 0 },
+                            interfaceMode = json.optString("mode", "full"),
+                        )
+                    "TCPClient" ->
+                        ParsedConfig(
+                            tcpHost = json.optString("target_host", ""),
+                            tcpPort = json.optInt("target_port", 4242),
+                            interfaceMode = json.optString("mode", "full"),
+                        )
+                    "TCPServer" ->
+                        ParsedConfig(
+                            tcpHost = json.optString("listen_ip", "0.0.0.0"),
+                            tcpPort = json.optInt("listen_port", 4242),
+                            interfaceMode = json.optString("mode", "full"),
+                        )
+                    else ->
+                        ParsedConfig(
+                            interfaceMode = json.optString("mode", "full"),
+                        )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing config JSON", e)

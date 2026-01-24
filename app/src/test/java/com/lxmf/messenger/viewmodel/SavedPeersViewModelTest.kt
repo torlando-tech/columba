@@ -173,5 +173,4 @@ class SavedPeersViewModelTest {
             // ViewModel should still be functioning
             assertNotNull(viewModel)
         }
-
 }

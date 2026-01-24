@@ -5,14 +5,12 @@ import app.cash.turbine.test
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -99,311 +97,336 @@ class TelemetryCollectorManagerTest {
     // ========== State Flow Tests ==========
 
     @Test
-    fun `initial state has null collector address`() = testScope.runTest {
-        manager = createManager()
+    fun `initial state has null collector address`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.collectorAddress.test {
-            assertNull(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.collectorAddress.test {
+                assertNull(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `initial state has disabled collector`() = testScope.runTest {
-        manager = createManager()
+    fun `initial state has disabled collector`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.isEnabled.test {
-            assertFalse(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.isEnabled.test {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `initial state has default send interval`() = testScope.runTest {
-        manager = createManager()
+    fun `initial state has default send interval`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.sendIntervalSeconds.test {
-            assertEquals(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS, awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.sendIntervalSeconds.test {
+                assertEquals(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `initial state has null last send time`() = testScope.runTest {
-        manager = createManager()
+    fun `initial state has null last send time`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.lastSendTime.test {
-            assertNull(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.lastSendTime.test {
+                assertNull(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `initial state is not sending`() = testScope.runTest {
-        manager = createManager()
+    fun `initial state is not sending`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.isSending.test {
-            assertFalse(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.isSending.test {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // ========== Start/Stop Tests ==========
 
     @Test
-    fun `start observes settings repository flows`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `start observes settings repository flows`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        // Verify that flows are being observed by checking that manager updates its state
-        collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        advanceUntilIdle()
+            // Verify that flows are being observed by checking that manager updates its state
+            collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            advanceUntilIdle()
 
-        manager.collectorAddress.test {
-            assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.collectorAddress.test {
+                assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
 
-        manager.stop()
-    }
-
     @Test
-    fun `start updates enabled state from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `start updates enabled state from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        collectorEnabledFlow.value = true
-        advanceUntilIdle()
+            collectorEnabledFlow.value = true
+            advanceUntilIdle()
 
-        manager.isEnabled.test {
-            assertTrue(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.isEnabled.test {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
 
-        manager.stop()
-    }
-
     @Test
-    fun `start updates send interval from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `start updates send interval from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        sendIntervalFlow.value = 900
-        advanceUntilIdle()
+            sendIntervalFlow.value = 900
+            advanceUntilIdle()
 
-        manager.sendIntervalSeconds.test {
-            assertEquals(900, awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.sendIntervalSeconds.test {
+                assertEquals(900, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
 
-        manager.stop()
-    }
-
     @Test
-    fun `start updates last send time from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `start updates last send time from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        val timestamp = System.currentTimeMillis()
-        lastSendTimeFlow.value = timestamp
-        advanceUntilIdle()
+            val timestamp = System.currentTimeMillis()
+            lastSendTimeFlow.value = timestamp
+            advanceUntilIdle()
 
-        manager.lastSendTime.test {
-            assertEquals(timestamp, awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.lastSendTime.test {
+                assertEquals(timestamp, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
 
-        manager.stop()
-    }
+    @Test
+    fun `stop cancels observer job`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+
+            // Verify manager is observing by making a change
+            collectorEnabledFlow.value = true
+            advanceUntilIdle()
+            assertTrue(manager.isEnabled.value)
+
+            // Stop the manager
+            manager.stop()
+
+            // Change after stop should not affect manager state
+            // (we'll check that it maintains the old value, not verify non-update)
+            collectorEnabledFlow.value = false
+            advanceUntilIdle()
+
+            // Note: State doesn't change back since we're not actively updating it
+            // The test verifies stop() doesn't throw and completes successfully
+        }
 
     @Test
-    fun `stop cancels observer job`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `start is idempotent - calling twice does not restart observers`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+            manager.start() // Second call should be no-op
 
-        // Verify manager is observing by making a change
-        collectorEnabledFlow.value = true
-        advanceUntilIdle()
-        assertTrue(manager.isEnabled.value)
+            // Should still work correctly
+            collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            advanceUntilIdle()
 
-        // Stop the manager
-        manager.stop()
+            assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", manager.collectorAddress.value)
 
-        // Change after stop should not affect manager state
-        // (we'll check that it maintains the old value, not verify non-update)
-        collectorEnabledFlow.value = false
-        advanceUntilIdle()
-
-        // Note: State doesn't change back since we're not actively updating it
-        // The test verifies stop() doesn't throw and completes successfully
-    }
-
-    @Test
-    fun `start is idempotent - calling twice does not restart observers`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-        manager.start() // Second call should be no-op
-
-        // Should still work correctly
-        collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        advanceUntilIdle()
-
-        assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", manager.collectorAddress.value)
-
-        manager.stop()
-    }
+            manager.stop()
+        }
 
     // ========== setCollectorAddress Tests ==========
 
     @Test
-    fun `setCollectorAddress saves valid 32-char hex address`() = testScope.runTest {
-        manager = createManager()
+    fun `setCollectorAddress saves valid 32-char hex address`() =
+        testScope.runTest {
+            manager = createManager()
 
-        val validAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        manager.setCollectorAddress(validAddress)
+            val validAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            manager.setCollectorAddress(validAddress)
 
-        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(validAddress) }
-    }
-
-    @Test
-    fun `setCollectorAddress saves null to clear`() = testScope.runTest {
-        manager = createManager()
-
-        manager.setCollectorAddress(null)
-
-        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(null) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(validAddress) }
+        }
 
     @Test
-    fun `setCollectorAddress rejects address shorter than 32 chars`() = testScope.runTest {
-        manager = createManager()
+    fun `setCollectorAddress saves null to clear`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setCollectorAddress("a1b2c3d4e5f6") // Only 12 chars
+            manager.setCollectorAddress(null)
 
-        coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
-    }
-
-    @Test
-    fun `setCollectorAddress rejects address longer than 32 chars`() = testScope.runTest {
-        manager = createManager()
-
-        manager.setCollectorAddress("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6") // 36 chars
-
-        coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(null) }
+        }
 
     @Test
-    fun `setCollectorAddress rejects address with non-hex characters`() = testScope.runTest {
-        manager = createManager()
+    fun `setCollectorAddress rejects address shorter than 32 chars`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setCollectorAddress("g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4") // 'g' is invalid
+            manager.setCollectorAddress("a1b2c3d4e5f6") // Only 12 chars
 
-        coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
-    }
+            coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
+        }
 
     @Test
-    fun `setCollectorAddress normalizes uppercase to lowercase`() = testScope.runTest {
-        manager = createManager()
+    fun `setCollectorAddress rejects address longer than 32 chars`() =
+        testScope.runTest {
+            manager = createManager()
 
-        val uppercaseAddress = "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"
-        val expectedLowercase = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        manager.setCollectorAddress(uppercaseAddress)
+            manager.setCollectorAddress("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6") // 36 chars
 
-        coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(expectedLowercase) }
-    }
+            coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
+        }
+
+    @Test
+    fun `setCollectorAddress rejects address with non-hex characters`() =
+        testScope.runTest {
+            manager = createManager()
+
+            manager.setCollectorAddress("g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4") // 'g' is invalid
+
+            coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
+        }
+
+    @Test
+    fun `setCollectorAddress normalizes uppercase to lowercase`() =
+        testScope.runTest {
+            manager = createManager()
+
+            val uppercaseAddress = "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"
+            val expectedLowercase = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            manager.setCollectorAddress(uppercaseAddress)
+
+            coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(expectedLowercase) }
+        }
 
     // ========== setEnabled Tests ==========
 
     @Test
-    fun `setEnabled saves true value`() = testScope.runTest {
-        manager = createManager()
+    fun `setEnabled saves true value`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setEnabled(true)
+            manager.setEnabled(true)
 
-        coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(true) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(true) }
+        }
 
     @Test
-    fun `setEnabled saves false value`() = testScope.runTest {
-        manager = createManager()
+    fun `setEnabled saves false value`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setEnabled(false)
+            manager.setEnabled(false)
 
-        coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(false) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(false) }
+        }
 
     // ========== setSendIntervalSeconds Tests ==========
 
     @Test
-    fun `setSendIntervalSeconds saves valid interval`() = testScope.runTest {
-        manager = createManager()
+    fun `setSendIntervalSeconds saves valid interval`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setSendIntervalSeconds(900) // 15 minutes
+            manager.setSendIntervalSeconds(900) // 15 minutes
 
-        coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(900) }
-    }
-
-    @Test
-    fun `setSendIntervalSeconds saves 5 minute interval`() = testScope.runTest {
-        manager = createManager()
-
-        manager.setSendIntervalSeconds(300)
-
-        coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(300) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(900) }
+        }
 
     @Test
-    fun `setSendIntervalSeconds saves 1 hour interval`() = testScope.runTest {
-        manager = createManager()
+    fun `setSendIntervalSeconds saves 5 minute interval`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.setSendIntervalSeconds(3600)
+            manager.setSendIntervalSeconds(300)
 
-        coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(3600) }
-    }
+            coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(300) }
+        }
+
+    @Test
+    fun `setSendIntervalSeconds saves 1 hour interval`() =
+        testScope.runTest {
+            manager = createManager()
+
+            manager.setSendIntervalSeconds(3600)
+
+            coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(3600) }
+        }
 
     // ========== sendTelemetryNow Tests ==========
 
     @Test
-    fun `sendTelemetryNow returns NoCollectorConfigured when address is null`() = testScope.runTest {
-        manager = createManager()
+    fun `sendTelemetryNow returns NoCollectorConfigured when address is null`() =
+        testScope.runTest {
+            manager = createManager()
 
-        val result = manager.sendTelemetryNow()
+            val result = manager.sendTelemetryNow()
 
-        assertEquals(TelemetrySendResult.NoCollectorConfigured, result)
-    }
-
-    @Test
-    fun `sendTelemetryNow returns NetworkNotReady when network initializing`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-
-        // Set collector address via flow
-        collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        advanceUntilIdle()
-
-        // Network is INITIALIZING by default
-        val result = manager.sendTelemetryNow()
-
-        assertEquals(TelemetrySendResult.NetworkNotReady, result)
-
-        manager.stop()
-    }
+            assertEquals(TelemetrySendResult.NoCollectorConfigured, result)
+        }
 
     @Test
-    fun `sendTelemetryNow returns NetworkNotReady when network errored`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `sendTelemetryNow returns NetworkNotReady when network initializing`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-        networkStatusFlow.value = NetworkStatus.ERROR("Test error")
-        advanceUntilIdle()
+            // Set collector address via flow
+            collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            advanceUntilIdle()
 
-        val result = manager.sendTelemetryNow()
+            // Network is INITIALIZING by default
+            val result = manager.sendTelemetryNow()
 
-        assertEquals(TelemetrySendResult.NetworkNotReady, result)
+            assertEquals(TelemetrySendResult.NetworkNotReady, result)
 
-        manager.stop()
-    }
+            manager.stop()
+        }
+
+    @Test
+    fun `sendTelemetryNow returns NetworkNotReady when network errored`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+
+            collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+            networkStatusFlow.value = NetworkStatus.ERROR("Test error")
+            advanceUntilIdle()
+
+            val result = manager.sendTelemetryNow()
+
+            assertEquals(TelemetrySendResult.NetworkNotReady, result)
+
+            manager.stop()
+        }
 
     // ========== TelemetrySendResult Tests ==========
 
@@ -475,265 +498,276 @@ class TelemetryCollectorManagerTest {
     // ========== Flow Emission Tests ==========
 
     @Test
-    fun `collectorAddress flow emits updates from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `collectorAddress flow emits updates from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        manager.collectorAddress.test {
-            // Initial value
-            assertNull(awaitItem())
+            manager.collectorAddress.test {
+                // Initial value
+                assertNull(awaitItem())
 
-            // Update from settings
-            collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-            advanceUntilIdle()
-            assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", awaitItem())
+                // Update from settings
+                collectorAddressFlow.value = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                advanceUntilIdle()
+                assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", awaitItem())
 
-            // Clear
-            collectorAddressFlow.value = null
-            advanceUntilIdle()
-            assertNull(awaitItem())
+                // Clear
+                collectorAddressFlow.value = null
+                advanceUntilIdle()
+                assertNull(awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        manager.stop()
-    }
 
     @Test
-    fun `isEnabled flow emits updates from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `isEnabled flow emits updates from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        manager.isEnabled.test {
-            // Initial value
-            assertFalse(awaitItem())
+            manager.isEnabled.test {
+                // Initial value
+                assertFalse(awaitItem())
 
-            // Enable
-            collectorEnabledFlow.value = true
-            advanceUntilIdle()
-            assertTrue(awaitItem())
+                // Enable
+                collectorEnabledFlow.value = true
+                advanceUntilIdle()
+                assertTrue(awaitItem())
 
-            // Disable
-            collectorEnabledFlow.value = false
-            advanceUntilIdle()
-            assertFalse(awaitItem())
+                // Disable
+                collectorEnabledFlow.value = false
+                advanceUntilIdle()
+                assertFalse(awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        manager.stop()
-    }
 
     @Test
-    fun `sendIntervalSeconds flow emits updates from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `sendIntervalSeconds flow emits updates from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        manager.sendIntervalSeconds.test {
-            // Initial value (default)
-            assertEquals(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS, awaitItem())
+            manager.sendIntervalSeconds.test {
+                // Initial value (default)
+                assertEquals(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS, awaitItem())
 
-            // Update to 15 minutes
-            sendIntervalFlow.value = 900
-            advanceUntilIdle()
-            assertEquals(900, awaitItem())
+                // Update to 15 minutes
+                sendIntervalFlow.value = 900
+                advanceUntilIdle()
+                assertEquals(900, awaitItem())
 
-            // Update to 1 hour
-            sendIntervalFlow.value = 3600
-            advanceUntilIdle()
-            assertEquals(3600, awaitItem())
+                // Update to 1 hour
+                sendIntervalFlow.value = 3600
+                advanceUntilIdle()
+                assertEquals(3600, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        manager.stop()
-    }
 
     @Test
-    fun `lastSendTime flow emits updates from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `lastSendTime flow emits updates from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        manager.lastSendTime.test {
-            // Initial value
-            assertNull(awaitItem())
+            manager.lastSendTime.test {
+                // Initial value
+                assertNull(awaitItem())
 
-            // Update with timestamp
-            val timestamp1 = System.currentTimeMillis()
-            lastSendTimeFlow.value = timestamp1
-            advanceUntilIdle()
-            assertEquals(timestamp1, awaitItem())
+                // Update with timestamp
+                val timestamp1 = System.currentTimeMillis()
+                lastSendTimeFlow.value = timestamp1
+                advanceUntilIdle()
+                assertEquals(timestamp1, awaitItem())
 
-            // Update with new timestamp
-            val timestamp2 = timestamp1 + 60_000
-            lastSendTimeFlow.value = timestamp2
-            advanceUntilIdle()
-            assertEquals(timestamp2, awaitItem())
+                // Update with new timestamp
+                val timestamp2 = timestamp1 + 60_000
+                lastSendTimeFlow.value = timestamp2
+                advanceUntilIdle()
+                assertEquals(timestamp2, awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        manager.stop()
-    }
 
     // ========== Host Mode Tests ==========
 
     @Test
-    fun `initial host mode state is disabled`() = testScope.runTest {
-        manager = createManager()
+    fun `initial host mode state is disabled`() =
+        testScope.runTest {
+            manager = createManager()
 
-        manager.isHostModeEnabled.test {
-            assertFalse(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.isHostModeEnabled.test {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `isHostModeEnabled flow emits updates from settings`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
+    fun `isHostModeEnabled flow emits updates from settings`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
 
-        manager.isHostModeEnabled.test {
-            // Initial value
-            assertFalse(awaitItem())
+            manager.isHostModeEnabled.test {
+                // Initial value
+                assertFalse(awaitItem())
+
+                // Enable host mode
+                hostModeEnabledFlow.value = true
+                advanceUntilIdle()
+                assertTrue(awaitItem())
+
+                // Disable host mode
+                hostModeEnabledFlow.value = false
+                advanceUntilIdle()
+                assertFalse(awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `setHostModeEnabled saves to repository`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+            advanceUntilIdle()
 
             // Enable host mode
+            manager.setHostModeEnabled(true)
+            advanceUntilIdle()
+
+            // Verify save was called
+            coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `setHostModeEnabled syncs with Python layer`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+            advanceUntilIdle()
+
+            // Set network to ready so Python sync will be attempted
+            networkStatusFlow.value = NetworkStatus.READY
+            advanceUntilIdle()
+
+            // Enable host mode - simulate the flow update that would come from the repository
             hostModeEnabledFlow.value = true
             advanceUntilIdle()
-            assertTrue(awaitItem())
 
-            // Disable host mode
+            // Verify Python sync was called
+            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+
+            // Disable host mode - simulate the flow update
             hostModeEnabledFlow.value = false
             advanceUntilIdle()
-            assertFalse(awaitItem())
 
-            cancelAndIgnoreRemainingEvents()
+            // Verify Python sync was called with false
+            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(false) }
+
+            manager.stop()
         }
 
-        manager.stop()
-    }
-
     @Test
-    fun `setHostModeEnabled saves to repository`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-        advanceUntilIdle()
+    fun `host mode setting change triggers Python sync`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+            advanceUntilIdle()
 
-        // Enable host mode
-        manager.setHostModeEnabled(true)
-        advanceUntilIdle()
+            // Set network to ready so Python sync will be attempted
+            networkStatusFlow.value = NetworkStatus.READY
+            advanceUntilIdle()
 
-        // Verify save was called
-        coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
+            // Simulate settings flow update (as if changed externally)
+            hostModeEnabledFlow.value = true
+            advanceUntilIdle()
 
-        manager.stop()
-    }
+            // Verify Python layer was synced
+            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
 
-    @Test
-    fun `setHostModeEnabled syncs with Python layer`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-        advanceUntilIdle()
-
-        // Set network to ready so Python sync will be attempted
-        networkStatusFlow.value = NetworkStatus.READY
-        advanceUntilIdle()
-
-        // Enable host mode - simulate the flow update that would come from the repository
-        hostModeEnabledFlow.value = true
-        advanceUntilIdle()
-
-        // Verify Python sync was called
-        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
-
-        // Disable host mode - simulate the flow update
-        hostModeEnabledFlow.value = false
-        advanceUntilIdle()
-
-        // Verify Python sync was called with false
-        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(false) }
-
-        manager.stop()
-    }
-
-    @Test
-    fun `host mode setting change triggers Python sync`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-        advanceUntilIdle()
-
-        // Set network to ready so Python sync will be attempted
-        networkStatusFlow.value = NetworkStatus.READY
-        advanceUntilIdle()
-
-        // Simulate settings flow update (as if changed externally)
-        hostModeEnabledFlow.value = true
-        advanceUntilIdle()
-
-        // Verify Python layer was synced
-        coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
-
-        manager.stop()
-    }
-
-    @Test
-    fun `setHostModeEnabled handles Python sync failure gracefully`() = testScope.runTest {
-        // Setup Python sync to fail
-        coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns
-            Result.failure(RuntimeException("Python error"))
-
-        manager = createManager()
-        manager.start()
-        advanceUntilIdle()
-
-        // Set network to ready so Python sync will be attempted
-        networkStatusFlow.value = NetworkStatus.READY
-        advanceUntilIdle()
-
-        // Enable host mode - should not throw
-        manager.setHostModeEnabled(true)
-        advanceUntilIdle()
-
-        // Verify save was still called even if Python sync failed
-        coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
-
-        manager.stop()
-    }
-
-    @Test
-    fun `host mode can be enabled and disabled independently of collector mode`() = testScope.runTest {
-        manager = createManager()
-        manager.start()
-        advanceUntilIdle()
-
-        // Enable collector mode (sending telemetry)
-        collectorEnabledFlow.value = true
-        advanceUntilIdle()
-
-        // Enable host mode (receiving telemetry) - should work independently
-        // Simulate the flow update that would come from settings repository
-        hostModeEnabledFlow.value = true
-        advanceUntilIdle()
-
-        manager.isHostModeEnabled.test {
-            assertTrue(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            manager.stop()
         }
 
-        manager.isEnabled.test {
-            assertTrue(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    @Test
+    fun `setHostModeEnabled handles Python sync failure gracefully`() =
+        testScope.runTest {
+            // Setup Python sync to fail
+            coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns
+                Result.failure(RuntimeException("Python error"))
+
+            manager = createManager()
+            manager.start()
+            advanceUntilIdle()
+
+            // Set network to ready so Python sync will be attempted
+            networkStatusFlow.value = NetworkStatus.READY
+            advanceUntilIdle()
+
+            // Enable host mode - should not throw
+            manager.setHostModeEnabled(true)
+            advanceUntilIdle()
+
+            // Verify save was still called even if Python sync failed
+            coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
+
+            manager.stop()
         }
 
-        // Disable collector mode - host mode should remain enabled
-        collectorEnabledFlow.value = false
-        advanceUntilIdle()
+    @Test
+    fun `host mode can be enabled and disabled independently of collector mode`() =
+        testScope.runTest {
+            manager = createManager()
+            manager.start()
+            advanceUntilIdle()
 
-        manager.isHostModeEnabled.test {
-            assertTrue(awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            // Enable collector mode (sending telemetry)
+            collectorEnabledFlow.value = true
+            advanceUntilIdle()
+
+            // Enable host mode (receiving telemetry) - should work independently
+            // Simulate the flow update that would come from settings repository
+            hostModeEnabledFlow.value = true
+            advanceUntilIdle()
+
+            manager.isHostModeEnabled.test {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.isEnabled.test {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            // Disable collector mode - host mode should remain enabled
+            collectorEnabledFlow.value = false
+            advanceUntilIdle()
+
+            manager.isHostModeEnabled.test {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        manager.stop()
-    }
 }

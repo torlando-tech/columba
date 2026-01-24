@@ -195,7 +195,10 @@ class DiscoveredInterfacesViewModel
         /**
          * Set user's location for distance calculation.
          */
-        fun setUserLocation(latitude: Double, longitude: Double) {
+        fun setUserLocation(
+            latitude: Double,
+            longitude: Double,
+        ) {
             _state.update {
                 it.copy(userLatitude = latitude, userLongitude = longitude)
             }

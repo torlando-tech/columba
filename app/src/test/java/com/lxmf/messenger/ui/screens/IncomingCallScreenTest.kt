@@ -451,7 +451,6 @@ class IncomingCallScreenTest {
 
         composeTestRule.onNodeWithText("Test User").assertIsDisplayed()
     }
-
 }
 
 // ========== Test Composables ==========

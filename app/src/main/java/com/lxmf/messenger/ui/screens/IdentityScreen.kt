@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bluetooth
@@ -37,9 +38,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
-import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +82,7 @@ import com.lxmf.messenger.viewmodel.DebugInfo
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.InterfaceInfo
 import com.lxmf.messenger.viewmodel.TestAnnounceResult
+import kotlinx.coroutines.launch
 
 /**
  * Network Status Screen
@@ -462,24 +462,25 @@ fun InterfacesCard(
                     val isRNode = iface.type.contains("RNode", ignoreCase = true)
                     InterfaceRow(
                         iface = iface,
-                        onClick = when {
-                            // RNode interfaces navigate to stats screen
-                            isRNode && viewModel != null -> {
-                                {
-                                    coroutineScope.launch {
-                                        val interfaceId = viewModel.findInterfaceIdByName(iface.name)
-                                        if (interfaceId != null) {
-                                            onNavigateToInterfaceStats(interfaceId)
+                        onClick =
+                            when {
+                                // RNode interfaces navigate to stats screen
+                                isRNode && viewModel != null -> {
+                                    {
+                                        coroutineScope.launch {
+                                            val interfaceId = viewModel.findInterfaceIdByName(iface.name)
+                                            if (interfaceId != null) {
+                                                onNavigateToInterfaceStats(interfaceId)
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            // Offline/failed interfaces show error dialog
-                            !iface.online || iface.error != null -> {
-                                { selectedInterface = iface }
-                            }
-                            else -> null
-                        },
+                                // Offline/failed interfaces show error dialog
+                                !iface.online || iface.error != null -> {
+                                    { selectedInterface = iface }
+                                }
+                                else -> null
+                            },
                         showChevron = isRNode,
                     )
                 }

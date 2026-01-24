@@ -649,7 +649,6 @@ interface AnnounceDao {
      */
     @Query("SELECT nodeType, COUNT(*) as count FROM announces GROUP BY nodeType")
     suspend fun getNodeTypeCounts(): List<NodeTypeCount>
-
 }
 
 /**

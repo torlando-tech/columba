@@ -1,14 +1,10 @@
 package com.lxmf.messenger.ui.screens.rnode
 
 import android.app.Application
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.data.model.BluetoothType
 import com.lxmf.messenger.data.model.DiscoveredRNode
-import com.lxmf.messenger.data.model.DiscoveredUsbDevice
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.RNodeConnectionType
 import com.lxmf.messenger.viewmodel.RNodeWizardState
@@ -687,4 +683,148 @@ class DeviceDiscoveryStepTest {
         // The current device (RNode 5678) should not be in the list below, only in "Current Device" section
     }
 
+    // ========== USB Bluetooth Pairing Mode Tests ==========
+
+    @Test
+    fun usbPairingMode_showsPairingCard_withPinDisplay() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.USB_SERIAL,
+                isUsbPairingMode = true,
+                usbBluetoothPin = "1234",
+                usbPairingStatus = "Enter this PIN when prompted",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - PIN label and value should be displayed
+        composeTestRule.onNodeWithText("PIN Code:").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1234").assertIsDisplayed()
+    }
+
+    @Test
+    fun usbPairingMode_exitButton_callsExitPairingMode() {
+        // Given - test in Bluetooth tab where the same card is also used
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                isUsbPairingMode = true,
+                usbBluetoothPin = "5678",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Click exit button (use assertExists since button may be below viewport fold)
+        val exitButton = composeTestRule.onNodeWithText("Exit Pairing Mode")
+        exitButton.assertExists()
+
+        // Check if button is enabled and perform click
+        exitButton.performClick()
+
+        // Wait for idle after click
+        composeTestRule.waitForIdle()
+
+        // Then
+        verify(exactly = 1) { mockViewModel.exitUsbBluetoothPairingMode() }
+    }
+
+    @Test
+    fun usbPairingMode_showsManualPinEntry_whenNoPin() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.USB_SERIAL,
+                isUsbPairingMode = true,
+                showManualPinEntry = true,
+                manualPinInput = "",
+                usbPairingStatus = "Enter the PIN shown on your RNode's display",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - manual entry section should be shown
+        composeTestRule.onNodeWithText("Enter the 6-digit PIN shown on your RNode's display:").assertIsDisplayed()
+    }
+
+    @Test
+    fun usbPairingMode_showsStatusMessage() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.USB_SERIAL,
+                isUsbPairingMode = true,
+                usbPairingStatus = "Scanning for RNode...",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then
+        composeTestRule.onNodeWithText("Scanning for RNode...").assertIsDisplayed()
+    }
+
+    @Test
+    fun bluetoothTab_pairViaUsb_button_startsUsbAssistedPairing() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                discoveredDevices = emptyList(),
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Click the "Pair via USB" button
+        composeTestRule.onNodeWithText("Pair via USB").performClick()
+
+        // Then
+        verify(exactly = 1) { mockViewModel.startUsbAssistedPairing() }
+    }
+
+    @Test
+    fun bluetoothTab_showsUsbPairingCard_whenPairingModeActive() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                isUsbPairingMode = true,
+                usbBluetoothPin = "9876",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+
+        // When
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        // Then - should show pairing card with PIN
+        composeTestRule.onNodeWithText("PIN Code:").assertIsDisplayed()
+        composeTestRule.onNodeWithText("9876").assertIsDisplayed()
+    }
 }

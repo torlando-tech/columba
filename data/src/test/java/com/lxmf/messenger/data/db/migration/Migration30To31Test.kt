@@ -3,11 +3,11 @@ package com.lxmf.messenger.data.db.migration
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
-import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals

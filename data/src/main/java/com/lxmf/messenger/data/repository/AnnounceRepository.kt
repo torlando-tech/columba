@@ -8,8 +8,8 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.model.EnrichedAnnounce
 import kotlinx.coroutines.flow.Flow
-import java.security.MessageDigest
 import kotlinx.coroutines.flow.map
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 

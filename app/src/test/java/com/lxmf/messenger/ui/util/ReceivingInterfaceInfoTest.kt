@@ -13,7 +13,6 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class ReceivingInterfaceInfoTest {
-
     // ===========================================
     // TCP Interface Tests
     // ===========================================

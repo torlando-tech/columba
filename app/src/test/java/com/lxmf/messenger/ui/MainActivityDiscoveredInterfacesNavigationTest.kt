@@ -11,7 +11,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.test.RegisterComponentActivityRule
-import com.lxmf.messenger.ui.screens.FocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.buildFocusInterfaceDetails
 import com.lxmf.messenger.ui.screens.isValidCoordinate
 import org.junit.Assert.assertEquals
@@ -72,23 +71,24 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with valid coordinates returns details`() {
-        val details = buildFocusInterfaceDetails(
-            lat = 45.123,
-            lon = -122.456,
-            label = "Test Interface",
-            type = "TCPServerInterface",
-            height = 100.0,
-            reachableOn = "192.168.1.1",
-            port = 4242,
-            frequency = 915000000L,
-            bandwidth = 125000,
-            sf = 10,
-            cr = 5,
-            modulation = "LoRa",
-            status = "online",
-            lastHeard = 1234567890L,
-            hops = 2,
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = 45.123,
+                lon = -122.456,
+                label = "Test Interface",
+                type = "TCPServerInterface",
+                height = 100.0,
+                reachableOn = "192.168.1.1",
+                port = 4242,
+                frequency = 915000000L,
+                bandwidth = 125000,
+                sf = 10,
+                cr = 5,
+                modulation = "LoRa",
+                status = "online",
+                lastHeard = 1234567890L,
+                hops = 2,
+            )
 
         assertNotNull(details)
         assertEquals("Test Interface", details!!.name)
@@ -110,45 +110,48 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with zero coordinates returns null`() {
-        val details = buildFocusInterfaceDetails(
-            lat = 0.0,
-            lon = 0.0,
-            label = "Test",
-            type = "TCP",
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = 0.0,
+                lon = 0.0,
+                label = "Test",
+                type = "TCP",
+            )
         assertNull(details)
     }
 
     @Test
     fun `buildFocusDetails with null coordinates returns null`() {
-        val details = buildFocusInterfaceDetails(
-            lat = null,
-            lon = null,
-            label = "Test",
-            type = "TCP",
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = null,
+                lon = null,
+                label = "Test",
+                type = "TCP",
+            )
         assertNull(details)
     }
 
     @Test
     fun `buildFocusDetails converts default values to null`() {
-        val details = buildFocusInterfaceDetails(
-            lat = 45.0,
-            lon = -122.0,
-            label = "Test",
-            type = "TCP",
-            height = Double.NaN, // Default for missing height
-            reachableOn = "", // Default empty string
-            port = -1, // Default for missing port
-            frequency = -1L, // Default for missing frequency
-            bandwidth = -1,
-            sf = -1,
-            cr = -1,
-            modulation = "",
-            status = "",
-            lastHeard = -1L,
-            hops = -1,
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = 45.0,
+                lon = -122.0,
+                label = "Test",
+                type = "TCP",
+                height = Double.NaN, // Default for missing height
+                reachableOn = "", // Default empty string
+                port = -1, // Default for missing port
+                frequency = -1L, // Default for missing frequency
+                bandwidth = -1,
+                sf = -1,
+                cr = -1,
+                modulation = "",
+                status = "",
+                lastHeard = -1L,
+                hops = -1,
+            )
 
         assertNotNull(details)
         assertNull(details!!.height)
@@ -166,12 +169,13 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with empty label uses Unknown`() {
-        val details = buildFocusInterfaceDetails(
-            lat = 45.0,
-            lon = -122.0,
-            label = null,
-            type = "TCP",
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = 45.0,
+                lon = -122.0,
+                label = null,
+                type = "TCP",
+            )
 
         assertNotNull(details)
         assertEquals("Unknown", details!!.name)
@@ -179,12 +183,13 @@ class MainActivityDiscoveredInterfacesNavigationTest {
 
     @Test
     fun `buildFocusDetails with empty type uses Unknown`() {
-        val details = buildFocusInterfaceDetails(
-            lat = 45.0,
-            lon = -122.0,
-            label = "Test",
-            type = "",
-        )
+        val details =
+            buildFocusInterfaceDetails(
+                lat = 45.0,
+                lon = -122.0,
+                label = "Test",
+                type = "",
+            )
 
         assertNotNull(details)
         assertEquals("Unknown", details!!.type)
@@ -221,12 +226,25 @@ class MainActivityDiscoveredInterfacesNavigationTest {
             ) {
                 composable(
                     route = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}",
-                    arguments = listOf(
-                        navArgument("lat") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("lon") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("label") { type = NavType.StringType; defaultValue = "" },
-                        navArgument("type") { type = NavType.StringType; defaultValue = "" },
-                    ),
+                    arguments =
+                        listOf(
+                            navArgument("lat") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("lon") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("label") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("type") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
                 ) { backStackEntry ->
                     capturedLat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
                     capturedLon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
@@ -253,12 +271,25 @@ class MainActivityDiscoveredInterfacesNavigationTest {
             ) {
                 composable(
                     route = "map_focus?lat={lat}&lon={lon}&label={label}&type={type}",
-                    arguments = listOf(
-                        navArgument("lat") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("lon") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("label") { type = NavType.StringType; defaultValue = "" },
-                        navArgument("type") { type = NavType.StringType; defaultValue = "" },
-                    ),
+                    arguments =
+                        listOf(
+                            navArgument("lat") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("lon") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("label") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("type") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
                 ) { backStackEntry ->
                     capturedLabel = backStackEntry.arguments?.getString("label")
                     capturedType = backStackEntry.arguments?.getString("type")
@@ -285,12 +316,25 @@ class MainActivityDiscoveredInterfacesNavigationTest {
             ) {
                 composable(
                     route = "map_focus?lat={lat}&lon={lon}&port={port}&frequency={frequency}",
-                    arguments = listOf(
-                        navArgument("lat") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("lon") { type = NavType.FloatType; defaultValue = 0f },
-                        navArgument("port") { type = NavType.IntType; defaultValue = -1 },
-                        navArgument("frequency") { type = NavType.LongType; defaultValue = -1L },
-                    ),
+                    arguments =
+                        listOf(
+                            navArgument("lat") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("lon") {
+                                type = NavType.FloatType
+                                defaultValue = 0f
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("frequency") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                        ),
                 ) { backStackEntry ->
                     capturedPort = backStackEntry.arguments?.getInt("port")
                     capturedFrequency = backStackEntry.arguments?.getLong("frequency")
@@ -320,11 +364,21 @@ class MainActivityDiscoveredInterfacesNavigationTest {
             ) {
                 composable(
                     route = "tcp_client_wizard?host={host}&port={port}&name={name}",
-                    arguments = listOf(
-                        navArgument("host") { type = NavType.StringType; defaultValue = "" },
-                        navArgument("port") { type = NavType.IntType; defaultValue = 4242 },
-                        navArgument("name") { type = NavType.StringType; defaultValue = "" },
-                    ),
+                    arguments =
+                        listOf(
+                            navArgument("host") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument("port") {
+                                type = NavType.IntType
+                                defaultValue = 4242
+                            },
+                            navArgument("name") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
                 ) { backStackEntry ->
                     capturedHost = backStackEntry.arguments?.getString("host")
                     capturedPort = backStackEntry.arguments?.getInt("port")
@@ -357,12 +411,25 @@ class MainActivityDiscoveredInterfacesNavigationTest {
             ) {
                 composable(
                     route = "rnode_wizard?loraFrequency={loraFrequency}&loraBandwidth={loraBandwidth}&loraSf={loraSf}&loraCr={loraCr}",
-                    arguments = listOf(
-                        navArgument("loraFrequency") { type = NavType.LongType; defaultValue = -1L },
-                        navArgument("loraBandwidth") { type = NavType.IntType; defaultValue = -1 },
-                        navArgument("loraSf") { type = NavType.IntType; defaultValue = -1 },
-                        navArgument("loraCr") { type = NavType.IntType; defaultValue = -1 },
-                    ),
+                    arguments =
+                        listOf(
+                            navArgument("loraFrequency") {
+                                type = NavType.LongType
+                                defaultValue = -1L
+                            },
+                            navArgument("loraBandwidth") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("loraSf") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("loraCr") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                        ),
                 ) { backStackEntry ->
                     capturedFrequency = backStackEntry.arguments?.getLong("loraFrequency")
                     capturedBandwidth = backStackEntry.arguments?.getInt("loraBandwidth")

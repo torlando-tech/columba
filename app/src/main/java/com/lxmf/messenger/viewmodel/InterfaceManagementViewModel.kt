@@ -241,7 +241,10 @@ class InterfaceManagementViewModel
                             discoveredStaleCount = staleCount,
                         )
                     }
-                    Log.d(TAG, "Discovered interfaces: ${discovered.size} (available=$availableCount, unknown=$unknownCount, stale=$staleCount), discovery enabled=$discoveryEnabled")
+                    Log.d(
+                        TAG,
+                        "Discovered interfaces: ${discovered.size} (available=$availableCount, unknown=$unknownCount, stale=$staleCount), discovery enabled=$discoveryEnabled",
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovered interfaces count", e)
                 }

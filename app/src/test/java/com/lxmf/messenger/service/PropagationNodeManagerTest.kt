@@ -142,6 +142,8 @@ class PropagationNodeManagerTest {
         if (::manager.isInitialized) {
             manager.stop()
         }
+        // Allow any pending coroutines to complete before resetting Main
+        Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
     }

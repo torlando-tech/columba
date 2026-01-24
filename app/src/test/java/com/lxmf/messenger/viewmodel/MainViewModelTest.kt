@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -40,6 +41,17 @@ class MainViewModelTest {
     private lateinit var viewModel: MainViewModel
     private lateinit var mockNetworkStatus: MutableStateFlow<NetworkStatus>
 
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = MainViewModel(reticulumProtocol)
+            advanceUntilIdle()
+            testBody()
+        }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -49,8 +61,6 @@ class MainViewModelTest {
 
         reticulumProtocol = mockk()
         every { reticulumProtocol.networkStatus } returns mockNetworkStatus
-
-        viewModel = MainViewModel(reticulumProtocol)
     }
 
     @After
@@ -61,7 +71,7 @@ class MainViewModelTest {
 
     @Test
     fun `initial state is Initial`() =
-        runTest {
+        runViewModelTest {
             viewModel.uiState.test {
                 assertEquals(UiState.Initial, awaitItem())
             }
@@ -69,7 +79,7 @@ class MainViewModelTest {
 
     @Test
     fun `initial network status is SHUTDOWN`() =
-        runTest {
+        runViewModelTest {
             viewModel.networkStatus.test {
                 assertEquals(NetworkStatus.SHUTDOWN, awaitItem())
             }
@@ -77,7 +87,7 @@ class MainViewModelTest {
 
     @Test
     fun `initializeReticulum success updates state and status`() =
-        runTest {
+        runViewModelTest {
             // Mock successful initialization
             coEvery { reticulumProtocol.initialize(any()) } returns Result.success(Unit)
 
@@ -108,7 +118,7 @@ class MainViewModelTest {
 
     @Test
     fun `initializeReticulum failure updates state with error`() =
-        runTest {
+        runViewModelTest {
             // Mock failed initialization
             val errorMessage = "Initialization failed"
             coEvery { reticulumProtocol.initialize(any()) } returns Result.failure(Exception(errorMessage))
@@ -126,7 +136,7 @@ class MainViewModelTest {
 
     @Test
     fun `createIdentity success updates state with hash`() =
-        runTest {
+        runViewModelTest {
             val mockIdentity =
                 Identity(
                     hash = ByteArray(16) { it.toByte() },
@@ -151,7 +161,7 @@ class MainViewModelTest {
 
     @Test
     fun `createIdentity failure updates state with error`() =
-        runTest {
+        runViewModelTest {
             val errorMessage = "Failed to create identity"
             coEvery { reticulumProtocol.createIdentity() } returns Result.failure(Exception(errorMessage))
 
@@ -167,7 +177,7 @@ class MainViewModelTest {
 
     @Test
     fun `testSendPacket without identity shows error`() =
-        runTest {
+        runViewModelTest {
             viewModel.testSendPacket()
             advanceUntilIdle()
 
@@ -180,7 +190,7 @@ class MainViewModelTest {
 
     @Test
     fun `testSendPacket with identity sends successfully`() =
-        runTest {
+        runViewModelTest {
             // First create an identity
             val mockIdentity =
                 Identity(
@@ -236,7 +246,7 @@ class MainViewModelTest {
 
     @Test
     fun `testSendPacket handles destination creation failure`() =
-        runTest {
+        runViewModelTest {
             // Create identity first
             val mockIdentity =
                 Identity(
@@ -265,7 +275,7 @@ class MainViewModelTest {
 
     @Test
     fun `getNetworkStatusColor returns correct colors`() =
-        runTest {
+        runViewModelTest {
             // Test initial SHUTDOWN status (gray)
             assertEquals(0xFF9E9E9EL, viewModel.getNetworkStatusColor()) // Gray
 
@@ -281,7 +291,7 @@ class MainViewModelTest {
 
     @Test
     fun `multiple operations can be performed sequentially`() =
-        runTest {
+        runViewModelTest {
             // Mock all operations
             coEvery { reticulumProtocol.initialize(any()) } coAnswers {
                 mockNetworkStatus.value = NetworkStatus.READY
@@ -309,7 +319,7 @@ class MainViewModelTest {
 
     @Test
     fun `networkStatus updates from protocol StateFlow during initialization`() =
-        runTest {
+        runViewModelTest {
             // Verify initial state
             viewModel.networkStatus.test {
                 assertEquals(NetworkStatus.SHUTDOWN, awaitItem())

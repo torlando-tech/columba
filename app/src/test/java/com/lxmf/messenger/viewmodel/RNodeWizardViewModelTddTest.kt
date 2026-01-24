@@ -15,6 +15,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -58,6 +59,17 @@ class RNodeWizardViewModelTddTest {
             isPaired = true,
         )
 
+    /**
+     * Runs a test with the ViewModel created inside the test's coroutine scope.
+     * This ensures coroutines launched during ViewModel init are properly tracked.
+     */
+    private fun runViewModelTest(testBody: suspend TestScope.() -> Unit) =
+        runTest {
+            viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
+            advanceUntilIdle()
+            testBody()
+        }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -71,8 +83,6 @@ class RNodeWizardViewModelTddTest {
         every { sharedPreferences.getString(any(), any()) } returns "{}"
         every { sharedPreferences.edit() } returns mockk(relaxed = true)
         every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns null
-
-        viewModel = RNodeWizardViewModel(context, interfaceRepository, configManager)
     }
 
     @After
@@ -85,7 +95,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `manual device name rejects empty input for proceed`() =
-        runTest {
+        runViewModelTest {
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("")
             advanceUntilIdle()
@@ -102,7 +112,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `manual device name rejects names over 32 characters`() =
-        runTest {
+        runViewModelTest {
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("A".repeat(33))
             advanceUntilIdle()
@@ -116,7 +126,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `manual device name accepts valid RNode name`() =
-        runTest {
+        runViewModelTest {
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("RNode A1B2")
             viewModel.updateManualBluetoothType(BluetoothType.BLE)
@@ -134,7 +144,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `manual device name shows warning for non-RNode name`() =
-        runTest {
+        runViewModelTest {
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("My Device")
             advanceUntilIdle()
@@ -148,7 +158,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `manual device name at exactly 32 characters is valid`() =
-        runTest {
+        runViewModelTest {
             viewModel.showManualEntry()
             viewModel.updateManualDeviceName("A".repeat(32))
             advanceUntilIdle()
@@ -163,7 +173,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `custom mode allows proceeding without region selection`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep() // REGION_SELECTION
             advanceUntilIdle()
@@ -182,7 +192,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `custom mode shows regulatory warning when no region selected`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             advanceUntilIdle()
@@ -202,7 +212,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `custom mode with region selected has no regulatory warning`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(usRegion)
@@ -216,7 +226,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `custom mode without airtime limits shows duty cycle warning for EU`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(euRegionL)
@@ -240,7 +250,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `user-modified frequency error is preserved when navigating forward from region`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(usRegion)
@@ -268,7 +278,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `region defaults replace values when user re-selects same region`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(usRegion)
@@ -297,7 +307,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `navigation forward preserves user-modified txPower error`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(usRegion)
@@ -325,7 +335,7 @@ class RNodeWizardViewModelTddTest {
 
     @Test
     fun `navigation forward does not clear errors when user has modified fields`() =
-        runTest {
+        runViewModelTest {
             viewModel.selectDevice(testBleDevice)
             viewModel.goToNextStep()
             viewModel.selectFrequencyRegion(euRegionL)

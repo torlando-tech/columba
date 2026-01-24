@@ -524,9 +524,10 @@ private fun TelemetryCollectorSection(
     var showContactPicker by remember { mutableStateOf(false) }
 
     // Find the selected contact for display
-    val selectedContact = contacts.find {
-        it.destinationHash.equals(collectorAddress, ignoreCase = true)
-    }
+    val selectedContact =
+        contacts.find {
+            it.destinationHash.equals(collectorAddress, ignoreCase = true)
+        }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -558,12 +559,13 @@ private fun TelemetryCollectorSection(
 
         // Enable toggle
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = null,
-                    indication = null,
-                ) { onEnabledChange(!enabled) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                    ) { onEnabledChange(!enabled) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -593,18 +595,20 @@ private fun TelemetryCollectorSection(
                 fontWeight = FontWeight.Medium,
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showContactPicker = true }
-                    .padding(vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showContactPicker = true }
+                        .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (selectedContact != null) {
-                    val hashBytes = selectedContact.destinationHash
-                        .chunked(2)
-                        .mapNotNull { it.toIntOrNull(16)?.toByte() }
-                        .toByteArray()
+                    val hashBytes =
+                        selectedContact.destinationHash
+                            .chunked(2)
+                            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                            .toByteArray()
                     ProfileIcon(
                         iconName = selectedContact.iconName,
                         foregroundColor = selectedContact.iconForegroundColor,
@@ -622,11 +626,12 @@ private fun TelemetryCollectorSection(
                 Text(
                     text = selectedContact?.displayName ?: "Select from contacts...",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (selectedContact != null) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (selectedContact != null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -694,9 +699,10 @@ private fun TelemetryCollectorSection(
             Button(
                 onClick = onSendNow,
                 enabled = enabled && !isSending && collectorAddress != null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                ),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                    ),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(
@@ -741,13 +747,14 @@ private fun TelemetryCollectorSection(
 
         // Request toggle (receive from collector)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = null,
-                    indication = null,
-                    enabled = collectorAddress != null,
-                ) { onRequestEnabledChange(!requestEnabled) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        enabled = collectorAddress != null,
+                    ) { onRequestEnabledChange(!requestEnabled) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -756,11 +763,12 @@ private fun TelemetryCollectorSection(
                     text = "Receive locations from group",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = if (collectorAddress != null) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (collectorAddress != null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
                 Text(
                     text = "Get everyone's location periodically",
@@ -781,11 +789,12 @@ private fun TelemetryCollectorSection(
                 text = "Request every: ${formatTelemetryIntervalDisplay(requestIntervalSeconds)}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = if (requestEnabled && collectorAddress != null) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color =
+                    if (requestEnabled && collectorAddress != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -875,12 +884,13 @@ private fun TelemetryCollectorSection(
 
         // Host mode toggle (act as collector for others)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = null,
-                    indication = null,
-                ) { onHostModeEnabledChange(!hostModeEnabled) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                    ) { onHostModeEnabledChange(!hostModeEnabled) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -983,11 +993,12 @@ private fun AllowedRequestersSection(
             val displayNames = selectedContacts.map { it.displayName }.take(3)
             val remaining = selectedContacts.size - displayNames.size
 
-            val displayText = if (remaining > 0) {
-                displayNames.joinToString(", ") + " +$remaining more"
-            } else {
-                displayNames.joinToString(", ")
-            }
+            val displayText =
+                if (remaining > 0) {
+                    displayNames.joinToString(", ") + " +$remaining more"
+                } else {
+                    displayNames.joinToString(", ")
+                }
 
             Text(
                 text = displayText.ifEmpty { "${allowedRequesters.size} selected" },
@@ -1014,16 +1025,17 @@ private fun AllowedRequestersDialog(
     var searchQuery by remember { mutableStateOf("") }
 
     // Filter contacts by search query
-    val filteredContacts = remember(contacts, searchQuery) {
-        if (searchQuery.isBlank()) {
-            contacts
-        } else {
-            contacts.filter { contact ->
-                contact.displayName.contains(searchQuery, ignoreCase = true) ||
-                    contact.destinationHash.contains(searchQuery, ignoreCase = true)
+    val filteredContacts =
+        remember(contacts, searchQuery) {
+            if (searchQuery.isBlank()) {
+                contacts
+            } else {
+                contacts.filter { contact ->
+                    contact.displayName.contains(searchQuery, ignoreCase = true) ||
+                        contact.destinationHash.contains(searchQuery, ignoreCase = true)
+                }
             }
         }
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1035,8 +1047,9 @@ private fun AllowedRequestersDialog(
             ) {
                 // Description
                 Text(
-                    text = "Only selected contacts can request your group's location data. " +
-                        "If no contacts are selected, all requests will be blocked.",
+                    text =
+                        "Only selected contacts can request your group's location data. " +
+                            "If no contacts are selected, all requests will be blocked.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1052,9 +1065,10 @@ private fun AllowedRequestersDialog(
 
                 // Contact list
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 300.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items(filteredContacts, key = { it.destinationHash }) { contact ->
@@ -1062,11 +1076,12 @@ private fun AllowedRequestersDialog(
                             contact = contact,
                             isSelected = contact.destinationHash in selectedHashes,
                             onSelectionChange = { selected ->
-                                selectedHashes = if (selected) {
-                                    selectedHashes + contact.destinationHash
-                                } else {
-                                    selectedHashes - contact.destinationHash
-                                }
+                                selectedHashes =
+                                    if (selected) {
+                                        selectedHashes + contact.destinationHash
+                                    } else {
+                                        selectedHashes - contact.destinationHash
+                                    }
                             },
                         )
                     }
@@ -1101,16 +1116,18 @@ private fun ContactSelectionRow(
     isSelected: Boolean,
     onSelectionChange: (Boolean) -> Unit,
 ) {
-    val hashBytes = contact.destinationHash
-        .chunked(2)
-        .mapNotNull { it.toIntOrNull(16)?.toByte() }
-        .toByteArray()
+    val hashBytes =
+        contact.destinationHash
+            .chunked(2)
+            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+            .toByteArray()
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelectionChange(!isSelected) }
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onSelectionChange(!isSelected) }
+                .padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProfileIcon(
@@ -1252,15 +1269,17 @@ private fun GroupHostContactRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
-        val hashBytes = contact.destinationHash
-            .chunked(2)
-            .mapNotNull { it.toIntOrNull(16)?.toByte() }
-            .toByteArray()
+        val hashBytes =
+            contact.destinationHash
+                .chunked(2)
+                .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                .toByteArray()
 
         ProfileIcon(
             iconName = contact.iconName,
@@ -1275,11 +1294,12 @@ private fun GroupHostContactRow(
         Text(
             text = contact.displayName,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (isSelected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
+            color =
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.weight(1f),
         )

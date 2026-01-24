@@ -67,6 +67,7 @@ object DatabaseModule {
             MIGRATION_30_31,
             MIGRATION_31_32,
             MIGRATION_32_33,
+            MIGRATION_33_34,
         )
     }
 
@@ -1287,10 +1288,61 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 31 to 32: Add signal quality fields to messages
-    // Stores RSSI and SNR captured when messages are received via radio interfaces
+    // Migration from version 31 to 32: Drop orphaned icon columns from announces table
+    // MIGRATION_30_31 created peer_icons and migrated data but forgot to drop the source columns.
+    // Room validates schema strictly, so these orphaned columns caused IllegalStateException.
+    // Uses table recreation pattern since SQLite doesn't support ALTER TABLE DROP COLUMN.
     private val MIGRATION_31_32 =
         object : Migration(31, 32) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Recreate announces table without icon columns
+                database.execSQL("ALTER TABLE announces RENAME TO announces_old")
+                database.execSQL(
+                    """
+                    CREATE TABLE announces (
+                        destinationHash TEXT NOT NULL PRIMARY KEY,
+                        peerName TEXT NOT NULL,
+                        publicKey BLOB NOT NULL,
+                        appData BLOB,
+                        hops INTEGER NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL,
+                        nodeType TEXT NOT NULL,
+                        receivingInterface TEXT,
+                        receivingInterfaceType TEXT,
+                        aspect TEXT,
+                        isFavorite INTEGER NOT NULL,
+                        favoritedTimestamp INTEGER,
+                        stampCost INTEGER,
+                        stampCostFlexibility INTEGER,
+                        peeringCost INTEGER,
+                        propagationTransferLimitKb INTEGER
+                    )
+                    """.trimIndent(),
+                )
+                // Copy data from old table (excluding icon columns)
+                database.execSQL(
+                    """
+                    INSERT INTO announces
+                    SELECT destinationHash, peerName, publicKey, appData, hops,
+                           lastSeenTimestamp, nodeType, receivingInterface, receivingInterfaceType,
+                           aspect, isFavorite, favoritedTimestamp, stampCost, stampCostFlexibility,
+                           peeringCost, propagationTransferLimitKb
+                    FROM announces_old
+                    """.trimIndent(),
+                )
+                database.execSQL("DROP TABLE announces_old")
+
+                // Recreate indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_lastSeenTimestamp ON announces(lastSeenTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_isFavorite_favoritedTimestamp ON announces(isFavorite, favoritedTimestamp)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_announces_nodeType_lastSeenTimestamp ON announces(nodeType, lastSeenTimestamp)")
+            }
+        }
+
+    // Migration from version 32 to 33: Add signal quality fields to messages
+    // Stores RSSI and SNR captured when messages are received via radio interfaces
+    private val MIGRATION_32_33 =
+        object : Migration(32, 33) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Add receivedRssi column (nullable INTEGER for RSSI in dBm)
                 database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
@@ -1299,11 +1351,11 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 32 to 33: Add received message info fields
+    // Migration from version 33 to 34: Add received message info fields
     // Stores hop count and receiving interface captured when messages are received
     // Also ensures all columns from previous migrations exist (handles pre-release build edge cases)
-    private val MIGRATION_32_33 =
-        object : Migration(32, 33) {
+    private val MIGRATION_33_34 =
+        object : Migration(33, 34) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Check existing columns in messages table to make migration idempotent
                 // (handles devices that had pre-release builds with these columns at different versions)
@@ -1322,11 +1374,11 @@ object DatabaseModule {
                 if ("receivedInterface" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedInterface TEXT DEFAULT NULL")
                 }
-                // Add receivedRssi column (should have been added in 31→32, but may be missing on some devices)
+                // Add receivedRssi column (should have been added in 32→33, but may be missing on some devices)
                 if ("receivedRssi" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedRssi INTEGER DEFAULT NULL")
                 }
-                // Add receivedSnr column (should have been added in 31→32, but may be missing on some devices)
+                // Add receivedSnr column (should have been added in 32→33, but may be missing on some devices)
                 if ("receivedSnr" !in messagesColumns) {
                     database.execSQL("ALTER TABLE messages ADD COLUMN receivedSnr REAL DEFAULT NULL")
                 }

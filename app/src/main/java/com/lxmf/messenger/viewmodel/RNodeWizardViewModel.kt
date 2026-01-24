@@ -1859,6 +1859,11 @@ class RNodeWizardViewModel
 
                     Log.d(TAG, "Bluetooth pairing mode command sent via USB")
 
+                    // Show unified status during PIN wait + discovery
+                    _state.update {
+                        it.copy(usbPairingStatus = "Waiting for PIN or scanning for RNode...")
+                    }
+
                     // Start discovery IMMEDIATELY - don't wait for PIN entry!
                     // RNode pairing mode lasts ~35 seconds, but we want to discover
                     // the device while it's still advertising.

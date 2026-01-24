@@ -30,7 +30,7 @@ data class AnnounceEntity(
     val stampCostFlexibility: Int? = null,
     val peeringCost: Int? = null,
     // Note: Icon fields removed - icons are now stored in peer_icons table (LXMF concept)
-    // The old columns remain in the DB but are no longer used (Room ignores extra columns)
+    // Database migration 31→32 drops the old icon columns from the announces table
     val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
 ) {
     @Suppress("CyclomaticComplexMethod") // Equals must compare all fields for correctness

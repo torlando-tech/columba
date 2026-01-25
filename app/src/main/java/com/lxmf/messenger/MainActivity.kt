@@ -50,6 +50,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -459,6 +461,7 @@ fun ColumbaNavigation(
     crashReportManager: CrashReportManager,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -661,12 +664,14 @@ fun ColumbaNavigation(
         initial = false,
     )
     LaunchedEffect(onboardingState.hasCompletedOnboarding, hasEnabledBluetoothInterface) {
-        if (onboardingState.hasCompletedOnboarding &&
-            hasEnabledBluetoothInterface &&
-            !BlePermissionManager.hasAllPermissions(context)
-        ) {
-            showPermissionBottomSheet = true
-        }
+        // Only show permission sheet if activity is still active (at least STARTED)
+        // to prevent BadTokenException when showing ModalBottomSheet
+        if (!LifecycleGuard.isActiveForWindows(lifecycleOwner)) return@LaunchedEffect
+        if (!onboardingState.hasCompletedOnboarding) return@LaunchedEffect
+        if (!hasEnabledBluetoothInterface) return@LaunchedEffect
+        if (BlePermissionManager.hasAllPermissions(context)) return@LaunchedEffect
+
+        showPermissionBottomSheet = true
     }
 
     // Track current navigation state
@@ -1559,7 +1564,9 @@ fun ColumbaNavigation(
                 }
 
                 // Bluetooth permission bottom sheet
-                if (showPermissionBottomSheet) {
+                // Only show if activity is at least STARTED to prevent BadTokenException
+                // when ModalBottomSheet tries to create popup window with invalid token
+                if (showPermissionBottomSheet && LifecycleGuard.isActiveForWindows(lifecycleOwner)) {
                     val currentStatus =
                         if (BlePermissionManager.hasAllPermissions(context)) {
                             BlePermissionManager.PermissionStatus.Granted

@@ -24,10 +24,12 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
   2. User can leave app running for extended periods (30+ minutes) without UI responsiveness degrading
   3. User can interact with buttons and UI elements with immediate (<200ms) response
   4. Memory usage remains stable over time (no unbounded growth visible in profiler)
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md - Setup & Investigation (LeakCanary + profiling session + FINDINGS.md)
+- [ ] 01-02-PLAN.md - Apply fixes based on findings + verification profiling
+- [ ] 01-03-PLAN.md - Add Sentry performance monitoring for ongoing observability
 
 ### Phase 2: Relay Loop Fix
 **Goal**: Relay auto-selection works correctly without add/remove cycling
@@ -49,5 +51,5 @@ Phases 1 and 2 are independent and can be worked in any order.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Performance Fix | 0/TBD | Not started | - |
+| 1. Performance Fix | 0/3 | Planned | - |
 | 2. Relay Loop Fix | 0/TBD | Not started | - |

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -716,39 +717,69 @@ class PropagationNodeManager
          * Observe propagation node announces for auto-selection.
          */
         private suspend fun observePropagationNodeAnnounces() {
-            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).collect { propagationNodes ->
-                val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+                .debounce(1000) // Batch rapid Room invalidation triggers (per research)
+                .collect { propagationNodes ->
+                    // CRITICAL: Don't trigger selection if already selecting or in cooldown
+                    if (_selectionState.value != RelaySelectionState.IDLE) {
+                        Log.d(TAG, "Skipping auto-select - state=${_selectionState.value}")
+                        return@collect
+                    }
 
-                Log.d(
-                    TAG,
-                    "observePropagationNodeAnnounces: isAutoSelect=$isAutoSelect, " +
-                        "availableNodes=${propagationNodes.size}",
-                )
+                    val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
 
-                if (isAutoSelect && propagationNodes.isNotEmpty()) {
-                    // Find the nearest propagation node
-                    val nearest = propagationNodes.minByOrNull { it.hops }
-                    if (nearest != null) {
-                        Log.i(
+                    Log.d(
+                        TAG,
+                        "observePropagationNodeAnnounces: isAutoSelect=$isAutoSelect, " +
+                            "availableNodes=${propagationNodes.size}, state=${_selectionState.value}",
+                    )
+
+                    if (isAutoSelect && propagationNodes.isNotEmpty()) {
+                        // Transition to SELECTING state BEFORE any selection logic
+                        _selectionState.value = RelaySelectionState.SELECTING
+                        Log.i(TAG, "Relay selection started (state=SELECTING)")
+
+                        // Find the nearest propagation node
+                        val nearest = propagationNodes.minByOrNull { it.hops }
+                        if (nearest != null) {
+                            Log.i(
+                                TAG,
+                                "Auto-selecting nearest relay: ${nearest.peerName} " +
+                                    "(${nearest.destinationHash.take(12)}...) at ${nearest.hops} hops",
+                            )
+                            onPropagationNodeAnnounce(
+                                nearest.destinationHash,
+                                nearest.peerName,
+                                nearest.hops,
+                                nearest.publicKey,
+                            )
+
+                            // Transition to STABLE and start cooldown
+                            _selectionState.value = RelaySelectionState.STABLE
+                            Log.i(TAG, "Relay selection complete (state=STABLE), cooldown=${selectionCooldownMs}ms")
+
+                            // Start cooldown timer
+                            cooldownJob?.cancel() // Cancel any existing cooldown
+                            cooldownJob = scope.launch {
+                                delay(selectionCooldownMs)
+                                if (_selectionState.value == RelaySelectionState.STABLE) {
+                                    _selectionState.value = RelaySelectionState.IDLE
+                                    Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                }
+                            }
+                        } else {
+                            // No nearest found (shouldn't happen if list is non-empty, but safety)
+                            _selectionState.value = RelaySelectionState.IDLE
+                            Log.w(TAG, "Auto-select enabled but no nearest node found, returning to IDLE")
+                        }
+                    } else if (isAutoSelect && propagationNodes.isEmpty()) {
+                        Log.w(
                             TAG,
-                            "Auto-selecting nearest relay: ${nearest.peerName} " +
-                                "(${nearest.destinationHash.take(12)}...) at ${nearest.hops} hops",
-                        )
-                        onPropagationNodeAnnounce(
-                            nearest.destinationHash,
-                            nearest.peerName,
-                            nearest.hops,
-                            nearest.publicKey,
+                            "Auto-select enabled but no valid propagation nodes available. " +
+                                "Nodes with deprecated announce format (stampCostFlexibility=NULL) are filtered out.",
                         )
                     }
-                } else if (isAutoSelect && propagationNodes.isEmpty()) {
-                    Log.w(
-                        TAG,
-                        "Auto-select enabled but no valid propagation nodes available. " +
-                            "Nodes with deprecated announce format (stampCostFlexibility=NULL) are filtered out.",
-                    )
                 }
-            }
         }
 
         /**

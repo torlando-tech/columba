@@ -667,7 +667,7 @@ class ColumbaApplication : Application() {
                 options.isEnableUserInteractionBreadcrumbs = true
 
                 // App Start performance tracking (cold/warm starts)
-                options.isEnableAppStartProfiling = true
+                options.isEnableAppStartProfiling = !BuildConfig.DEBUG
 
                 // ANR Detection (Application Not Responding)
                 options.isAnrEnabled = true

@@ -1,0 +1,53 @@
+# Roadmap: Columba 0.7.2 Bug Fixes
+
+## Overview
+
+This milestone addresses two high-priority bugs reported after the 0.7.2 pre-release: performance degradation (#340) and relay auto-selection loop (#343). Each bug is addressed as a complete investigation-to-fix cycle within its own phase, allowing independent progress on either issue.
+
+## Phases
+
+**Phase Numbering:**
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+- [ ] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
+- [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
+
+## Phase Details
+
+### Phase 1: Performance Fix
+**Goal**: App runs smoothly without progressive degradation, especially on Interface Discovery screen
+**Depends on**: Nothing (first phase)
+**Requirements**: PERF-01, PERF-02, PERF-03
+**Success Criteria** (what must be TRUE):
+  1. User can scroll Interface Discovery screen without visible stuttering or lag
+  2. User can leave app running for extended periods (30+ minutes) without UI responsiveness degrading
+  3. User can interact with buttons and UI elements with immediate (<200ms) response
+  4. Memory usage remains stable over time (no unbounded growth visible in profiler)
+**Plans**: TBD
+
+Plans:
+- [ ] 01-01: TBD
+
+### Phase 2: Relay Loop Fix
+**Goal**: Relay auto-selection works correctly without add/remove cycling
+**Depends on**: Nothing (independent of Phase 1)
+**Requirements**: RELAY-01, RELAY-02
+**Success Criteria** (what must be TRUE):
+  1. User sees relay selected once and it stays selected (no repeated add/remove in logs)
+  2. User can manually unset relay, and system re-selects a relay exactly once (not in a loop)
+  3. Relay selection logs show clean single-selection behavior, not 40+ cycles
+**Plans**: TBD
+
+Plans:
+- [ ] 02-01: TBD
+
+## Progress
+
+**Execution Order:**
+Phases 1 and 2 are independent and can be worked in any order.
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Performance Fix | 0/TBD | Not started | - |
+| 2. Relay Loop Fix | 0/TBD | Not started | - |

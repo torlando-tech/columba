@@ -75,6 +75,12 @@ data class FlasherUiState(
     val flashMessage: String = "",
     val isFlashing: Boolean = false,
     val showCancelConfirmation: Boolean = false,
+    // Step 4b: Waiting for manual reset (ESP32-S3 native USB)
+    val needsManualReset: Boolean = false,
+    val resetMessage: String? = null,
+    // Step 4c: Provisioning
+    val isProvisioning: Boolean = false,
+    val provisioningMessage: String? = null,
     // Step 5: Complete
     val flashResult: FlashResult? = null,
     // General state
@@ -164,6 +170,30 @@ class FlasherViewModel
                                     flashProgress = flashState.percent,
                                     flashMessage = flashState.message,
                                     isFlashing = true,
+                                    needsManualReset = false,
+                                    isProvisioning = false,
+                                )
+                            }
+                        }
+                        is RNodeFlasher.FlashState.NeedsManualReset -> {
+                            Log.i(TAG, "Device needs manual reset: ${flashState.message}")
+                            _state.update {
+                                it.copy(
+                                    isFlashing = false,
+                                    needsManualReset = true,
+                                    resetMessage = flashState.message,
+                                    flashMessage = flashState.message,
+                                )
+                            }
+                        }
+                        is RNodeFlasher.FlashState.Provisioning -> {
+                            _state.update {
+                                it.copy(
+                                    isFlashing = false,
+                                    needsManualReset = false,
+                                    isProvisioning = true,
+                                    provisioningMessage = flashState.message,
+                                    flashMessage = flashState.message,
                                 )
                             }
                         }
@@ -172,6 +202,8 @@ class FlasherViewModel
                                 it.copy(
                                     currentStep = FlasherStep.COMPLETE,
                                     isFlashing = false,
+                                    needsManualReset = false,
+                                    isProvisioning = false,
                                     flashResult = FlashResult.Success(flashState.deviceInfo),
                                 )
                             }
@@ -189,6 +221,8 @@ class FlasherViewModel
                                     it.copy(
                                         currentStep = FlasherStep.COMPLETE,
                                         isFlashing = false,
+                                        needsManualReset = false,
+                                        isProvisioning = false,
                                         flashResult = FlashResult.Failure(flashState.message),
                                     )
                                 }
@@ -530,6 +564,29 @@ class FlasherViewModel
                 )
             }
             flasher.resetState()
+        }
+
+        /**
+         * Called by the user after they have manually reset the device.
+         * This triggers the provisioning step for the freshly flashed firmware.
+         */
+        fun onDeviceReset() {
+            val device = _state.value.selectedDevice ?: return
+            val board = _state.value.selectedBoard ?: return
+
+            Log.i(TAG, "User confirmed device reset, starting provisioning")
+            _state.update {
+                it.copy(
+                    needsManualReset = false,
+                    isProvisioning = true,
+                    provisioningMessage = "Connecting...",
+                )
+            }
+
+            viewModelScope.launch {
+                flasher.onDeviceManuallyReset(device.deviceId, board)
+                // State will be updated by observeFlashState
+            }
         }
 
         // ==================== Step 5: Complete ====================

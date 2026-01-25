@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -39,6 +42,7 @@ import androidx.compose.ui.unit.dp
  * Step 4: Flash Progress
  *
  * Shows the flashing progress with a determinate progress bar.
+ * Also handles waiting for manual reset and provisioning states.
  * Includes a cancel button with confirmation dialog.
  */
 @Composable
@@ -50,6 +54,9 @@ fun FlashProgressStep(
     onHideCancelConfirmation: () -> Unit,
     onCancelFlash: () -> Unit,
     modifier: Modifier = Modifier,
+    needsManualReset: Boolean = false,
+    isProvisioning: Boolean = false,
+    onDeviceReset: () -> Unit = {},
 ) {
     // Pulsing animation for the icon
     val infiniteTransition = rememberInfiniteTransition(label = "flashPulse")
@@ -68,93 +75,30 @@ fun FlashProgressStep(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            // Animated icon
-            Icon(
-                imageVector = Icons.Default.Memory,
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .size(80.dp)
-                        .alpha(alpha),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-
-            // Title
-            Text(
-                text = "Flashing Firmware",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-
-            // Progress card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    // Progress percentage
-                    Text(
-                        text = "$progress%",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-
-                    // Progress bar
-                    LinearProgressIndicator(
-                        progress = { progress / 100f },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(8.dp),
-                    )
-
-                    // Status message
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-
-            // Warning
-            Card(
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "Do not disconnect the device while flashing is in progress.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(12.dp),
+        when {
+            needsManualReset -> {
+                // Show manual reset instructions
+                ManualResetContent(
+                    message = message,
+                    alpha = alpha,
+                    onDeviceReset = onDeviceReset,
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Cancel button
-            OutlinedButton(
-                onClick = onShowCancelConfirmation,
-            ) {
-                Text("Cancel")
+            isProvisioning -> {
+                // Show provisioning progress
+                ProvisioningContent(
+                    message = message,
+                    alpha = alpha,
+                )
+            }
+            else -> {
+                // Show flashing progress
+                FlashingContent(
+                    progress = progress,
+                    message = message,
+                    alpha = alpha,
+                    onShowCancelConfirmation = onShowCancelConfirmation,
+                )
             }
         }
     }
@@ -165,6 +109,269 @@ fun FlashProgressStep(
             onDismiss = onHideCancelConfirmation,
             onConfirm = onCancelFlash,
         )
+    }
+}
+
+@Composable
+private fun FlashingContent(
+    progress: Int,
+    message: String,
+    alpha: Float,
+    onShowCancelConfirmation: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        // Animated icon
+        Icon(
+            imageVector = Icons.Default.Memory,
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(80.dp)
+                    .alpha(alpha),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        // Title
+        Text(
+            text = "Flashing Firmware",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+
+        // Progress card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Progress percentage
+                Text(
+                    text = "$progress%",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                // Progress bar
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                )
+
+                // Status message
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        // Warning
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Do not disconnect the device while flashing is in progress.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Cancel button
+        OutlinedButton(
+            onClick = onShowCancelConfirmation,
+        ) {
+            Text("Cancel")
+        }
+    }
+}
+
+@Composable
+private fun ManualResetContent(
+    message: String,
+    alpha: Float,
+    onDeviceReset: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        // Animated icon
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(80.dp)
+                    .alpha(alpha),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        // Title
+        Text(
+            text = "Reset Required",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+
+        // Instructions card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "Flashing complete!",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        // Info card
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Press the RESET (RST) button on your device, then tap the button below to continue with provisioning.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Continue button
+        Button(
+            onClick = onDeviceReset,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("I've Reset the Device")
+        }
+    }
+}
+
+@Composable
+private fun ProvisioningContent(
+    message: String,
+    alpha: Float,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        // Animated icon
+        Icon(
+            imageVector = Icons.Default.Settings,
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(80.dp)
+                    .alpha(alpha),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        // Title
+        Text(
+            text = "Provisioning Device",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+
+        // Progress card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Indeterminate progress bar
+                LinearProgressIndicator(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                )
+
+                // Status message
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        // Info card
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Setting up device identity and firmware verification. This may take a moment.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
     }
 }
 

@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.security.MessageDigest
 
 /**
  * Detects RNode devices over USB and retrieves their capabilities.
@@ -26,6 +27,10 @@ class RNodeDetector(
         private const val TAG = "Columba:RNodeDetector"
         private const val COMMAND_TIMEOUT_MS = 2000L
         private const val READ_POLL_INTERVAL_MS = 50L
+        private const val EEPROM_WRITE_DELAY_MS = 85L // Time to wait after each EEPROM write
+        private const val SIGNATURE_LENGTH = 128
+        private const val CHECKSUM_LENGTH = 16
+        private const val FIRMWARE_HASH_LENGTH = 32
     }
 
     private val frameParser = KISSFrameParser()
@@ -283,6 +288,225 @@ class RNodeDetector(
             Log.e(TAG, "Failed to send firmware update indication")
         }
         result
+    }
+
+    /**
+     * Write a single byte to EEPROM.
+     *
+     * @param address The EEPROM address to write to
+     * @param value The byte value to write
+     * @return true if the write was sent successfully
+     */
+    suspend fun writeEeprom(address: Int, value: Byte): Boolean = withContext(Dispatchers.IO) {
+        Log.v(TAG, "Writing EEPROM: addr=0x${address.toString(16)}, value=0x${(value.toInt() and 0xFF).toString(16)}")
+        val frame = KISSCodec.createFrame(
+            RNodeConstants.CMD_ROM_WRITE,
+            byteArrayOf(address.toByte(), value),
+        )
+        val result = usbBridge.write(frame) > 0
+        if (result) {
+            // Wait for EEPROM write to complete
+            delay(EEPROM_WRITE_DELAY_MS)
+        }
+        result
+    }
+
+    /**
+     * Get the current firmware hash from the device.
+     * This is the SHA256 hash that the firmware calculates on boot.
+     *
+     * @return The 32-byte firmware hash, or null if not available
+     */
+    suspend fun getFirmwareHash(): ByteArray? = withContext(Dispatchers.IO) {
+        val response = sendCommandAndWait(
+            RNodeConstants.CMD_HASHES,
+            byteArrayOf(RNodeConstants.HASH_TYPE_FIRMWARE),
+        )
+
+        if (response != null && response.size >= FIRMWARE_HASH_LENGTH) {
+            Log.d(TAG, "Got firmware hash: ${response.take(FIRMWARE_HASH_LENGTH).joinToString("") {
+                String.format("%02x", it.toInt() and 0xFF)
+            }}")
+            return@withContext response.take(FIRMWARE_HASH_LENGTH).toByteArray()
+        }
+        Log.w(TAG, "Failed to get firmware hash")
+        null
+    }
+
+    /**
+     * Set the target firmware hash in EEPROM.
+     * This should match the actual firmware hash for the device to be considered valid.
+     *
+     * @param hash The 32-byte SHA256 hash
+     * @return true if the command was sent successfully
+     */
+    suspend fun setFirmwareHash(hash: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        require(hash.size == FIRMWARE_HASH_LENGTH) { "Firmware hash must be $FIRMWARE_HASH_LENGTH bytes" }
+
+        Log.d(TAG, "Setting firmware hash: ${hash.joinToString("") {
+            String.format("%02x", it.toInt() and 0xFF)
+        }}")
+
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_FW_HASH, hash)
+        val result = usbBridge.write(frame) > 0
+        if (result) {
+            // Wait for hash to be written
+            delay(1000)
+            Log.d(TAG, "Firmware hash set successfully")
+        } else {
+            Log.e(TAG, "Failed to set firmware hash")
+        }
+        result
+    }
+
+    /**
+     * Provision a device's EEPROM with device information.
+     * This sets up the device identity including product, model, serial number, etc.
+     * Uses a blank (all-zeros) signature since we don't have signing keys.
+     *
+     * @param product The product code (e.g., PRODUCT_H32_V4 for Heltec LoRa32 V4)
+     * @param model The model code (frequency band variant)
+     * @param hardwareRevision Hardware revision number
+     * @param serialNumber Unique serial number for this device
+     * @return true if provisioning completed successfully
+     */
+    @Suppress("MagicNumber")
+    suspend fun provisionDevice(
+        product: Byte,
+        model: Byte,
+        hardwareRevision: Byte = 0x01,
+        serialNumber: Int = 1,
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Provisioning device: product=0x${(product.toInt() and 0xFF).toString(16)}, " +
+            "model=0x${(model.toInt() and 0xFF).toString(16)}, hwRev=$hardwareRevision, serial=$serialNumber")
+
+        try {
+            // Generate timestamp
+            val timestamp = (System.currentTimeMillis() / 1000).toInt()
+
+            // Convert to big-endian byte arrays
+            val serialBytes = intToBytesBigEndian(serialNumber)
+            val timestampBytes = intToBytesBigEndian(timestamp)
+
+            // Calculate MD5 checksum of device info
+            val infoChunk = byteArrayOf(product, model, hardwareRevision) + serialBytes + timestampBytes
+            val md5 = MessageDigest.getInstance("MD5")
+            val checksum = md5.digest(infoChunk)
+
+            Log.d(TAG, "Info chunk: ${infoChunk.joinToString(" ") { String.format("%02X", it.toInt() and 0xFF) }}")
+            Log.d(TAG, "Checksum: ${checksum.joinToString(" ") { String.format("%02X", it.toInt() and 0xFF) }}")
+
+            // Blank signature (128 zeros)
+            val signature = ByteArray(SIGNATURE_LENGTH) { 0x00 }
+
+            // Write device info
+            Log.d(TAG, "Writing device info...")
+            if (!writeEeprom(RNodeConstants.ADDR_PRODUCT, product)) return@withContext false
+            if (!writeEeprom(RNodeConstants.ADDR_MODEL, model)) return@withContext false
+            if (!writeEeprom(RNodeConstants.ADDR_HW_REV, hardwareRevision)) return@withContext false
+
+            // Write serial number (4 bytes)
+            for (i in 0 until 4) {
+                if (!writeEeprom(RNodeConstants.ADDR_SERIAL + i, serialBytes[i])) return@withContext false
+            }
+
+            // Write timestamp (4 bytes)
+            for (i in 0 until 4) {
+                if (!writeEeprom(RNodeConstants.ADDR_MADE + i, timestampBytes[i])) return@withContext false
+            }
+
+            // Write checksum (16 bytes)
+            Log.d(TAG, "Writing checksum...")
+            for (i in 0 until CHECKSUM_LENGTH) {
+                if (!writeEeprom(RNodeConstants.ADDR_CHKSUM + i, checksum[i])) return@withContext false
+            }
+
+            // Write signature (128 bytes - blank)
+            Log.d(TAG, "Writing signature (blank)...")
+            for (i in 0 until SIGNATURE_LENGTH) {
+                if (!writeEeprom(RNodeConstants.ADDR_SIGNATURE + i, signature[i])) return@withContext false
+            }
+
+            // Write lock byte
+            Log.d(TAG, "Writing lock byte...")
+            if (!writeEeprom(RNodeConstants.ADDR_INFO_LOCK, RNodeConstants.INFO_LOCK_BYTE)) return@withContext false
+
+            // Wait for NRF52 EEPROM to complete (slower)
+            delay(3000)
+
+            Log.i(TAG, "Device provisioned successfully")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to provision device", e)
+            false
+        }
+    }
+
+    /**
+     * Complete provisioning flow: provision EEPROM and set firmware hash.
+     * This should be called after flashing firmware and resetting the device.
+     *
+     * @param board The board type being provisioned
+     * @return true if provisioning completed successfully
+     */
+    suspend fun provisionAndSetFirmwareHash(board: RNodeBoard): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Starting full provisioning for ${board.displayName}")
+
+        // Get product code and model from board
+        val product = board.productCode
+        val model = getDefaultModelForBoard(board)
+
+        // Provision EEPROM
+        if (!provisionDevice(product, model)) {
+            Log.e(TAG, "EEPROM provisioning failed")
+            return@withContext false
+        }
+
+        // Wait a moment for EEPROM writes to settle
+        delay(500)
+
+        // Get and set firmware hash
+        val firmwareHash = getFirmwareHash()
+        if (firmwareHash == null) {
+            Log.e(TAG, "Failed to get firmware hash")
+            return@withContext false
+        }
+
+        if (!setFirmwareHash(firmwareHash)) {
+            Log.e(TAG, "Failed to set firmware hash")
+            return@withContext false
+        }
+
+        // Wait for hash write
+        delay(500)
+
+        Log.i(TAG, "Provisioning completed successfully")
+        true
+    }
+
+    /**
+     * Get the default model code for a board (assumes 868/915 MHz band).
+     */
+    private fun getDefaultModelForBoard(board: RNodeBoard): Byte {
+        // Most boards use model 0x11 for 868/915 MHz
+        // Model 0x12 is for 433 MHz variants
+        return when (board) {
+            RNodeBoard.RAK4631 -> RNodeConstants.MODEL_11
+            else -> 0x11 // Default to 868/915 MHz model
+        }
+    }
+
+    /**
+     * Convert an integer to a 4-byte big-endian byte array.
+     */
+    @Suppress("MagicNumber")
+    private fun intToBytesBigEndian(value: Int): ByteArray {
+        return byteArrayOf(
+            ((value shr 24) and 0xFF).toByte(),
+            ((value shr 16) and 0xFF).toByte(),
+            ((value shr 8) and 0xFF).toByte(),
+            (value and 0xFF).toByte(),
+        )
     }
 
     private data class RomInfo(

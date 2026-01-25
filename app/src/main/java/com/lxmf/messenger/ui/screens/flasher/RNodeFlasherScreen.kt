@@ -260,6 +260,9 @@ fun RNodeFlasherScreen(
                             onShowCancelConfirmation = { viewModel.showCancelConfirmation() },
                             onHideCancelConfirmation = { viewModel.hideCancelConfirmation() },
                             onCancelFlash = { viewModel.cancelFlash() },
+                            needsManualReset = state.needsManualReset,
+                            isProvisioning = state.isProvisioning,
+                            onDeviceReset = { viewModel.onDeviceReset() },
                         )
 
                     FlasherStep.COMPLETE ->

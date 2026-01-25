@@ -666,13 +666,12 @@ fun ColumbaNavigation(
     LaunchedEffect(onboardingState.hasCompletedOnboarding, hasEnabledBluetoothInterface) {
         // Only show permission sheet if activity is still active (at least STARTED)
         // to prevent BadTokenException when showing ModalBottomSheet
-        if (LifecycleGuard.isActiveForWindows(lifecycleOwner) &&
-            onboardingState.hasCompletedOnboarding &&
-            hasEnabledBluetoothInterface &&
-            !BlePermissionManager.hasAllPermissions(context)
-        ) {
-            showPermissionBottomSheet = true
-        }
+        if (!LifecycleGuard.isActiveForWindows(lifecycleOwner)) return@LaunchedEffect
+        if (!onboardingState.hasCompletedOnboarding) return@LaunchedEffect
+        if (!hasEnabledBluetoothInterface) return@LaunchedEffect
+        if (BlePermissionManager.hasAllPermissions(context)) return@LaunchedEffect
+
+        showPermissionBottomSheet = true
     }
 
     // Track current navigation state

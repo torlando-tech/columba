@@ -105,7 +105,9 @@ enum class RelaySelectionState {
     /** Selection triggered, waiting for database update to complete. */
     SELECTING,
     /** Relay selected and stable. Cooldown active before returning to IDLE. */
-    STABLE
+    STABLE,
+    /** Loop detected. Exponential backoff in progress before returning to IDLE. */
+    BACKING_OFF
 }
 
 /**
@@ -144,6 +146,16 @@ class PropagationNodeManager
 
         // Job for cooldown timer (cancellable if user takes manual action)
         private var cooldownJob: Job? = null
+
+        // Loop detection: track recent selections to detect rapid cycling
+        // Per context decisions: 3+ changes in 60 seconds triggers warning
+        private val recentSelections = ArrayDeque<Pair<String, Long>>()
+        private val loopThresholdCount = 3
+        private val loopWindowMs = 60_000L
+        private val maxBackoffMs = 10 * 60 * 1000L // 10 minutes max (per context decisions)
+
+        // Job for backoff timer
+        private var backoffJob: Job? = null
 
         /**
          * Build RelayInfo from a contact entity and auto-select setting.

@@ -589,15 +589,57 @@ class RNodeFlasher(
      * @return true if provisioning succeeded
      */
     suspend fun provisionDevice(deviceId: Int, board: RNodeBoard): Boolean = withContext(Dispatchers.IO) {
-        _flashState.value = FlashState.Provisioning("Connecting for provisioning...")
+        _flashState.value = FlashState.Provisioning("Waiting for device...")
 
         try {
-            // Connect to device
-            if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
-                Log.e(TAG, "Failed to connect for provisioning")
-                _flashState.value = FlashState.Error("Failed to connect for provisioning")
+            // After reset, device may take time to re-enumerate and may have new device ID
+            // Try multiple times with increasing delays
+            var connected = false
+            var actualDeviceId = deviceId
+            val maxRetries = 5
+            val retryDelayMs = 2000L
+
+            for (attempt in 1..maxRetries) {
+                Log.d(TAG, "Provisioning connect attempt $attempt/$maxRetries")
+                _flashState.value = FlashState.Provisioning("Connecting to device (attempt $attempt)...")
+
+                // First try the original device ID
+                if (usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                    connected = true
+                    actualDeviceId = deviceId
+                    break
+                }
+
+                // If that failed, scan for devices and try to find one matching native USB VID/PID
+                Log.d(TAG, "Original device ID failed, scanning for devices...")
+                val devices = usbBridge.getConnectedUsbDevices()
+                val nativeUsbDevice = devices.find {
+                    ESPToolFlasher.isNativeUsbDevice(it.vendorId, it.productId)
+                }
+
+                if (nativeUsbDevice != null && nativeUsbDevice.deviceId != deviceId) {
+                    Log.d(TAG, "Found native USB device with new ID: ${nativeUsbDevice.deviceId}")
+                    if (usbBridge.connect(nativeUsbDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                        connected = true
+                        actualDeviceId = nativeUsbDevice.deviceId
+                        break
+                    }
+                }
+
+                // Wait before retrying
+                if (attempt < maxRetries) {
+                    Log.d(TAG, "Waiting ${retryDelayMs}ms before retry...")
+                    kotlinx.coroutines.delay(retryDelayMs)
+                }
+            }
+
+            if (!connected) {
+                Log.e(TAG, "Failed to connect for provisioning after $maxRetries attempts")
+                _flashState.value = FlashState.Error("Failed to connect for provisioning. Make sure the device is connected and has been reset.")
                 return@withContext false
             }
+
+            Log.i(TAG, "Connected to device $actualDeviceId for provisioning")
 
             // Small delay to let the device settle after boot
             kotlinx.coroutines.delay(1000)

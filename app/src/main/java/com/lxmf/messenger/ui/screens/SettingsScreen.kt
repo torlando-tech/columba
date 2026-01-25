@@ -121,6 +121,7 @@ fun SettingsScreen(
 
     // Check for pending crash report on launch
     LaunchedEffect(Unit) {
+        if (!LifecycleGuard.isActiveForWindows(lifecycleOwner)) return@LaunchedEffect
         if (crashReportManager.hasPendingCrashReport()) {
             pendingCrashReport = crashReportManager.getPendingCrashReport()
             showCrashDialog = true

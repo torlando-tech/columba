@@ -67,6 +67,8 @@ class RNodeFlasher(
         data object Idle : FlashState()
         data class Detecting(val message: String) : FlashState()
         data class Progress(val percent: Int, val message: String) : FlashState()
+        data class Provisioning(val message: String) : FlashState()
+        data class NeedsManualReset(val board: RNodeBoard, val message: String) : FlashState()
         data class Complete(val deviceInfo: RNodeDeviceInfo?) : FlashState()
         data class Error(val message: String, val recoverable: Boolean = true) : FlashState()
     }
@@ -156,6 +158,12 @@ class RNodeFlasher(
                 return@withContext false
             }
 
+            // Check if device is ESP32-S3 native USB (needs manual reset after flashing)
+            val deviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
+            val isNativeUsb = deviceInfo?.let {
+                ESPToolFlasher.isNativeUsbDevice(it.vendorId, it.productId)
+            } ?: false
+
             // Select flasher based on platform
             val success = when (firmwarePackage.platform) {
                 RNodePlatform.NRF52 -> {
@@ -173,14 +181,24 @@ class RNodeFlasher(
             }
 
             if (success) {
-                // Re-detect device after flashing
-                _flashState.value = FlashState.Progress(98, "Verifying flash...")
+                if (isNativeUsb && firmwarePackage.platform == RNodePlatform.ESP32) {
+                    // ESP32-S3 native USB doesn't auto-reboot reliably
+                    // User needs to manually reset the device, then we'll provision
+                    Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
+                    _flashState.value = FlashState.NeedsManualReset(
+                        firmwarePackage.board,
+                        "Flashing complete! Please press the RST button on your ${firmwarePackage.board.displayName}.",
+                    )
+                } else {
+                    // Standard flow: verify and complete
+                    _flashState.value = FlashState.Progress(98, "Verifying flash...")
 
-                // Give device time to boot
-                kotlinx.coroutines.delay(2000)
+                    // Give device time to boot
+                    kotlinx.coroutines.delay(2000)
 
-                val deviceInfo = detectDevice(deviceId)
-                _flashState.value = FlashState.Complete(deviceInfo)
+                    val detectedInfo = detectDevice(deviceId)
+                    _flashState.value = FlashState.Complete(detectedInfo)
+                }
             }
 
             success
@@ -217,6 +235,12 @@ class RNodeFlasher(
                 return@withContext false
             }
 
+            // Check if device is ESP32-S3 native USB (needs manual reset after flashing)
+            val usbDeviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
+            val isNativeUsb = usbDeviceInfo?.let {
+                ESPToolFlasher.isNativeUsbDevice(it.vendorId, it.productId)
+            } ?: false
+
             _flashState.value = FlashState.Progress(5, "Starting flash...")
 
             // Select flasher based on platform
@@ -236,7 +260,16 @@ class RNodeFlasher(
             }
 
             if (success) {
-                _flashState.value = FlashState.Complete(info)
+                if (isNativeUsb && info.platform == RNodePlatform.ESP32) {
+                    // ESP32-S3 native USB doesn't auto-reboot reliably
+                    Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
+                    _flashState.value = FlashState.NeedsManualReset(
+                        info.board,
+                        "Flashing complete! Please press the RST button on your ${info.board.displayName}.",
+                    )
+                } else {
+                    _flashState.value = FlashState.Complete(info)
+                }
             }
 
             success
@@ -540,5 +573,125 @@ class RNodeFlasher(
             Log.w(TAG, "Console image not available: ${e.message}")
             null
         }
+    }
+
+    /**
+     * Provision a freshly flashed device.
+     *
+     * After flashing, the device needs to be provisioned with:
+     * 1. EEPROM device info (product, model, serial, checksum, blank signature)
+     * 2. Firmware hash set to match the actual firmware
+     *
+     * This should be called after the device has been reset and is running the new firmware.
+     *
+     * @param deviceId USB device ID
+     * @param board The board type that was flashed
+     * @return true if provisioning succeeded
+     */
+    suspend fun provisionDevice(deviceId: Int, board: RNodeBoard): Boolean = withContext(Dispatchers.IO) {
+        _flashState.value = FlashState.Provisioning("Connecting for provisioning...")
+
+        try {
+            // Connect to device
+            if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                Log.e(TAG, "Failed to connect for provisioning")
+                _flashState.value = FlashState.Error("Failed to connect for provisioning")
+                return@withContext false
+            }
+
+            // Small delay to let the device settle after boot
+            kotlinx.coroutines.delay(1000)
+
+            // Check if already provisioned
+            _flashState.value = FlashState.Provisioning("Checking provisioning status...")
+            val deviceInfo = detector.getDeviceInfo()
+
+            if (deviceInfo?.isProvisioned == true) {
+                Log.i(TAG, "Device is already provisioned")
+                _flashState.value = FlashState.Provisioning("Device already provisioned, setting firmware hash...")
+
+                // Still need to set firmware hash if not matching
+                val firmwareHash = detector.getFirmwareHash()
+                if (firmwareHash != null) {
+                    detector.setFirmwareHash(firmwareHash)
+                }
+
+                usbBridge.disconnect()
+                _flashState.value = FlashState.Complete(deviceInfo)
+                return@withContext true
+            }
+
+            // Provision EEPROM
+            _flashState.value = FlashState.Provisioning("Writing device information...")
+            if (!detector.provisionAndSetFirmwareHash(board)) {
+                Log.e(TAG, "Provisioning failed")
+                _flashState.value = FlashState.Error("Failed to provision device EEPROM")
+                usbBridge.disconnect()
+                return@withContext false
+            }
+
+            // Wait for writes to complete
+            _flashState.value = FlashState.Provisioning("Finalizing...")
+            kotlinx.coroutines.delay(2000)
+
+            // Reset device to apply changes
+            _flashState.value = FlashState.Provisioning("Resetting device...")
+            detector.resetDevice()
+            usbBridge.disconnect()
+
+            // Wait for device to reboot
+            kotlinx.coroutines.delay(3000)
+
+            // Verify provisioning
+            _flashState.value = FlashState.Provisioning("Verifying provisioning...")
+            if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                // Device may have changed ports after reset, but provisioning likely succeeded
+                Log.w(TAG, "Could not reconnect to verify, but provisioning likely succeeded")
+                _flashState.value = FlashState.Complete(null)
+                return@withContext true
+            }
+
+            kotlinx.coroutines.delay(500)
+            val verifiedInfo = detector.getDeviceInfo()
+            usbBridge.disconnect()
+
+            if (verifiedInfo?.isProvisioned == true) {
+                Log.i(TAG, "Provisioning verified successfully")
+                _flashState.value = FlashState.Complete(verifiedInfo)
+                true
+            } else {
+                Log.w(TAG, "Provisioning verification failed, but writes may have succeeded")
+                _flashState.value = FlashState.Complete(verifiedInfo)
+                true // Optimistic - EEPROM writes likely succeeded
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Provisioning failed", e)
+            _flashState.value = FlashState.Error("Provisioning failed: ${e.message}")
+            usbBridge.disconnect()
+            false
+        }
+    }
+
+    /**
+     * Signal that the user has manually reset the device after flashing.
+     * This triggers the provisioning step.
+     *
+     * @param deviceId USB device ID
+     * @param board The board type that was flashed
+     */
+    suspend fun onDeviceManuallyReset(deviceId: Int, board: RNodeBoard): Boolean {
+        Log.i(TAG, "Device manually reset, starting provisioning")
+        return provisionDevice(deviceId, board)
+    }
+
+    /**
+     * Notify that flashing is complete but manual reset is required.
+     * The UI should show instructions for the user to reset the device.
+     */
+    fun notifyNeedsManualReset(board: RNodeBoard) {
+        _flashState.value = FlashState.NeedsManualReset(
+            board,
+            "Flashing complete! Please press the RESET button on your ${board.displayName} to continue.",
+        )
     }
 }

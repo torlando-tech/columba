@@ -647,13 +647,13 @@ class ColumbaApplication : Application() {
                 options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty() && !BuildConfig.DEBUG
 
                 // Performance Monitoring
-                options.tracesSampleRate = 0.1  // Sample 10% of transactions
-                options.profilesSampleRate = 0.05  // Profile 5% of sampled transactions
+                options.tracesSampleRate = 0.1 // Sample 10% of transactions
+                options.profilesSampleRate = 0.05 // Profile 5% of sampled transactions
 
                 // ANR Detection (Application Not Responding)
                 options.isAnrEnabled = true
-                options.anrTimeoutIntervalMillis = 5000  // 5 second ANR threshold (default)
-                options.isAttachAnrThreadDump = true  // Include thread dump in ANR events
+                options.anrTimeoutIntervalMillis = 5000 // 5 second ANR threshold (default)
+                options.isAttachAnrThreadDump = true // Include thread dump in ANR events
 
                 // Frame Tracking (slow/frozen frames)
                 options.isEnableFramesTracking = true

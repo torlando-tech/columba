@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 ## Current Position
 
 Phase: 1 of 2 (Performance Fix)
-Plan: 2 of 3 complete
-Status: In progress
-Last activity: 2026-01-25 — Completed 01-02-PLAN.md (performance fixes)
+Plan: 3 of 3 complete
+Status: Phase complete
+Last activity: 2026-01-25 — Completed 01-03-PLAN.md (Sentry monitoring)
 
-Progress: [██████░░░░] 66% (2/3 plans in phase 1)
+Progress: [██████████] 100% (3/3 plans in phase 1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 5m 9s
-- Total execution time: 10m 18s
+- Total plans completed: 3
+- Average duration: 6m 14s
+- Total execution time: 18m 42s
 
 **By Phase:**
 
 | Phase | Plans | Total Time | Avg/Plan |
 |-------|-------|------------|----------|
-| 01-performance-fix | 2/3 | 10m 18s | 5m 9s |
+| 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
 
 **Recent Trend:**
-- Last 2 plans: 5m 1s (01-01), 5m 17s (01-02)
-- Trend: Stable velocity
+- Last 3 plans: 5m 1s (01-01), 5m 17s (01-02), 8m 24s (01-03)
+- Trend: Slightly increasing (01-03 included build troubleshooting)
 
 *Updated after each plan completion*
 
@@ -45,12 +45,15 @@ Recent decisions affecting current work:
 - Focus on #340 (performance) and #343 (relay loop) first — highest user impact
 - Add Compose runtime dependency to data module for @Stable annotation (01-02)
 - Defer Issue 1 (Native Memory Growth) to Plan 03 for Python instrumentation (01-02)
+- Disable Sentry in debug builds to avoid noise during development (01-03)
+- Sample 10% of transactions and profile 5% for production monitoring (01-03)
+- Report janky frames via Sentry breadcrumbs for context in errors (01-03)
 
 ### Pending Todos
 
 - Verify performance improvements with device profiling (01-02 Task 2 checkpoint)
-- Add Python tracemalloc instrumentation (01-03)
-- Investigate Reticulum cache growth with memory profiling (01-03)
+- Configure Sentry DSN for production monitoring (01-03)
+- Deploy release build to verify Sentry data capture (01-03)
 
 ### Blockers/Concerns
 
@@ -62,5 +65,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed 01-02-PLAN.md, awaiting verification profiling checkpoint
+Stopped at: Completed Phase 1 (01-03-PLAN.md) - Performance monitoring established
 Resume file: None
+Next: Begin Phase 2 planning (Relay Selection Loop Fixes)

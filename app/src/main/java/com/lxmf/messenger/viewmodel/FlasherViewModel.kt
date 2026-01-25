@@ -54,6 +54,7 @@ data class FlasherUiState(
     val isRefreshingDevices: Boolean = false,
     val permissionPending: Boolean = false,
     val permissionError: String? = null,
+    val bootloaderMode: Boolean = false, // Skip detection for fresh devices in bootloader
     // Step 2: Device Detection
     val isDetecting: Boolean = false,
     val detectedInfo: RNodeDeviceInfo? = null,
@@ -107,11 +108,39 @@ class FlasherViewModel
         private val _state = MutableStateFlow(FlasherUiState())
         val state: StateFlow<FlasherUiState> = _state.asStateFlow()
 
+        // Flag to skip detection and go straight to manual board selection
+        // Used when flashing fresh devices that are already in bootloader mode
+        private var skipDetectionMode = false
+
         init {
             // Observe flash state from the flasher
             observeFlashState()
             // Initial device scan
             refreshDevices()
+        }
+
+        /**
+         * Enable skip detection mode for flashing fresh devices in bootloader mode.
+         * When enabled, selecting a device will skip the detection step and go
+         * directly to firmware selection with manual board selection.
+         */
+        fun enableSkipDetectionMode() {
+            Log.d(TAG, "Skip detection mode enabled (for bootloader flashing)")
+            skipDetectionMode = true
+            _state.update { it.copy(bootloaderMode = true, useManualBoardSelection = true) }
+        }
+
+        /**
+         * Toggle bootloader mode on/off.
+         * When enabled, device detection is skipped and user must select board manually.
+         * Also disables USB auto-navigation to prevent interfering with bootloader.
+         */
+        fun setBootloaderMode(enabled: Boolean) {
+            Log.d(TAG, "Bootloader mode set to: $enabled")
+            skipDetectionMode = enabled
+            // Disable USB auto-navigation when bootloader mode is active
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = enabled
+            _state.update { it.copy(bootloaderMode = enabled, useManualBoardSelection = enabled) }
         }
 
         private fun observeFlashState() {
@@ -284,6 +313,8 @@ class FlasherViewModel
 
         fun enableManualBoardSelection() {
             _state.update { it.copy(useManualBoardSelection = true, detectionError = null) }
+            // Navigate directly to firmware selection step
+            goToFirmwareSelection()
         }
 
         fun canProceedFromDetection(): Boolean {
@@ -504,6 +535,8 @@ class FlasherViewModel
         // ==================== Step 5: Complete ====================
 
         fun flashAnother() {
+            // Reset bootloader mode
+            setBootloaderMode(false)
             _state.update {
                 FlasherUiState(
                     currentStep = FlasherStep.DEVICE_SELECTION,
@@ -513,6 +546,12 @@ class FlasherViewModel
             flasher.resetState()
         }
 
+        override fun onCleared() {
+            super.onCleared()
+            // Ensure bootloader flash mode is disabled when leaving flasher
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
+        }
+
         // ==================== Navigation Helpers ====================
 
         fun goToNextStep() {
@@ -520,7 +559,13 @@ class FlasherViewModel
             when (currentState.currentStep) {
                 FlasherStep.DEVICE_SELECTION -> {
                     if (canProceedFromDeviceSelection()) {
-                        detectDevice()
+                        if (skipDetectionMode) {
+                            // Skip detection entirely - go straight to firmware selection
+                            Log.d(TAG, "Skipping detection (bootloader mode)")
+                            goToFirmwareSelection()
+                        } else {
+                            detectDevice()
+                        }
                     }
                 }
                 FlasherStep.DEVICE_DETECTION -> {

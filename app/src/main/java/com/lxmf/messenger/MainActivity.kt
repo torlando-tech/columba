@@ -114,6 +114,14 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
+
+        /**
+         * When true, USB auto-navigation is disabled to allow bootloader flashing.
+         * Set this before connecting a device in bootloader mode to prevent
+         * the app from communicating with it and kicking it out of bootloader.
+         */
+        @Volatile
+        var bootloaderFlashModeActive: Boolean = false
     }
 
     @Inject
@@ -377,6 +385,13 @@ class MainActivity : ComponentActivity() {
     private fun handleUsbDeviceAttached(usbDevice: UsbDevice) {
         Log.d(TAG, "🔌 handleUsbDeviceAttached called for device: ${usbDevice.deviceName}")
 
+        // Check if bootloader flash mode is active - skip all auto-navigation
+        // This prevents us from communicating with a device that's in bootloader mode
+        if (bootloaderFlashModeActive) {
+            Log.d(TAG, "🔌 Bootloader flash mode active - skipping auto-navigation")
+            return
+        }
+
         // Check if we've already handled this device recently (debounce)
         // But allow retry if previous attempt didn't reconnect due to missing permission
         val now = System.currentTimeMillis()
@@ -473,6 +488,14 @@ sealed class PendingNavigation {
 
     /** Navigate to RNode wizard with USB device pre-selected */
     data class RNodeWizardWithUsb(
+        val usbDeviceId: Int,
+        val vendorId: Int,
+        val productId: Int,
+        val deviceName: String,
+    ) : PendingNavigation()
+
+    /** Navigate directly to flasher with skip-detection mode for bootloader flashing */
+    data class DirectFlash(
         val usbDeviceId: Int,
         val vendorId: Int,
         val productId: Int,
@@ -635,6 +658,17 @@ fun ColumbaNavigation(
                             "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
                     navController.navigate(route)
                     Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
+                }
+                is PendingNavigation.DirectFlash -> {
+                    // Navigate directly to flasher with skip-detection mode
+                    val route =
+                        "rnode_flasher?skipDetection=true" +
+                            "&usbDeviceId=${navigation.usbDeviceId}" +
+                            "&usbVendorId=${navigation.vendorId}" +
+                            "&usbProductId=${navigation.productId}" +
+                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                    navController.navigate(route)
+                    Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                 }
             }
             // Clear the pending navigation after handling
@@ -1140,13 +1174,43 @@ fun ColumbaNavigation(
                         )
                     }
 
-                    composable("rnode_flasher") {
+                    composable(
+                        route = "rnode_flasher?skipDetection={skipDetection}&usbDeviceId={usbDeviceId}" +
+                            "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
+                        arguments = listOf(
+                            navArgument("skipDetection") {
+                                type = NavType.BoolType
+                                defaultValue = false
+                            },
+                            navArgument("usbDeviceId") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("usbVendorId") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("usbProductId") {
+                                type = NavType.IntType
+                                defaultValue = -1
+                            },
+                            navArgument("usbDeviceName") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                                nullable = true
+                            },
+                        ),
+                    ) { backStackEntry ->
+                        val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
+                        val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                         RNodeFlasherScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onComplete = { navController.popBackStack() },
                             onNavigateToRNodeWizard = {
                                 navController.navigate("rnode_wizard")
                             },
+                            skipDetection = skipDetection,
+                            preselectedUsbDeviceId = if (usbDeviceId > 0) usbDeviceId else null,
                         )
                     }
 

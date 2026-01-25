@@ -256,6 +256,35 @@ class RNodeDetector(
         usbBridge.write(frame) > 0
     }
 
+    /**
+     * Indicate to the RNode firmware that a firmware update is about to begin.
+     *
+     * This command tells the RNode firmware to prepare for an update. For ESP32 devices,
+     * this enables the auto-reset functionality that allows esptool to put the device
+     * into bootloader mode via DTR/RTS signals.
+     *
+     * Based on rnodeconf's indicate_firmware_update() which sends CMD_FW_UPD (0x61)
+     * before attempting to flash.
+     *
+     * @return true if the command was sent successfully
+     */
+    suspend fun indicateFirmwareUpdate(): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Sending firmware update indication to RNode")
+        val frame = KISSCodec.createFrame(
+            RNodeConstants.CMD_FW_UPD,
+            byteArrayOf(0x01),
+        )
+        val result = usbBridge.write(frame) > 0
+        if (result) {
+            // Give firmware time to process the command
+            delay(100)
+            Log.d(TAG, "Firmware update indication sent successfully")
+        } else {
+            Log.e(TAG, "Failed to send firmware update indication")
+        }
+        result
+    }
+
     private data class RomInfo(
         val product: Byte,
         val model: Byte,

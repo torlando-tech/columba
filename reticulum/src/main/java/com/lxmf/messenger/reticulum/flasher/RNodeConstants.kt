@@ -195,19 +195,19 @@ enum class RNodeBoard(
         RNodeConstants.PRODUCT_H32_V2,
         RNodePlatform.ESP32,
         "Heltec LoRa32 v2",
-        "rnode_firmware_heltec32_v2",
+        "rnode_firmware_heltec32v2",
     ),
     HELTEC_V3(
         RNodeConstants.PRODUCT_H32_V3,
         RNodePlatform.ESP32,
         "Heltec LoRa32 v3",
-        "rnode_firmware_heltec32_v3",
+        "rnode_firmware_heltec32v3",
     ),
     HELTEC_V4(
         RNodeConstants.PRODUCT_H32_V4,
         RNodePlatform.ESP32,
         "Heltec LoRa32 v4",
-        "rnode_firmware_heltec32_v4",
+        "rnode_firmware_heltec32v4pa",
     ),
     TBEAM(
         RNodeConstants.PRODUCT_TBEAM,
@@ -231,13 +231,13 @@ enum class RNodeBoard(
         RNodeConstants.PRODUCT_T32_20,
         RNodePlatform.ESP32,
         "TTGO LoRa32 v2.0",
-        "rnode_firmware_lora32_v20",
+        "rnode_firmware_lora32v20",
     ),
     LORA32_V2_1(
         RNodeConstants.PRODUCT_T32_21,
         RNodePlatform.ESP32,
         "TTGO LoRa32 v2.1",
-        "rnode_firmware_lora32_v21",
+        "rnode_firmware_lora32v21",
     ),
     RNODE(
         RNodeConstants.PRODUCT_RNODE,

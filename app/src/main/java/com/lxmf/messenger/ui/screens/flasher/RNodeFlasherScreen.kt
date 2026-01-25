@@ -62,10 +62,29 @@ fun RNodeFlasherScreen(
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
     onNavigateToRNodeWizard: () -> Unit = {},
+    skipDetection: Boolean = false,
+    preselectedUsbDeviceId: Int? = null,
     viewModel: FlasherViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     var showExitConfirmation by remember { mutableStateOf(false) }
+
+    // Handle skip detection mode (for bootloader flashing)
+    androidx.compose.runtime.LaunchedEffect(skipDetection) {
+        if (skipDetection) {
+            viewModel.enableSkipDetectionMode()
+        }
+    }
+
+    // Auto-select USB device if provided
+    androidx.compose.runtime.LaunchedEffect(preselectedUsbDeviceId, state.connectedDevices) {
+        if (preselectedUsbDeviceId != null && state.selectedDevice == null) {
+            val device = state.connectedDevices.find { it.deviceId == preselectedUsbDeviceId }
+            if (device != null) {
+                viewModel.selectDevice(device)
+            }
+        }
+    }
 
     // Handle back navigation
     BackHandler {
@@ -200,8 +219,10 @@ fun RNodeFlasherScreen(
                             isRefreshing = state.isRefreshingDevices,
                             permissionPending = state.permissionPending,
                             permissionError = state.permissionError,
+                            bootloaderMode = state.bootloaderMode,
                             onDeviceSelected = { viewModel.selectDevice(it) },
                             onRefresh = { viewModel.refreshDevices() },
+                            onBootloaderModeChanged = { viewModel.setBootloaderMode(it) },
                         )
 
                     FlasherStep.DEVICE_DETECTION ->

@@ -268,13 +268,40 @@ class RNodeFlasher(
         firmwarePackage: FirmwarePackage,
         consoleImage: InputStream?,
     ): Boolean {
-        return espToolFlasher.flash(
-            firmwarePackage.getInputStream(),
-            deviceId,
-            firmwarePackage.board,
-            consoleImage,
-            createEspProgressCallback(),
-        )
+        // Get device info to pass VID/PID for native USB detection
+        val deviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
+        val vendorId = deviceInfo?.vendorId ?: 0
+        val productId = deviceInfo?.productId ?: 0
+
+        // For native USB devices (ESP32-S3), skip the firmware update indication.
+        // These devices either:
+        // 1. Don't have RNode firmware yet (so CMD_FW_UPD won't work)
+        // 2. May already be in bootloader mode from manual entry (connecting would interfere)
+        // For devices with USB-UART bridges (CP2102, CH343, etc.), try the indication.
+        val isNativeUsb = ESPToolFlasher.isNativeUsbDevice(vendorId, productId)
+        if (!isNativeUsb) {
+            _flashState.value = FlashState.Progress(2, "Preparing device for update...")
+            if (!prepareFirmwareUpdate(deviceId)) {
+                Log.w(TAG, "Could not send firmware update indication, proceeding anyway")
+            }
+        } else {
+            Log.d(TAG, "Skipping firmware update indication for native USB device")
+        }
+
+        return try {
+            espToolFlasher.flash(
+                firmwarePackage.getInputStream(),
+                deviceId,
+                firmwarePackage.board,
+                vendorId,
+                productId,
+                consoleImage,
+                createEspProgressCallback(),
+            )
+        } catch (e: ESPToolFlasher.ManualBootModeRequired) {
+            _flashState.value = FlashState.Error(e.message ?: "Manual boot mode required", recoverable = true)
+            false
+        }
     }
 
     private suspend fun flashEsp32Direct(
@@ -283,13 +310,79 @@ class RNodeFlasher(
         board: RNodeBoard,
         consoleImage: InputStream?,
     ): Boolean {
-        return espToolFlasher.flash(
-            firmwareStream,
-            deviceId,
-            board,
-            consoleImage,
-            createEspProgressCallback(),
-        )
+        // Get device info to pass VID/PID for native USB detection
+        val deviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
+        val vendorId = deviceInfo?.vendorId ?: 0
+        val productId = deviceInfo?.productId ?: 0
+
+        // For native USB devices (ESP32-S3), skip the firmware update indication.
+        // These devices either:
+        // 1. Don't have RNode firmware yet (so CMD_FW_UPD won't work)
+        // 2. May already be in bootloader mode from manual entry (connecting would interfere)
+        // For devices with USB-UART bridges (CP2102, CH343, etc.), try the indication.
+        val isNativeUsb = ESPToolFlasher.isNativeUsbDevice(vendorId, productId)
+        if (!isNativeUsb) {
+            _flashState.value = FlashState.Progress(2, "Preparing device for update...")
+            if (!prepareFirmwareUpdate(deviceId)) {
+                Log.w(TAG, "Could not send firmware update indication, proceeding anyway")
+            }
+        } else {
+            Log.d(TAG, "Skipping firmware update indication for native USB device")
+        }
+
+        return try {
+            espToolFlasher.flash(
+                firmwareStream,
+                deviceId,
+                board,
+                vendorId,
+                productId,
+                consoleImage,
+                createEspProgressCallback(),
+            )
+        } catch (e: ESPToolFlasher.ManualBootModeRequired) {
+            _flashState.value = FlashState.Error(e.message ?: "Manual boot mode required", recoverable = true)
+            false
+        }
+    }
+
+    /**
+     * Prepare the RNode for a firmware update by sending the CMD_FW_UPD command.
+     *
+     * This tells the running RNode firmware that a firmware update is about to begin.
+     * For ESP32 devices, this enables the auto-reset functionality via DTR/RTS signals.
+     *
+     * Based on rnodeconf's indicate_firmware_update() function which is called before
+     * invoking esptool.
+     *
+     * @param deviceId USB device ID
+     * @return true if the command was sent successfully
+     */
+    private suspend fun prepareFirmwareUpdate(deviceId: Int): Boolean {
+        return try {
+            // Connect to send KISS command
+            if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                Log.e(TAG, "Failed to connect for firmware update indication")
+                return false
+            }
+
+            // Send the firmware update indication
+            val success = detector.indicateFirmwareUpdate()
+
+            // Disconnect - esptool will reconnect
+            // Give the device a moment to process before disconnecting
+            kotlinx.coroutines.delay(500)
+            usbBridge.disconnect()
+
+            // Additional delay to let the device fully prepare
+            kotlinx.coroutines.delay(500)
+
+            success
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send firmware update indication", e)
+            usbBridge.disconnect()
+            false
+        }
     }
 
     private fun createProgressCallback(): NordicDFUFlasher.ProgressCallback {

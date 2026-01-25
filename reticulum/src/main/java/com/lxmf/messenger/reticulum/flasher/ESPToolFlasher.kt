@@ -34,6 +34,12 @@ import java.util.zip.ZipInputStream
 class ESPToolFlasher(
     private val usbBridge: KotlinUSBBridge,
 ) {
+    /**
+     * Exception thrown when manual bootloader entry is required.
+     * This happens with ESP32-S3 native USB devices that don't support
+     * automatic reset via DTR/RTS signals.
+     */
+    class ManualBootModeRequired(message: String) : Exception(message)
     companion object {
         private const val TAG = "Columba:ESPTool"
 
@@ -45,6 +51,8 @@ class ESPToolFlasher(
         private const val SYNC_TIMEOUT_MS = 5000L
         private const val COMMAND_TIMEOUT_MS = 3000L
         private const val READ_TIMEOUT_MS = 100
+        private const val ERASE_TIMEOUT_PER_MB_MS = 10000L // 10 seconds per MB for flash erase
+        private const val MIN_ERASE_TIMEOUT_MS = 10000L // Minimum 10 seconds for any erase
 
         // ESP32 ROM commands
         private const val ESP_FLASH_BEGIN: Byte = 0x02
@@ -70,8 +78,15 @@ class ESPToolFlasher(
         private const val SLIP_ESC_END: Byte = 0xDC.toByte()
         private const val SLIP_ESC_ESC: Byte = 0xDD.toByte()
 
+        // ESP32-S3 specific registers for reset
+        private const val ESP32S3_RTC_CNTL_OPTION1_REG = 0x6000812C
+        private const val ESP32S3_RTC_CNTL_FORCE_DOWNLOAD_BOOT_MASK = 0x1
+
         // Flash parameters
-        private const val ESP_FLASH_BLOCK_SIZE = 0x400 // 1024 bytes
+        // ROM bootloader uses 0x400 (1024) block size for all ESP32 variants
+        // Stub loader uses 0x4000 (16KB) but USB CDC limits to 0x800 (2KB)
+        // Since we're using ROM (no stub), always use 0x400
+        private const val ESP_FLASH_BLOCK_SIZE = 0x400 // 1024 bytes for ROM bootloader
         private const val ESP_CHECKSUM_MAGIC: Byte = 0xEF.toByte()
 
         // Standard flash offsets for ESP32
@@ -105,10 +120,27 @@ class ESPToolFlasher(
 
         // Bootloader entry timing
         private const val RESET_DELAY_MS = 100L
+        private const val RESET_DELAY_MS_USB = 200L // ESP32-S3 USB needs longer delays
         private const val BOOT_DELAY_MS = 50L
+
+        // ESP32-S3 native USB-JTAG-Serial identifiers
+        // When connected via native USB (not a USB-UART bridge like CP2102),
+        // DTR/RTS are virtual signals that may not trigger bootloader entry.
+        const val ESPRESSIF_VID = 0x303A
+        const val ESP32_S3_USB_JTAG_SERIAL_PID = 0x1001
+
+        /**
+         * Check if a device uses ESP32-S3 native USB-JTAG-Serial.
+         * These devices have virtual DTR/RTS that may not work for bootloader entry.
+         */
+        fun isNativeUsbDevice(vendorId: Int, productId: Int): Boolean {
+            return vendorId == ESPRESSIF_VID && productId == ESP32_S3_USB_JTAG_SERIAL_PID
+        }
     }
 
     private var inBootloader = false
+    private var currentBoardIsS3 = false
+    private var isNativeUsb = false
 
     /**
      * Callback interface for flash progress updates.
@@ -125,20 +157,28 @@ class ESPToolFlasher(
      * @param firmwareZipStream Input stream of the firmware ZIP file
      * @param deviceId USB device ID to flash
      * @param board The target board (used to determine ESP32 vs ESP32-S3)
+     * @param vendorId USB Vendor ID (used to detect native USB devices)
+     * @param productId USB Product ID (used to detect native USB devices)
      * @param consoleImageStream Optional console image (SPIFFS) stream
      * @param progressCallback Progress callback
      * @return true if flashing succeeded
+     * @throws ManualBootModeRequired if the device needs manual bootloader entry
      */
     suspend fun flash(
         firmwareZipStream: InputStream,
         deviceId: Int,
         board: RNodeBoard = RNodeBoard.UNKNOWN,
+        vendorId: Int = 0,
+        productId: Int = 0,
         consoleImageStream: InputStream? = null,
         progressCallback: ProgressCallback,
     ): Boolean = withContext(Dispatchers.IO) {
         val bootloaderOffset = getBootloaderOffset(board)
         val isS3 = isEsp32S3(board)
-        Log.d(TAG, "Flashing ${board.displayName}, ESP32-S3=$isS3, bootloader offset=0x${bootloaderOffset.toString(16)}")
+        currentBoardIsS3 = isS3
+        isNativeUsb = isNativeUsbDevice(vendorId, productId)
+        Log.d(TAG, "Flashing ${board.displayName}, ESP32-S3=$isS3, nativeUSB=$isNativeUsb, " +
+            "bootloader offset=0x${bootloaderOffset.toString(16)}")
         try {
             progressCallback.onProgress(0, "Parsing firmware package...")
 
@@ -160,31 +200,64 @@ class ESPToolFlasher(
                 return@withContext false
             }
 
-            progressCallback.onProgress(8, "Entering bootloader...")
+            // Enable raw mode for ESPTool - stops async reads so readBlocking() works
+            usbBridge.enableRawMode()
 
-            // Enter bootloader mode
-            if (!enterBootloader()) {
-                progressCallback.onError("Failed to enter bootloader mode")
-                return@withContext false
+            progressCallback.onProgress(8, "Syncing with bootloader...")
+
+            // First try to sync WITHOUT entering bootloader.
+            // This handles the case where user has manually entered bootloader mode.
+            // If we try enterBootloader() first, the DTR/RTS sequence would reset the chip
+            // and kick it out of bootloader mode.
+            var synced = trySyncQuick()
+
+            if (synced) {
+                Log.d(TAG, "Device already in bootloader mode (manual entry detected)")
+            } else {
+                // Not in bootloader yet, try to enter via DTR/RTS sequence
+                progressCallback.onProgress(9, "Entering bootloader...")
+                if (!enterBootloader()) {
+                    progressCallback.onError("Failed to enter bootloader mode")
+                    return@withContext false
+                }
+
+                progressCallback.onProgress(10, "Syncing with bootloader...")
+                synced = sync()
             }
 
-            progressCallback.onProgress(10, "Syncing with bootloader...")
-
-            // Sync with bootloader
-            if (!sync()) {
+            if (!synced) {
                 progressCallback.onError("Failed to sync with bootloader")
                 return@withContext false
             }
 
-            progressCallback.onProgress(12, "Switching to high-speed mode...")
-
-            // Try to switch to higher baud rate
-            if (changeBaudRate(FLASH_BAUD)) {
-                delay(50)
-                usbBridge.setBaudRate(FLASH_BAUD)
-                Log.d(TAG, "Switched to $FLASH_BAUD baud")
+            // Read chip detect register - this "activates" the bootloader for subsequent commands
+            progressCallback.onProgress(11, "Detecting chip...")
+            val chipMagic = readChipDetectReg()
+            if (chipMagic != null) {
+                Log.d(TAG, "Chip magic: 0x${chipMagic.toString(16)}")
             } else {
-                Log.w(TAG, "Could not switch baud rate, continuing at $INITIAL_BAUD")
+                Log.w(TAG, "Could not read chip detect register")
+            }
+
+            // ESP32-S3 native USB doesn't use baud rate (it's not UART)
+            // Only attempt baud rate change for non-S3 boards
+            if (!isS3) {
+                progressCallback.onProgress(12, "Switching to high-speed mode...")
+                if (changeBaudRate(FLASH_BAUD)) {
+                    delay(50)
+                    usbBridge.setBaudRate(FLASH_BAUD)
+                    Log.d(TAG, "Switched to $FLASH_BAUD baud")
+                } else {
+                    Log.w(TAG, "Could not switch baud rate, continuing at $INITIAL_BAUD")
+                }
+            } else {
+                Log.d(TAG, "Skipping baud rate change for ESP32-S3 USB")
+            }
+
+            // SPI attach configures flash pins (required before flash operations)
+            progressCallback.onProgress(13, "Attaching SPI flash...")
+            if (!spiAttach()) {
+                Log.w(TAG, "SPI attach failed, attempting to continue anyway")
             }
 
             progressCallback.onProgress(15, "Flashing bootloader...")
@@ -264,20 +337,34 @@ class ESPToolFlasher(
                 if (!success) return@withContext false
             }
 
-            progressCallback.onProgress(95, "Verifying...")
+            progressCallback.onProgress(95, "Finalizing...")
 
-            // Hard reset to exit bootloader
+            // Send FLASH_END to tell bootloader to reboot and run application
+            sendFlashEnd(reboot = true)
+
+            // Give the device time to reboot
+            delay(500)
+
+            // Hard reset as backup (may not work on native USB but doesn't hurt)
             hardReset()
 
             progressCallback.onProgress(100, "Flash complete!")
             progressCallback.onComplete()
 
             true
+        } catch (e: ManualBootModeRequired) {
+            // Re-throw ManualBootModeRequired so it can be handled by the caller
+            // finally block will handle cleanup
+            Log.w(TAG, "Manual boot mode required", e)
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Flash failed", e)
             progressCallback.onError("Flash failed: ${e.message}")
             false
         } finally {
+            // Disable raw mode before disconnecting to restore normal async reads
+            // (in case the connection is reused, though we disconnect anyway)
+            usbBridge.disableRawMode()
             usbBridge.disconnect()
             inBootloader = false
         }
@@ -286,41 +373,87 @@ class ESPToolFlasher(
     /**
      * Enter ESP32 bootloader using DTR/RTS sequence.
      *
-     * The ESP32 bootloader is entered by:
-     * 1. Assert DTR (hold EN low)
-     * 2. Assert RTS (hold IO0 low)
-     * 3. Release DTR (release EN - chip resets)
-     * 4. Wait briefly
-     * 5. Release RTS (release IO0)
+     * DTR controls IO0 (boot mode) - active low (DTR=true means IO0=LOW)
+     * RTS controls EN (chip reset) - active low (RTS=true means EN=LOW)
+     *
+     * To enter bootloader: IO0 must be LOW when EN goes HIGH (chip exits reset)
+     *
+     * ESP32-S3 with native USB uses a different sequence (USBJTAGSerialReset).
      */
     private suspend fun enterBootloader(): Boolean {
-        Log.d(TAG, "Entering bootloader via DTR/RTS sequence")
+        Log.d(TAG, "Entering bootloader via DTR/RTS sequence (S3=$currentBoardIsS3)")
 
-        // Classic ESP32 bootloader entry sequence
-        usbBridge.setDtrRts(false, true)  // RTS high, DTR low
-        delay(RESET_DELAY_MS)
+        if (currentBoardIsS3) {
+            // ESP32-S3 USB-JTAG-Serial reset sequence (from esptool USBJTAGSerialReset)
+            // Note: For native USB, DTR/RTS are virtual and may not work with factory firmware.
+            // The ROM bootloader should support this, but if device isn't in bootloader yet,
+            // it depends on the running firmware supporting these signals.
+            Log.d(TAG, "S3 reset: Setting idle state (DTR=false, RTS=false)")
+            usbBridge.setRts(false)
+            usbBridge.setDtr(false)  // Idle state
+            delay(RESET_DELAY_MS_USB)
 
-        usbBridge.setDtrRts(true, true)   // Both high (hold in reset)
+            Log.d(TAG, "S3 reset: Setting IO0=LOW (DTR=true)")
+            usbBridge.setDtr(true)   // IO0=LOW (boot mode select)
+            usbBridge.setRts(false)
+            delay(RESET_DELAY_MS_USB)
+
+            Log.d(TAG, "S3 reset: Entering reset (RTS=true, keeping DTR=true)")
+            usbBridge.setRts(true)   // EN=LOW (enter reset)
+            usbBridge.setDtr(true)   // Keep IO0=LOW during reset! (was incorrectly false)
+            delay(RESET_DELAY_MS_USB)
+
+            Log.d(TAG, "S3 reset: Exiting reset (RTS=false, DTR=false)")
+            usbBridge.setRts(false)  // EN=HIGH (exit reset - IO0 still LOW, enters bootloader)
+            delay(RESET_DELAY_MS_USB / 2)
+            usbBridge.setDtr(false)  // Now release IO0
+        } else {
+            // Classic ESP32 reset sequence (from esptool ClassicReset)
+            usbBridge.setDtr(false)  // IO0=HIGH
+            usbBridge.setRts(true)   // EN=LOW, chip in reset
+            delay(RESET_DELAY_MS)
+
+            usbBridge.setDtr(true)   // IO0=LOW (will be sampled on reset release)
+            usbBridge.setRts(false)  // EN=HIGH, chip out of reset -> enters bootloader
+            delay(BOOT_DELAY_MS)
+
+            usbBridge.setDtr(false)  // IO0=HIGH, done
+        }
+
+        // For S3 native USB, the chip resets and the ROM bootloader re-enumerates USB.
+        // We need extra time for this to settle.
+        if (currentBoardIsS3) {
+            Log.d(TAG, "S3 reset: Waiting for USB re-enumeration...")
+            delay(500) // Give time for ROM bootloader USB to come up
+        }
+
+        // Clear any garbage data from the port
         delay(BOOT_DELAY_MS)
-
-        usbBridge.setDtrRts(true, false)  // DTR high, RTS low (IO0 low during reset)
-        delay(RESET_DELAY_MS)
-
-        usbBridge.setDtrRts(false, false) // Release both
-        delay(BOOT_DELAY_MS)
-
-        // Clear any garbage data
-        usbBridge.drain(200)
+        usbBridge.drain(if (currentBoardIsS3) 300 else 200)
 
         inBootloader = true
         return true
     }
 
     /**
-     * Sync with the ESP32 bootloader.
+     * Quick sync check to see if device is already in bootloader mode.
+     * This is used to detect manual bootloader entry before trying DTR/RTS reset.
+     * Only tries a few times with short timeout to avoid delays.
+     *
+     * @return true if sync successful (device in bootloader mode), false otherwise
      */
-    private suspend fun sync(): Boolean = withTimeoutOrNull(SYNC_TIMEOUT_MS) {
-        Log.d(TAG, "Syncing with bootloader...")
+    private suspend fun trySyncQuick(): Boolean {
+        Log.d(TAG, "Quick sync check (detecting if already in bootloader)...")
+
+        // Clear any garbage data and log what we drain
+        val drained = ByteArray(256)
+        val drainedCount = usbBridge.readBlocking(drained, 100)
+        if (drainedCount > 0) {
+            val hex = drained.take(minOf(drainedCount, 64)).joinToString(" ") {
+                String.format("%02X", it.toInt() and 0xFF)
+            }
+            Log.d(TAG, "Drained $drainedCount bytes before sync: $hex")
+        }
 
         // The sync packet is a series of 0x07 0x07 0x12 0x20 followed by 32 x 0x55
         val syncData = ByteArray(36)
@@ -332,26 +465,84 @@ class ESPToolFlasher(
             syncData[i] = 0x55
         }
 
-        // Try multiple times
-        repeat(10) { attempt ->
+        // Try only 3 times with short delays for quick check
+        repeat(3) { attempt ->
             val response = sendCommand(ESP_SYNC, syncData, 0)
 
             if (response != null && response.isNotEmpty()) {
-                Log.d(TAG, "Sync successful on attempt ${attempt + 1}")
+                Log.d(TAG, "Quick sync successful on attempt ${attempt + 1} - device already in bootloader")
 
                 // Read and discard any additional sync responses
-                delay(100)
+                delay(50)
                 usbBridge.drain(100)
 
-                return@withTimeoutOrNull true
+                inBootloader = true
+                return true
             }
 
-            delay(100)
+            delay(50)
         }
 
-        Log.e(TAG, "Sync failed after 10 attempts")
-        false
-    } ?: false
+        Log.d(TAG, "Quick sync check failed - device not in bootloader mode")
+        return false
+    }
+
+    /**
+     * Sync with the ESP32 bootloader.
+     *
+     * @throws ManualBootModeRequired if sync fails on native USB device
+     */
+    private suspend fun sync(): Boolean {
+        val result = withTimeoutOrNull(SYNC_TIMEOUT_MS) {
+            Log.d(TAG, "Syncing with bootloader...")
+
+            // The sync packet is a series of 0x07 0x07 0x12 0x20 followed by 32 x 0x55
+            val syncData = ByteArray(36)
+            syncData[0] = 0x07
+            syncData[1] = 0x07
+            syncData[2] = 0x12
+            syncData[3] = 0x20
+            for (i in 4 until 36) {
+                syncData[i] = 0x55
+            }
+
+            // Try multiple times
+            repeat(10) { attempt ->
+                val response = sendCommand(ESP_SYNC, syncData, 0)
+
+                if (response != null && response.isNotEmpty()) {
+                    Log.d(TAG, "Sync successful on attempt ${attempt + 1}")
+
+                    // Read and discard any additional sync responses (esptool behavior)
+                    delay(50)
+                    usbBridge.drain(100)
+
+                    return@withTimeoutOrNull true
+                }
+
+                delay(100)
+            }
+
+            Log.e(TAG, "Sync failed after 10 attempts")
+            false
+        } ?: false
+
+        if (!result && isNativeUsb) {
+            Log.w(TAG, "Sync failed on native USB device - manual boot mode required")
+            throw ManualBootModeRequired(
+                "Could not sync with bootloader. This device uses native USB (ESP32-S3) " +
+                    "which requires manual bootloader entry for initial flashing.\n\n" +
+                    "Please enter boot mode manually:\n" +
+                    "1. Hold the PRG (or BOOT) button\n" +
+                    "2. Press and release the RST button\n" +
+                    "3. Release the PRG (or BOOT) button\n" +
+                    "4. Try flashing again\n\n" +
+                    "Note: Once RNode firmware is installed, future updates will work automatically."
+            )
+        }
+
+        return result
+    }
 
     /**
      * Change the bootloader's baud rate.
@@ -376,6 +567,59 @@ class ESPToolFlasher(
     }
 
     /**
+     * Read the chip detect magic register.
+     * This helps "activate" the bootloader and identifies the chip type.
+     */
+    private suspend fun readChipDetectReg(): Long? {
+        // ESP32-S3 chip detect magic register address
+        val regAddr = 0x40001000L // CHIP_DETECT_MAGIC_REG_ADDR
+
+        val data = ByteArray(4)
+        putUInt32LE(data, 0, regAddr.toInt())
+
+        Log.d(TAG, "Reading chip detect register at 0x${regAddr.toString(16)}")
+        val response = sendCommand(ESP_READ_REG, data, 0)
+
+        if (response != null && response.size >= 8) {
+            // Value is in bytes 4-7 of the response (the 'val' field)
+            val value = (response[4].toLong() and 0xFF) or
+                ((response[5].toLong() and 0xFF) shl 8) or
+                ((response[6].toLong() and 0xFF) shl 16) or
+                ((response[7].toLong() and 0xFF) shl 24)
+            return value
+        }
+        return null
+    }
+
+    /**
+     * Attach SPI flash (required for ESP32-S3 before flash operations).
+     *
+     * The SPI_ATTACH command configures the SPI flash pins and mode.
+     * For ESP32-S3, this must be called before any flash operations.
+     *
+     * ROM mode requires 8 bytes: hspi_arg (4) + is_legacy flag + padding (4)
+     */
+    private suspend fun spiAttach(): Boolean {
+        Log.d(TAG, "Attaching SPI flash...")
+
+        // ROM mode SPI attach:
+        // - bytes 0-3: hspi_arg (0 = HSPI, normal flash)
+        // - bytes 4-7: is_legacy (0) + padding
+        val data = ByteArray(8)
+        putUInt32LE(data, 0, 0) // hspi_arg = 0 (default SPI flash mode)
+        putUInt32LE(data, 4, 0) // is_legacy = 0, with padding
+
+        val response = sendCommand(ESP_SPI_ATTACH, data, 0)
+        if (response != null) {
+            Log.d(TAG, "SPI attach successful")
+            return true
+        } else {
+            Log.e(TAG, "SPI attach failed")
+            return false
+        }
+    }
+
+    /**
      * Flash a region of memory.
      */
     private suspend fun flashRegion(
@@ -388,13 +632,17 @@ class ESPToolFlasher(
     ): Boolean {
         Log.d(TAG, "Flashing $name: ${data.size} bytes at 0x${offset.toString(16)}")
 
-        // Calculate number of blocks
+        // ROM bootloader always uses 0x400 block size
         val blockSize = ESP_FLASH_BLOCK_SIZE
         val numBlocks = (data.size + blockSize - 1) / blockSize
         val eraseSize = numBlocks * blockSize
 
+        Log.d(TAG, "Using block size: $blockSize, num blocks: $numBlocks, erase size: $eraseSize")
+
         // Send flash begin command
-        val beginData = ByteArray(16)
+        // ESP32-S3 ROM mode requires extra encryption flag (4 bytes)
+        val beginDataSize = if (currentBoardIsS3) 20 else 16
+        val beginData = ByteArray(beginDataSize)
         // Erase size
         putUInt32LE(beginData, 0, eraseSize)
         // Number of blocks
@@ -403,8 +651,17 @@ class ESPToolFlasher(
         putUInt32LE(beginData, 8, blockSize)
         // Offset
         putUInt32LE(beginData, 12, offset)
+        // ESP32-S3 ROM: encryption flag (0 = not encrypted)
+        if (currentBoardIsS3) {
+            putUInt32LE(beginData, 16, 0)
+        }
 
-        val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0)
+        // Calculate timeout based on erase size - larger regions need more time
+        val eraseMB = eraseSize.toDouble() / (1024 * 1024)
+        val eraseTimeout = maxOf(MIN_ERASE_TIMEOUT_MS, (eraseMB * ERASE_TIMEOUT_PER_MB_MS).toLong())
+        Log.d(TAG, "Flash begin with ${eraseTimeout}ms timeout for ${String.format("%.2f", eraseMB)}MB erase")
+
+        val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0, eraseTimeout)
         if (beginResponse == null) {
             Log.e(TAG, "Flash begin failed for $name")
             return false
@@ -454,15 +711,65 @@ class ESPToolFlasher(
     }
 
     /**
+     * Send FLASH_END command to tell bootloader we're done flashing.
+     * @param reboot If true, bootloader will reset and run the application.
+     */
+    private suspend fun sendFlashEnd(reboot: Boolean) {
+        Log.d(TAG, "Sending FLASH_END (reboot=$reboot)")
+
+        // For ESP32-S3, clear force download boot mode to avoid getting stuck
+        // in bootloader after reset (workaround for arduino-esp32 issue #6762)
+        if (currentBoardIsS3) {
+            try {
+                Log.d(TAG, "Clearing ESP32-S3 force download boot mode")
+                writeReg(ESP32S3_RTC_CNTL_OPTION1_REG, 0, ESP32S3_RTC_CNTL_FORCE_DOWNLOAD_BOOT_MASK)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear force download boot mode: ${e.message}")
+                // Continue anyway - this is not fatal
+            }
+        }
+
+        // FLASH_END packet: reboot flag (4 bytes)
+        val data = ByteArray(4)
+        putUInt32LE(data, 0, if (reboot) 0 else 1) // 0 = reboot, 1 = stay in bootloader (inverted!)
+
+        // Don't wait for response if rebooting - device may reset before responding
+        if (reboot) {
+            val packet = buildCommandPacket(ESP_FLASH_END, data, 0)
+            val slipPacket = slipEncode(packet)
+            usbBridge.write(slipPacket)
+            Log.d(TAG, "FLASH_END sent, device should reboot")
+        } else {
+            sendCommand(ESP_FLASH_END, data, 0)
+        }
+    }
+
+    /**
+     * Write to a register on the ESP32.
+     */
+    private suspend fun writeReg(address: Int, value: Int, mask: Int) {
+        // WRITE_REG packet: addr (4) + value (4) + mask (4) + delay_us (4)
+        val data = ByteArray(16)
+        putUInt32LE(data, 0, address)
+        putUInt32LE(data, 4, value)
+        putUInt32LE(data, 8, mask)
+        putUInt32LE(data, 12, 0) // delay_us = 0
+
+        sendCommand(ESP_WRITE_REG, data, 0)
+    }
+
+    /**
      * Hard reset the device to exit bootloader.
      */
     private suspend fun hardReset() {
-        Log.d(TAG, "Hard resetting device")
+        Log.d(TAG, "Hard resetting device (S3=$currentBoardIsS3)")
+
+        val resetDelay = if (currentBoardIsS3) RESET_DELAY_MS_USB else RESET_DELAY_MS
 
         usbBridge.setDtrRts(false, true)  // Assert RTS (EN low - reset)
-        delay(RESET_DELAY_MS)
+        delay(resetDelay)
         usbBridge.setDtrRts(false, false) // Release both
-        delay(RESET_DELAY_MS)
+        delay(resetDelay)
 
         inBootloader = false
     }
@@ -474,16 +781,26 @@ class ESPToolFlasher(
         command: Byte,
         data: ByteArray,
         checksum: Int,
+        timeoutMs: Long = COMMAND_TIMEOUT_MS,
     ): ByteArray? {
+        // Clear any pending data before sending
+        usbBridge.drain(50)
+
         // Build command packet
         val packet = buildCommandPacket(command, data, checksum)
 
         // SLIP encode and send
         val slipPacket = slipEncode(packet)
-        usbBridge.write(slipPacket)
+        Log.d(TAG, "Sending command 0x${(command.toInt() and 0xFF).toString(16)}, " +
+            "data size=${data.size}, packet size=${slipPacket.size}")
+        val bytesWritten = usbBridge.write(slipPacket)
+        Log.d(TAG, "Wrote $bytesWritten bytes")
+
+        // Give USB CDC time to transmit
+        delay(10)
 
         // Wait for response
-        return readResponse(command)
+        return readResponse(command, timeoutMs)
     }
 
     /**
@@ -535,11 +852,15 @@ class ESPToolFlasher(
     /**
      * Read and decode a response from the bootloader.
      */
-    private suspend fun readResponse(expectedCommand: Byte): ByteArray? =
-        withTimeoutOrNull(COMMAND_TIMEOUT_MS) {
+    private suspend fun readResponse(
+        expectedCommand: Byte,
+        timeoutMs: Long = COMMAND_TIMEOUT_MS,
+    ): ByteArray? =
+        withTimeoutOrNull(timeoutMs) {
             val buffer = mutableListOf<Byte>()
             var inPacket = false
             var escape = false
+            var totalBytesRead = 0
 
             while (true) {
                 val readBuffer = ByteArray(256)
@@ -548,6 +869,15 @@ class ESPToolFlasher(
                 if (bytesRead <= 0) {
                     delay(10)
                     continue
+                }
+
+                totalBytesRead += bytesRead
+                if (totalBytesRead <= 64) {
+                    // Log first bytes received for debugging
+                    val hex = readBuffer.take(bytesRead).joinToString(" ") {
+                        String.format("%02X", it.toInt() and 0xFF)
+                    }
+                    Log.d(TAG, "Received $bytesRead bytes: $hex")
                 }
 
                 for (i in 0 until bytesRead) {
@@ -565,15 +895,28 @@ class ESPToolFlasher(
                                 if (response[0] == 0x01.toByte() &&
                                     response[1] == expectedCommand
                                 ) {
-                                    // Check status (bytes 8-11)
-                                    val status = response.getOrNull(8)?.toInt()?.and(0xFF) ?: 1
+                                    // Parse response: direction(1) + cmd(1) + size(2) + val(4) + data(size)
+                                    val dataLen = (response[2].toInt() and 0xFF) or
+                                        ((response[3].toInt() and 0xFF) shl 8)
+
+                                    // Status is in the LAST 2 bytes of the data section
+                                    // If no data, check the 'val' field instead
+                                    val status = if (dataLen >= 2) {
+                                        // Last 2 bytes of data (data starts at byte 8)
+                                        response.getOrNull(8 + dataLen - 2)?.toInt()?.and(0xFF) ?: 1
+                                    } else {
+                                        // For empty responses, val field indicates status (byte 4)
+                                        response.getOrNull(4)?.toInt()?.and(0xFF) ?: 1
+                                    }
+
                                     if (status == 0) {
                                         return@withTimeoutOrNull response
                                     } else {
+                                        val errorCode = response.getOrNull(8 + dataLen - 1)?.toInt()?.and(0xFF) ?: 0
                                         Log.w(
                                             TAG,
                                             "Command 0x${expectedCommand.toInt().and(0xFF).toString(16)} " +
-                                                "returned error: $status",
+                                                "returned error: status=$status, code=$errorCode",
                                         )
                                         return@withTimeoutOrNull null
                                     }

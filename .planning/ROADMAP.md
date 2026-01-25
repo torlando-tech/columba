@@ -10,7 +10,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
+- [x] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
 
 ## Phase Details
@@ -27,9 +27,9 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 01-01-PLAN.md - Setup & Investigation (LeakCanary + profiling session + FINDINGS.md)
-- [ ] 01-02-PLAN.md - Apply fixes based on findings + verification profiling
-- [ ] 01-03-PLAN.md - Add Sentry performance monitoring for ongoing observability
+- [x] 01-01-PLAN.md - Setup & Investigation (LeakCanary + profiling session + FINDINGS.md)
+- [x] 01-02-PLAN.md - Apply fixes based on findings + verification profiling
+- [x] 01-03-PLAN.md - Add Sentry performance monitoring for ongoing observability
 
 ### Phase 2: Relay Loop Fix
 **Goal**: Relay auto-selection works correctly without add/remove cycling
@@ -51,5 +51,5 @@ Phases 1 and 2 are independent and can be worked in any order.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Performance Fix | 0/3 | Planned | - |
+| 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
 | 2. Relay Loop Fix | 0/TBD | Not started | - |

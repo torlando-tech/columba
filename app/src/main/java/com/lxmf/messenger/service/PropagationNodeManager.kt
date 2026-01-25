@@ -126,7 +126,7 @@ enum class RelaySelectionState {
  * disables auto-selection until they re-enable it.
  */
 @Singleton
-@Suppress("TooManyFunctions") // Relay management requires distinct operations
+@Suppress("TooManyFunctions", "LargeClass") // Relay management requires distinct operations; refactor deferred
 class PropagationNodeManager
     @Inject
     constructor(

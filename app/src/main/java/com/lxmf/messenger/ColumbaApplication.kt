@@ -647,7 +647,7 @@ class ColumbaApplication : Application() {
                 options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty() && !BuildConfig.DEBUG
 
                 // Performance Monitoring - Tracing
-                options.tracesSampleRate = 1.0 // 100% during testing, reduce to 0.1-0.2 for production
+                options.tracesSampleRate = 0.5 // 50% sampling appropriate for <500 users
                 options.profilesSampleRate = 0.1 // Profile 10% of sampled transactions
 
                 // Activity & Fragment tracing (enabled by default)

@@ -641,14 +641,23 @@ class ColumbaApplication : Application() {
                 // Empty DSN = Sentry disabled (used by noSentry build variant in Phase 2)
                 options.dsn = BuildConfig.SENTRY_DSN
 
-                // Sentry is enabled when:
-                // 1. DSN is provided (not empty)
-                // 2. Not a debug build (release/production only)
-                options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty() && !BuildConfig.DEBUG
+                // Sentry is enabled when DSN is provided (not empty).
+                // Both debug and release builds report, distinguished by environment.
+                options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty()
+
+                // Tag the environment so events are filterable in the Sentry dashboard.
+                // "debug" for local/dev builds, "production" for release builds.
+                options.environment = if (BuildConfig.DEBUG) "debug" else "production"
 
                 // Performance Monitoring - Tracing
-                options.tracesSampleRate = 0.5 // 50% sampling appropriate for <500 users
-                options.profilesSampleRate = 0.1 // Profile 10% of sampled transactions
+                // Debug builds use lower sampling to reduce noise during development.
+                if (BuildConfig.DEBUG) {
+                    options.tracesSampleRate = 0.1 // 10% sampling for debug
+                    options.profilesSampleRate = 0.0 // No profiling in debug
+                } else {
+                    options.tracesSampleRate = 0.5 // 50% sampling appropriate for <500 users
+                    options.profilesSampleRate = 0.1 // Profile 10% of sampled transactions
+                }
 
                 // Activity & Fragment tracing (enabled by default)
                 options.isEnableActivityLifecycleTracingAutoFinish = true
@@ -676,6 +685,7 @@ class ColumbaApplication : Application() {
                 android.util.Log.d(
                     "ColumbaApplication",
                     "Sentry initialized: enabled=${options.isEnabled}, " +
+                        "environment=${options.environment}, " +
                         "tracing=${options.tracesSampleRate}, " +
                         "hasDsn=${BuildConfig.SENTRY_DSN.isNotEmpty()}",
                 )

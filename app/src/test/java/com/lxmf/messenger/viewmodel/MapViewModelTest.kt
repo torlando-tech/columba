@@ -2,6 +2,7 @@ package com.lxmf.messenger.viewmodel
 
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
@@ -54,6 +55,7 @@ class MapViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var contactRepository: ContactRepository
     private lateinit var receivedLocationDao: ReceivedLocationDao
     private lateinit var locationSharingManager: LocationSharingManager
@@ -68,6 +70,7 @@ class MapViewModelTest {
         // Disable periodic refresh to prevent infinite loops in tests
         MapViewModel.enablePeriodicRefresh = false
 
+        savedStateHandle = SavedStateHandle()
         contactRepository = mockk(relaxed = true)
         receivedLocationDao = mockk(relaxed = true)
         locationSharingManager = mockk(relaxed = true)
@@ -98,7 +101,7 @@ class MapViewModelTest {
     @Test
     fun `initial state has no user location`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -109,7 +112,7 @@ class MapViewModelTest {
     @Test
     fun `initial state has no location permission`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -120,7 +123,7 @@ class MapViewModelTest {
     @Test
     fun `initial state has no error message`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -131,7 +134,7 @@ class MapViewModelTest {
     @Test
     fun `onPermissionResult updates hasLocationPermission to true`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 // Consume initial state
@@ -147,7 +150,7 @@ class MapViewModelTest {
     @Test
     fun `onPermissionResult updates hasLocationPermission to false`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 // First grant permission
@@ -166,7 +169,7 @@ class MapViewModelTest {
     @Test
     fun `updateUserLocation updates state with new location`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
             viewModel.state.test {
@@ -185,7 +188,7 @@ class MapViewModelTest {
     @Test
     fun `clearError removes error message`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             // Verify initial state has no error message
             assertNull(viewModel.state.value.errorMessage)
@@ -202,7 +205,7 @@ class MapViewModelTest {
     @Test
     fun `initial state has permission card not dismissed`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -213,7 +216,7 @@ class MapViewModelTest {
     @Test
     fun `dismissPermissionCard updates state to dismissed`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 // Consume initial state
@@ -229,7 +232,7 @@ class MapViewModelTest {
     @Test
     fun `dismissed state persists after permission granted`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 awaitItem() // initial state
@@ -289,7 +292,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -326,7 +329,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -340,7 +343,7 @@ class MapViewModelTest {
         runTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -353,7 +356,7 @@ class MapViewModelTest {
         runTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -364,7 +367,7 @@ class MapViewModelTest {
     @Test
     fun `multiple location updates replace previous location`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val location1 = createMockLocation(37.7749, -122.4194)
             val location2 = createMockLocation(40.7128, -74.0060)
 
@@ -408,7 +411,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val newLocation = createMockLocation(40.7128, -74.0060) // New York
 
             viewModel.state.test {
@@ -450,7 +453,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -484,7 +487,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -497,7 +500,7 @@ class MapViewModelTest {
     @Test
     fun `permission and location can be set independently`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
             viewModel.state.test {
@@ -520,7 +523,7 @@ class MapViewModelTest {
     @Test
     fun `state is immutable - modifications dont affect original`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             val originalState = viewModel.state.value
             val originalPermission = originalState.hasLocationPermission
@@ -538,7 +541,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - fresh location returns FRESH`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -554,7 +557,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - location older than 5 minutes returns STALE`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -570,7 +573,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - expired within grace period returns EXPIRED_GRACE_PERIOD`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -586,7 +589,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - expired past grace period returns null`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -602,7 +605,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - indefinite sharing never expires`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -618,7 +621,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - exactly at stale threshold returns FRESH`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -635,7 +638,7 @@ class MapViewModelTest {
     @Test
     fun `calculateMarkerState - just past stale threshold returns STALE`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             val now = System.currentTimeMillis()
 
             val state =
@@ -653,7 +656,7 @@ class MapViewModelTest {
     @Test
     fun `startSharing calls locationSharingManager with correct parameters`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             val selectedContacts =
                 listOf(
@@ -682,7 +685,7 @@ class MapViewModelTest {
     @Test
     fun `startSharing with empty list calls locationSharingManager with empty list`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES)
 
@@ -694,7 +697,7 @@ class MapViewModelTest {
     @Test
     fun `startSharing with single contact`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             val selectedContacts =
                 listOf(
@@ -720,7 +723,7 @@ class MapViewModelTest {
     @Test
     fun `stopSharing without parameter stops all sharing`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.stopSharing()
 
@@ -732,7 +735,7 @@ class MapViewModelTest {
     @Test
     fun `stopSharing with destinationHash stops specific session`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.stopSharing("specific_hash")
 
@@ -744,7 +747,7 @@ class MapViewModelTest {
     @Test
     fun `stopSharing called multiple times calls manager each time`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.stopSharing("hash1")
             viewModel.stopSharing("hash2")
@@ -763,7 +766,7 @@ class MapViewModelTest {
             val isSharingFlow = MutableStateFlow(false)
             every { locationSharingManager.isSharing } returns isSharingFlow
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val initial = awaitItem()
@@ -782,7 +785,7 @@ class MapViewModelTest {
             val sessionsFlow = MutableStateFlow<List<com.lxmf.messenger.service.SharingSession>>(emptyList())
             every { locationSharingManager.activeSessions } returns sessionsFlow
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val initial = awaitItem()
@@ -852,7 +855,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -882,7 +885,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -943,7 +946,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -999,7 +1002,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -1057,7 +1060,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(announces)
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -1097,7 +1100,7 @@ class MapViewModelTest {
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -1116,7 +1119,7 @@ class MapViewModelTest {
     fun `initial state has permission sheet not dismissed`() =
         runTest {
             every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -1128,7 +1131,7 @@ class MapViewModelTest {
     fun `state reflects dismissed permission sheet from settings`() =
         runTest {
             every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(true)
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -1139,7 +1142,7 @@ class MapViewModelTest {
     @Test
     fun `dismissLocationPermissionSheet calls settingsRepository`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.dismissLocationPermissionSheet()
 
@@ -1152,7 +1155,7 @@ class MapViewModelTest {
             val dismissalFlow = MutableStateFlow(false)
             every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns dismissalFlow
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.state.test {
                 // Initial state - not dismissed
@@ -1171,7 +1174,7 @@ class MapViewModelTest {
     @Test
     fun `enableHttp clears download flag and enables HTTP`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.enableHttp()
 
@@ -1183,7 +1186,7 @@ class MapViewModelTest {
     @Test
     fun `enableHttp triggers map style refresh`() =
         runTest {
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             viewModel.enableHttp()
 
@@ -1199,13 +1202,71 @@ class MapViewModelTest {
             val httpEnabledFlow = MutableStateFlow(true)
             every { mapTileSourceManager.httpEnabledFlow } returns httpEnabledFlow
 
-            viewModel = MapViewModel(contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             // Change HTTP enabled state
             httpEnabledFlow.value = false
 
             // Verify getMapStyle was called multiple times (initial + after flow change)
             coVerify(atLeast = 2) { mapTileSourceManager.getMapStyle(any(), any()) }
+        }
+
+    // ========== Permission Card Dismissed State Persistence Tests (Issue #342) ==========
+
+    @Test
+    fun `permission card dismissed state survives ViewModel recreation via SavedStateHandle`() =
+        runTest {
+            // Given: A ViewModel where the user dismissed the permission card
+            viewModel = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            viewModel.dismissPermissionCard()
+
+            // Verify card is dismissed
+            assertTrue(viewModel.state.value.isPermissionCardDismissed)
+
+            // When: ViewModel is recreated with the same SavedStateHandle (simulates tab switch)
+            val viewModel2 = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            // Then: Permission card should still be dismissed
+            viewModel2.state.test {
+                val state = awaitItem()
+                assertTrue(
+                    "Permission card dismissed state should survive ViewModel recreation (issue #342)",
+                    state.isPermissionCardDismissed,
+                )
+            }
+        }
+
+    @Test
+    fun `permission card dismissed state is false with fresh SavedStateHandle`() =
+        runTest {
+            // Given: A fresh SavedStateHandle (simulates fresh app launch)
+            val freshHandle = SavedStateHandle()
+
+            // When: ViewModel is created
+            viewModel = MapViewModel(freshHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            // Then: Permission card should NOT be dismissed
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.isPermissionCardDismissed)
+            }
+        }
+
+    @Test
+    fun `permission card dismissed state does not leak between different SavedStateHandles`() =
+        runTest {
+            // Given: First ViewModel dismisses the card
+            val handle1 = SavedStateHandle()
+            val vm1 = MapViewModel(handle1, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            vm1.dismissPermissionCard()
+            assertTrue(vm1.state.value.isPermissionCardDismissed)
+
+            // When: A completely separate ViewModel is created with a different handle
+            val handle2 = SavedStateHandle()
+            val vm2 = MapViewModel(handle2, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+
+            // Then: The second ViewModel should NOT have the card dismissed
+            assertFalse(vm2.state.value.isPermissionCardDismissed)
         }
 
     // Helper function to create mock Location

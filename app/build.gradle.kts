@@ -282,11 +282,10 @@ android {
 
 // Sentry Gradle Plugin configuration
 sentry {
-    // Disable auto-upload of ProGuard mappings (not using ProGuard obfuscation)
+    // Disable all auto-upload features (no Sentry auth in CI)
     autoUploadProguardMapping.set(false)
-
-    // Enable source context for readable stack traces
-    includeSourceContext.set(true)
+    autoUploadSourceContext.set(false)
+    autoUploadNativeSymbols.set(false)
 
     // Logcat integration - captures android.util.Log calls as breadcrumbs
     tracingInstrumentation {

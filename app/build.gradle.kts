@@ -126,6 +126,23 @@ android {
         }
     }
 
+    flavorDimensions += "telemetry"
+
+    productFlavors {
+        create("sentry") {
+            dimension = "telemetry"
+            // SENTRY_DSN from environment - Sentry enabled in release builds
+            buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
+        }
+        create("noSentry") {
+            dimension = "telemetry"
+            // Empty DSN - Sentry fully disabled (no init, no network calls)
+            buildConfigField("String", "SENTRY_DSN", "\"\"")
+            // Suffix to distinguish APK in app drawer
+            applicationIdSuffix = ".nosentry"
+        }
+    }
+
     lint {
         // Workaround for lint crash with Kotlin 2.x
         // https://issuetracker.google.com/issues/344341744

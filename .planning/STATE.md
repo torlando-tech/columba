@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Fix the performance degradation and relay selection loop bugs so users have a stable, responsive app experience.
-**Current focus:** Phase 1 - Performance Fix
+**Current focus:** Phase 2 - Relay Selection Loop Fixes
 
 ## Current Position
 
-Phase: 1 of 2 (Performance Fix)
-Plan: 3 of 3 complete
-Status: Phase complete
-Last activity: 2026-01-25 — Completed 01-03-PLAN.md (Sentry monitoring)
+Phase: 2 of 2 (Relay Selection Loop Fixes)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-01-25 — Completed 02-01-PLAN.md (State machine for relay selection)
 
-Progress: [██████████] 100% (3/3 plans in phase 1)
+Progress: [████████░░] 67% (4/6 total plans across both phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 6m 14s
-- Total execution time: 18m 42s
+- Total plans completed: 4
+- Average duration: 5m 36s
+- Total execution time: 21m 45s
 
 **By Phase:**
 
 | Phase | Plans | Total Time | Avg/Plan |
 |-------|-------|------------|----------|
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
+| 02-relay-loop-fix | 1/3 | 3m 3s | 3m 3s |
 
 **Recent Trend:**
-- Last 3 plans: 5m 1s (01-01), 5m 17s (01-02), 8m 24s (01-03)
-- Trend: Slightly increasing (01-03 included build troubleshooting)
+- Last 3 plans: 5m 17s (01-02), 8m 24s (01-03), 3m 3s (02-01)
+- Trend: Decreasing (02-01 was straightforward state machine implementation)
 
 *Updated after each plan completion*
 
@@ -48,6 +49,9 @@ Recent decisions affecting current work:
 - Disable Sentry in debug builds to avoid noise during development (01-03)
 - Sample 10% of transactions and profile 5% for production monitoring (01-03)
 - Report janky frames via Sentry breadcrumbs for context in errors (01-03)
+- Use 1000ms debounce to batch rapid Room invalidation triggers (02-01)
+- Use 30-second cooldown after successful relay selection (02-01)
+- User actions always cancel ongoing auto-selection and reset to IDLE state (02-01)
 
 ### Pending Todos
 
@@ -71,6 +75,6 @@ Also pending from plans:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed Phase 1 (01-03-PLAN.md) - Performance monitoring established
+Stopped at: Completed 02-01-PLAN.md - Relay selection state machine implemented
 Resume file: None
-Next: Begin Phase 2 planning (Relay Selection Loop Fixes)
+Next: Continue Phase 2 with 02-02 (Sentry breadcrumbs for relay selection)

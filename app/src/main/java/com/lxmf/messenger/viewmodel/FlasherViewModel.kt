@@ -589,6 +589,25 @@ class FlasherViewModel
             }
         }
 
+        /**
+         * Skip flashing and go directly to provisioning.
+         * Useful for testing or when flashing was already done externally.
+         */
+        fun provisionOnly() {
+            val device = _state.value.selectedDevice ?: return
+            val board = _state.value.selectedBoard ?: return
+
+            Log.i(TAG, "Starting provision-only flow for ${board.displayName}")
+            _state.update {
+                it.copy(
+                    currentStep = FlasherStep.FLASH_PROGRESS,
+                    needsManualReset = true,
+                    resetMessage = "Connect your ${board.displayName} and press RST if needed.",
+                    flashMessage = "Ready to provision ${board.displayName}",
+                )
+            }
+        }
+
         // ==================== Step 5: Complete ====================
 
         fun flashAnother() {

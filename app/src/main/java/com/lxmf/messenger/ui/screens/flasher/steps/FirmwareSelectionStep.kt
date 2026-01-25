@@ -68,6 +68,7 @@ fun FirmwareSelectionStep(
     onBandSelected: (FrequencyBand) -> Unit,
     onFirmwareSelected: (FirmwarePackage) -> Unit,
     onDownloadFirmware: (String) -> Unit,
+    onProvisionOnly: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -145,6 +146,41 @@ fun FirmwareSelectionStep(
             onFirmwareSelected = onFirmwareSelected,
             onDownloadFirmware = onDownloadFirmware,
         )
+
+        // Provision only option (skip flashing)
+        if (selectedBoard != null) {
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Already Flashed?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "If you've already flashed the firmware externally, you can skip to provisioning the EEPROM.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onProvisionOnly,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Provision Only (Skip Flashing)")
+                    }
+                }
+            }
+        }
     }
 }
 

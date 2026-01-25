@@ -250,6 +250,7 @@ fun RNodeFlasherScreen(
                             onBandSelected = { viewModel.selectFrequencyBand(it) },
                             onFirmwareSelected = { viewModel.selectFirmware(it) },
                             onDownloadFirmware = { viewModel.downloadFirmware(it) },
+                            onProvisionOnly = { viewModel.provisionOnly() },
                         )
 
                     FlasherStep.FLASH_PROGRESS ->

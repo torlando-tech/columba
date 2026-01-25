@@ -141,20 +141,22 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build release APK
-        run: ./gradlew :app:assembleRelease --stacktrace --max-workers=2
+        run: ./gradlew :app:assembleSentryRelease --stacktrace --max-workers=2
         env:
           # Use debug signing for CI verification (no release keystore needed)
           RELEASE_STORE_FILE: ""
           RELEASE_STORE_PASSWORD: ""
           RELEASE_KEY_ALIAS: ""
           RELEASE_KEY_PASSWORD: ""
+          # Empty DSN for CI builds (Sentry not configured in CI)
+          SENTRY_DSN: ""
 
       - name: Verify Python-Kotlin bridge methods are not obfuscated
         run: |
-          # Find the release APK
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          # Find the release APK (sentry variant)
+          APK_PATH=$(find app/build/outputs/apk/sentry/release -name "*.apk" | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "ERROR: No release APK found!"
+            echo "ERROR: No sentry release APK found!"
             exit 1
           fi
           # Run dynamic verification script that extracts methods from Python source
@@ -165,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: r8-mapping
-          path: app/build/outputs/mapping/release/mapping.txt
+          path: app/build/outputs/mapping/sentryRelease/mapping.txt
           retention-days: 30
 
       - name: Annotate failure before cancelling

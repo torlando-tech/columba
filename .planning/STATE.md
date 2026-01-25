@@ -60,11 +60,13 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-2 todos in `.planning/todos/pending/`:
+3 todos in `.planning/todos/pending/`:
 - **Investigate native memory growth using Python profiling** (performance)
   - ~1.4 MB/min growth in Python/Reticulum layer needs tracemalloc investigation
 - **Make discovered interfaces page event-driven** (ui)
   - Pages don't update in real-time; user must re-navigate to see new data
+- **Refactor PropagationNodeManager to extract components** (architecture)
+  - Extract RelaySelectionStateMachine, LoopDetector; remove LargeClass suppression
 
 Also pending from plans:
 - Configure Sentry DSN for production monitoring (01-03)

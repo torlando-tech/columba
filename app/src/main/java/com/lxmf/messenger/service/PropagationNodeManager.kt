@@ -576,6 +576,7 @@ class PropagationNodeManager
             if (_selectionState.value != RelaySelectionState.IDLE) {
                 Log.i(TAG, "User manual selection - cancelling auto-select (state was ${_selectionState.value})")
                 cooldownJob?.cancel()
+                backoffJob?.cancel()
             }
             _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
             excludedRelayHash = null // Clear exclusion - user made explicit choice
@@ -603,6 +604,7 @@ class PropagationNodeManager
         suspend fun enableAutoSelect() {
             // Reset state when enabling auto-select
             cooldownJob?.cancel()
+            backoffJob?.cancel()
             _selectionState.value = RelaySelectionState.IDLE
             excludedRelayHash = null // Clear any exclusion - user wants fresh auto-select
 
@@ -670,6 +672,7 @@ class PropagationNodeManager
             if (_selectionState.value != RelaySelectionState.IDLE) {
                 Log.i(TAG, "User manual relay by hash - cancelling auto-select (state was ${_selectionState.value})")
                 cooldownJob?.cancel()
+                backoffJob?.cancel()
             }
             _selectionState.value = RelaySelectionState.IDLE
             excludedRelayHash = null // Clear exclusion - user made explicit choice

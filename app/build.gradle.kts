@@ -387,7 +387,7 @@ dependencies {
 
     // Crash Reporting - GlitchTip (Sentry-compatible)
     // Phase 4 Task 4.2: Production Observability
-    implementation("io.sentry:sentry-android:7.3.0")
+    implementation("io.sentry:sentry-android:8.29.0")
 
     // QR Code & Camera
     implementation(libs.zxing.core)

@@ -16,6 +16,7 @@ import javax.inject.Singleton
 /**
  * Data class representing an announce for UI layer
  */
+@androidx.compose.runtime.Stable
 data class Announce(
     val destinationHash: String,
     val peerName: String,

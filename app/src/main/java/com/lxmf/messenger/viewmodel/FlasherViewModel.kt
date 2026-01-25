@@ -118,6 +118,9 @@ class FlasherViewModel
         // Used when flashing fresh devices that are already in bootloader mode
         private var skipDetectionMode = false
 
+        // Firmware hash from the flashed binary (used for provisioning)
+        private var firmwareHashForProvisioning: ByteArray? = null
+
         init {
             // Observe flash state from the flasher
             observeFlashState()
@@ -176,7 +179,9 @@ class FlasherViewModel
                             }
                         }
                         is RNodeFlasher.FlashState.NeedsManualReset -> {
-                            Log.i(TAG, "Device needs manual reset: ${flashState.message}")
+                            Log.i(TAG, "Device needs manual reset: ${flashState.message} (hash provided: ${flashState.firmwareHash != null})")
+                            // Store the firmware hash for provisioning after reset
+                            firmwareHashForProvisioning = flashState.firmwareHash
                             _state.update {
                                 it.copy(
                                     isFlashing = false,
@@ -574,7 +579,7 @@ class FlasherViewModel
             val device = _state.value.selectedDevice ?: return
             val board = _state.value.selectedBoard ?: return
 
-            Log.i(TAG, "User confirmed device reset, starting provisioning")
+            Log.i(TAG, "User confirmed device reset, starting provisioning (hash available: ${firmwareHashForProvisioning != null})")
             _state.update {
                 it.copy(
                     needsManualReset = false,
@@ -584,8 +589,10 @@ class FlasherViewModel
             }
 
             viewModelScope.launch {
-                flasher.onDeviceManuallyReset(device.deviceId, board)
+                flasher.onDeviceManuallyReset(device.deviceId, board, firmwareHashForProvisioning)
                 // State will be updated by observeFlashState
+                // Clear the hash after use
+                firmwareHashForProvisioning = null
             }
         }
 
@@ -596,8 +603,18 @@ class FlasherViewModel
         fun provisionOnly() {
             val device = _state.value.selectedDevice ?: return
             val board = _state.value.selectedBoard ?: return
+            val firmware = _state.value.selectedFirmware
 
             Log.i(TAG, "Starting provision-only flow for ${board.displayName}")
+
+            // Calculate firmware hash from selected firmware if available
+            firmwareHashForProvisioning = firmware?.calculateFirmwareBinaryHash()
+            if (firmwareHashForProvisioning != null) {
+                Log.d(TAG, "Pre-calculated firmware hash for provisioning")
+            } else {
+                Log.w(TAG, "No firmware selected - will attempt to get hash from device (may fail)")
+            }
+
             _state.update {
                 it.copy(
                     currentStep = FlasherStep.FLASH_PROGRESS,

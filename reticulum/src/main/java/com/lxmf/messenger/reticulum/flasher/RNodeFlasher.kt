@@ -68,7 +68,30 @@ class RNodeFlasher(
         data class Detecting(val message: String) : FlashState()
         data class Progress(val percent: Int, val message: String) : FlashState()
         data class Provisioning(val message: String) : FlashState()
-        data class NeedsManualReset(val board: RNodeBoard, val message: String) : FlashState()
+        data class NeedsManualReset(
+            val board: RNodeBoard,
+            val message: String,
+            val firmwareHash: ByteArray? = null,
+        ) : FlashState() {
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is NeedsManualReset) return false
+                if (board != other.board) return false
+                if (message != other.message) return false
+                if (firmwareHash != null) {
+                    if (other.firmwareHash == null) return false
+                    if (!firmwareHash.contentEquals(other.firmwareHash)) return false
+                } else if (other.firmwareHash != null) return false
+                return true
+            }
+
+            override fun hashCode(): Int {
+                var result = board.hashCode()
+                result = 31 * result + message.hashCode()
+                result = 31 * result + (firmwareHash?.contentHashCode() ?: 0)
+                return result
+            }
+        }
         data class Complete(val deviceInfo: RNodeDeviceInfo?) : FlashState()
         data class Error(val message: String, val recoverable: Boolean = true) : FlashState()
     }
@@ -185,9 +208,14 @@ class RNodeFlasher(
                     // ESP32-S3 native USB doesn't auto-reboot reliably
                     // User needs to manually reset the device, then we'll provision
                     Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
+
+                    // Calculate the firmware hash from the binary for provisioning
+                    val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
+
                     _flashState.value = FlashState.NeedsManualReset(
                         firmwarePackage.board,
                         "Flashing complete! Please press the RST button on your ${firmwarePackage.board.displayName}.",
+                        firmwareHash,
                     )
                 } else {
                     // Standard flow: verify and complete
@@ -586,9 +614,14 @@ class RNodeFlasher(
      *
      * @param deviceId USB device ID
      * @param board The board type that was flashed
+     * @param firmwareHash The pre-calculated SHA256 hash of the firmware binary (optional)
      * @return true if provisioning succeeded
      */
-    suspend fun provisionDevice(deviceId: Int, board: RNodeBoard): Boolean = withContext(Dispatchers.IO) {
+    suspend fun provisionDevice(
+        deviceId: Int,
+        board: RNodeBoard,
+        firmwareHash: ByteArray? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
         _flashState.value = FlashState.Provisioning("Waiting for device...")
 
         try {
@@ -652,10 +685,10 @@ class RNodeFlasher(
                 Log.i(TAG, "Device is already provisioned")
                 _flashState.value = FlashState.Provisioning("Device already provisioned, setting firmware hash...")
 
-                // Still need to set firmware hash if not matching
-                val firmwareHash = detector.getFirmwareHash()
-                if (firmwareHash != null) {
-                    detector.setFirmwareHash(firmwareHash)
+                // Use provided hash, or fall back to getting from device (which may be zeros)
+                val hashToSet = firmwareHash ?: detector.getFirmwareHash()
+                if (hashToSet != null) {
+                    detector.setFirmwareHash(hashToSet)
                 }
 
                 usbBridge.disconnect()
@@ -665,7 +698,7 @@ class RNodeFlasher(
 
             // Provision EEPROM
             _flashState.value = FlashState.Provisioning("Writing device information...")
-            if (!detector.provisionAndSetFirmwareHash(board)) {
+            if (!detector.provisionAndSetFirmwareHash(board, firmwareHash)) {
                 Log.e(TAG, "Provisioning failed")
                 _flashState.value = FlashState.Error("Failed to provision device EEPROM")
                 usbBridge.disconnect()
@@ -720,10 +753,15 @@ class RNodeFlasher(
      *
      * @param deviceId USB device ID
      * @param board The board type that was flashed
+     * @param firmwareHash The pre-calculated SHA256 hash of the firmware binary (optional)
      */
-    suspend fun onDeviceManuallyReset(deviceId: Int, board: RNodeBoard): Boolean {
-        Log.i(TAG, "Device manually reset, starting provisioning")
-        return provisionDevice(deviceId, board)
+    suspend fun onDeviceManuallyReset(
+        deviceId: Int,
+        board: RNodeBoard,
+        firmwareHash: ByteArray? = null,
+    ): Boolean {
+        Log.i(TAG, "Device manually reset, starting provisioning (hash provided: ${firmwareHash != null})")
+        return provisionDevice(deviceId, board, firmwareHash)
     }
 
     /**

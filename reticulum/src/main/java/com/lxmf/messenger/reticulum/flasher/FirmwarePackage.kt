@@ -46,6 +46,45 @@ data class FirmwarePackage(
      */
     fun delete(): Boolean = zipFile.delete()
 
+    /**
+     * Calculate the SHA256 hash of the firmware binary (application.bin) for provisioning.
+     *
+     * The RNode firmware hash is the SHA256 of the raw application binary,
+     * not the ZIP file. This hash is written to EEPROM during provisioning.
+     *
+     * @return 32-byte SHA256 hash as ByteArray, or null if extraction fails
+     */
+    fun calculateFirmwareBinaryHash(): ByteArray? {
+        return try {
+            ZipInputStream(zipFile.inputStream()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    // Find the application binary - try various naming conventions
+                    if (entry.name.endsWith("application.bin") ||
+                        entry.name.endsWith(".bin") && !entry.name.contains("bootloader") &&
+                        !entry.name.contains("partition")
+                    ) {
+                        val digest = MessageDigest.getInstance("SHA-256")
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (zip.read(buffer).also { bytesRead = it } != -1) {
+                            digest.update(buffer, 0, bytesRead)
+                        }
+                        val hash = digest.digest()
+                        Log.d(TAG, "Calculated firmware binary hash: ${hash.joinToString("") { "%02x".format(it) }}")
+                        return hash
+                    }
+                    entry = zip.nextEntry
+                }
+            }
+            Log.w(TAG, "No application binary found in firmware ZIP")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to calculate firmware binary hash", e)
+            null
+        }
+    }
+
     companion object {
         private const val TAG = "Columba:FirmwarePackage"
 

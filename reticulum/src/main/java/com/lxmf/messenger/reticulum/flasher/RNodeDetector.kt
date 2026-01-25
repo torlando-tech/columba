@@ -318,18 +318,35 @@ class RNodeDetector(
      * @return The 32-byte firmware hash, or null if not available
      */
     suspend fun getFirmwareHash(): ByteArray? = withContext(Dispatchers.IO) {
-        val response = sendCommandAndWait(
+        // First get the actual firmware hash (calculated by firmware on boot)
+        val actualResponse = sendCommandAndWait(
             RNodeConstants.CMD_HASHES,
             byteArrayOf(RNodeConstants.HASH_TYPE_FIRMWARE),
         )
 
-        if (response != null && response.size >= FIRMWARE_HASH_LENGTH) {
-            Log.d(TAG, "Got firmware hash: ${response.take(FIRMWARE_HASH_LENGTH).joinToString("") {
+        // Also get the target firmware hash (stored in EEPROM) for comparison
+        val targetResponse = sendCommandAndWait(
+            RNodeConstants.CMD_HASHES,
+            byteArrayOf(RNodeConstants.HASH_TYPE_TARGET_FIRMWARE),
+        )
+
+        if (targetResponse != null && targetResponse.size >= FIRMWARE_HASH_LENGTH + 1) {
+            val targetHash = targetResponse.drop(1).take(FIRMWARE_HASH_LENGTH).toByteArray()
+            Log.d(TAG, "Target firmware hash (EEPROM): ${targetHash.joinToString("") {
                 String.format("%02x", it.toInt() and 0xFF)
             }}")
-            return@withContext response.take(FIRMWARE_HASH_LENGTH).toByteArray()
         }
-        Log.w(TAG, "Failed to get firmware hash")
+
+        // Response format: [hash_type_byte] + [32 bytes of hash]
+        // We need to skip the first byte (hash type) and take the next 32 bytes
+        if (actualResponse != null && actualResponse.size >= FIRMWARE_HASH_LENGTH + 1) {
+            val hash = actualResponse.drop(1).take(FIRMWARE_HASH_LENGTH).toByteArray()
+            Log.d(TAG, "Actual firmware hash (calculated): ${hash.joinToString("") {
+                String.format("%02x", it.toInt() and 0xFF)
+            }}")
+            return@withContext hash
+        }
+        Log.w(TAG, "Failed to get firmware hash (response size: ${actualResponse?.size ?: 0})")
         null
     }
 
@@ -447,10 +464,17 @@ class RNodeDetector(
      * This should be called after flashing firmware and resetting the device.
      *
      * @param board The board type being provisioned
+     * @param providedFirmwareHash Optional pre-calculated firmware hash from the binary file.
+     *        If provided, this hash will be used instead of querying the device.
+     *        The device firmware often returns zeros for the hash, so this should be
+     *        calculated from the firmware binary file before flashing.
      * @return true if provisioning completed successfully
      */
-    suspend fun provisionAndSetFirmwareHash(board: RNodeBoard): Boolean = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Starting full provisioning for ${board.displayName}")
+    suspend fun provisionAndSetFirmwareHash(
+        board: RNodeBoard,
+        providedFirmwareHash: ByteArray? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Starting full provisioning for ${board.displayName} (hash provided: ${providedFirmwareHash != null})")
 
         // Get product code and model from board
         val product = board.productCode
@@ -465,11 +489,23 @@ class RNodeDetector(
         // Wait a moment for EEPROM writes to settle
         delay(500)
 
-        // Get and set firmware hash
-        val firmwareHash = getFirmwareHash()
+        // Use provided hash or try to get from device (may return zeros)
+        val firmwareHash = providedFirmwareHash ?: run {
+            Log.d(TAG, "No pre-calculated hash provided, attempting to get from device...")
+            getFirmwareHash()
+        }
+
         if (firmwareHash == null) {
             Log.e(TAG, "Failed to get firmware hash")
             return@withContext false
+        }
+
+        // Check if hash is all zeros (indicates device doesn't calculate hash)
+        val isAllZeros = firmwareHash.all { it == 0.toByte() }
+        if (isAllZeros) {
+            Log.w(TAG, "Firmware hash is all zeros - device may show 'Missing Config' after provisioning")
+        } else {
+            Log.d(TAG, "Using firmware hash: ${firmwareHash.joinToString("") { String.format("%02x", it.toInt() and 0xFF) }}")
         }
 
         if (!setFirmwareHash(firmwareHash)) {

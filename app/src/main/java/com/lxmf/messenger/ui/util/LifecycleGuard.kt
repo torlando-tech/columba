@@ -1,10 +1,7 @@
 package com.lxmf.messenger.ui.util
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
  * Utility for checking lifecycle state before showing window-based UI components
@@ -54,26 +51,3 @@ object LifecycleGuard {
     }
 }
 
-/**
- * Composable helper that returns whether it's safe to show window-based UI components.
- *
- * Use this in conditionals before showing dialogs or bottom sheets to prevent
- * BadTokenException crashes when the activity is being destroyed.
- *
- * Example:
- * ```kotlin
- * val canShowDialog = rememberIsLifecycleActiveForWindows()
- * if (showDialog && canShowDialog) {
- *     AlertDialog(...)
- * }
- * ```
- *
- * @return true if the current lifecycle owner is active enough to show windows
- */
-@Composable
-fun rememberIsLifecycleActiveForWindows(): Boolean {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    return remember(lifecycleOwner.lifecycle.currentState) {
-        LifecycleGuard.isActiveForWindows(lifecycleOwner)
-    }
-}

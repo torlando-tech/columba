@@ -588,8 +588,10 @@ class FlasherViewModel
                 )
             }
 
+            val band = _state.value.selectedBand
+
             viewModelScope.launch {
-                flasher.onDeviceManuallyReset(device.deviceId, board, firmwareHashForProvisioning)
+                flasher.onDeviceManuallyReset(device.deviceId, board, band, firmwareHashForProvisioning)
                 // State will be updated by observeFlashState
                 // Clear the hash after use
                 firmwareHashForProvisioning = null

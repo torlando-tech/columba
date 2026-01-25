@@ -6,6 +6,7 @@ import com.lxmf.messenger.service.binder.ReticulumServiceBinder
 import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

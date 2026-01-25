@@ -443,6 +443,8 @@ class AnnounceStreamViewModel
         fun unsetRelayAndDelete(destinationHash: String) {
             viewModelScope.launch {
                 try {
+                    // IMPORTANT: Set exclusion BEFORE delete to prevent immediate re-selection
+                    propagationNodeManager.excludeFromAutoSelect(destinationHash)
                     contactRepository.deleteContact(destinationHash)
                     propagationNodeManager.onRelayDeleted()
                     Log.d(TAG, "Unset relay and deleted: $destinationHash")

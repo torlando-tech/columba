@@ -2796,4 +2796,174 @@ class PropagationNodeManagerTest {
 
         manager.stop()
     }
+
+    // ========== excludeFromAutoSelect Tests ==========
+
+    @Test
+    fun `excludeFromAutoSelect - prevents re-selection of excluded relay`() =
+        runTest {
+            // Given: Two propagation nodes available
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Node 1",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Node 2",
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // When: Exclude node1 (the nearest one) and trigger relay deleted
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: Should select node2 instead of excluded node1
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - exclusion cleared after successful selection`() =
+        runTest {
+            // Given: Two nodes, node1 excluded
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Node 1",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Node 2",
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // Exclude node1 and select node2
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Verify node2 was selected
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+
+            // Clear mocks to track new calls
+            clearAllMocks(answers = false)
+
+            // Reset state for next selection
+            manager.enableAutoSelect()
+            advanceUntilIdle()
+
+            // When: Trigger another selection - node1 should now be selectable
+            // (exclusion was cleared after node2 was selected)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: node1 (nearest) should be selected since exclusion was cleared
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - no selection if excluded relay is only option`() =
+        runTest {
+            // Given: Only one propagation node available
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Only Node",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+
+            // When: Exclude the only available node and trigger selection
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: No relay should be set (the only candidate was excluded)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - does not affect manual relay selection`() =
+        runTest {
+            // Given: Node excluded from auto-select
+            val node =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Manual Node",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node
+            coEvery { contactRepository.hasContact(testDestHash) } returns true
+
+            manager.excludeFromAutoSelect(testDestHash)
+
+            // When: User manually sets the excluded node as relay
+            manager.setManualRelay(testDestHash, "Manual Node")
+            advanceUntilIdle()
+
+            // Then: Manual selection should still work (exclusion only affects auto-select)
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - selects next nearest when nearest is excluded`() =
+        runTest {
+            // Given: Three nodes with different hop counts
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Nearest",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Middle",
+                    hops = 3,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node3 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash3,
+                    peerName = "Farthest",
+                    hops = 5,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2, node3))
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // When: Exclude nearest node and trigger selection
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: Should select node2 (next nearest after excluded node1)
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash3, any()) }
+        }
 }

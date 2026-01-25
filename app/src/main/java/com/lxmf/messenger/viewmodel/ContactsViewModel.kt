@@ -243,6 +243,11 @@ class ContactsViewModel
         fun unsetRelayAndDelete(destinationHash: String) {
             viewModelScope.launch {
                 try {
+                    // IMPORTANT: Set exclusion BEFORE delete to prevent immediate re-selection
+                    // The delete triggers a Room Flow emission that could cause auto-selection
+                    // before onRelayDeleted() is called
+                    propagationNodeManager.excludeFromAutoSelect(destinationHash)
+
                     // Delete the contact (this also clears isMyRelay flag in database)
                     contactRepository.deleteContact(destinationHash)
 

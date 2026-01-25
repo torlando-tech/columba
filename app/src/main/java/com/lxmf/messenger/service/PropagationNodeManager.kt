@@ -150,6 +150,10 @@ class PropagationNodeManager
         // Job for cooldown timer (cancellable if user takes manual action)
         private var cooldownJob: Job? = null
 
+        // Excluded relay: when user manually clears a relay, don't auto-select it again
+        // This prevents the frustrating "I cleared it but it came right back" experience
+        private var excludedRelayHash: String? = null
+
         // Loop detection: track recent selections to detect rapid cycling
         // Per context decisions: 3+ changes in 60 seconds triggers warning
         private val recentSelections = ArrayDeque<Pair<String, Long>>()
@@ -574,6 +578,7 @@ class PropagationNodeManager
                 cooldownJob?.cancel()
             }
             _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
+            excludedRelayHash = null // Clear exclusion - user made explicit choice
 
             Log.i(TAG, "User manually selected relay: $displayName")
 
@@ -599,6 +604,7 @@ class PropagationNodeManager
             // Reset state when enabling auto-select
             cooldownJob?.cancel()
             _selectionState.value = RelaySelectionState.IDLE
+            excludedRelayHash = null // Clear any exclusion - user wants fresh auto-select
 
             Log.i(TAG, "Enabling auto-select for propagation node")
 
@@ -633,7 +639,15 @@ class PropagationNodeManager
             cooldownJob?.cancel()
             _selectionState.value = RelaySelectionState.IDLE
 
-            Log.i(TAG, "Clearing relay selection")
+            // Exclude the current relay from auto-selection
+            // This prevents the "I cleared it but it came right back" frustration
+            val currentHash = currentRelay.value?.destinationHash
+            if (currentHash != null) {
+                excludedRelayHash = currentHash
+                Log.i(TAG, "Clearing relay selection, excluding ${currentHash.take(12)}... from auto-select")
+            } else {
+                Log.i(TAG, "Clearing relay selection")
+            }
 
             settingsRepository.saveManualPropagationNode(null)
             // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
@@ -658,6 +672,7 @@ class PropagationNodeManager
                 cooldownJob?.cancel()
             }
             _selectionState.value = RelaySelectionState.IDLE
+            excludedRelayHash = null // Clear exclusion - user made explicit choice
 
             Log.i(TAG, "User manually entered relay hash: $destinationHash")
 
@@ -684,6 +699,17 @@ class PropagationNodeManager
         }
 
         /**
+         * Exclude a relay from auto-selection. Call this BEFORE deleting a relay contact
+         * to prevent it from being immediately re-selected.
+         *
+         * @param destinationHash The relay hash to exclude from auto-selection
+         */
+        fun excludeFromAutoSelect(destinationHash: String) {
+            excludedRelayHash = destinationHash
+            Log.i(TAG, "Excluding relay ${destinationHash.take(12)}... from auto-select")
+        }
+
+        /**
          * Called when the current relay contact is deleted by the user.
          * Clears current state and triggers auto-selection of a new relay if enabled.
          */
@@ -698,9 +724,18 @@ class PropagationNodeManager
             }
             settingsRepository.saveManualPropagationNode(null)
 
-            // Find the best available propagation node
+            // Find the best available propagation node, respecting any exclusion
             val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
-            val nearest = propagationNodes.minByOrNull { it.hops }
+            val candidates = if (excludedRelayHash != null) {
+                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                if (filtered.size < propagationNodes.size) {
+                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                }
+                filtered
+            } else {
+                propagationNodes
+            }
+            val nearest = candidates.minByOrNull { it.hops }
 
             if (nearest != null) {
                 Log.i(TAG, "Auto-selecting new relay: ${nearest.peerName} at ${nearest.hops} hops")
@@ -858,8 +893,17 @@ class PropagationNodeManager
                         _selectionState.value = RelaySelectionState.SELECTING
                         Log.i(TAG, "Relay selection started (state=SELECTING)")
 
-                        // Find the nearest propagation node
-                        val nearest = propagationNodes.minByOrNull { it.hops }
+                        // Find the nearest propagation node, excluding any recently-cleared relay
+                        val candidates = if (excludedRelayHash != null) {
+                            val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                            if (filtered.size < propagationNodes.size) {
+                                Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                            }
+                            filtered
+                        } else {
+                            propagationNodes
+                        }
+                        val nearest = candidates.minByOrNull { it.hops }
                         if (nearest != null) {
                             Log.i(
                                 TAG,
@@ -873,21 +917,25 @@ class PropagationNodeManager
                                 nearest.publicKey,
                             )
 
-                            // Record for loop detection BEFORE transitioning to STABLE
+                            // Record for loop detection - may transition to BACKING_OFF
                             recordSelection(nearest.destinationHash, "auto-select")
 
-                            // Transition to STABLE and start cooldown
-                            _selectionState.value = RelaySelectionState.STABLE
-                            Log.i(TAG, "Relay selection complete (state=STABLE), cooldown=${selectionCooldownMs}ms")
+                            // Only transition to STABLE if loop detection didn't trigger BACKING_OFF
+                            if (_selectionState.value != RelaySelectionState.BACKING_OFF) {
+                                _selectionState.value = RelaySelectionState.STABLE
+                                Log.i(TAG, "Relay selection complete (state=STABLE), cooldown=${selectionCooldownMs}ms")
 
-                            // Start cooldown timer
-                            cooldownJob?.cancel() // Cancel any existing cooldown
-                            cooldownJob = scope.launch {
-                                delay(selectionCooldownMs)
-                                if (_selectionState.value == RelaySelectionState.STABLE) {
-                                    _selectionState.value = RelaySelectionState.IDLE
-                                    Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                // Start cooldown timer
+                                cooldownJob?.cancel() // Cancel any existing cooldown
+                                cooldownJob = scope.launch {
+                                    delay(selectionCooldownMs)
+                                    if (_selectionState.value == RelaySelectionState.STABLE) {
+                                        _selectionState.value = RelaySelectionState.IDLE
+                                        Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                    }
                                 }
+                            } else {
+                                Log.w(TAG, "Relay selection triggered backoff - skipping STABLE transition")
                             }
                         } else {
                             // No nearest found (shouldn't happen if list is non-empty, but safety)

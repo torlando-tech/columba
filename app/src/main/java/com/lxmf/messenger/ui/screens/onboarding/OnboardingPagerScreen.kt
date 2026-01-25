@@ -93,14 +93,6 @@ fun OnboardingPagerScreen(
             }
         }
 
-    // Battery optimization launcher
-    val batteryOptimizationLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult(),
-        ) {
-            viewModel.checkBatteryOptimizationStatus(context)
-        }
-
     // Check initial battery status
     LaunchedEffect(Unit) {
         viewModel.checkBatteryOptimizationStatus(context)
@@ -228,10 +220,10 @@ fun OnboardingPagerScreen(
                                 },
                                 onEnableBatteryOptimization = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                        val intent =
-                                            BatteryOptimizationManager
-                                                .createRequestExemptionIntent(context)
-                                        batteryOptimizationLauncher.launch(intent)
+                                        // Use safe method that handles OEM devices without direct exemption support
+                                        BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
+                                        // Manually trigger status check since we're not using launcher
+                                        viewModel.checkBatteryOptimizationStatus(context)
                                     }
                                 },
                                 onBack = {

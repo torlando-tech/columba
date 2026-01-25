@@ -59,6 +59,42 @@ object BatteryOptimizationManager {
     }
 
     /**
+     * Safely request battery optimization exemption with fallback for OEM devices.
+     *
+     * Some OEM devices (MEIZU, OnePlus, etc.) don't implement the
+     * ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS intent, causing crashes.
+     * This method tries the direct exemption request first, then falls back
+     * to the general battery settings screen if unavailable.
+     *
+     * @param context The context to launch the intent from
+     * @return true if an intent was successfully launched, false otherwise
+     */
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun requestBatteryOptimizationExemption(context: Context): Boolean {
+        return try {
+            // Try the direct exemption request first
+            val exemptionIntent = createRequestExemptionIntent(context)
+
+            // Check if an activity can handle this intent
+            val packageManager = context.packageManager
+            if (exemptionIntent.resolveActivity(packageManager) != null) {
+                context.startActivity(exemptionIntent)
+                Log.d(TAG, "Launched direct battery exemption request")
+                true
+            } else {
+                // OEM doesn't support direct exemption - fall back to settings
+                Log.w(TAG, "Device doesn't support REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, falling back to settings")
+                val settingsIntent = createBatterySettingsIntent()
+                context.startActivity(settingsIntent)
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch battery optimization intent", e)
+            false
+        }
+    }
+
+    /**
      * Check if we should prompt the user for battery exemption.
      * Returns true if:
      * - Android 6.0+ (Doze mode exists)

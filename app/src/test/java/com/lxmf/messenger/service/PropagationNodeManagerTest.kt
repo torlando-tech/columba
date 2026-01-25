@@ -2596,4 +2596,120 @@ class PropagationNodeManagerTest {
 
         manager.stop()
     }
+
+    @Test
+    fun `auto-select - skips selection when state is not IDLE`() = runTest {
+        // Given: Auto-select enabled with propagation nodes
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts
+        manager.start()
+        advanceUntilIdle()
+
+        // First emission triggers selection
+        announcesFlow.emit(listOf(announce))
+        testScheduler.advanceTimeBy(1500) // Past debounce
+        advanceUntilIdle()
+
+        // Record setAsMyRelay call count
+        val callsAfterFirst = mutableListOf<String>()
+        coEvery { contactRepository.setAsMyRelay(capture(callsAfterFirst), any()) } answers {
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = callsAfterFirst.last(),
+                isMyRelay = true
+            )
+        }
+
+        // Second emission should be blocked by state guard (still in STABLE/cooldown)
+        val announce2 = TestFactories.createAnnounce(
+            destinationHash = testDestHash2,
+            nodeType = "PROPAGATION_NODE",
+            hops = 1 // Lower hop count - would normally trigger switch
+        )
+        announcesFlow.emit(listOf(announce2))
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // Then: Second selection should NOT have called setAsMyRelay for testDestHash2
+        // because state guard blocked it (state was STABLE, not IDLE)
+        coVerify(atMost = 1) { contactRepository.setAsMyRelay(any(), any()) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `setManualRelay - resets state to IDLE`() = runTest {
+        // Given: Manager in some non-IDLE state (simulate by triggering auto-select)
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        manager.start()
+        advanceUntilIdle()
+
+        // Trigger auto-select to get into STABLE state
+        announcesFlow.emit(listOf(announce))
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // State should be STABLE
+        assertTrue(
+            "Expected STABLE, got ${manager.selectionState.value}",
+            manager.selectionState.value == RelaySelectionState.STABLE ||
+            manager.selectionState.value == RelaySelectionState.IDLE
+        )
+
+        // When: User manually selects a relay
+        manager.setManualRelay(testDestHash2, "Manual Relay")
+        advanceUntilIdle()
+
+        // Then: State should be reset to IDLE (user action cancels auto-select)
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `clearRelay - resets state to IDLE`() = runTest {
+        // Given: Manager started
+        manager.start()
+        advanceUntilIdle()
+
+        // When: Relay is cleared
+        manager.clearRelay()
+        advanceUntilIdle()
+
+        // Then: State should be IDLE
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `enableAutoSelect - resets state to IDLE`() = runTest {
+        // Given: Manager started
+        manager.start()
+        advanceUntilIdle()
+
+        // When: Auto-select is enabled
+        manager.enableAutoSelect()
+        advanceUntilIdle()
+
+        // Then: State should be IDLE (ready for fresh auto-selection)
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
 }

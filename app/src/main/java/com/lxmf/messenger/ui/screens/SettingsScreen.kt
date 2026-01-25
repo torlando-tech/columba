@@ -45,9 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
@@ -474,7 +474,7 @@ fun SettingsScreen(
 
         // Crash Report Dialog
         // Only show if activity is at least STARTED to prevent BadTokenException
-        val isLifecycleActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        val isLifecycleActive = LifecycleGuard.isActiveForWindows(lifecycleOwner)
         if (showCrashDialog && pendingCrashReport != null && isLifecycleActive) {
             CrashReportDialog(
                 crashReport = pendingCrashReport!!,

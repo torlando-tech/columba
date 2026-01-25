@@ -50,8 +50,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -666,8 +666,7 @@ fun ColumbaNavigation(
     LaunchedEffect(onboardingState.hasCompletedOnboarding, hasEnabledBluetoothInterface) {
         // Only show permission sheet if activity is still active (at least STARTED)
         // to prevent BadTokenException when showing ModalBottomSheet
-        val isActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-        if (isActive &&
+        if (LifecycleGuard.isActiveForWindows(lifecycleOwner) &&
             onboardingState.hasCompletedOnboarding &&
             hasEnabledBluetoothInterface &&
             !BlePermissionManager.hasAllPermissions(context)
@@ -1568,8 +1567,7 @@ fun ColumbaNavigation(
                 // Bluetooth permission bottom sheet
                 // Only show if activity is at least STARTED to prevent BadTokenException
                 // when ModalBottomSheet tries to create popup window with invalid token
-                val isLifecycleActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-                if (showPermissionBottomSheet && isLifecycleActive) {
+                if (showPermissionBottomSheet && LifecycleGuard.isActiveForWindows(lifecycleOwner)) {
                     val currentStatus =
                         if (BlePermissionManager.hasAllPermissions(context)) {
                             BlePermissionManager.PermissionStatus.Granted

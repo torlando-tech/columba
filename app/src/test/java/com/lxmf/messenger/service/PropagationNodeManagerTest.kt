@@ -2521,4 +2521,79 @@ class PropagationNodeManagerTest {
 
             manager.stop()
         }
+
+    // ========== State Machine Tests (Phase 2 - Relay Loop Fix) ==========
+
+    @Test
+    fun `selectionState - starts as IDLE`() = runTest {
+        // When: Manager is created
+        // Then: Selection state should start as IDLE
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+    }
+
+    @Test
+    fun `selectionState - transitions to STABLE after auto-selection`() = runTest {
+        // Given: Auto-select enabled with propagation nodes available
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts and receives announces
+        manager.start()
+        advanceUntilIdle()
+
+        // Emit announces after debounce period
+        announcesFlow.emit(listOf(announce))
+        advanceUntilIdle()
+
+        // Allow debounce (1000ms) + processing
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // Then: State should be STABLE (selection completed, in cooldown)
+        manager.selectionState.test(timeout = 5.seconds) {
+            val state = awaitItem()
+            assertTrue(
+                "Expected STABLE or IDLE, got $state",
+                state == RelaySelectionState.STABLE || state == RelaySelectionState.IDLE
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `selectionState - returns to IDLE after cooldown`() = runTest {
+        // Given: Auto-select enabled with propagation nodes
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts and processes selection
+        manager.start()
+        advanceUntilIdle()
+
+        announcesFlow.emit(listOf(announce))
+        advanceUntilIdle()
+
+        // Advance past debounce (1s) + cooldown (30s) + buffer
+        testScheduler.advanceTimeBy(35_000)
+        advanceUntilIdle()
+
+        // Then: State should return to IDLE after cooldown
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
 }

@@ -549,6 +549,13 @@ class PropagationNodeManager
             destinationHash: String,
             displayName: String,
         ) {
+            // Cancel any ongoing auto-selection - user action takes precedence
+            if (_selectionState.value != RelaySelectionState.IDLE) {
+                Log.i(TAG, "User manual selection - cancelling auto-select (state was ${_selectionState.value})")
+                cooldownJob?.cancel()
+            }
+            _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
+
             Log.i(TAG, "User manually selected relay: $displayName")
 
             // Disable auto-select and save manual selection
@@ -570,6 +577,10 @@ class PropagationNodeManager
          * Switch back to auto-selection mode.
          */
         suspend fun enableAutoSelect() {
+            // Reset state when enabling auto-select
+            cooldownJob?.cancel()
+            _selectionState.value = RelaySelectionState.IDLE
+
             Log.i(TAG, "Enabling auto-select for propagation node")
 
             settingsRepository.saveAutoSelectPropagationNode(true)
@@ -597,6 +608,10 @@ class PropagationNodeManager
          * Clear the current relay (no propagation node selected).
          */
         suspend fun clearRelay() {
+            // Cancel any ongoing auto-selection
+            cooldownJob?.cancel()
+            _selectionState.value = RelaySelectionState.IDLE
+
             Log.i(TAG, "Clearing relay selection")
 
             settingsRepository.saveManualPropagationNode(null)
@@ -616,6 +631,13 @@ class PropagationNodeManager
             destinationHash: String,
             nickname: String?,
         ) {
+            // Cancel any ongoing auto-selection - user action takes precedence
+            if (_selectionState.value != RelaySelectionState.IDLE) {
+                Log.i(TAG, "User manual relay by hash - cancelling auto-select (state was ${_selectionState.value})")
+                cooldownJob?.cancel()
+            }
+            _selectionState.value = RelaySelectionState.IDLE
+
             Log.i(TAG, "User manually entered relay hash: $destinationHash")
 
             // Disable auto-select and save manual selection

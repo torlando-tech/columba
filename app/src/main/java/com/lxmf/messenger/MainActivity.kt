@@ -50,6 +50,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -459,6 +461,7 @@ fun ColumbaNavigation(
     crashReportManager: CrashReportManager,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -661,7 +664,11 @@ fun ColumbaNavigation(
         initial = false,
     )
     LaunchedEffect(onboardingState.hasCompletedOnboarding, hasEnabledBluetoothInterface) {
-        if (onboardingState.hasCompletedOnboarding &&
+        // Only show permission sheet if activity is still active (at least STARTED)
+        // to prevent BadTokenException when showing ModalBottomSheet
+        val isActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        if (isActive &&
+            onboardingState.hasCompletedOnboarding &&
             hasEnabledBluetoothInterface &&
             !BlePermissionManager.hasAllPermissions(context)
         ) {
@@ -1559,7 +1566,10 @@ fun ColumbaNavigation(
                 }
 
                 // Bluetooth permission bottom sheet
-                if (showPermissionBottomSheet) {
+                // Only show if activity is at least STARTED to prevent BadTokenException
+                // when ModalBottomSheet tries to create popup window with invalid token
+                val isLifecycleActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                if (showPermissionBottomSheet && isLifecycleActive) {
                     val currentStatus =
                         if (BlePermissionManager.hasAllPermissions(context)) {
                             BlePermissionManager.PermissionStatus.Granted

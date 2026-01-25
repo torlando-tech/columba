@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
@@ -92,6 +94,7 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // Crash report dialog state
     var showCrashDialog by remember { mutableStateOf(false) }
@@ -470,7 +473,9 @@ fun SettingsScreen(
         }
 
         // Crash Report Dialog
-        if (showCrashDialog && pendingCrashReport != null) {
+        // Only show if activity is at least STARTED to prevent BadTokenException
+        val isLifecycleActive = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        if (showCrashDialog && pendingCrashReport != null && isLifecycleActive) {
             CrashReportDialog(
                 crashReport = pendingCrashReport!!,
                 onDismiss = {
@@ -515,7 +520,8 @@ fun SettingsScreen(
         }
 
         // Location Permission Bottom Sheet for Telemetry Collector
-        if (showTelemetryPermissionSheet) {
+        // Only show if activity is at least STARTED to prevent BadTokenException
+        if (showTelemetryPermissionSheet && isLifecycleActive) {
             LocationPermissionBottomSheet(
                 onDismiss = {
                     showTelemetryPermissionSheet = false

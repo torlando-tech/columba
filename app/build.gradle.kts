@@ -34,6 +34,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("com.chaquo.python")
+    id("io.sentry.android.gradle")
 }
 
 // Parse version from git tag (e.g., v1.2.3 -> versionName "1.2.3", versionCode calculated)
@@ -275,6 +276,25 @@ android {
     sourceSets {
         getByName("androidTest") {
             manifest.srcFile("src/androidTest/AndroidManifest.xml")
+        }
+    }
+}
+
+// Sentry Gradle Plugin configuration
+sentry {
+    // Disable auto-upload of ProGuard mappings (not using ProGuard obfuscation)
+    autoUploadProguardMapping.set(false)
+
+    // Enable source context for readable stack traces
+    includeSourceContext.set(true)
+
+    // Logcat integration - captures android.util.Log calls as breadcrumbs
+    tracingInstrumentation {
+        enabled.set(true)
+
+        logcat {
+            enabled.set(true)
+            minLevel.set(io.sentry.android.gradle.instrumentation.logcat.LogcatLevel.WARNING)
         }
     }
 }

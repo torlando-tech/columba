@@ -646,19 +646,39 @@ class ColumbaApplication : Application() {
                 // 2. Not a debug build (release/production only)
                 options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty() && !BuildConfig.DEBUG
 
-                // Performance Monitoring
-                options.tracesSampleRate = 0.1 // Sample 10% of transactions
-                options.profilesSampleRate = 0.05 // Profile 5% of sampled transactions
+                // Performance Monitoring - Tracing
+                options.tracesSampleRate = 1.0 // 100% during testing, reduce to 0.1-0.2 for production
+                options.profilesSampleRate = 0.1 // Profile 10% of sampled transactions
+
+                // Activity & Fragment tracing (enabled by default)
+                options.isEnableActivityLifecycleTracingAutoFinish = true
+
+                // User Interaction tracing (clicks, scrolls, swipes)
+                options.isEnableUserInteractionTracing = true
+                options.isEnableUserInteractionBreadcrumbs = true
+
+                // App Start performance tracking (cold/warm starts)
+                options.isEnableAppStartProfiling = true
 
                 // ANR Detection (Application Not Responding)
                 options.isAnrEnabled = true
-                options.anrTimeoutIntervalMillis = 5000 // 5 second ANR threshold (default)
-                options.isAttachAnrThreadDump = true // Include thread dump in ANR events
+                options.anrTimeoutIntervalMillis = 5000 // 5 second ANR threshold
+                options.isAttachAnrThreadDump = true
 
                 // Frame Tracking (slow/frozen frames)
                 options.isEnableFramesTracking = true
 
-                android.util.Log.d("ColumbaApplication", "Sentry initialized: enabled=${options.isEnabled}, hasDsn=${BuildConfig.SENTRY_DSN.isNotEmpty()}")
+                // Breadcrumbs for debugging
+                options.isEnableActivityLifecycleBreadcrumbs = true
+                options.isEnableAppComponentBreadcrumbs = true
+                options.isEnableSystemEventBreadcrumbs = true
+
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "Sentry initialized: enabled=${options.isEnabled}, " +
+                        "tracing=${options.tracesSampleRate}, " +
+                        "hasDsn=${BuildConfig.SENTRY_DSN.isNotEmpty()}",
+                )
             }
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "Failed to initialize Sentry", e)

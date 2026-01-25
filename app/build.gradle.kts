@@ -34,6 +34,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("com.chaquo.python")
+    id("io.sentry.android.gradle")
 }
 
 // Parse version from git tag (e.g., v1.2.3 -> versionName "1.2.3", versionCode calculated)
@@ -279,6 +280,30 @@ android {
     }
 }
 
+// Sentry Gradle Plugin configuration
+sentry {
+    // Auth token from environment (set in CI via GitHub secrets)
+    authToken.set(System.getenv("SENTRY_AUTH_TOKEN") ?: "")
+    org.set(System.getenv("SENTRY_ORG") ?: "")
+    projectName.set(System.getenv("SENTRY_PROJECT") ?: "columba")
+
+    // Enable uploads only when auth token is available
+    val hasAuth = !System.getenv("SENTRY_AUTH_TOKEN").isNullOrEmpty()
+    autoUploadProguardMapping.set(hasAuth)
+    autoUploadSourceContext.set(hasAuth)
+    autoUploadNativeSymbols.set(false) // No native code
+
+    // Logcat integration - captures android.util.Log calls as breadcrumbs
+    tracingInstrumentation {
+        enabled.set(true)
+
+        logcat {
+            enabled.set(true)
+            minLevel.set(io.sentry.android.gradle.instrumentation.logcat.LogcatLevel.WARNING)
+        }
+    }
+}
+
 chaquopy {
     defaultConfig {
         version = "3.11"
@@ -367,7 +392,7 @@ dependencies {
 
     // Crash Reporting - GlitchTip (Sentry-compatible)
     // Phase 4 Task 4.2: Production Observability
-    implementation("io.sentry:sentry-android:7.3.0")
+    implementation("io.sentry:sentry-android:8.29.0")
 
     // QR Code & Camera
     implementation(libs.zxing.core)

@@ -150,6 +150,9 @@ jobs:
           RELEASE_KEY_PASSWORD: ""
           # Empty DSN for CI builds (Sentry not configured in CI)
           SENTRY_DSN: ""
+          # Sentry auth for ProGuard mapping uploads (optional - uploads if available)
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
 
       - name: Verify Python-Kotlin bridge methods are not obfuscated
         run: |

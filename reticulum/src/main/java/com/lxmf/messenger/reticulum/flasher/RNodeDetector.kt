@@ -262,6 +262,27 @@ class RNodeDetector(
     }
 
     /**
+     * Save the current configuration to persistent storage.
+     * This sends CMD_CONF_SAVE to make radio config changes persist across reboots.
+     */
+    suspend fun saveConfig(): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Sending config save command")
+        val frame = KISSCodec.createFrame(
+            RNodeConstants.CMD_CONF_SAVE,
+            byteArrayOf(0x00),
+        )
+        val result = usbBridge.write(frame) > 0
+        if (result) {
+            // Wait for save to complete
+            delay(500)
+            Log.d(TAG, "Config save command sent successfully")
+        } else {
+            Log.e(TAG, "Failed to send config save command")
+        }
+        result
+    }
+
+    /**
      * Indicate to the RNode firmware that a firmware update is about to begin.
      *
      * This command tells the RNode firmware to prepare for an update. For ESP32 devices,
@@ -463,7 +484,16 @@ class RNodeDetector(
      * Complete provisioning flow: provision EEPROM and set firmware hash.
      * This should be called after flashing firmware and resetting the device.
      *
+     * Note: This does NOT configure TNC mode (radio parameters saved to EEPROM).
+     * The device will show "Missing Config" after provisioning, which is EXPECTED
+     * and CORRECT for devices used with Reticulum apps (Columba, Sideband, MeshChat).
+     * These apps send radio parameters at runtime via KISS commands.
+     *
+     * TNC mode is only needed for standalone KISS TNC operation with amateur radio software.
+     * Use enableTncMode() separately if TNC mode is specifically required.
+     *
      * @param board The board type being provisioned
+     * @param band The frequency band for this device (used for model code in EEPROM)
      * @param providedFirmwareHash Optional pre-calculated firmware hash from the binary file.
      *        If provided, this hash will be used instead of querying the device.
      *        The device firmware often returns zeros for the hash, so this should be
@@ -472,15 +502,16 @@ class RNodeDetector(
      */
     suspend fun provisionAndSetFirmwareHash(
         board: RNodeBoard,
+        band: FrequencyBand = FrequencyBand.BAND_868_915,
         providedFirmwareHash: ByteArray? = null,
     ): Boolean = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Starting full provisioning for ${board.displayName} (hash provided: ${providedFirmwareHash != null})")
+        Log.i(TAG, "Starting full provisioning for ${board.displayName} band=${band.displayName} (hash provided: ${providedFirmwareHash != null})")
 
-        // Get product code and model from board
+        // Get product code and model from board and band
         val product = board.productCode
-        val model = getDefaultModelForBoard(board)
+        val model = getModelForBoardAndBand(board, band)
 
-        // Provision EEPROM
+        // Provision EEPROM (device info, checksum, signature, lock byte)
         if (!provisionDevice(product, model)) {
             Log.e(TAG, "EEPROM provisioning failed")
             return@withContext false
@@ -488,6 +519,10 @@ class RNodeDetector(
 
         // Wait a moment for EEPROM writes to settle
         delay(500)
+
+        // Note: We intentionally do NOT configure TNC mode (radio config).
+        // The device will display "Missing Config" which is normal for Reticulum apps.
+        // Columba/Sideband/MeshChat send radio parameters at runtime.
 
         // Use provided hash or try to get from device (may return zeros)
         val firmwareHash = providedFirmwareHash ?: run {
@@ -503,7 +538,7 @@ class RNodeDetector(
         // Check if hash is all zeros (indicates device doesn't calculate hash)
         val isAllZeros = firmwareHash.all { it == 0.toByte() }
         if (isAllZeros) {
-            Log.w(TAG, "Firmware hash is all zeros - device may show 'Missing Config' after provisioning")
+            Log.w(TAG, "Firmware hash is all zeros - this is unexpected, hash should be pre-calculated from firmware binary")
         } else {
             Log.d(TAG, "Using firmware hash: ${firmwareHash.joinToString("") { String.format("%02x", it.toInt() and 0xFF) }}")
         }
@@ -516,19 +551,188 @@ class RNodeDetector(
         // Wait for hash write
         delay(500)
 
-        Log.i(TAG, "Provisioning completed successfully")
+        Log.i(TAG, "Provisioning completed successfully (device will show 'Missing Config' - this is normal)")
         true
     }
 
     /**
-     * Get the default model code for a board (assumes 868/915 MHz band).
+     * Enable TNC mode with radio configuration saved to EEPROM.
+     *
+     * TNC mode allows the RNode to operate as a standalone KISS TNC, which is useful
+     * for amateur radio applications. When TNC mode is enabled, the device will display
+     * its configured frequency instead of "Missing Config".
+     *
+     * IMPORTANT: TNC mode should be DISABLED when using the RNode with Reticulum apps
+     * like Columba, Sideband, or MeshChat. These apps send radio parameters at runtime
+     * and expect the device to be in "Normal (host-controlled)" mode.
+     *
+     * The RNode firmware expects radio config to be set via KISS commands (CMD_FREQUENCY,
+     * CMD_BANDWIDTH, etc.) and then saved with CMD_CONF_SAVE.
+     *
+     * @param band The frequency band to configure
+     * @param frequency Optional specific frequency in Hz (defaults based on band)
+     * @param bandwidth Bandwidth in Hz (default 125000 = 125 kHz)
+     * @param spreadingFactor LoRa spreading factor 7-12 (default 8)
+     * @param codingRate LoRa coding rate 5-8 (default 5 = 4/5)
+     * @param txPower Transmit power in dBm (default 17)
+     * @return true if all commands succeeded
      */
-    private fun getDefaultModelForBoard(board: RNodeBoard): Byte {
-        // Most boards use model 0x11 for 868/915 MHz
-        // Model 0x12 is for 433 MHz variants
-        return when (board) {
-            RNodeBoard.RAK4631 -> RNodeConstants.MODEL_11
-            else -> 0x11 // Default to 868/915 MHz model
+    @Suppress("MagicNumber")
+    suspend fun enableTncMode(
+        band: FrequencyBand,
+        frequency: Int? = null,
+        bandwidth: Int = 125000,
+        spreadingFactor: Int = 8,
+        codingRate: Int = 5,
+        txPower: Int = 17,
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Enabling TNC mode for band: ${band.displayName}")
+
+        try {
+            // Use provided frequency or default based on band
+            val actualFrequency = frequency ?: when (band) {
+                FrequencyBand.BAND_868_915 -> 868000000 // 868 MHz (Europe default)
+                FrequencyBand.BAND_433 -> 433775000 // 433.775 MHz
+                FrequencyBand.UNKNOWN -> 868000000 // Default to 868 MHz
+            }
+
+            // Set frequency via KISS command (CMD_FREQUENCY 0x01)
+            Log.d(TAG, "Setting frequency: $actualFrequency Hz")
+            if (!setRadioFrequency(actualFrequency)) return@withContext false
+
+            // Set bandwidth via KISS command (CMD_BANDWIDTH 0x02)
+            Log.d(TAG, "Setting bandwidth: $bandwidth Hz")
+            if (!setRadioBandwidth(bandwidth)) return@withContext false
+
+            // Set TX power via KISS command (CMD_TXPOWER 0x03)
+            Log.d(TAG, "Setting TX power: $txPower dBm")
+            if (!setRadioTxPower(txPower)) return@withContext false
+
+            // Set spreading factor via KISS command (CMD_SF 0x04)
+            Log.d(TAG, "Setting spreading factor: $spreadingFactor")
+            if (!setRadioSpreadingFactor(spreadingFactor)) return@withContext false
+
+            // Set coding rate via KISS command (CMD_CR 0x05)
+            Log.d(TAG, "Setting coding rate: $codingRate")
+            if (!setRadioCodingRate(codingRate)) return@withContext false
+
+            // Save config to EEPROM (CMD_CONF_SAVE) - this persists the settings
+            Log.d(TAG, "Saving configuration to EEPROM...")
+            if (!saveConfig()) {
+                Log.w(TAG, "Config save command failed")
+                return@withContext false
+            }
+
+            Log.i(TAG, "TNC mode enabled successfully")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable TNC mode", e)
+            false
+        }
+    }
+
+    /**
+     * Disable TNC mode by deleting saved radio configuration from EEPROM.
+     *
+     * This returns the device to "Normal (host-controlled)" mode where it expects
+     * the host application to send radio parameters at runtime. The device will
+     * display "Missing Config" after this, which is normal.
+     *
+     * Use this to switch from TNC mode back to normal mode for use with Reticulum apps.
+     *
+     * @return true if the command succeeded
+     */
+    suspend fun disableTncMode(): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Disabling TNC mode")
+        try {
+            val frame = KISSCodec.createFrame(RNodeConstants.CMD_CONF_DELETE, byteArrayOf(0x00))
+            val result = usbBridge.write(frame) > 0
+            if (result) {
+                delay(500)
+                Log.i(TAG, "TNC mode disabled successfully")
+            } else {
+                Log.e(TAG, "Failed to send config delete command")
+            }
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to disable TNC mode", e)
+            false
+        }
+    }
+
+    /**
+     * Set radio frequency via KISS command.
+     */
+    private suspend fun setRadioFrequency(frequency: Int): Boolean {
+        val data = intToBytesBigEndian(frequency)
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_FREQUENCY, data)
+        val result = usbBridge.write(frame) > 0
+        if (result) delay(100)
+        return result
+    }
+
+    /**
+     * Set radio bandwidth via KISS command.
+     */
+    private suspend fun setRadioBandwidth(bandwidth: Int): Boolean {
+        val data = intToBytesBigEndian(bandwidth)
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_BANDWIDTH, data)
+        val result = usbBridge.write(frame) > 0
+        if (result) delay(100)
+        return result
+    }
+
+    /**
+     * Set radio TX power via KISS command.
+     */
+    private suspend fun setRadioTxPower(txPower: Int): Boolean {
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_TXPOWER, byteArrayOf(txPower.toByte()))
+        val result = usbBridge.write(frame) > 0
+        if (result) delay(100)
+        return result
+    }
+
+    /**
+     * Set radio spreading factor via KISS command.
+     */
+    private suspend fun setRadioSpreadingFactor(sf: Int): Boolean {
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_SF, byteArrayOf(sf.toByte()))
+        val result = usbBridge.write(frame) > 0
+        if (result) delay(100)
+        return result
+    }
+
+    /**
+     * Set radio coding rate via KISS command.
+     */
+    private suspend fun setRadioCodingRate(cr: Int): Boolean {
+        val frame = KISSCodec.createFrame(RNodeConstants.CMD_CR, byteArrayOf(cr.toByte()))
+        val result = usbBridge.write(frame) > 0
+        if (result) delay(100)
+        return result
+    }
+
+    /**
+     * Get the model code for a board and frequency band combination.
+     *
+     * The model byte encodes the frequency band variant:
+     * - 0xX1, 0xX4, 0xX5: 868/915 MHz variants
+     * - 0xX2, 0xX6, 0xX7: 433 MHz variants
+     *
+     * @param board The board type
+     * @param band The frequency band
+     * @return The model code byte
+     */
+    private fun getModelForBoardAndBand(board: RNodeBoard, band: FrequencyBand): Byte {
+        // Model codes follow a pattern where the lower nibble indicates frequency:
+        // 0x11 = 868/915 MHz (SX127x style)
+        // 0x12 = 433 MHz (SX127x style)
+        // 0x14 = 868/915 MHz (SX126x style, higher power)
+        // 0x16 = 433 MHz (SX126x style, higher power)
+        return when (band) {
+            FrequencyBand.BAND_868_915 -> 0x11.toByte()
+            FrequencyBand.BAND_433 -> 0x12.toByte()
+            FrequencyBand.UNKNOWN -> 0x11.toByte() // Default to 868/915
         }
     }
 

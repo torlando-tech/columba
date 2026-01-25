@@ -614,12 +614,14 @@ class RNodeFlasher(
      *
      * @param deviceId USB device ID
      * @param board The board type that was flashed
+     * @param band The frequency band for this device
      * @param firmwareHash The pre-calculated SHA256 hash of the firmware binary (optional)
      * @return true if provisioning succeeded
      */
     suspend fun provisionDevice(
         deviceId: Int,
         board: RNodeBoard,
+        band: FrequencyBand = FrequencyBand.BAND_868_915,
         firmwareHash: ByteArray? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         _flashState.value = FlashState.Provisioning("Waiting for device...")
@@ -682,10 +684,15 @@ class RNodeFlasher(
             val deviceInfo = detector.getDeviceInfo()
 
             if (deviceInfo?.isProvisioned == true) {
-                Log.i(TAG, "Device is already provisioned")
-                _flashState.value = FlashState.Provisioning("Device already provisioned, setting firmware hash...")
+                // Device is already provisioned - just set firmware hash if needed
+                // Note: "Missing Config" display is normal for host-controlled mode (Reticulum apps)
+                Log.i(TAG, "Device is already provisioned (configured: ${deviceInfo.isConfigured})")
+                if (!deviceInfo.isConfigured) {
+                    Log.i(TAG, "Device shows 'Missing Config' - this is normal for Reticulum apps")
+                }
 
-                // Use provided hash, or fall back to getting from device (which may be zeros)
+                // Set firmware hash
+                _flashState.value = FlashState.Provisioning("Setting firmware hash...")
                 val hashToSet = firmwareHash ?: detector.getFirmwareHash()
                 if (hashToSet != null) {
                     detector.setFirmwareHash(hashToSet)
@@ -698,7 +705,7 @@ class RNodeFlasher(
 
             // Provision EEPROM
             _flashState.value = FlashState.Provisioning("Writing device information...")
-            if (!detector.provisionAndSetFirmwareHash(board, firmwareHash)) {
+            if (!detector.provisionAndSetFirmwareHash(board, band, firmwareHash)) {
                 Log.e(TAG, "Provisioning failed")
                 _flashState.value = FlashState.Error("Failed to provision device EEPROM")
                 usbBridge.disconnect()
@@ -753,15 +760,17 @@ class RNodeFlasher(
      *
      * @param deviceId USB device ID
      * @param board The board type that was flashed
+     * @param band The frequency band for this device
      * @param firmwareHash The pre-calculated SHA256 hash of the firmware binary (optional)
      */
     suspend fun onDeviceManuallyReset(
         deviceId: Int,
         board: RNodeBoard,
+        band: FrequencyBand = FrequencyBand.BAND_868_915,
         firmwareHash: ByteArray? = null,
     ): Boolean {
-        Log.i(TAG, "Device manually reset, starting provisioning (hash provided: ${firmwareHash != null})")
-        return provisionDevice(deviceId, board, firmwareHash)
+        Log.i(TAG, "Device manually reset, starting provisioning (band=${band.displayName}, hash provided: ${firmwareHash != null})")
+        return provisionDevice(deviceId, board, band, firmwareHash)
     }
 
     /**

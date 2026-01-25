@@ -95,6 +95,9 @@ class ColumbaApplication : Application() {
         // This ensures we capture crashes from any subsequent initialization
         crashReportManager.installCrashHandler()
 
+        // Initialize Sentry for crash reporting and performance monitoring
+        initializeSentry()
+
         // Phase 4 Task 4.1: StrictMode for debug builds
         // Detect threading violations during development
         if (BuildConfig.DEBUG) {
@@ -625,6 +628,40 @@ class ColumbaApplication : Application() {
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error restoring peer identities", e)
             }
+        }
+    }
+
+    /**
+     * Initialize Sentry SDK for crash reporting and performance monitoring.
+     */
+    private fun initializeSentry() {
+        try {
+            io.sentry.android.core.SentryAndroid.init(this) { options ->
+                // DSN from BuildConfig - set via SENTRY_DSN environment variable at build time
+                // Empty DSN = Sentry disabled (used by noSentry build variant in Phase 2)
+                options.dsn = BuildConfig.SENTRY_DSN
+
+                // Sentry is enabled when:
+                // 1. DSN is provided (not empty)
+                // 2. Not a debug build (release/production only)
+                options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty() && !BuildConfig.DEBUG
+
+                // Performance Monitoring
+                options.tracesSampleRate = 0.1  // Sample 10% of transactions
+                options.profilesSampleRate = 0.05  // Profile 5% of sampled transactions
+
+                // ANR Detection (Application Not Responding)
+                options.isAnrEnabled = true
+                options.anrTimeoutIntervalMillis = 5000  // 5 second ANR threshold (default)
+                options.isAttachAnrThreadDump = true  // Include thread dump in ANR events
+
+                // Frame Tracking (slow/frozen frames)
+                options.isEnableFramesTracking = true
+
+                android.util.Log.d("ColumbaApplication", "Sentry initialized: enabled=${options.isEnabled}, hasDsn=${BuildConfig.SENTRY_DSN.isNotEmpty()}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ColumbaApplication", "Failed to initialize Sentry", e)
         }
     }
 }

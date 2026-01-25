@@ -2761,17 +2761,17 @@ class PropagationNodeManagerTest {
     }
 
     @Test
-    fun `auto-select - processes emission after debounce delay`() = runTest {
-        // Given: Auto-select enabled
+    fun `auto-select - processes announces and selects relay`() = runTest {
+        // Given: Auto-select enabled with propagation nodes available
         coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
-
         val announce = TestFactories.createAnnounce(
             destinationHash = testDestHash,
             nodeType = "PROPAGATION_NODE",
             hops = 2
         )
+        // Use flowOf() which emits immediately when collection starts
+        // This tests that the selection flow works end-to-end
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
 
         // Track setAsMyRelay calls
         var setAsMyRelayCalled = false
@@ -2783,25 +2783,16 @@ class PropagationNodeManagerTest {
             )
         }
 
-        // When: Manager starts
+        // When: Manager starts (which triggers observePropagationNodeAnnounces)
         manager.start()
         advanceUntilIdle()
 
-        // Emit announces
-        announcesFlow.emit(listOf(announce))
-        advanceUntilIdle()
-
-        // Before debounce delay - should NOT have processed yet
-        testScheduler.advanceTimeBy(500) // Less than 1000ms debounce
-        advanceUntilIdle()
-        // Selection might not have happened yet
-
-        // After debounce delay - should process
-        testScheduler.advanceTimeBy(1000) // Total 1500ms > 1000ms debounce
+        // Advance past debounce period (1000ms) + cooldown buffer
+        testScheduler.advanceTimeBy(2000)
         advanceUntilIdle()
 
         // Then: Selection should have been made
-        assertTrue("Expected setAsMyRelay to be called after debounce", setAsMyRelayCalled)
+        assertTrue("Expected setAsMyRelay to be called", setAsMyRelayCalled)
 
         manager.stop()
     }

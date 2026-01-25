@@ -42,9 +42,10 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
-          echo "✓ Release APK built successfully"
+          ./gradlew :app:assembleSentryRelease :app:assembleNoSentryRelease --no-daemon --stacktrace
+          echo "✓ Release APKs built successfully"
 
       - name: Extract signing certificate fingerprints
         id: cert
@@ -64,27 +65,31 @@ jobs:
           echo "sha1=$SHA1" >> $GITHUB_OUTPUT
           echo "✓ Extracted certificate fingerprints"
 
-      - name: Rename APK with version
+      - name: Rename APKs with version
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk "columba-${VERSION}.apk"
-          echo "✓ Renamed APK to columba-${VERSION}.apk"
+          cp app/build/outputs/apk/sentry/release/app-sentry-release.apk "columba-${VERSION}.apk"
+          cp app/build/outputs/apk/noSentry/release/app-noSentry-release.apk "columba-${VERSION}-no-sentry.apk"
+          echo "✓ Renamed APKs"
 
-      - name: Generate SHA256 checksum
+      - name: Generate SHA256 checksums
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           sha256sum "columba-${VERSION}.apk" > "columba-${VERSION}.apk.sha256"
-          echo "✓ Generated SHA256 checksum"
+          sha256sum "columba-${VERSION}-no-sentry.apk" > "columba-${VERSION}-no-sentry.apk.sha256"
+          echo "✓ Generated SHA256 checksums"
 
-      - name: Read SHA256 checksum
+      - name: Read SHA256 checksums
         id: sha256
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          SHA256=$(cat "columba-${VERSION}.apk.sha256")
-          echo "checksum=$SHA256" >> $GITHUB_OUTPUT
+          SHA256_SENTRY=$(cat "columba-${VERSION}.apk.sha256")
+          SHA256_NOSENTRY=$(cat "columba-${VERSION}-no-sentry.apk.sha256")
+          echo "checksum_sentry=$SHA256_SENTRY" >> $GITHUB_OUTPUT
+          echo "checksum_nosentry=$SHA256_NOSENTRY" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -92,6 +97,8 @@ jobs:
           files: |
             columba-${{ steps.version.outputs.version }}.apk
             columba-${{ steps.version.outputs.version }}.apk.sha256
+            columba-${{ steps.version.outputs.version }}-no-sentry.apk
+            columba-${{ steps.version.outputs.version }}-no-sentry.apk.sha256
           draft: true
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true
@@ -99,7 +106,11 @@ jobs:
             ## Columba ${{ steps.version.outputs.version }}
 
             ### Installation
-            Download the APK below and install on your Android device.
+            Download one of the APKs below and install on your Android device.
+
+            **Two variants available:**
+            - `columba-${{ steps.version.outputs.version }}.apk` - Standard build with crash reporting (Sentry)
+            - `columba-${{ steps.version.outputs.version }}-no-sentry.apk` - Privacy-focused build without telemetry
 
             ### Verification
             See [SECURITY.md](https://github.com/torlando-tech/columba/blob/main/SECURITY.md) for verification instructions.
@@ -110,9 +121,10 @@ jobs:
             SHA-1:   ${{ steps.cert.outputs.sha1 }}
             ```
 
-            **SHA256 Checksum:**
+            **SHA256 Checksums:**
             ```
-            ${{ steps.sha256.outputs.checksum }}
+            Standard build:     ${{ steps.sha256.outputs.checksum_sentry }}
+            No-telemetry build: ${{ steps.sha256.outputs.checksum_nosentry }}
             ```
 
             ### What's Changed
@@ -120,9 +132,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload APK as workflow artifact
+      - name: Upload APKs as workflow artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: columba-${{ steps.version.outputs.version }}-apk
-          path: columba-${{ steps.version.outputs.version }}.apk
+          name: columba-${{ steps.version.outputs.version }}-apks
+          path: |
+            columba-${{ steps.version.outputs.version }}.apk
+            columba-${{ steps.version.outputs.version }}-no-sentry.apk
           retention-days: 30

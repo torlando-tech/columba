@@ -113,6 +113,7 @@ android {
 
         buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
+        buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -39,10 +39,12 @@ Plans:
   1. User sees relay selected once and it stays selected (no repeated add/remove in logs)
   2. User can manually unset relay, and system re-selects a relay exactly once (not in a loop)
   3. Relay selection logs show clean single-selection behavior, not 40+ cycles
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md - Add state machine to PropagationNodeManager (IDLE/SELECTING/STABLE)
+- [ ] 02-02-PLAN.md - Add loop detection, backoff, and Sentry diagnostics (depends on 02-01)
+- [ ] 02-03-PLAN.md - Add unit tests for state machine (depends on 02-01)
 
 ## Progress
 
@@ -52,4 +54,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
-| 2. Relay Loop Fix | 0/TBD | Not started | - |
+| 2. Relay Loop Fix | 0/3 | Not started | - |

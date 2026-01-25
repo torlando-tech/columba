@@ -805,25 +805,31 @@ class PropagationNodeManager
          */
         private suspend fun recordSelection(destinationHash: String, reason: String) {
             val now = System.currentTimeMillis()
-
-            // Record this selection
-            recentSelections.addLast(destinationHash to now)
-
-            // Keep only last 10 entries to bound memory
-            while (recentSelections.size > 10) {
-                recentSelections.removeFirst()
-            }
-
-            // Count selections within the loop detection window
             val windowStart = now - loopWindowMs
-            val recentCount = recentSelections.count { it.second > windowStart }
+
+            // Synchronize deque access — callers run on both Dispatchers.Main and Default
+            val (recentCount, hashes) = synchronized(recentSelections) {
+                recentSelections.addLast(destinationHash to now)
+
+                // Keep only last 10 entries to bound memory
+                while (recentSelections.size > 10) {
+                    recentSelections.removeFirst()
+                }
+
+                val count = recentSelections.count { it.second > windowStart }
+                val hashList = if (count >= loopThresholdCount) {
+                    recentSelections
+                        .filter { it.second > windowStart }
+                        .map { it.first.take(12) }
+                } else {
+                    emptyList()
+                }
+                count to hashList
+            }
 
             Log.i(TAG, "Relay selected: ${destinationHash.take(12)}... ($reason) [${recentCount}x in last 60s]")
 
             if (recentCount >= loopThresholdCount) {
-                val hashes = recentSelections
-                    .filter { it.second > windowStart }
-                    .map { it.first.take(12) }
 
                 Log.w(TAG, "⚠️ Relay loop detected! $recentCount selections in 60s: $hashes")
 

@@ -43,6 +43,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         run: |
           ./gradlew :app:assembleSentryRelease :app:assembleNoSentryRelease --no-daemon --stacktrace
           echo "✓ Release APKs built successfully"

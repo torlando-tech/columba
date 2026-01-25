@@ -282,10 +282,16 @@ android {
 
 // Sentry Gradle Plugin configuration
 sentry {
-    // Disable all auto-upload features (no Sentry auth in CI)
-    autoUploadProguardMapping.set(false)
-    autoUploadSourceContext.set(false)
-    autoUploadNativeSymbols.set(false)
+    // Auth token from environment (set in CI via GitHub secrets)
+    authToken.set(System.getenv("SENTRY_AUTH_TOKEN") ?: "")
+    org.set(System.getenv("SENTRY_ORG") ?: "")
+    projectName.set(System.getenv("SENTRY_PROJECT") ?: "columba")
+
+    // Enable uploads only when auth token is available
+    val hasAuth = !System.getenv("SENTRY_AUTH_TOKEN").isNullOrEmpty()
+    autoUploadProguardMapping.set(hasAuth)
+    autoUploadSourceContext.set(hasAuth)
+    autoUploadNativeSymbols.set(false) // No native code
 
     // Logcat integration - captures android.util.Log calls as breadcrumbs
     tracingInstrumentation {

@@ -121,9 +121,8 @@ android {
         }
 
         ndk {
-            // Python 3.11 supports 64-bit ABIs
-            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
-            abiFilters += listOf("arm64-v8a")
+            // 64-bit ABIs supported by Python 3.11 + pycodec2 wheels
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -250,6 +249,17 @@ android {
         }
     }
 
+    // Per-ABI APK splits: produces separate APKs for each architecture
+    // Keeps download size small (~60MB each) instead of one fat APK
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = true // Fallback APK containing all ABIs
+        }
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -276,6 +286,19 @@ android {
     sourceSets {
         getByName("androidTest") {
             manifest.srcFile("src/androidTest/AndroidManifest.xml")
+        }
+    }
+}
+
+// Assign unique version codes per ABI so app stores can serve the right APK.
+// Universal APK gets base versionCode; per-ABI APKs get (abiMultiplier * 1000 + base).
+val abiVersionCodes = mapOf("arm64-v8a" to 1, "x86_64" to 2)
+android.applicationVariants.all {
+    outputs.all {
+        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+        val abiFilter = output.getFilter(com.android.build.OutputFile.ABI)
+        if (abiFilter != null) {
+            output.versionCodeOverride = (abiVersionCodes[abiFilter] ?: 0) * 1000 + (defaultConfig.versionCode ?: 0)
         }
     }
 }
@@ -309,11 +332,13 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Install pre-built pycodec2 wheel for arm64
+            // Pre-built pycodec2 wheels for each ABI live in wheels/pycodec2/.
+            // --find-links lets pip auto-select the matching platform wheel.
             // Uses pure Python ctypes wrapper (not Cython) to avoid Android linker namespace
             // symbol resolution issues with Python C API symbols like PyExc_RuntimeError
             // audioop is built-in on Python 3.11, no external wheel needed
-            install("https://github.com/torlando-tech/android-python-wheels/releases/download/v1.1.0/pycodec2-4.1.1-cp311-cp311-android_21_arm64_v8a.whl")
+            options("--find-links", file("../wheels/pycodec2").absolutePath)
+            install("pycodec2==4.1.1")
 
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")

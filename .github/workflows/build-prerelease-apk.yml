@@ -93,30 +93,40 @@ jobs:
           TAG="prerelease-${{ steps.timestamp.outputs.timestamp }}-${{ steps.sha.outputs.sha }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Find APK
-        id: apk
+      - name: Rename APKs by architecture
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "path=$APK_PATH" >> $GITHUB_OUTPUT
-          echo "name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+          APK_DIR="app/build/outputs/apk"
+          # Find all release APKs across flavors
+          for apk in $(find "$APK_DIR" -name "*-release.apk" -type f); do
+            filename=$(basename "$apk")
+            if echo "$filename" | grep -q "arm64-v8a"; then
+              cp "$apk" "columba-arm64.apk"
+            elif echo "$filename" | grep -q "x86_64"; then
+              cp "$apk" "columba-x86_64.apk"
+            elif echo "$filename" | grep -q "universal"; then
+              cp "$apk" "columba-universal.apk"
+            fi
+          done
+          ls -la columba-*.apk
+          echo "✓ Renamed APKs"
 
-      - name: Rename APK
-        env:
-          APK_PATH: ${{ steps.apk.outputs.path }}
+      - name: Generate SHA256 checksums
         run: |
-          cp "$APK_PATH" columba.apk
-          echo "✓ Renamed APK to columba.apk"
+          for apk in columba-*.apk; do
+            sha256sum "$apk" > "${apk}.sha256"
+          done
+          echo "✓ Generated SHA256 checksums"
 
-      - name: Generate SHA256 checksum
-        run: |
-          sha256sum columba.apk > columba.apk.sha256
-          echo "✓ Generated SHA256 checksum"
-
-      - name: Read SHA256 checksum
+      - name: Read SHA256 checksums
         id: sha256
         run: |
-          SHA256=$(cat columba.apk.sha256)
-          echo "checksum=$SHA256" >> $GITHUB_OUTPUT
+          CHECKSUMS=""
+          for checksum_file in columba-*.apk.sha256; do
+            CHECKSUMS="${CHECKSUMS}$(cat "$checksum_file")\n"
+          done
+          echo "checksums<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHECKSUMS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Determine release name
         id: release_name
@@ -144,11 +154,16 @@ jobs:
             **Commit:** ${{ github.sha }}
             **Built:** ${{ steps.timestamp.outputs.timestamp }}
 
-            This is a production-ready pre-release APK built with:
+            This is a production-ready pre-release build with:
             - Release build configuration
             - ProGuard optimization enabled
             - Code minification enabled
             - No debug features
+
+            **APKs by architecture:**
+            - `columba-arm64.apk` — Most Android phones (arm64-v8a)
+            - `columba-x86_64.apk` — Chromebooks & emulators (x86_64)
+            - `columba-universal.apk` — Universal fallback (all architectures)
 
             ${{ github.event.inputs.release_notes }}
 
@@ -161,26 +176,26 @@ jobs:
             SHA-1:   ${{ steps.cert.outputs.sha1 }}
             ```
 
-            **SHA256 Checksum:**
+            **SHA256 Checksums:**
             ```
-            ${{ steps.sha256.outputs.checksum }}
+            ${{ steps.sha256.outputs.checksums }}
             ```
 
             ### Installation
-            Download the APK below and install it on your Android device.
+            Download the APK matching your device and install it.
 
             **Note:** You may need to enable "Install from Unknown Sources" in your device settings.
           files: |
-            columba.apk
-            columba.apk.sha256
+            columba-*.apk
+            columba-*.apk.sha256
           draft: false
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload APK as artifact
+      - name: Upload APKs as artifacts
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: app-release-${{ steps.sha.outputs.sha }}
-          path: columba.apk
+          path: columba-*.apk
           retention-days: 90

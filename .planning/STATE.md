@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 ## Current Position
 
 Phase: 2 of 2 (Relay Selection Loop Fixes)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-01-25 — Completed 02-01-PLAN.md (State machine for relay selection)
+Last activity: 2026-01-25 — Completed 02-02-PLAN.md (Loop detection and exponential backoff)
 
-Progress: [████████░░] 67% (4/6 total plans across both phases)
+Progress: [█████████░] 83% (5/6 total plans across both phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 5m 36s
-- Total execution time: 21m 45s
+- Total plans completed: 5
+- Average duration: 5m 27s
+- Total execution time: 26m 50s
 
 **By Phase:**
 
 | Phase | Plans | Total Time | Avg/Plan |
 |-------|-------|------------|----------|
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
-| 02-relay-loop-fix | 1/3 | 3m 3s | 3m 3s |
+| 02-relay-loop-fix | 2/3 | 8m 8s | 4m 4s |
 
 **Recent Trend:**
-- Last 3 plans: 5m 17s (01-02), 8m 24s (01-03), 3m 3s (02-01)
-- Trend: Decreasing (02-01 was straightforward state machine implementation)
+- Last 3 plans: 8m 24s (01-03), 3m 3s (02-01), 5m 5s (02-02)
+- Trend: Stable (small, focused plans executing efficiently)
 
 *Updated after each plan completion*
 
@@ -52,6 +52,9 @@ Recent decisions affecting current work:
 - Use 1000ms debounce to batch rapid Room invalidation triggers (02-01)
 - Use 30-second cooldown after successful relay selection (02-01)
 - User actions always cancel ongoing auto-selection and reset to IDLE state (02-01)
+- 3+ selections in 60 seconds triggers loop detection warning (02-02)
+- Exponential backoff: 2^(count-3) seconds, capped at 10 minutes (02-02)
+- Send Sentry warning events when relay loop detected for diagnostics (02-02)
 
 ### Pending Todos
 
@@ -75,6 +78,6 @@ Also pending from plans:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed 02-01-PLAN.md - Relay selection state machine implemented
+Stopped at: Completed 02-02-PLAN.md - Loop detection and exponential backoff
 Resume file: None
-Next: Continue Phase 2 with 02-02 (Sentry breadcrumbs for relay selection)
+Next: Continue Phase 2 with 02-03 (Unit tests for state machine lifecycle)

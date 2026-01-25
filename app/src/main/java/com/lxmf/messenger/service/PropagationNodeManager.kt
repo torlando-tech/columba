@@ -95,6 +95,19 @@ sealed class AvailableRelaysState {
 }
 
 /**
+ * State machine for relay auto-selection process.
+ * Prevents feedback loops by tracking selection lifecycle.
+ */
+enum class RelaySelectionState {
+    /** Ready to auto-select. Only state where selection can trigger. */
+    IDLE,
+    /** Selection triggered, waiting for database update to complete. */
+    SELECTING,
+    /** Relay selected and stable. Cooldown active before returning to IDLE. */
+    STABLE
+}
+
+/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
  * This class implements Sideband's auto-selection algorithm:
@@ -120,6 +133,16 @@ class PropagationNodeManager
         companion object {
             private const val TAG = "PropagationNodeManager"
         }
+
+        // State machine to prevent relay selection feedback loops
+        private val _selectionState = MutableStateFlow(RelaySelectionState.IDLE)
+        val selectionState: StateFlow<RelaySelectionState> = _selectionState.asStateFlow()
+
+        // Cooldown duration after successful selection (30 seconds per context decisions)
+        private val selectionCooldownMs = 30_000L
+
+        // Job for cooldown timer (cancellable if user takes manual action)
+        private var cooldownJob: Job? = null
 
         /**
          * Build RelayInfo from a contact entity and auto-select setting.

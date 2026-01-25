@@ -492,11 +492,15 @@ class PropagationNodeManager
             syncJob?.cancel()
             settingsObserverJob?.cancel()
             propagationStateObserverJob?.cancel()
+            cooldownJob?.cancel()
+            backoffJob?.cancel()
             relayObserverJob = null
             announceObserverJob = null
             syncJob = null
             settingsObserverJob = null
             propagationStateObserverJob = null
+            cooldownJob = null
+            backoffJob = null
         }
 
         /**
@@ -612,6 +616,8 @@ class PropagationNodeManager
                     nearest.hops,
                     nearest.publicKey,
                 )
+                // Record for loop detection
+                recordSelection(nearest.destinationHash, "auto-select-enabled")
             } else {
                 // No known propagation nodes, clear and wait for announces
                 // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
@@ -704,6 +710,8 @@ class PropagationNodeManager
                     nearest.hops,
                     nearest.publicKey,
                 )
+                // Record for loop detection
+                recordSelection(nearest.destinationHash, "relay-deleted")
             } else {
                 Log.d(TAG, "No propagation nodes available for auto-selection")
                 // currentRelay Flow will emit null, observeRelayChanges() will sync to Python
@@ -833,7 +841,7 @@ class PropagationNodeManager
                 .collect { propagationNodes ->
                     // CRITICAL: Don't trigger selection if already selecting or in cooldown
                     if (_selectionState.value != RelaySelectionState.IDLE) {
-                        Log.d(TAG, "Skipping auto-select - state=${_selectionState.value}")
+                        Log.d(TAG, "Skipping auto-select - state=${_selectionState.value} (only IDLE allows selection)")
                         return@collect
                     }
 
@@ -864,6 +872,9 @@ class PropagationNodeManager
                                 nearest.hops,
                                 nearest.publicKey,
                             )
+
+                            // Record for loop detection BEFORE transitioning to STABLE
+                            recordSelection(nearest.destinationHash, "auto-select")
 
                             // Transition to STABLE and start cooldown
                             _selectionState.value = RelaySelectionState.STABLE

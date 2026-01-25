@@ -113,7 +113,6 @@ android {
 
         buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -124,6 +123,23 @@ android {
             // Python 3.11 supports 64-bit ABIs
             // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    flavorDimensions += "telemetry"
+
+    productFlavors {
+        create("sentry") {
+            dimension = "telemetry"
+            // SENTRY_DSN from environment - Sentry enabled in release builds
+            buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
+        }
+        create("noSentry") {
+            dimension = "telemetry"
+            // Empty DSN - Sentry fully disabled (no init, no network calls)
+            buildConfigField("String", "SENTRY_DSN", "\"\"")
+            // Suffix to distinguish APK in app drawer
+            applicationIdSuffix = ".nosentry"
         }
     }
 

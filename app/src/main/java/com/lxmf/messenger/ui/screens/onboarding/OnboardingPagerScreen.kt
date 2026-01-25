@@ -93,14 +93,6 @@ fun OnboardingPagerScreen(
             }
         }
 
-    // Battery optimization launcher
-    val batteryOptimizationLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult(),
-        ) {
-            viewModel.checkBatteryOptimizationStatus(context)
-        }
-
     // Check initial battery status
     LaunchedEffect(Unit) {
         viewModel.checkBatteryOptimizationStatus(context)

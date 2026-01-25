@@ -389,6 +389,9 @@ dependencies {
     // Google Play Services Location - for FusedLocationProviderClient
     implementation("com.google.android.gms:play-services-location:21.2.0")
 
+    // Memory leak detection
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

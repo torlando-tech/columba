@@ -10,6 +10,9 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import io.sentry.Breadcrumb
+import io.sentry.Sentry
+import io.sentry.SentryLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -744,6 +747,80 @@ class PropagationNodeManager
             } else {
                 Log.w(TAG, "No alternative relays available (excluded ${excludeHashes.size} relays)")
                 null
+            }
+        }
+
+        /**
+         * Record a relay selection for loop detection.
+         * If 3+ selections happen within 60 seconds, triggers BACKING_OFF state.
+         *
+         * @param destinationHash The selected relay's destination hash
+         * @param reason Reason for selection (for logging)
+         */
+        private suspend fun recordSelection(destinationHash: String, reason: String) {
+            val now = System.currentTimeMillis()
+
+            // Record this selection
+            recentSelections.addLast(destinationHash to now)
+
+            // Keep only last 10 entries to bound memory
+            while (recentSelections.size > 10) {
+                recentSelections.removeFirst()
+            }
+
+            // Count selections within the loop detection window
+            val windowStart = now - loopWindowMs
+            val recentCount = recentSelections.count { it.second > windowStart }
+
+            Log.i(TAG, "Relay selected: ${destinationHash.take(12)}... ($reason) [${recentCount}x in last 60s]")
+
+            if (recentCount >= loopThresholdCount) {
+                val hashes = recentSelections
+                    .filter { it.second > windowStart }
+                    .map { it.first.take(12) }
+
+                Log.w(TAG, "⚠️ Relay loop detected! $recentCount selections in 60s: $hashes")
+
+                // Send Sentry event for diagnostics (per context decisions)
+                // The Sentry integration was added in Phase 1 (01-03-PLAN.md)
+                try {
+                    Sentry.captureMessage(
+                        "Relay selection loop detected: $recentCount selections in 60s",
+                        SentryLevel.WARNING
+                    )
+                    Sentry.addBreadcrumb(
+                        Breadcrumb().apply {
+                            category = "relay"
+                            message = "Loop detected: hashes=$hashes"
+                            level = SentryLevel.WARNING
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to send Sentry event: ${e.message}")
+                }
+
+                // Transition to BACKING_OFF state
+                _selectionState.value = RelaySelectionState.BACKING_OFF
+
+                // Calculate exponential backoff: 1s, 2s, 4s, 8s... max 10 minutes
+                // Formula: 2^(recentCount - loopThreshold) seconds, capped at max
+                val exponent = (recentCount - loopThresholdCount).coerceAtLeast(0)
+                val backoffMs = minOf(
+                    (1L shl exponent) * 1000L, // 2^exponent * 1000ms
+                    maxBackoffMs
+                )
+
+                Log.w(TAG, "Entering backoff for ${backoffMs / 1000}s (exponent=$exponent)")
+
+                // Start backoff timer
+                backoffJob?.cancel()
+                backoffJob = scope.launch {
+                    delay(backoffMs)
+                    if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
+                        _selectionState.value = RelaySelectionState.IDLE
+                        Log.i(TAG, "Backoff complete, returning to IDLE")
+                    }
+                }
             }
         }
 

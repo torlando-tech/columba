@@ -369,6 +369,10 @@ dependencies {
     // Phase 4 Task 4.2: Production Observability
     implementation("io.sentry:sentry-android:7.3.0")
 
+    // Performance Monitoring - JankStats for frame monitoring
+    // Phase 1 Plan 01-03: Frame tracking integration with Sentry
+    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+
     // QR Code & Camera
     implementation(libs.zxing.core)
     implementation(libs.cameraX.core)

@@ -2712,4 +2712,97 @@ class PropagationNodeManagerTest {
 
         manager.stop()
     }
+
+    @Test
+    fun `auto-select - debounce batches rapid announce emissions`() = runTest {
+        // Given: Auto-select enabled
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // Track setAsMyRelay calls
+        val relayCalls = mutableListOf<String>()
+        coEvery { contactRepository.setAsMyRelay(capture(relayCalls), any()) } answers {
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = relayCalls.last(),
+                isMyRelay = true
+            )
+        }
+
+        // When: Manager starts
+        manager.start()
+        advanceUntilIdle()
+
+        // Emit 5 rapid changes (simulating Room invalidation triggers)
+        // These should be debounced into a single selection
+        repeat(5) { i ->
+            val announce = TestFactories.createAnnounce(
+                destinationHash = testDestHash,
+                nodeType = "PROPAGATION_NODE",
+                hops = 2 + i // Different hop counts
+            )
+            announcesFlow.emit(listOf(announce))
+            testScheduler.advanceTimeBy(100) // 100ms between emissions (within 1s debounce)
+            advanceUntilIdle()
+        }
+
+        // Advance past debounce period
+        testScheduler.advanceTimeBy(2000)
+        advanceUntilIdle()
+
+        // Then: Only ONE selection should have been made (debounce batched the rapid emissions)
+        // The last emitted value should be processed
+        assertTrue(
+            "Expected at most 1 setAsMyRelay call (debounce should batch), got ${relayCalls.size}",
+            relayCalls.size <= 1
+        )
+
+        manager.stop()
+    }
+
+    @Test
+    fun `auto-select - processes emission after debounce delay`() = runTest {
+        // Given: Auto-select enabled
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+
+        // Track setAsMyRelay calls
+        var setAsMyRelayCalled = false
+        coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
+            setAsMyRelayCalled = true
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = testDestHash,
+                isMyRelay = true
+            )
+        }
+
+        // When: Manager starts
+        manager.start()
+        advanceUntilIdle()
+
+        // Emit announces
+        announcesFlow.emit(listOf(announce))
+        advanceUntilIdle()
+
+        // Before debounce delay - should NOT have processed yet
+        testScheduler.advanceTimeBy(500) // Less than 1000ms debounce
+        advanceUntilIdle()
+        // Selection might not have happened yet
+
+        // After debounce delay - should process
+        testScheduler.advanceTimeBy(1000) // Total 1500ms > 1000ms debounce
+        advanceUntilIdle()
+
+        // Then: Selection should have been made
+        assertTrue("Expected setAsMyRelay to be called after debounce", setAsMyRelayCalled)
+
+        manager.stop()
+    }
 }

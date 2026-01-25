@@ -98,10 +98,6 @@ class ColumbaApplication : Application() {
         // Phase 1 Plan 01-03: Sentry Performance Monitoring
         initializeSentry()
 
-
-        // Initialize Sentry for crash reporting and performance monitoring
-        initializeSentry()
-
         // Phase 4 Task 4.1: StrictMode for debug builds
         // Detect threading violations during development
         if (BuildConfig.DEBUG) {

@@ -293,12 +293,17 @@ android {
 // Assign unique version codes per ABI so app stores can serve the right APK.
 // Universal APK gets base versionCode; per-ABI APKs get (abiMultiplier * 1000 + base).
 val abiVersionCodes = mapOf("arm64-v8a" to 1, "x86_64" to 2)
-android.applicationVariants.all {
-    outputs.all {
-        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-        val abiFilter = output.getFilter(com.android.build.OutputFile.ABI)
-        if (abiFilter != null) {
-            output.versionCodeOverride = (abiVersionCodes[abiFilter] ?: 0) * 1000 + (defaultConfig.versionCode ?: 0)
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val abiFilter = output.filters.find {
+                it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+            }
+            if (abiFilter != null) {
+                output.versionCode.set(output.versionCode.map { baseCode ->
+                    (abiVersionCodes[abiFilter.identifier] ?: 0) * 1000 + (baseCode ?: 0)
+                })
+            }
         }
     }
 }

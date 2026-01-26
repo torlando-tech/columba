@@ -15,6 +15,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.model.SharingDuration
+import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +100,7 @@ data class MapState(
 class MapViewModel
     @Inject
     constructor(
+        private val savedStateHandle: SavedStateHandle,
         private val contactRepository: ContactRepository,
         private val receivedLocationDao: ReceivedLocationDao,
         private val locationSharingManager: LocationSharingManager,
@@ -111,6 +113,7 @@ class MapViewModel
             private const val STALE_THRESHOLD_MS = 5 * 60 * 1000L // 5 minutes
             private const val GRACE_PERIOD_MS = 60 * 60 * 1000L // 1 hour
             private const val REFRESH_INTERVAL_MS = 30_000L // 30 seconds
+            private const val KEY_PERMISSION_CARD_DISMISSED = "isPermissionCardDismissed"
 
             /**
              * Controls whether periodic refresh is enabled.
@@ -120,7 +123,15 @@ class MapViewModel
             internal var enablePeriodicRefresh = true
         }
 
-        private val _state = MutableStateFlow(MapState())
+        private val _state = MutableStateFlow(
+            MapState(
+                // Restore permission card dismissed state from SavedStateHandle
+                // This survives tab switches (Navigation saveState/restoreState) and process death,
+                // but resets on fresh app launch — matching the expected 0.6.x behavior.
+                // Fixes issue #342: permission card reappearing on every tab switch.
+                isPermissionCardDismissed = savedStateHandle.get<Boolean>(KEY_PERMISSION_CARD_DISMISSED) ?: false,
+            ),
+        )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
         // Refresh trigger for periodic staleness recalculation
@@ -338,8 +349,13 @@ class MapViewModel
         /**
          * Dismiss the location permission card for this session.
          * User can still trigger permission request via My Location button.
+         *
+         * Persisted via SavedStateHandle so it survives tab switches (Navigation
+         * saveState/restoreState) and process death, but resets on fresh app launch.
+         * Fixes issue #342.
          */
         fun dismissPermissionCard() {
+            savedStateHandle[KEY_PERMISSION_CARD_DISMISSED] = true
             _state.update { currentState ->
                 currentState.copy(isPermissionCardDismissed = true)
             }

@@ -67,20 +67,41 @@ jobs:
           echo "sha1=$SHA1" >> $GITHUB_OUTPUT
           echo "✓ Extracted certificate fingerprints"
 
-      - name: Rename APKs with version
+      - name: Rename APKs with version and architecture
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          cp app/build/outputs/apk/sentry/release/app-sentry-release.apk "columba-${VERSION}.apk"
-          cp app/build/outputs/apk/noSentry/release/app-noSentry-release.apk "columba-${VERSION}-no-sentry.apk"
+          # ABI split APKs: app-{abi}-{flavor}-release.apk
+          # Universal APKs: app-universal-{flavor}-release.apk
+          APK_DIR="app/build/outputs/apk"
+          
+          for flavor in sentry noSentry; do
+            suffix=""
+            [ "$flavor" = "noSentry" ] && suffix="-no-sentry"
+            
+            for apk in "$APK_DIR/$flavor/release/"*.apk; do
+              filename=$(basename "$apk")
+              
+              if echo "$filename" | grep -q "arm64-v8a"; then
+                cp "$apk" "columba-${VERSION}-arm64${suffix}.apk"
+              elif echo "$filename" | grep -q "x86_64"; then
+                cp "$apk" "columba-${VERSION}-x86_64${suffix}.apk"
+              elif echo "$filename" | grep -q "universal"; then
+                cp "$apk" "columba-${VERSION}-universal${suffix}.apk"
+              fi
+            done
+          done
+          
+          ls -la columba-*.apk
           echo "✓ Renamed APKs"
 
       - name: Generate SHA256 checksums
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sha256sum "columba-${VERSION}.apk" > "columba-${VERSION}.apk.sha256"
-          sha256sum "columba-${VERSION}-no-sentry.apk" > "columba-${VERSION}-no-sentry.apk.sha256"
+          for apk in columba-*.apk; do
+            sha256sum "$apk" > "${apk}.sha256"
+          done
           echo "✓ Generated SHA256 checksums"
 
       - name: Read SHA256 checksums
@@ -88,19 +109,20 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          SHA256_SENTRY=$(cat "columba-${VERSION}.apk.sha256")
-          SHA256_NOSENTRY=$(cat "columba-${VERSION}-no-sentry.apk.sha256")
-          echo "checksum_sentry=$SHA256_SENTRY" >> $GITHUB_OUTPUT
-          echo "checksum_nosentry=$SHA256_NOSENTRY" >> $GITHUB_OUTPUT
+          CHECKSUMS=""
+          for checksum_file in columba-*.apk.sha256; do
+            CHECKSUMS="${CHECKSUMS}$(cat "$checksum_file")\n"
+          done
+          echo "checksums<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHECKSUMS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            columba-${{ steps.version.outputs.version }}.apk
-            columba-${{ steps.version.outputs.version }}.apk.sha256
-            columba-${{ steps.version.outputs.version }}-no-sentry.apk
-            columba-${{ steps.version.outputs.version }}-no-sentry.apk.sha256
+            columba-*.apk
+            columba-*.apk.sha256
           draft: true
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true
@@ -108,11 +130,19 @@ jobs:
             ## Columba ${{ steps.version.outputs.version }}
 
             ### Installation
-            Download one of the APKs below and install on your Android device.
+            Download the APK matching your device's CPU architecture.
 
-            **Two variants available:**
-            - `columba-${{ steps.version.outputs.version }}.apk` - Standard build with crash reporting (Sentry)
-            - `columba-${{ steps.version.outputs.version }}-no-sentry.apk` - Privacy-focused build without telemetry
+            **Architecture-specific APKs (recommended — smaller download):**
+            | APK | Architecture | Devices |
+            |-----|-------------|---------|
+            | `columba-${{ steps.version.outputs.version }}-arm64.apk` | arm64-v8a | Most modern Android phones & tablets |
+            | `columba-${{ steps.version.outputs.version }}-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
+            | `columba-${{ steps.version.outputs.version }}-universal.apk` | All | Universal fallback (larger download) |
+
+            **Telemetry variants:**
+            Each architecture also has a `-no-sentry` variant without crash reporting for maximum privacy.
+
+            > **Not sure which to pick?** Most Android phones use **arm64**. If unsure, use the **universal** APK.
 
             ### Verification
             See [SECURITY.md](https://github.com/torlando-tech/columba/blob/main/SECURITY.md) for verification instructions.
@@ -125,8 +155,7 @@ jobs:
 
             **SHA256 Checksums:**
             ```
-            Standard build:     ${{ steps.sha256.outputs.checksum_sentry }}
-            No-telemetry build: ${{ steps.sha256.outputs.checksum_nosentry }}
+            ${{ steps.sha256.outputs.checksums }}
             ```
 
             ### What's Changed
@@ -138,7 +167,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: columba-${{ steps.version.outputs.version }}-apks
-          path: |
-            columba-${{ steps.version.outputs.version }}.apk
-            columba-${{ steps.version.outputs.version }}-no-sentry.apk
+          path: columba-*.apk
           retention-days: 30

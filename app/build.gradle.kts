@@ -300,9 +300,9 @@ androidComponents {
                 it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
             }
             if (abiFilter != null) {
-                output.versionCode.set(output.versionCode.map { baseCode ->
-                    (abiVersionCodes[abiFilter.identifier] ?: 0) * 1000 + (baseCode ?: 0)
-                })
+                output.versionCode.set(
+                    (abiVersionCodes[abiFilter.identifier] ?: 0) * 1000 + versionCodeValue
+                )
             }
         }
     }

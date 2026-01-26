@@ -158,7 +158,8 @@ android {
             val keyAlias = System.getenv("KEY_ALIAS")
             val keyPassword = System.getenv("KEY_PASSWORD")
 
-            keystoreFile != null && keystorePassword != null && keyAlias != null && keyPassword != null
+            !keystoreFile.isNullOrEmpty() && !keystorePassword.isNullOrEmpty() &&
+                !keyAlias.isNullOrEmpty() && !keyPassword.isNullOrEmpty()
         }
 
     signingConfigs {

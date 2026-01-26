@@ -45,6 +45,8 @@ class CallViewModel
         val callState: StateFlow<CallState> = callBridge.callState
         val isMuted: StateFlow<Boolean> = callBridge.isMuted
         val isSpeakerOn: StateFlow<Boolean> = callBridge.isSpeakerOn
+        val isPttMode: StateFlow<Boolean> = callBridge.isPttMode
+        val isPttActive: StateFlow<Boolean> = callBridge.isPttActive
         val remoteIdentity: StateFlow<String?> = callBridge.remoteIdentity
 
         // Call duration (updated every second during active call)
@@ -275,6 +277,40 @@ class CallViewModel
             viewModelScope.launch {
                 protocol.setCallSpeaker(newSpeaker)
             }
+        }
+
+        /**
+         * Toggle push-to-talk mode.
+         *
+         * When enabled, transmit is muted by default. The user must press
+         * and hold the PTT button (on-screen or Bluetooth headset) to transmit.
+         */
+        fun togglePttMode() {
+            val newMode = !callBridge.isPttMode.value
+            callBridge.setPttModeLocally(newMode)
+            if (newMode) {
+                // Entering PTT: mute transmit
+                callBridge.setMutedLocally(true)
+                callBridge.setPttActiveLocally(false)
+                viewModelScope.launch { protocol.setCallMuted(true) }
+            } else {
+                // Leaving PTT: unmute transmit (full duplex)
+                callBridge.setMutedLocally(false)
+                callBridge.setPttActiveLocally(false)
+                viewModelScope.launch { protocol.setCallMuted(false) }
+            }
+        }
+
+        /**
+         * Set PTT transmit state (press/release).
+         *
+         * @param active true when pressed (transmitting), false when released (listening)
+         */
+        fun setPttActive(active: Boolean) {
+            if (!callBridge.isPttMode.value) return
+            callBridge.setPttActiveLocally(active)
+            callBridge.setMutedLocally(!active)
+            viewModelScope.launch { protocol.setCallMuted(!active) }
         }
 
         /**

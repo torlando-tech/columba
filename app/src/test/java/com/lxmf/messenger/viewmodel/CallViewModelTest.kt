@@ -40,6 +40,8 @@ class CallViewModelTest {
     private lateinit var callStateFlow: MutableStateFlow<CallState>
     private lateinit var isMutedFlow: MutableStateFlow<Boolean>
     private lateinit var isSpeakerOnFlow: MutableStateFlow<Boolean>
+    private lateinit var isPttModeFlow: MutableStateFlow<Boolean>
+    private lateinit var isPttActiveFlow: MutableStateFlow<Boolean>
     private lateinit var remoteIdentityFlow: MutableStateFlow<String?>
 
     @Before
@@ -54,6 +56,8 @@ class CallViewModelTest {
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
         isMutedFlow = MutableStateFlow(false)
         isSpeakerOnFlow = MutableStateFlow(false)
+        isPttModeFlow = MutableStateFlow(false)
+        isPttActiveFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
 
         // Mock CallBridge singleton
@@ -62,6 +66,8 @@ class CallViewModelTest {
         every { mockCallBridge.callState } returns callStateFlow
         every { mockCallBridge.isMuted } returns isMutedFlow
         every { mockCallBridge.isSpeakerOn } returns isSpeakerOnFlow
+        every { mockCallBridge.isPttMode } returns isPttModeFlow
+        every { mockCallBridge.isPttActive } returns isPttActiveFlow
         every { mockCallBridge.remoteIdentity } returns remoteIdentityFlow
         every { mockCallBridge.hasActiveCall() } answers {
             when (callStateFlow.value) {
@@ -330,5 +336,83 @@ class CallViewModelTest {
             // Should fallback to formatted hash
             val name = viewModel.peerName.value
             assertTrue(name?.contains("abc123") == true)
+        }
+
+    // ========== Push-to-Talk Tests ==========
+
+    @Test
+    fun `isPttMode exposes CallBridge isPttMode`() {
+        assertEquals(isPttModeFlow, viewModel.isPttMode)
+    }
+
+    @Test
+    fun `isPttActive exposes CallBridge isPttActive`() {
+        assertEquals(isPttActiveFlow, viewModel.isPttActive)
+    }
+
+    @Test
+    fun `togglePttMode enables PTT and mutes transmit`() =
+        runTest {
+            isPttModeFlow.value = false
+            every { mockCallBridge.isPttMode } returns isPttModeFlow
+
+            viewModel.togglePttMode()
+
+            verify { mockCallBridge.setPttModeLocally(true) }
+            verify { mockCallBridge.setMutedLocally(true) }
+            verify { mockCallBridge.setPttActiveLocally(false) }
+            coVerify { mockProtocol.setCallMuted(true) }
+        }
+
+    @Test
+    fun `togglePttMode disables PTT and unmutes transmit`() =
+        runTest {
+            isPttModeFlow.value = true
+            every { mockCallBridge.isPttMode } returns isPttModeFlow
+
+            viewModel.togglePttMode()
+
+            verify { mockCallBridge.setPttModeLocally(false) }
+            verify { mockCallBridge.setMutedLocally(false) }
+            verify { mockCallBridge.setPttActiveLocally(false) }
+            coVerify { mockProtocol.setCallMuted(false) }
+        }
+
+    @Test
+    fun `setPttActive pressed unmutes and activates`() =
+        runTest {
+            isPttModeFlow.value = true
+            every { mockCallBridge.isPttMode } returns isPttModeFlow
+
+            viewModel.setPttActive(true)
+
+            verify { mockCallBridge.setPttActiveLocally(true) }
+            verify { mockCallBridge.setMutedLocally(false) }
+            coVerify { mockProtocol.setCallMuted(false) }
+        }
+
+    @Test
+    fun `setPttActive released mutes and deactivates`() =
+        runTest {
+            isPttModeFlow.value = true
+            every { mockCallBridge.isPttMode } returns isPttModeFlow
+
+            viewModel.setPttActive(false)
+
+            verify { mockCallBridge.setPttActiveLocally(false) }
+            verify { mockCallBridge.setMutedLocally(true) }
+            coVerify { mockProtocol.setCallMuted(true) }
+        }
+
+    @Test
+    fun `setPttActive is ignored when PTT mode off`() =
+        runTest {
+            isPttModeFlow.value = false
+            every { mockCallBridge.isPttMode } returns isPttModeFlow
+
+            viewModel.setPttActive(true)
+
+            verify(exactly = 0) { mockCallBridge.setPttActiveLocally(any()) }
+            verify(exactly = 0) { mockCallBridge.setMutedLocally(any()) }
         }
 }

@@ -93,20 +93,28 @@ jobs:
           TAG="prerelease-${{ steps.timestamp.outputs.timestamp }}-${{ steps.sha.outputs.sha }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Rename APKs by architecture
+      - name: Rename APKs by architecture and flavor
         run: |
           APK_DIR="app/build/outputs/apk"
-          # Find all release APKs across flavors
-          for apk in $(find "$APK_DIR" -name "*-release.apk" -type f); do
-            filename=$(basename "$apk")
-            if echo "$filename" | grep -q "arm64-v8a"; then
-              cp "$apk" "columba-arm64.apk"
-            elif echo "$filename" | grep -q "x86_64"; then
-              cp "$apk" "columba-x86_64.apk"
-            elif echo "$filename" | grep -q "universal"; then
-              cp "$apk" "columba-universal.apk"
-            fi
+          
+          for flavor in sentry noSentry; do
+            suffix=""
+            [ "$flavor" = "noSentry" ] && suffix="-no-sentry"
+            
+            for apk in "$APK_DIR/$flavor/release/"*.apk; do
+              [ -f "$apk" ] || continue
+              filename=$(basename "$apk")
+              
+              if echo "$filename" | grep -q "arm64-v8a"; then
+                cp "$apk" "columba-arm64${suffix}.apk"
+              elif echo "$filename" | grep -q "x86_64"; then
+                cp "$apk" "columba-x86_64${suffix}.apk"
+              elif echo "$filename" | grep -q "universal"; then
+                cp "$apk" "columba-universal${suffix}.apk"
+              fi
+            done
           done
+          
           ls -la columba-*.apk
           echo "✓ Renamed APKs"
 
@@ -160,10 +168,15 @@ jobs:
             - Code minification enabled
             - No debug features
 
-            **APKs by architecture:**
+            **APKs by architecture (standard build with crash reporting):**
             - `columba-arm64.apk` — Most Android phones (arm64-v8a)
             - `columba-x86_64.apk` — Chromebooks & emulators (x86_64)
             - `columba-universal.apk` — Universal fallback (all architectures)
+
+            **No-telemetry variants (privacy-focused, no Sentry):**
+            - `columba-arm64-no-sentry.apk`
+            - `columba-x86_64-no-sentry.apk`
+            - `columba-universal-no-sentry.apk`
 
             ${{ github.event.inputs.release_notes }}
 

@@ -17,8 +17,10 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -165,10 +167,12 @@ class AnnounceStreamViewModel
             }
 
             try {
-                // Get path table hashes from RNS
-                val pathTableHashes = reticulumProtocol.getPathTableHashes()
+                // Get path table hashes from RNS (Python call - must be off main thread)
+                val pathTableHashes = withContext(Dispatchers.IO) {
+                    reticulumProtocol.getPathTableHashes()
+                }
 
-                // Count announces that match the path table
+                // Count announces that match the path table (database query - already on IO dispatcher in repository)
                 val count = announceRepository.countReachableAnnounces(pathTableHashes)
 
                 _reachableAnnounceCount.value = count
@@ -439,6 +443,8 @@ class AnnounceStreamViewModel
         fun unsetRelayAndDelete(destinationHash: String) {
             viewModelScope.launch {
                 try {
+                    // IMPORTANT: Set exclusion BEFORE delete to prevent immediate re-selection
+                    propagationNodeManager.excludeFromAutoSelect(destinationHash)
                     contactRepository.deleteContact(destinationHash)
                     propagationNodeManager.onRelayDeleted()
                     Log.d(TAG, "Unset relay and deleted: $destinationHash")

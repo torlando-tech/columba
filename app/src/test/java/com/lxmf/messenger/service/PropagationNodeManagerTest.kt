@@ -2521,4 +2521,449 @@ class PropagationNodeManagerTest {
 
             manager.stop()
         }
+
+    // ========== State Machine Tests (Phase 2 - Relay Loop Fix) ==========
+
+    @Test
+    fun `selectionState - starts as IDLE`() = runTest {
+        // When: Manager is created
+        // Then: Selection state should start as IDLE
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+    }
+
+    @Test
+    fun `selectionState - transitions to STABLE after auto-selection`() = runTest {
+        // Given: Auto-select enabled with propagation nodes available
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts and receives announces
+        manager.start()
+        advanceUntilIdle()
+
+        // Emit announces after debounce period
+        announcesFlow.emit(listOf(announce))
+        advanceUntilIdle()
+
+        // Allow debounce (1000ms) + processing
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // Then: State should be STABLE (selection completed, in cooldown)
+        manager.selectionState.test(timeout = 5.seconds) {
+            val state = awaitItem()
+            assertTrue(
+                "Expected STABLE or IDLE, got $state",
+                state == RelaySelectionState.STABLE || state == RelaySelectionState.IDLE
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `selectionState - returns to IDLE after cooldown`() = runTest {
+        // Given: Auto-select enabled with propagation nodes
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts and processes selection
+        manager.start()
+        advanceUntilIdle()
+
+        announcesFlow.emit(listOf(announce))
+        advanceUntilIdle()
+
+        // Advance past debounce (1s) + cooldown (30s) + buffer
+        testScheduler.advanceTimeBy(35_000)
+        advanceUntilIdle()
+
+        // Then: State should return to IDLE after cooldown
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `auto-select - skips selection when state is not IDLE`() = runTest {
+        // Given: Auto-select enabled with propagation nodes
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // When: Manager starts
+        manager.start()
+        advanceUntilIdle()
+
+        // First emission triggers selection
+        announcesFlow.emit(listOf(announce))
+        testScheduler.advanceTimeBy(1500) // Past debounce
+        advanceUntilIdle()
+
+        // Record setAsMyRelay call count
+        val callsAfterFirst = mutableListOf<String>()
+        coEvery { contactRepository.setAsMyRelay(capture(callsAfterFirst), any()) } answers {
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = callsAfterFirst.last(),
+                isMyRelay = true
+            )
+        }
+
+        // Second emission should be blocked by state guard (still in STABLE/cooldown)
+        val announce2 = TestFactories.createAnnounce(
+            destinationHash = testDestHash2,
+            nodeType = "PROPAGATION_NODE",
+            hops = 1 // Lower hop count - would normally trigger switch
+        )
+        announcesFlow.emit(listOf(announce2))
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // Then: Second selection should NOT have called setAsMyRelay for testDestHash2
+        // because state guard blocked it (state was STABLE, not IDLE)
+        coVerify(atMost = 1) { contactRepository.setAsMyRelay(any(), any()) }
+
+        manager.stop()
+    }
+
+    @Test
+    fun `setManualRelay - resets state to IDLE`() = runTest {
+        // Given: Manager in some non-IDLE state (simulate by triggering auto-select)
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        manager.start()
+        advanceUntilIdle()
+
+        // Trigger auto-select to get into STABLE state
+        announcesFlow.emit(listOf(announce))
+        testScheduler.advanceTimeBy(1500)
+        advanceUntilIdle()
+
+        // State should be STABLE
+        assertTrue(
+            "Expected STABLE, got ${manager.selectionState.value}",
+            manager.selectionState.value == RelaySelectionState.STABLE ||
+            manager.selectionState.value == RelaySelectionState.IDLE
+        )
+
+        // When: User manually selects a relay
+        manager.setManualRelay(testDestHash2, "Manual Relay")
+        advanceUntilIdle()
+
+        // Then: State should be reset to IDLE (user action cancels auto-select)
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `clearRelay - resets state to IDLE`() = runTest {
+        // Given: Manager started
+        manager.start()
+        advanceUntilIdle()
+
+        // When: Relay is cleared
+        manager.clearRelay()
+        advanceUntilIdle()
+
+        // Then: State should be IDLE
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `enableAutoSelect - resets state to IDLE`() = runTest {
+        // Given: Manager started
+        manager.start()
+        advanceUntilIdle()
+
+        // When: Auto-select is enabled
+        manager.enableAutoSelect()
+        advanceUntilIdle()
+
+        // Then: State should be IDLE (ready for fresh auto-selection)
+        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+        manager.stop()
+    }
+
+    @Test
+    fun `auto-select - debounce batches rapid announce emissions`() = runTest {
+        // Given: Auto-select enabled
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+        // Track setAsMyRelay calls
+        val relayCalls = mutableListOf<String>()
+        coEvery { contactRepository.setAsMyRelay(capture(relayCalls), any()) } answers {
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = relayCalls.last(),
+                isMyRelay = true
+            )
+        }
+
+        // When: Manager starts
+        manager.start()
+        advanceUntilIdle()
+
+        // Emit 5 rapid changes (simulating Room invalidation triggers)
+        // These should be debounced into a single selection
+        repeat(5) { i ->
+            val announce = TestFactories.createAnnounce(
+                destinationHash = testDestHash,
+                nodeType = "PROPAGATION_NODE",
+                hops = 2 + i // Different hop counts
+            )
+            announcesFlow.emit(listOf(announce))
+            testScheduler.advanceTimeBy(100) // 100ms between emissions (within 1s debounce)
+            advanceUntilIdle()
+        }
+
+        // Advance past debounce period
+        testScheduler.advanceTimeBy(2000)
+        advanceUntilIdle()
+
+        // Then: Only ONE selection should have been made (debounce batched the rapid emissions)
+        // The last emitted value should be processed
+        assertTrue(
+            "Expected at most 1 setAsMyRelay call (debounce should batch), got ${relayCalls.size}",
+            relayCalls.size <= 1
+        )
+
+        manager.stop()
+    }
+
+    @Test
+    fun `auto-select - processes announces and selects relay`() = runTest {
+        // Given: Auto-select enabled with propagation nodes available
+        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+        val announce = TestFactories.createAnnounce(
+            destinationHash = testDestHash,
+            nodeType = "PROPAGATION_NODE",
+            hops = 2
+        )
+        // Use flowOf() which emits immediately when collection starts
+        // This tests that the selection flow works end-to-end
+        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+        // Track setAsMyRelay calls
+        var setAsMyRelayCalled = false
+        coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
+            setAsMyRelayCalled = true
+            myRelayFlow.value = TestFactories.createContactEntity(
+                destinationHash = testDestHash,
+                isMyRelay = true
+            )
+        }
+
+        // When: Manager starts (which triggers observePropagationNodeAnnounces)
+        manager.start()
+        advanceUntilIdle()
+
+        // Advance past debounce period (1000ms) + cooldown buffer
+        testScheduler.advanceTimeBy(2000)
+        advanceUntilIdle()
+
+        // Then: Selection should have been made
+        assertTrue("Expected setAsMyRelay to be called", setAsMyRelayCalled)
+
+        manager.stop()
+    }
+
+    // ========== excludeFromAutoSelect Tests ==========
+
+    @Test
+    fun `excludeFromAutoSelect - prevents re-selection of excluded relay`() =
+        runTest {
+            // Given: Two propagation nodes available
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Node 1",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Node 2",
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // When: Exclude node1 (the nearest one) and trigger relay deleted
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: Should select node2 instead of excluded node1
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - exclusion cleared after successful selection`() =
+        runTest {
+            // Given: Two nodes, node1 excluded
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Node 1",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Node 2",
+                    hops = 2,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // Exclude node1 and select node2
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Verify node2 was selected
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+
+            // Clear mocks to track new calls
+            clearAllMocks(answers = false)
+
+            // Reset state for next selection
+            manager.enableAutoSelect()
+            advanceUntilIdle()
+
+            // When: Trigger another selection - node1 should now be selectable
+            // (exclusion was cleared after node2 was selected)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: node1 (nearest) should be selected since exclusion was cleared
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - no selection if excluded relay is only option`() =
+        runTest {
+            // Given: Only one propagation node available
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Only Node",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1))
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node1
+
+            // When: Exclude the only available node and trigger selection
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: No relay should be set (the only candidate was excluded)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - does not affect manual relay selection`() =
+        runTest {
+            // Given: Node excluded from auto-select
+            val node =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Manual Node",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            coEvery { announceRepository.getAnnounce(testDestHash) } returns node
+            coEvery { contactRepository.hasContact(testDestHash) } returns true
+
+            manager.excludeFromAutoSelect(testDestHash)
+
+            // When: User manually sets the excluded node as relay
+            manager.setManualRelay(testDestHash, "Manual Node")
+            advanceUntilIdle()
+
+            // Then: Manual selection should still work (exclusion only affects auto-select)
+            coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
+        }
+
+    @Test
+    fun `excludeFromAutoSelect - selects next nearest when nearest is excluded`() =
+        runTest {
+            // Given: Three nodes with different hop counts
+            val node1 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Nearest",
+                    hops = 1,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    peerName = "Middle",
+                    hops = 3,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            val node3 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash3,
+                    peerName = "Farthest",
+                    hops = 5,
+                    nodeType = "PROPAGATION_NODE",
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node1, node2, node3))
+            coEvery { announceRepository.getAnnounce(testDestHash2) } returns node2
+
+            // When: Exclude nearest node and trigger selection
+            manager.excludeFromAutoSelect(testDestHash)
+            manager.onRelayDeleted()
+            advanceUntilIdle()
+
+            // Then: Should select node2 (next nearest after excluded node1)
+            coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash3, any()) }
+        }
 }

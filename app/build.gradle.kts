@@ -425,6 +425,10 @@ dependencies {
     // Phase 4 Task 4.2: Production Observability
     implementation("io.sentry:sentry-android:8.29.0")
 
+    // Performance Monitoring - JankStats for frame monitoring
+    // Phase 1 Plan 01-03: Frame tracking integration with Sentry
+    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+
     // QR Code & Camera
     implementation(libs.zxing.core)
     implementation(libs.cameraX.core)
@@ -444,6 +448,9 @@ dependencies {
 
     // Google Play Services Location - for FusedLocationProviderClient
     implementation("com.google.android.gms:play-services-location:21.2.0")
+
+    // Memory leak detection
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
 
     // Testing
     testImplementation(libs.junit)

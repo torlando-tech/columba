@@ -639,6 +639,7 @@ class PropagationNodeManager
         suspend fun clearRelay() {
             // Cancel any ongoing auto-selection
             cooldownJob?.cancel()
+            backoffJob?.cancel()
             _selectionState.value = RelaySelectionState.IDLE
 
             // Exclude the current relay from auto-selection

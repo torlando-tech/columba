@@ -27,6 +27,7 @@ import javax.inject.Inject
  * Uses ReticulumProtocol for call actions (IPC to service process)
  * and CallCoordinator for local state management.
  */
+@Suppress("TooManyFunctions") // Call + PTT controls require many small action methods
 @HiltViewModel
 class CallViewModel
     @Inject

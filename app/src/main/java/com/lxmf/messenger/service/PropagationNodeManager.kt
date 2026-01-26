@@ -193,29 +193,37 @@ class PropagationNodeManager
          * Current relay state with loading indicator.
          * Starts as Loading, transitions to Loaded once database query completes.
          * This allows distinguishing "loading" from "no relay configured".
+         * 
+         * Uses Lazily to avoid immediate startup but keeps the flow active once started,
+         * which is critical for relay state management.
          */
         val currentRelayState: StateFlow<RelayLoadState> =
             contactRepository.getMyRelayFlow()
                 .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
                     RelayLoadState.Loaded(buildRelayInfo(contact, isAutoSelect))
                 }
-                .stateIn(scope, SharingStarted.Eagerly, RelayLoadState.Loading)
+                .stateIn(scope, SharingStarted.Lazily, RelayLoadState.Loading)
 
         /**
          * Current relay derived from database (single source of truth).
          * Automatically stays in sync with database changes.
          * Returns null if loading or no relay configured.
+         * 
+         * Uses Lazily to match currentRelayState's sharing strategy.
          */
         val currentRelay: StateFlow<RelayInfo?> =
             currentRelayState
                 .map { state -> (state as? RelayLoadState.Loaded)?.relay }
-                .stateIn(scope, SharingStarted.Eagerly, null)
+                .stateIn(scope, SharingStarted.Lazily, null)
 
         /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
          * Used for relay selection UI.
          *
          * Uses optimized SQL query with LIMIT to fetch only 10 rows.
+         * 
+         * Uses WhileSubscribed to prevent unnecessary database queries when no subscribers are active.
+         * This prevents the feedback loop that occurred when SettingsViewModel subscribed during navigation.
          */
         val availableRelaysState: StateFlow<AvailableRelaysState> =
             announceRepository.getTopPropagationNodes(limit = 10)
@@ -233,7 +241,7 @@ class PropagationNodeManager
                         }
                     AvailableRelaysState.Loaded(relays)
                 }
-                .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)
+                .stateIn(scope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000), AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()

@@ -471,6 +471,174 @@ class CallBridgeTest {
             assertTrue(callBridge.hasActiveCall())
         }
 
+    // ========== Push-to-Talk Tests ==========
+
+    @Test
+    fun `initial PTT mode is false`() =
+        runTest {
+            advanceUntilIdle()
+            callBridge.isPttMode.test(timeout = 5.seconds) {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `initial PTT active is false`() =
+        runTest {
+            advanceUntilIdle()
+            callBridge.isPttActive.test(timeout = 5.seconds) {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setPttMode enables PTT and mutes transmit`() =
+        runTest {
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+
+            callBridge.isPttMode.test(timeout = 5.seconds) {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            callBridge.isMuted.test(timeout = 5.seconds) {
+                assertTrue("Transmit should be muted when PTT enabled", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            verify { mockCallManager.muteMicrophone(true) }
+        }
+
+    @Test
+    fun `setPttMode disables PTT and unmutes transmit`() =
+        runTest {
+            // Enable then disable
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+            callBridge.setPttMode(false)
+            advanceUntilIdle()
+
+            callBridge.isPttMode.test(timeout = 5.seconds) {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            callBridge.isMuted.test(timeout = 5.seconds) {
+                assertFalse("Transmit should be unmuted when PTT disabled", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            verify { mockCallManager.muteMicrophone(false) }
+        }
+
+    @Test
+    fun `setPttActive unmutes when pressed in PTT mode`() =
+        runTest {
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+
+            callBridge.setPttActive(true)
+            advanceUntilIdle()
+
+            callBridge.isPttActive.test(timeout = 5.seconds) {
+                assertTrue(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            // Should unmute (active = transmitting)
+            verify { mockCallManager.muteMicrophone(false) }
+        }
+
+    @Test
+    fun `setPttActive mutes when released in PTT mode`() =
+        runTest {
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+
+            callBridge.setPttActive(true)
+            advanceUntilIdle()
+            callBridge.setPttActive(false)
+            advanceUntilIdle()
+
+            callBridge.isPttActive.test(timeout = 5.seconds) {
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            // Last call should be mute(true) for released
+            verify(atLeast = 1) { mockCallManager.muteMicrophone(true) }
+        }
+
+    @Test
+    fun `setPttActive is ignored when PTT mode is off`() =
+        runTest {
+            // PTT mode off by default
+            callBridge.setPttActive(true)
+            advanceUntilIdle()
+
+            callBridge.isPttActive.test(timeout = 5.seconds) {
+                assertFalse("PTT active should remain false when PTT mode is off", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `PTT state resets on call ended`() =
+        runTest {
+            val testHash = "abc123def456789012345678901234567890"
+
+            // Set up active call with PTT
+            callBridge.onCallEstablished(testHash)
+            advanceUntilIdle()
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+            callBridge.setPttActive(true)
+            advanceUntilIdle()
+
+            // End the call
+            callBridge.onCallEnded(testHash)
+            advanceUntilIdle()
+
+            // Wait for reset (after Ended + delay)
+            testScheduler.advanceTimeBy(3000)
+            advanceUntilIdle()
+
+            callBridge.isPttMode.test(timeout = 5.seconds) {
+                assertFalse("PTT mode should reset after call ends", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+            callBridge.isPttActive.test(timeout = 5.seconds) {
+                assertFalse("PTT active should reset after call ends", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `PTT full cycle press and release`() =
+        runTest {
+            callBridge.setPttMode(true)
+            advanceUntilIdle()
+
+            // Verify initial PTT state: muted, not active
+            assertTrue(callBridge.isMuted.value)
+            assertFalse(callBridge.isPttActive.value)
+
+            // Press PTT button
+            callBridge.setPttActive(true)
+            advanceUntilIdle()
+            assertFalse("Should be unmuted while pressing PTT", callBridge.isMuted.value)
+            assertTrue("Should be active while pressing PTT", callBridge.isPttActive.value)
+
+            // Release PTT button
+            callBridge.setPttActive(false)
+            advanceUntilIdle()
+            assertTrue("Should be muted after releasing PTT", callBridge.isMuted.value)
+            assertFalse("Should be inactive after releasing PTT", callBridge.isPttActive.value)
+        }
+
     // ========== Duration Tests ==========
 
     @Test

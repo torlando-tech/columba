@@ -1013,6 +1013,189 @@ class VoiceCallScreenTest {
         // Screen should render without crashing
         composeTestRule.onNodeWithText(longName).assertIsDisplayed()
     }
+
+    // ========== Push-to-Talk UI Tests ==========
+
+    @Test
+    fun `PTT toggle button is displayed during active call`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "01:00",
+                callDuration = "01:00",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = false,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNode(hasText("PTT"), useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `PTT toggle shows PTT On label when enabled`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "Listening",
+                callDuration = "01:00",
+                isMuted = true,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = true,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNode(hasText("PTT On"), useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `PTT toggle calls callback when clicked`() {
+        var pttToggled = false
+
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "01:00",
+                callDuration = "01:00",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = false,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = { pttToggled = true },
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("PTT").performClick()
+        assertTrue(pttToggled)
+    }
+
+    @Test
+    fun `PTT hold-to-talk button shown in PTT mode during active call`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "Listening",
+                callDuration = "01:00",
+                isMuted = true,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = true,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNode(hasText("HOLD\nTO TALK", useUnmergedTree = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `PTT button shows TALKING when active`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "Transmitting",
+                callDuration = "01:00",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = true,
+                isPttActive = true,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNode(hasText("TALKING", useUnmergedTree = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `PTT hold-to-talk button not shown when PTT off`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "01:00",
+                callDuration = "01:00",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = false,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNode(hasText("HOLD\nTO TALK", useUnmergedTree = true)).assertDoesNotExist()
+        composeTestRule.onNode(hasText("TALKING", useUnmergedTree = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `mute button disabled when PTT mode is on`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "Listening",
+                callDuration = "01:00",
+                isMuted = true,
+                isSpeakerOn = false,
+                isCallActive = true,
+                isPttMode = true,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        // Mute button should be disabled when PTT controls transmit
+        composeTestRule.onNodeWithContentDescription("Unmute").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `PTT toggle disabled when call not active`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "PTT User",
+                callStatus = "Connecting...",
+                callDuration = "",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = false,
+                isPttMode = false,
+                isPttActive = false,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onTogglePtt = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("PTT").assertIsNotEnabled()
+    }
 }
 
 // ========== Test Composables ==========
@@ -1031,8 +1214,11 @@ private fun TestVoiceCallScreen(
     isMuted: Boolean,
     isSpeakerOn: Boolean,
     isCallActive: Boolean,
+    isPttMode: Boolean = false,
+    isPttActive: Boolean = false,
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
+    onTogglePtt: () -> Unit = {},
     onEndCall: () -> Unit,
 ) {
     MaterialTheme {
@@ -1081,16 +1267,57 @@ private fun TestVoiceCallScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Control buttons row (mute + speaker)
+            // PTT hold-to-talk button (when PTT mode active during call)
+            if (isPttMode && isCallActive) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isPttActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            ),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = if (isPttActive) "Transmitting" else "Hold to talk",
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Text(
+                            text = if (isPttActive) "TALKING" else "HOLD\nTO TALK",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Control buttons row (mute + ptt + speaker)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(32.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                // Mute button
+                // Mute button (disabled in PTT mode)
                 TestCallControlButton(
                     icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                     label = if (isMuted) "Unmute" else "Mute",
                     isActive = isMuted,
                     onClick = onToggleMute,
+                    enabled = isCallActive && !isPttMode,
+                )
+
+                // PTT toggle
+                TestCallControlButton(
+                    icon = Icons.Default.Mic,
+                    label = if (isPttMode) "PTT On" else "PTT",
+                    isActive = isPttMode,
+                    onClick = onTogglePtt,
                     enabled = isCallActive,
                 )
 

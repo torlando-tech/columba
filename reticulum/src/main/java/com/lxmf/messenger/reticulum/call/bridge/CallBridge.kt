@@ -145,6 +145,12 @@ class CallBridge private constructor(
     private val _isSpeakerOn = MutableStateFlow(false)
     val isSpeakerOn: StateFlow<Boolean> = _isSpeakerOn.asStateFlow()
 
+    private val _isPttMode = MutableStateFlow(false)
+    val isPttMode: StateFlow<Boolean> = _isPttMode.asStateFlow()
+
+    private val _isPttActive = MutableStateFlow(false)
+    val isPttActive: StateFlow<Boolean> = _isPttActive.asStateFlow()
+
     private val _callDuration = MutableStateFlow(0L)
     val callDuration: StateFlow<Long> = _callDuration.asStateFlow()
 
@@ -447,6 +453,43 @@ class CallBridge private constructor(
         }
     }
 
+    // ===== Push-to-Talk =====
+
+    /**
+     * Enable or disable PTT mode.
+     *
+     * When PTT mode is enabled, transmit is muted by default.
+     * The user must press (and hold) the PTT button to transmit.
+     * When PTT mode is disabled, transmit returns to full duplex.
+     */
+    fun setPttMode(enabled: Boolean) {
+        Log.d(TAG, "PTT mode: $enabled")
+        _isPttMode.value = enabled
+        if (enabled) {
+            // Enter PTT mode: mute transmit by default
+            _isPttActive.value = false
+            setMuted(true)
+        } else {
+            // Leave PTT mode: unmute transmit (back to full duplex)
+            _isPttActive.value = false
+            setMuted(false)
+        }
+    }
+
+    /**
+     * Set PTT transmit state (press/release).
+     *
+     * Only has effect when PTT mode is enabled and call is active.
+     * @param active true when the PTT button is pressed (transmitting),
+     *               false when released (listening)
+     */
+    fun setPttActive(active: Boolean) {
+        if (!_isPttMode.value) return
+        Log.d(TAG, "PTT active: $active")
+        _isPttActive.value = active
+        setMuted(!active) // Pressed = unmuted (transmitting), released = muted (listening)
+    }
+
     // ===== Helper Methods =====
 
     /**
@@ -479,6 +522,8 @@ class CallBridge private constructor(
         _remoteIdentity.value = null
         _isMuted.value = false
         _isSpeakerOn.value = false
+        _isPttMode.value = false
+        _isPttActive.value = false
         _callDuration.value = 0L
         _callStartTime.value = null
     }
@@ -518,6 +563,20 @@ class CallBridge private constructor(
      */
     fun setSpeakerLocally(enabled: Boolean) {
         _isSpeakerOn.value = enabled
+    }
+
+    /**
+     * Update local PTT mode state.
+     */
+    fun setPttModeLocally(enabled: Boolean) {
+        _isPttMode.value = enabled
+    }
+
+    /**
+     * Update local PTT active state.
+     */
+    fun setPttActiveLocally(active: Boolean) {
+        _isPttActive.value = active
     }
 
     /**

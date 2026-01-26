@@ -173,6 +173,14 @@ jobs:
           path: app/build/outputs/mapping/sentryRelease/mapping.txt
           retention-days: 30
 
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: columba-apk
+          path: app/build/outputs/apk/sentry/release/*.apk
+          retention-days: 14
+
       - name: Annotate failure before cancelling
         if: failure()
         run: |
@@ -492,3 +500,48 @@ jobs:
   #         adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
   #         pkill -9 qemu-system || true
   #       adb kill-server || true
+
+  ci-passed:
+    name: ✅ CI Passed — APK Ready
+    if: always()
+    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Check all jobs passed
+        run: |
+          # Fail this job if any dependency failed or was cancelled
+          if [[ "${{ needs.validate-wrapper.result }}" != "success" ]] || \
+             [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.threading-audit.result }}" != "success" ]] || \
+             [[ "${{ needs.proguard-verification.result }}" != "success" ]] || \
+             [[ "${{ needs.python-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.kotlin-tests.result }}" != "success" ]]; then
+            echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+            echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Validate Wrapper | ${{ needs.validate-wrapper.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Threading Audit | ${{ needs.threading-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ProGuard Verification | ${{ needs.proguard-verification.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Python Tests | ${{ needs.python-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Kotlin Tests | ${{ needs.kotlin-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: CI Summary
+        run: |
+          echo "## ✅ All CI checks passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The **columba-apk** artifact is available for download from the Artifacts section of this workflow run." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate Wrapper | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Threading Audit | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| ProGuard Verification | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kotlin Tests | ✅ |" >> $GITHUB_STEP_SUMMARY

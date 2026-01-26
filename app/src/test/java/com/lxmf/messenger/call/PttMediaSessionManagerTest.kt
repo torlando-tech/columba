@@ -1,8 +1,5 @@
 package com.lxmf.messenger.call
 
-import android.content.Intent
-import android.support.v4.media.session.MediaSessionCompat
-import android.view.KeyEvent
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertFalse

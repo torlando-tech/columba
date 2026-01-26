@@ -143,14 +143,11 @@ jobs:
       - name: Build release APK
         run: ./gradlew :app:assembleSentryRelease --stacktrace --max-workers=2
         env:
-          # Use debug signing for CI verification (no release keystore needed)
-          RELEASE_STORE_FILE: ""
-          RELEASE_STORE_PASSWORD: ""
-          RELEASE_KEY_ALIAS: ""
-          RELEASE_KEY_PASSWORD: ""
-          # Empty DSN for CI builds (Sentry not configured in CI)
-          SENTRY_DSN: ""
-          # Sentry auth for ProGuard mapping uploads (optional - uploads if available)
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
 

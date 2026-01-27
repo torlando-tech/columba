@@ -376,24 +376,7 @@ class ColumbaApplication : Application() {
                             }
 
                             // Restore peer identities from database to enable message sending
-                            // Run on IO dispatcher to avoid blocking main thread during JSON serialization
-                            applicationScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    val peerIdentities = conversationRepository.getAllPeerIdentities()
-                                    if (peerIdentities.isNotEmpty()) {
-                                        val result =
-                                            (reticulumProtocol as ServiceReticulumProtocol)
-                                                .restorePeerIdentities(peerIdentities)
-                                        result.onSuccess { count ->
-                                            android.util.Log.d("ColumbaApplication", "Restored $count peer identities")
-                                        }.onFailure { error ->
-                                            android.util.Log.e("ColumbaApplication", "Failed to restore peer identities", error)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("ColumbaApplication", "Error restoring peer identities", e)
-                                }
-                            }
+                            restorePeerIdentities(reticulumProtocol as ServiceReticulumProtocol)
 
                             // Start the message collector service after Reticulum is ready
                             messageCollector.startCollecting()
@@ -663,6 +646,7 @@ class ColumbaApplication : Application() {
                 }
 
                 offset += batchSize
+                kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error processing peer identity batch at offset $offset", e)
                 break

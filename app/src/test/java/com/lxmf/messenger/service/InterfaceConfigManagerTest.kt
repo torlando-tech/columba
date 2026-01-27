@@ -115,10 +115,10 @@ class InterfaceConfigManagerTest {
         // Setup database mock
         val announceDao = mockk<AnnounceDao>()
         every { database.announceDao() } returns announceDao
-        coEvery { announceDao.getAllAnnouncesSync() } returns emptyList()
+        coEvery { announceDao.getAnnouncesBatch(any(), any()) } returns emptyList()
 
         // Setup conversation repository mock
-        coEvery { conversationRepository.getAllPeerIdentities() } returns emptyList()
+        coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
         // Setup protocol mock
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
@@ -340,7 +340,7 @@ class InterfaceConfigManagerTest {
                     Pair("hash1", byteArrayOf(1, 2, 3)),
                     Pair("hash2", byteArrayOf(4, 5, 6)),
                 )
-            coEvery { conversationRepository.getAllPeerIdentities() } returns peerIdentities
+            coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns peerIdentities
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
@@ -401,7 +401,7 @@ class InterfaceConfigManagerTest {
                 )
             val announceDao = mockk<AnnounceDao>()
             every { database.announceDao() } returns announceDao
-            coEvery { announceDao.getAllAnnouncesSync() } returns announces
+            coEvery { announceDao.getAnnouncesBatch(any(), any()) } returns announces
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
@@ -442,7 +442,7 @@ class InterfaceConfigManagerTest {
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
 
-            coEvery { conversationRepository.getAllPeerIdentities() } returns emptyList()
+            coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
@@ -477,7 +477,7 @@ class InterfaceConfigManagerTest {
 
             val announceDao = mockk<AnnounceDao>()
             every { database.announceDao() } returns announceDao
-            coEvery { announceDao.getAllAnnouncesSync() } returns emptyList()
+            coEvery { announceDao.getAnnouncesBatch(any(), any()) } returns emptyList()
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
@@ -512,7 +512,7 @@ class InterfaceConfigManagerTest {
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
 
             val peerIdentities = listOf(Pair("hash1", byteArrayOf(1, 2, 3)))
-            coEvery { conversationRepository.getAllPeerIdentities() } returns peerIdentities
+            coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns peerIdentities
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
@@ -565,7 +565,7 @@ class InterfaceConfigManagerTest {
                 )
             val announceDao = mockk<AnnounceDao>()
             every { database.announceDao() } returns announceDao
-            coEvery { announceDao.getAllAnnouncesSync() } returns announces
+            coEvery { announceDao.getAnnouncesBatch(any(), any()) } returns announces
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(

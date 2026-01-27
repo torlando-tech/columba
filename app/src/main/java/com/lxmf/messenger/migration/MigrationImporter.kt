@@ -19,6 +19,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -43,6 +44,7 @@ class MigrationImporter
         private val interfaceDatabase: InterfaceDatabase,
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) {
         companion object {
             private const val TAG = "MigrationImporter"
@@ -142,6 +144,23 @@ class MigrationImporter
                     onProgress(0.92f)
 
                     importSettings(bundle.settings, txResult.themeIdMap)
+                    onProgress(0.95f)
+
+                    // Trigger auto-selection after import if enabled and no relay was restored
+                    try {
+                        val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+                        val manualRelay = settingsRepository.getManualPropagationNode()
+                        
+                        if (isAutoSelect && manualRelay == null) {
+                            Log.d(TAG, "Auto-selection enabled but no relay restored - triggering auto-selection")
+                            propagationNodeManager.enableAutoSelect()
+                        } else if (!isAutoSelect && manualRelay != null) {
+                            Log.d(TAG, "Restored manual relay: $manualRelay")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to trigger auto-selection after import", e)
+                        // Non-fatal - continue with import completion
+                    }
                     onProgress(1.0f)
 
                     Log.i(TAG, "Migration import complete")
@@ -302,6 +321,9 @@ class MigrationImporter
         }
 
         private suspend fun importContacts(contacts: List<ContactExport>): Int {
+            // Track relay restoration for settings update
+            var restoredRelayHash: String? = null
+            
             val entities =
                 contacts.map { contact ->
                     // Determine status: use exported value, or infer from publicKey for backward compatibility
@@ -318,6 +340,13 @@ class MigrationImporter
                             ContactStatus.ACTIVE
                         }
 
+                    // Track which contact was the relay for settings restoration
+                    val isMyRelay = contact.isMyRelay == true
+                    if (isMyRelay) {
+                        restoredRelayHash = contact.destinationHash
+                        Log.d(TAG, "Restored relay contact: ${contact.customNickname ?: contact.destinationHash.take(12)}")
+                    }
+
                     ContactEntity(
                         destinationHash = contact.destinationHash,
                         identityHash = contact.identityHash,
@@ -330,10 +359,24 @@ class MigrationImporter
                         lastInteractionTimestamp = contact.lastInteractionTimestamp,
                         isPinned = contact.isPinned,
                         status = status,
+                        isMyRelay = isMyRelay,
                     )
                 }
             database.contactDao().insertContacts(entities)
             Log.d(TAG, "Imported ${entities.size} contacts")
+            
+            // Restore manual propagation node setting if a relay was restored
+            if (restoredRelayHash != null) {
+                try {
+                    settingsRepository.saveManualPropagationNode(restoredRelayHash)
+                    // If we restored a relay, the user had manual selection enabled
+                    settingsRepository.saveAutoSelectPropagationNode(false)
+                    Log.d(TAG, "Restored manual propagation node setting: $restoredRelayHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to restore propagation node settings", e)
+                }
+            }
+            
             return entities.size
         }
 

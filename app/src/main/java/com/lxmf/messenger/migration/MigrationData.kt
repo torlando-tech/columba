@@ -99,6 +99,8 @@ data class ContactExport(
     val isPinned: Boolean,
     /** Contact status: ACTIVE, PENDING_IDENTITY, or UNRESOLVED (nullable for backward compatibility) */
     val status: String? = null,
+    /** Whether this contact is the user's selected propagation node relay (nullable for backward compatibility) */
+    val isMyRelay: Boolean? = null,
 )
 
 /**

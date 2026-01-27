@@ -208,6 +208,7 @@ class MigrationExporter
                     lastInteractionTimestamp = contact.lastInteractionTimestamp,
                     isPinned = contact.isPinned,
                     status = contact.status.name,
+                    isMyRelay = contact.isMyRelay,
                 )
             }
         }

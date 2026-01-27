@@ -363,17 +363,18 @@ class InterfaceConfigManager
 
             Log.d(TAG, "Starting batched $label restoration (batch size: $batchSize)")
 
-            while (true) {
+            var batch = try {
+                fetchBatch(batchSize, offset)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching initial $label batch", e)
+                emptyList()
+            }
+
+            while (batch.isNotEmpty()) {
+                Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${batch.size} $label (offset $offset)")
+
+                val batchCount = batch.size
                 try {
-                    val batch = fetchBatch(batchSize, offset)
-
-                    if (batch.isEmpty()) {
-                        Log.d(TAG, "No more $label to process, finished at offset $offset")
-                        break
-                    }
-
-                    Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${batch.size} $label (offset $offset)")
-
                     processBatch(batch)
                         .onSuccess { count ->
                             totalRestored += count
@@ -383,12 +384,16 @@ class InterfaceConfigManager
                             Log.w(TAG, "Failed to restore $label batch at offset $offset: ${error.message}", error)
                         }
 
-                    if (batch.size < batchSize) break
                     offset += batchSize
-                    yield() // Let GC reclaim previous batch's bridge objects
+                    batch = if (batchCount < batchSize) {
+                        emptyList()
+                    } else {
+                        yield() // Let GC reclaim previous batch's bridge objects
+                        fetchBatch(batchSize, offset)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing $label batch at offset $offset", e)
-                    break
+                    batch = emptyList()
                 }
             }
 

@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -1256,6 +1258,7 @@ class SettingsViewModel
          * This fixes a bug where when relayInfo was null, the auto-select state
          * would incorrectly default to true instead of reading from the actual setting.
          */
+        @OptIn(FlowPreview::class)
         private fun startRelayMonitor() {
             viewModelScope.launch {
                 // Combine relay info with the actual auto-select setting from DataStore
@@ -1265,22 +1268,36 @@ class SettingsViewModel
                     settingsRepository.autoSelectPropagationNodeFlow,
                 ) { relayInfo, isAutoSelect ->
                     relayInfo to isAutoSelect
-                }.collect { (relayInfo, isAutoSelect) ->
-                    _state.value =
-                        _state.value.copy(
-                            currentRelayName = relayInfo?.displayName,
-                            // -1 means unknown hops (relay restored without announce data)
-                            currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
-                            currentRelayHash = relayInfo?.destinationHash,
-                            // Use the actual setting from DataStore, not a default
-                            autoSelectPropagationNode = isAutoSelect,
-                        )
-                    if (relayInfo != null) {
-                        Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops, autoSelect=$isAutoSelect)")
-                    } else {
-                        Log.d(TAG, "No relay selected (autoSelect=$isAutoSelect)")
-                    }
                 }
+                    // Add debouncing to prevent feedback loops from rapid relay state changes
+                    // This ensures the UI doesn't trigger cascading updates during auto-selection
+                    .debounce(300) // 300ms debounce - enough to break loops without affecting UX
+                    .distinctUntilChanged { old, new ->
+                        // Only update UI when relay info actually changes
+                        val (oldRelay, oldAutoSelect) = old
+                        val (newRelay, newAutoSelect) = new
+                        
+                        oldAutoSelect == newAutoSelect &&
+                            oldRelay?.destinationHash == newRelay?.destinationHash &&
+                            oldRelay?.displayName == newRelay?.displayName &&
+                            oldRelay?.hops == newRelay?.hops
+                    }
+                    .collect { (relayInfo, isAutoSelect) ->
+                        _state.value =
+                            _state.value.copy(
+                                currentRelayName = relayInfo?.displayName,
+                                // -1 means unknown hops (relay restored without announce data)
+                                currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
+                                currentRelayHash = relayInfo?.destinationHash,
+                                // Use the actual setting from DataStore, not a default
+                                autoSelectPropagationNode = isAutoSelect,
+                            )
+                        if (relayInfo != null) {
+                            Log.d(TAG, "Current relay updated: ${relayInfo.displayName} (${relayInfo.hops} hops, autoSelect=$isAutoSelect)")
+                        } else {
+                            Log.d(TAG, "No relay selected (autoSelect=$isAutoSelect)")
+                        }
+                    }
             }
         }
 
@@ -1293,23 +1310,38 @@ class SettingsViewModel
         private fun startSyncStateMonitor() {
             // Monitor available relays for selection UI
             viewModelScope.launch {
-                propagationNodeManager.availableRelaysState.collect { state ->
-                    when (state) {
-                        is AvailableRelaysState.Loading -> {
-                            Log.d(TAG, "SettingsViewModel: available relays loading")
-                            _state.update { it.copy(availableRelaysLoading = true) }
+                propagationNodeManager.availableRelaysState
+                    .distinctUntilChanged { old, new ->
+                        // Only update when the list content actually changes
+                        when {
+                            old is AvailableRelaysState.Loading && new is AvailableRelaysState.Loading -> true
+                            old is AvailableRelaysState.Loaded && new is AvailableRelaysState.Loaded ->
+                                old.relays.size == new.relays.size &&
+                                    old.relays.zip(new.relays).all { (oldRelay, newRelay) ->
+                                        oldRelay.destinationHash == newRelay.destinationHash &&
+                                            oldRelay.displayName == newRelay.displayName &&
+                                            oldRelay.hops == newRelay.hops
+                                    }
+                            else -> false
                         }
-                        is AvailableRelaysState.Loaded -> {
-                            Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
-                            _state.update {
-                                it.copy(
-                                    availableRelays = state.relays,
-                                    availableRelaysLoading = false,
-                                )
+                    }
+                    .collect { state ->
+                        when (state) {
+                            is AvailableRelaysState.Loading -> {
+                                Log.d(TAG, "SettingsViewModel: available relays loading")
+                                _state.update { it.copy(availableRelaysLoading = true) }
+                            }
+                            is AvailableRelaysState.Loaded -> {
+                                Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
+                                _state.update {
+                                    it.copy(
+                                        availableRelays = state.relays,
+                                        availableRelaysLoading = false,
+                                    )
+                                }
                             }
                         }
                     }
-                }
             }
 
             // Monitor isSyncing separately - it changes rapidly and shouldn't trigger

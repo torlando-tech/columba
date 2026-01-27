@@ -19,13 +19,13 @@ import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -248,7 +248,8 @@ class SettingsViewModel
                 try {
                     // Load custom themes and convert to AppTheme list
                     val customThemesFlow =
-                        settingsRepository.getAllCustomThemes()
+                        settingsRepository
+                            .getAllCustomThemes()
                             .map { themeDataList ->
                                 themeDataList.map { themeData ->
                                     settingsRepository.customThemeDataToAppTheme(themeData)
@@ -608,13 +609,13 @@ class SettingsViewModel
                     if (activeIdentity != null) {
                         // Update the display name in the database
                         val nameToSave = newDisplayName.trim()
-                        identityRepository.updateDisplayName(activeIdentity.identityHash, nameToSave)
+                        identityRepository
+                            .updateDisplayName(activeIdentity.identityHash, nameToSave)
                             .onSuccess {
                                 Log.d(TAG, "Display name updated successfully to: $nameToSave")
                                 // Show success message
                                 _state.value = _state.value.copy(showSaveSuccess = true)
-                            }
-                            .onFailure { error ->
+                            }.onFailure { error ->
                                 Log.e(TAG, "Failed to update display name", error)
                             }
                     } else {
@@ -647,17 +648,18 @@ class SettingsViewModel
                     val activeIdentity = identityRepository.getActiveIdentitySync()
 
                     if (activeIdentity != null) {
-                        identityRepository.updateIconAppearance(
-                            activeIdentity.identityHash,
-                            iconName,
-                            foregroundColor,
-                            backgroundColor,
-                        ).onSuccess {
-                            Log.d(TAG, "Icon appearance updated successfully")
-                            _state.value = _state.value.copy(showSaveSuccess = true)
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to update icon appearance", error)
-                        }
+                        identityRepository
+                            .updateIconAppearance(
+                                activeIdentity.identityHash,
+                                iconName,
+                                foregroundColor,
+                                backgroundColor,
+                            ).onSuccess {
+                                Log.d(TAG, "Icon appearance updated successfully")
+                                _state.value = _state.value.copy(showSaveSuccess = true)
+                            }.onFailure { error ->
+                                Log.e(TAG, "Failed to update icon appearance", error)
+                            }
                     } else {
                         Log.w(TAG, "Cannot update icon appearance - no active identity")
                     }
@@ -670,9 +672,7 @@ class SettingsViewModel
         /**
          * Get the effective display name (custom or default) to be used in announces and messages.
          */
-        fun getEffectiveDisplayName(): String {
-            return state.value.displayName
-        }
+        fun getEffectiveDisplayName(): String = state.value.displayName
 
         /**
          * Toggle the QR code dialog visibility.
@@ -847,14 +847,13 @@ class SettingsViewModel
                     // 1. Shutdown current service
                     // 2. Restart the service process
                     // 3. Re-initialize with config from database
-                    interfaceConfigManager.applyInterfaceChanges()
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
                         .onSuccess {
                             Log.i(TAG, "Service restart completed successfully")
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.e(TAG, "Service restart failed: ${error.message}", error)
-                        }
-                        .getOrThrow() // Convert failure to exception for catch block
+                        }.getOrThrow() // Convert failure to exception for catch block
 
                     _state.value = _state.value.copy(isRestarting = false)
                 } catch (e: Exception) {
@@ -881,14 +880,13 @@ class SettingsViewModel
 
                     // Use InterfaceConfigManager which handles the full restart lifecycle
                     // Python will check for shared instance, find it offline, and use own interfaces
-                    interfaceConfigManager.applyInterfaceChanges()
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
                         .onSuccess {
                             Log.i(TAG, "Service restart completed - now using Columba's own instance")
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.e(TAG, "Service restart failed: ${error.message}", error)
-                        }
-                        .getOrThrow()
+                        }.getOrThrow()
 
                     // Keep wasUsingSharedInstance = true to show informational banner
                     _state.value =
@@ -1273,16 +1271,15 @@ class SettingsViewModel
                     // This ensures the UI doesn't trigger cascading updates during auto-selection
                     .debounce(300) // 300ms debounce - enough to break loops without affecting UX
                     .distinctUntilChanged { old, new ->
-                        // Only update UI when relay info actually changes
+                        // Filter out emissions when relay info hasn't changed
                         val (oldRelay, oldAutoSelect) = old
                         val (newRelay, newAutoSelect) = new
-                        
+
                         oldAutoSelect == newAutoSelect &&
                             oldRelay?.destinationHash == newRelay?.destinationHash &&
                             oldRelay?.displayName == newRelay?.displayName &&
                             oldRelay?.hops == newRelay?.hops
-                    }
-                    .collect { (relayInfo, isAutoSelect) ->
+                    }.collect { (relayInfo, isAutoSelect) ->
                         _state.value =
                             _state.value.copy(
                                 currentRelayName = relayInfo?.displayName,
@@ -1324,8 +1321,7 @@ class SettingsViewModel
                                     }
                             else -> false
                         }
-                    }
-                    .collect { state ->
+                    }.collect { state ->
                         when (state) {
                             is AvailableRelaysState.Loading -> {
                                 Log.d(TAG, "SettingsViewModel: available relays loading")

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-push hook: run ktlint + detekt + CPD (mirrors CI "Code Quality" job)
+# Skip with: git push --no-verify
+
+set -e
+
+echo "Running code quality checks before push..."
+
+./gradlew ktlintCheck detekt cpdCheck --continue --quiet 2>&1
+
+echo "✓ Code quality checks passed"

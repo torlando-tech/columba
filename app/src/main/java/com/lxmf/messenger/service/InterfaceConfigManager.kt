@@ -19,6 +19,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,8 +66,8 @@ class InterfaceConfigManager
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(): Result<Unit> {
-            return runCatching {
+        suspend fun applyInterfaceChanges(): Result<Unit> =
+            runCatching {
                 Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
 
                 // Step 1: Stop message collector
@@ -90,7 +91,8 @@ class InterfaceConfigManager
                 // CRITICAL: Use commit() not apply() to ensure flag is written to disk BEFORE service starts
                 // Service runs in separate process and needs to read this from disk
                 Log.d(TAG, "Step 3: Setting config apply flag (synchronous write)...")
-                context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                context
+                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                     .edit()
                     .putBoolean("is_applying_config", true)
                     .commit() // Synchronous write - blocks until written to disk
@@ -195,11 +197,11 @@ class InterfaceConfigManager
                 val activeIdentity = identityRepository.getActiveIdentitySync()
                 val identityPath =
                     if (activeIdentity != null) {
-                        identityRepository.ensureIdentityFileExists(activeIdentity)
+                        identityRepository
+                            .ensureIdentityFileExists(activeIdentity)
                             .onFailure { error ->
                                 Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                            }
-                            .getOrNull()
+                            }.getOrNull()
                     } else {
                         null
                     }
@@ -240,20 +242,22 @@ class InterfaceConfigManager
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                     )
 
-                reticulumProtocol.initialize(config)
+                reticulumProtocol
+                    .initialize(config)
                     .onSuccess {
                         Log.d(TAG, "✓ Reticulum initialized successfully")
 
                         // Clear the flag now that initialization is complete
-                        context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        context
+                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                             .edit()
                             .putBoolean("is_applying_config", false)
                             .commit() // Synchronous to ensure flag is cleared for next restart
                         Log.d(TAG, "✓ Config apply flag cleared")
-                    }
-                    .onFailure { error ->
+                    }.onFailure { error ->
                         // Clear flag even on failure
-                        context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        context
+                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                             .edit()
                             .putBoolean("is_applying_config", false)
                             .commit() // Synchronous to ensure flag is cleared
@@ -262,54 +266,21 @@ class InterfaceConfigManager
                         throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                     }
 
-                // Step 10: Restore peer identities (uses bulk restore with lightweight hash computation)
-                Log.d(TAG, "Step 10: Bulk restoring peer identities...")
+                // Step 10: Restore peer identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10: Batch restoring peer identities...")
                 try {
-                    val peerIdentities = conversationRepository.getAllPeerIdentities()
-                    Log.d(TAG, "Retrieved ${peerIdentities.size} peer identities from database")
-
-                    if (peerIdentities.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        reticulumProtocol.restorePeerIdentities(peerIdentities)
-                            .onSuccess { count ->
-                                Log.d(TAG, "✓ Bulk restored $count peer identities")
-                            }
-                            .onFailure { error ->
-                                Log.w(TAG, "Failed to bulk restore peer identities: ${error.message}", error)
-                                // Not fatal - continue
-                            }
-                    } else {
-                        Log.d(TAG, "No peer identities to restore")
-                    }
+                    restorePeerIdentitiesInBatches()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error bulk restoring peer identities", e)
+                    Log.w(TAG, "Error batch restoring peer identities", e)
                     // Not fatal - continue
                 }
 
-                // Step 10b: Restore announce identities (uses fast bulk restore with direct dict population)
-                Log.d(TAG, "Step 10b: Bulk restoring announce identities...")
+                // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10b: Batch restoring announce identities...")
                 try {
-                    val announces = database.announceDao().getAllAnnouncesSync()
-                    Log.d(TAG, "Retrieved ${announces.size} announce identities from database")
-
-                    if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        // Map announces to (destinationHash, publicKey) - no hash computation needed
-                        val announceIdentities =
-                            announces.map { announce ->
-                                announce.destinationHash to announce.publicKey
-                            }
-                        reticulumProtocol.restoreAnnounceIdentities(announceIdentities)
-                            .onSuccess { count ->
-                                Log.d(TAG, "✓ Bulk restored $count announce identities")
-                            }
-                            .onFailure { error ->
-                                Log.w(TAG, "Failed to bulk restore announce identities: ${error.message}", error)
-                                // Not fatal - continue
-                            }
-                    } else {
-                        Log.d(TAG, "No announce identities to restore")
-                    }
+                    restoreAnnounceIdentitiesInBatches()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error bulk restoring announce identities", e)
+                    Log.w(TAG, "Error batch restoring announce identities", e)
                     // Not fatal - continue
                 }
 
@@ -327,19 +298,17 @@ class InterfaceConfigManager
 
                 Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
             }
-        }
 
         /**
          * Check if Reticulum is currently running and ready.
          */
-        fun isReticulumRunning(): Boolean {
-            return try {
+        fun isReticulumRunning(): Boolean =
+            try {
                 val status = reticulumProtocol.networkStatus.value
                 status.toString().contains("RUNNING") || status.toString().contains("READY")
             } catch (e: Exception) {
                 false
             }
-        }
 
         /**
          * Mark that there are pending interface changes that need to be applied.
@@ -347,7 +316,8 @@ class InterfaceConfigManager
          * (e.g., from RNode wizard).
          */
         fun setPendingChanges(hasPending: Boolean) {
-            context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+            context
+                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("has_pending_interface_changes", hasPending)
                 .apply()
@@ -371,11 +341,86 @@ class InterfaceConfigManager
          *
          * @return RSSI in dBm, or -100 if not connected or not available
          */
-        fun getRNodeRssi(): Int {
-            return if (reticulumProtocol is ServiceReticulumProtocol) {
+        fun getRNodeRssi(): Int =
+            if (reticulumProtocol is ServiceReticulumProtocol) {
                 reticulumProtocol.getRNodeRssi()
             } else {
                 -100
             }
+
+        /**
+         * Generic batched restoration to prevent OOM when loading large tables across the
+         * Chaquopy bridge. Fetches records in pages and yields between batches so the GC
+         * can reclaim the previous batch's bridge objects.
+         */
+        private suspend fun <T> restoreInBatches(
+            label: String,
+            batchSize: Int = 500,
+            fetchBatch: suspend (limit: Int, offset: Int) -> List<T>,
+            processBatch: suspend (List<T>) -> Result<Int>,
+        ): Int {
+            var offset = 0
+            var totalRestored = 0
+
+            Log.d(TAG, "Starting batched $label restoration (batch size: $batchSize)")
+
+            var batch =
+                try {
+                    fetchBatch(batchSize, offset)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching initial $label batch", e)
+                    emptyList()
+                }
+
+            while (batch.isNotEmpty()) {
+                Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${batch.size} $label (offset $offset)")
+
+                val batchCount = batch.size
+                try {
+                    processBatch(batch)
+                        .onSuccess { count ->
+                            totalRestored += count
+                            Log.d(TAG, "✓ Restored $count $label from batch (total: $totalRestored)")
+                        }.onFailure { error ->
+                            Log.w(TAG, "Failed to restore $label batch at offset $offset: ${error.message}", error)
+                        }
+
+                    offset += batchSize
+                    batch =
+                        if (batchCount < batchSize) {
+                            emptyList()
+                        } else {
+                            yield() // Let GC reclaim previous batch's bridge objects
+                            fetchBatch(batchSize, offset)
+                        }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing $label batch at offset $offset", e)
+                    batch = emptyList()
+                }
+            }
+
+            Log.d(TAG, "✓ Batch restore complete: $totalRestored $label restored")
+            return totalRestored
+        }
+
+        private suspend fun restorePeerIdentitiesInBatches() {
+            if (reticulumProtocol !is ServiceReticulumProtocol) return
+            restoreInBatches(
+                label = "peer identities",
+                fetchBatch = { limit, offset -> conversationRepository.getPeerIdentitiesBatch(limit, offset) },
+                processBatch = { batch -> reticulumProtocol.restorePeerIdentities(batch) },
+            )
+        }
+
+        private suspend fun restoreAnnounceIdentitiesInBatches() {
+            if (reticulumProtocol !is ServiceReticulumProtocol) return
+            restoreInBatches(
+                label = "announce identities",
+                fetchBatch = { limit, offset -> database.announceDao().getAnnouncesBatch(limit, offset) },
+                processBatch = { batch ->
+                    val identities = batch.map { it.destinationHash to it.publicKey }
+                    reticulumProtocol.restoreAnnounceIdentities(identities)
+                },
+            )
         }
     }

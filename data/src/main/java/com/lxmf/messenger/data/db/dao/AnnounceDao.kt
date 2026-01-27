@@ -34,6 +34,17 @@ interface AnnounceDao {
     suspend fun getAllAnnouncesSync(): List<AnnounceEntity>
 
     /**
+     * Get announces in batches to prevent OOM when loading large amounts of data.
+     * Used for identity restoration with pagination.
+     * 
+     * @param limit Number of announces to return in this batch
+     * @param offset Number of announces to skip (for pagination)
+     * @return List of announces sorted by most recently seen
+     */
+    @Query("SELECT * FROM announces ORDER BY lastSeenTimestamp DESC LIMIT :limit OFFSET :offset")
+    suspend fun getAnnouncesBatch(limit: Int, offset: Int): List<AnnounceEntity>
+
+    /**
      * Insert multiple announces at once (for import).
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

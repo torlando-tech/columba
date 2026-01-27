@@ -617,39 +617,37 @@ class ColumbaApplication : Application() {
 
         android.util.Log.d("ColumbaApplication", "Starting batched peer identity restoration (batch size: $batchSize)")
 
-        while (true) {
+        var batch = try {
+            conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+        } catch (e: Exception) {
+            android.util.Log.e("ColumbaApplication", "Error fetching initial peer identity batch", e)
+            emptyList()
+        }
+
+        while (batch.isNotEmpty()) {
+            android.util.Log.d("ColumbaApplication", "Processing batch ${offset / batchSize + 1}: ${batch.size} peer identities (offset $offset)")
+
+            val batchCount = batch.size
             try {
-                val peerIdentitiesBatch = conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
-                
-                if (peerIdentitiesBatch.isEmpty()) {
-                    android.util.Log.d("ColumbaApplication", "No more peer identities to process, finished at offset $offset")
-                    break
-                }
-
-                android.util.Log.d("ColumbaApplication", "Processing batch ${offset / batchSize + 1}: ${peerIdentitiesBatch.size} peer identities (offset $offset)")
-
-                // Restore this batch
-                serviceProtocol.restorePeerIdentities(peerIdentitiesBatch)
+                serviceProtocol.restorePeerIdentities(batch)
                     .onSuccess { count ->
                         totalRestored += count
                         android.util.Log.d("ColumbaApplication", "✓ Restored $count peer identities from batch (total: $totalRestored)")
                     }
                     .onFailure { error ->
                         android.util.Log.w("ColumbaApplication", "Failed to restore peer identity batch at offset $offset: ${error.message}", error)
-                        // Continue with next batch even if this one fails
                     }
 
-                // If we got fewer than requested, we've reached the end
-                if (peerIdentitiesBatch.size < batchSize) {
-                    android.util.Log.d("ColumbaApplication", "Reached end of peer identities (got ${peerIdentitiesBatch.size} < $batchSize)")
-                    break
-                }
-
                 offset += batchSize
-                kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
+                batch = if (batchCount < batchSize) {
+                    emptyList()
+                } else {
+                    kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
+                    conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+                }
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error processing peer identity batch at offset $offset", e)
-                break
+                batch = emptyList()
             }
         }
 

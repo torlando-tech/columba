@@ -66,8 +66,8 @@ class InterfaceConfigManager
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(): Result<Unit> {
-            return runCatching {
+        suspend fun applyInterfaceChanges(): Result<Unit> =
+            runCatching {
                 Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
 
                 // Step 1: Stop message collector
@@ -91,7 +91,8 @@ class InterfaceConfigManager
                 // CRITICAL: Use commit() not apply() to ensure flag is written to disk BEFORE service starts
                 // Service runs in separate process and needs to read this from disk
                 Log.d(TAG, "Step 3: Setting config apply flag (synchronous write)...")
-                context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                context
+                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                     .edit()
                     .putBoolean("is_applying_config", true)
                     .commit() // Synchronous write - blocks until written to disk
@@ -196,11 +197,11 @@ class InterfaceConfigManager
                 val activeIdentity = identityRepository.getActiveIdentitySync()
                 val identityPath =
                     if (activeIdentity != null) {
-                        identityRepository.ensureIdentityFileExists(activeIdentity)
+                        identityRepository
+                            .ensureIdentityFileExists(activeIdentity)
                             .onFailure { error ->
                                 Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                            }
-                            .getOrNull()
+                            }.getOrNull()
                     } else {
                         null
                     }
@@ -241,20 +242,22 @@ class InterfaceConfigManager
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                     )
 
-                reticulumProtocol.initialize(config)
+                reticulumProtocol
+                    .initialize(config)
                     .onSuccess {
                         Log.d(TAG, "✓ Reticulum initialized successfully")
 
                         // Clear the flag now that initialization is complete
-                        context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        context
+                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                             .edit()
                             .putBoolean("is_applying_config", false)
                             .commit() // Synchronous to ensure flag is cleared for next restart
                         Log.d(TAG, "✓ Config apply flag cleared")
-                    }
-                    .onFailure { error ->
+                    }.onFailure { error ->
                         // Clear flag even on failure
-                        context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        context
+                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                             .edit()
                             .putBoolean("is_applying_config", false)
                             .commit() // Synchronous to ensure flag is cleared
@@ -295,19 +298,17 @@ class InterfaceConfigManager
 
                 Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
             }
-        }
 
         /**
          * Check if Reticulum is currently running and ready.
          */
-        fun isReticulumRunning(): Boolean {
-            return try {
+        fun isReticulumRunning(): Boolean =
+            try {
                 val status = reticulumProtocol.networkStatus.value
                 status.toString().contains("RUNNING") || status.toString().contains("READY")
             } catch (e: Exception) {
                 false
             }
-        }
 
         /**
          * Mark that there are pending interface changes that need to be applied.
@@ -315,7 +316,8 @@ class InterfaceConfigManager
          * (e.g., from RNode wizard).
          */
         fun setPendingChanges(hasPending: Boolean) {
-            context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+            context
+                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("has_pending_interface_changes", hasPending)
                 .apply()
@@ -339,13 +341,12 @@ class InterfaceConfigManager
          *
          * @return RSSI in dBm, or -100 if not connected or not available
          */
-        fun getRNodeRssi(): Int {
-            return if (reticulumProtocol is ServiceReticulumProtocol) {
+        fun getRNodeRssi(): Int =
+            if (reticulumProtocol is ServiceReticulumProtocol) {
                 reticulumProtocol.getRNodeRssi()
             } else {
                 -100
             }
-        }
 
         /**
          * Generic batched restoration to prevent OOM when loading large tables across the
@@ -363,12 +364,13 @@ class InterfaceConfigManager
 
             Log.d(TAG, "Starting batched $label restoration (batch size: $batchSize)")
 
-            var batch = try {
-                fetchBatch(batchSize, offset)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching initial $label batch", e)
-                emptyList()
-            }
+            var batch =
+                try {
+                    fetchBatch(batchSize, offset)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching initial $label batch", e)
+                    emptyList()
+                }
 
             while (batch.isNotEmpty()) {
                 Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${batch.size} $label (offset $offset)")
@@ -379,18 +381,18 @@ class InterfaceConfigManager
                         .onSuccess { count ->
                             totalRestored += count
                             Log.d(TAG, "✓ Restored $count $label from batch (total: $totalRestored)")
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.w(TAG, "Failed to restore $label batch at offset $offset: ${error.message}", error)
                         }
 
                     offset += batchSize
-                    batch = if (batchCount < batchSize) {
-                        emptyList()
-                    } else {
-                        yield() // Let GC reclaim previous batch's bridge objects
-                        fetchBatch(batchSize, offset)
-                    }
+                    batch =
+                        if (batchCount < batchSize) {
+                            emptyList()
+                        } else {
+                            yield() // Let GC reclaim previous batch's bridge objects
+                            fetchBatch(batchSize, offset)
+                        }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing $label batch at offset $offset", e)
                     batch = emptyList()

@@ -102,13 +102,15 @@ class ColumbaApplication : Application() {
         // Detect threading violations during development
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(
-                StrictMode.ThreadPolicy.Builder()
+                StrictMode.ThreadPolicy
+                    .Builder()
                     .detectAll() // Detect disk reads, disk writes, network, custom slow calls
                     .penaltyLog() // Log violations to logcat
                     .build(),
             )
             StrictMode.setVmPolicy(
-                StrictMode.VmPolicy.Builder()
+                StrictMode.VmPolicy
+                    .Builder()
                     .detectAll() // Detect leaks, file URI exposure, etc.
                     .penaltyLog()
                     .build(),
@@ -241,7 +243,8 @@ class ColumbaApplication : Application() {
                         val serviceIdentity =
                             withTimeoutOrNull(IPC_TIMEOUT_MS) {
                                 (reticulumProtocol as ServiceReticulumProtocol)
-                                    .getLxmfIdentity().getOrNull()
+                                    .getLxmfIdentity()
+                                    .getOrNull()
                             }
                         val verificationResult = serviceIdentityVerifier.verify(serviceIdentity)
 
@@ -269,7 +272,8 @@ class ColumbaApplication : Application() {
                             )
                             return@launch
                         }
-                    } else if (currentStatus != "SHUTDOWN" && currentStatus != null &&
+                    } else if (currentStatus != "SHUTDOWN" &&
+                        currentStatus != null &&
                         !currentStatus.startsWith("ERROR:")
                     ) {
                         // Service is in INITIALIZING or RESTARTING state - wait for it
@@ -337,7 +341,8 @@ class ColumbaApplication : Application() {
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         )
 
-                    reticulumProtocol.initialize(config)
+                    reticulumProtocol
+                        .initialize(config)
                         .onSuccess {
                             android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
 
@@ -362,10 +367,12 @@ class ColumbaApplication : Application() {
                                     // Get identity hashes from service
                                     val identity =
                                         (reticulumProtocol as ServiceReticulumProtocol)
-                                            .getLxmfIdentity().getOrNull()
+                                            .getLxmfIdentity()
+                                            .getOrNull()
                                     val destination =
                                         (reticulumProtocol as ServiceReticulumProtocol)
-                                            .getLxmfDestination().getOrNull()
+                                            .getLxmfDestination()
+                                            .getOrNull()
                                     val idHash = identity?.hash?.toHexString()
                                     val destHash = destination?.hash?.toHexString()
 
@@ -388,8 +395,7 @@ class ColumbaApplication : Application() {
                                 "ColumbaApplication",
                                 "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
                             )
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             android.util.Log.e("ColumbaApplication", "Failed to initialize Reticulum: ${error.message}", error)
                         }
                 } catch (e: Exception) {
@@ -424,8 +430,8 @@ class ColumbaApplication : Application() {
      * Get the current process name.
      * Used to detect if we're running in the main app or service process.
      */
-    private fun getCurrentProcessName(): String? {
-        return if (android.os.Build.VERSION.SDK_INT >= 28) {
+    private fun getCurrentProcessName(): String? =
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
             Application.getProcessName()
         } else {
             try {
@@ -437,20 +443,18 @@ class ColumbaApplication : Application() {
                 null
             }
         }
-    }
 
     /**
      * Detect if we're running in a test environment.
      * Used to skip auto-initialization during instrumented tests.
      */
-    private fun isRunningInTest(): Boolean {
-        return try {
+    private fun isRunningInTest(): Boolean =
+        try {
             Class.forName("androidx.test.espresso.Espresso")
             true
         } catch (e: ClassNotFoundException) {
             false
         }
-    }
 
     /**
      * Register existing companion device associations for device presence monitoring.
@@ -569,7 +573,8 @@ class ColumbaApplication : Application() {
                     autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                 )
 
-            serviceProtocol.initialize(config)
+            serviceProtocol
+                .initialize(config)
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
@@ -586,8 +591,7 @@ class ColumbaApplication : Application() {
                         "ColumbaApplication",
                         "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
                     )
-                }
-                .onFailure { error ->
+                }.onFailure { error ->
                     android.util.Log.e("ColumbaApplication", "initializeReticulumService: Failed to initialize Reticulum: ${error.message}", error)
                 }
         } catch (e: Exception) {
@@ -617,34 +621,36 @@ class ColumbaApplication : Application() {
 
         android.util.Log.d("ColumbaApplication", "Starting batched peer identity restoration (batch size: $batchSize)")
 
-        var batch = try {
-            conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
-        } catch (e: Exception) {
-            android.util.Log.e("ColumbaApplication", "Error fetching initial peer identity batch", e)
-            emptyList()
-        }
+        var batch =
+            try {
+                conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+            } catch (e: Exception) {
+                android.util.Log.e("ColumbaApplication", "Error fetching initial peer identity batch", e)
+                emptyList()
+            }
 
         while (batch.isNotEmpty()) {
             android.util.Log.d("ColumbaApplication", "Processing batch ${offset / batchSize + 1}: ${batch.size} peer identities (offset $offset)")
 
             val batchCount = batch.size
             try {
-                serviceProtocol.restorePeerIdentities(batch)
+                serviceProtocol
+                    .restorePeerIdentities(batch)
                     .onSuccess { count ->
                         totalRestored += count
                         android.util.Log.d("ColumbaApplication", "✓ Restored $count peer identities from batch (total: $totalRestored)")
-                    }
-                    .onFailure { error ->
+                    }.onFailure { error ->
                         android.util.Log.w("ColumbaApplication", "Failed to restore peer identity batch at offset $offset: ${error.message}", error)
                     }
 
                 offset += batchSize
-                batch = if (batchCount < batchSize) {
-                    emptyList()
-                } else {
-                    kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
-                    conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
-                }
+                batch =
+                    if (batchCount < batchSize) {
+                        emptyList()
+                    } else {
+                        kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
+                        conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+                    }
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error processing peer identity batch at offset $offset", e)
                 batch = emptyList()

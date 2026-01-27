@@ -2,6 +2,9 @@ package com.lxmf.messenger.ui.screens
 
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.SystemClock
+import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,7 +26,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
@@ -123,8 +129,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -172,6 +183,118 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val URL_ANNOTATION_TAG = "url"
+
+private fun cleanUrlForOpening(raw: String): String {
+    val trimmed = raw.trim()
+    return trimmed.trimEnd { ch -> ch in listOf('.', ',', ';', ':', '!', '?', ')', ']', '}') }
+}
+
+private fun toBrowsableUri(rawUrl: String): Uri {
+    val cleaned = cleanUrlForOpening(rawUrl)
+    val hasScheme = cleaned.startsWith("http://", ignoreCase = true) || cleaned.startsWith("https://", ignoreCase = true)
+    val withScheme = if (hasScheme) cleaned else "https://$cleaned"
+    return Uri.parse(withScheme)
+}
+
+@Composable
+private fun LinkifiedMessageText(
+    text: String,
+    isFromMe: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val viewConfiguration = LocalViewConfiguration.current
+
+    val textColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val linkColor = MaterialTheme.colorScheme.primary
+
+    val annotatedText =
+        remember(text, linkColor) {
+            val matches = Patterns.WEB_URL.matcher(text)
+            buildAnnotatedString {
+                var currentIndex = 0
+                while (matches.find()) {
+                    val start = matches.start()
+                    val end = matches.end()
+                    if (start > currentIndex) {
+                        append(text.substring(currentIndex, start))
+                    }
+
+                    val urlText = text.substring(start, end)
+                    val linkStart = length
+                    append(urlText)
+                    val linkEnd = length
+                    addStyle(
+                        style =
+                            SpanStyle(
+                                color = linkColor,
+                                textDecoration = TextDecoration.Underline,
+                            ),
+                        start = linkStart,
+                        end = linkEnd,
+                    )
+                    addStringAnnotation(
+                        tag = URL_ANNOTATION_TAG,
+                        annotation = urlText,
+                        start = linkStart,
+                        end = linkEnd,
+                    )
+                    currentIndex = end
+                }
+
+                if (currentIndex < text.length) {
+                    append(text.substring(currentIndex))
+                }
+            }
+        }
+
+    var layoutResult: TextLayoutResult? by remember { mutableStateOf(null) }
+
+    Text(
+        text = annotatedText,
+        style = MaterialTheme.typography.bodyLarge,
+        color = textColor,
+        onTextLayout = { layoutResult = it },
+        modifier =
+            modifier.pointerInput(annotatedText, viewConfiguration.longPressTimeoutMillis) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val downTime = SystemClock.uptimeMillis()
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    val upTime = SystemClock.uptimeMillis()
+
+                    if (upTime - downTime >= viewConfiguration.longPressTimeoutMillis) {
+                        return@awaitEachGesture
+                    }
+
+                    val result = layoutResult ?: return@awaitEachGesture
+                    val offset = result.getOffsetForPosition(up.position)
+                    val url =
+                        annotatedText
+                            .getStringAnnotations(URL_ANNOTATION_TAG, offset, offset)
+                            .firstOrNull()
+                            ?.item
+                            ?: return@awaitEachGesture
+
+                    down.consume()
+                    up.consume()
+
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(url)))
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -1571,15 +1694,9 @@ fun MessageBubble(
                             }
                         }
 
-                        Text(
+                        LinkifiedMessageText(
                             text = message.content,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color =
-                                if (isFromMe) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
+                            isFromMe = isFromMe,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(

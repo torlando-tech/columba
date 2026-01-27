@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -1257,6 +1258,7 @@ class SettingsViewModel
          * This fixes a bug where when relayInfo was null, the auto-select state
          * would incorrectly default to true instead of reading from the actual setting.
          */
+        @OptIn(FlowPreview::class)
         private fun startRelayMonitor() {
             viewModelScope.launch {
                 // Combine relay info with the actual auto-select setting from DataStore
@@ -1309,8 +1311,6 @@ class SettingsViewModel
             // Monitor available relays for selection UI
             viewModelScope.launch {
                 propagationNodeManager.availableRelaysState
-                    // Debounce to prevent rapid-fire updates during announce processing
-                    .debounce(500) // 500ms for available relays (less critical than current relay)
                     .distinctUntilChanged { old, new ->
                         // Only update when the list content actually changes
                         when {

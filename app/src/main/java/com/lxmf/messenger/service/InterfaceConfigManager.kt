@@ -262,54 +262,21 @@ class InterfaceConfigManager
                         throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                     }
 
-                // Step 10: Restore peer identities (uses bulk restore with lightweight hash computation)
-                Log.d(TAG, "Step 10: Bulk restoring peer identities...")
+                // Step 10: Restore peer identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10: Batch restoring peer identities...")
                 try {
-                    val peerIdentities = conversationRepository.getAllPeerIdentities()
-                    Log.d(TAG, "Retrieved ${peerIdentities.size} peer identities from database")
-
-                    if (peerIdentities.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        reticulumProtocol.restorePeerIdentities(peerIdentities)
-                            .onSuccess { count ->
-                                Log.d(TAG, "✓ Bulk restored $count peer identities")
-                            }
-                            .onFailure { error ->
-                                Log.w(TAG, "Failed to bulk restore peer identities: ${error.message}", error)
-                                // Not fatal - continue
-                            }
-                    } else {
-                        Log.d(TAG, "No peer identities to restore")
-                    }
+                    restorePeerIdentitiesInBatches()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error bulk restoring peer identities", e)
+                    Log.w(TAG, "Error batch restoring peer identities", e)
                     // Not fatal - continue
                 }
 
-                // Step 10b: Restore announce identities (uses fast bulk restore with direct dict population)
-                Log.d(TAG, "Step 10b: Bulk restoring announce identities...")
+                // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10b: Batch restoring announce identities...")
                 try {
-                    val announces = database.announceDao().getAllAnnouncesSync()
-                    Log.d(TAG, "Retrieved ${announces.size} announce identities from database")
-
-                    if (announces.isNotEmpty() && reticulumProtocol is ServiceReticulumProtocol) {
-                        // Map announces to (destinationHash, publicKey) - no hash computation needed
-                        val announceIdentities =
-                            announces.map { announce ->
-                                announce.destinationHash to announce.publicKey
-                            }
-                        reticulumProtocol.restoreAnnounceIdentities(announceIdentities)
-                            .onSuccess { count ->
-                                Log.d(TAG, "✓ Bulk restored $count announce identities")
-                            }
-                            .onFailure { error ->
-                                Log.w(TAG, "Failed to bulk restore announce identities: ${error.message}", error)
-                                // Not fatal - continue
-                            }
-                    } else {
-                        Log.d(TAG, "No announce identities to restore")
-                    }
+                    restoreAnnounceIdentitiesInBatches()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error bulk restoring announce identities", e)
+                    Log.w(TAG, "Error batch restoring announce identities", e)
                     // Not fatal - continue
                 }
 
@@ -377,5 +344,111 @@ class InterfaceConfigManager
             } else {
                 -100
             }
+        }
+
+        /**
+         * Restore peer identities in batches to prevent OOM on devices with large identity tables.
+         * Uses pagination to load peer identities in manageable chunks.
+         */
+        private suspend fun restorePeerIdentitiesInBatches() {
+            if (reticulumProtocol !is ServiceReticulumProtocol) {
+                Log.d(TAG, "ServiceReticulumProtocol not available for peer identity restoration")
+                return
+            }
+
+            val batchSize = 500
+            var offset = 0
+            var totalRestored = 0
+
+            Log.d(TAG, "Starting batched peer identity restoration (batch size: $batchSize)")
+
+            while (true) {
+                try {
+                    val batch = conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+
+                    if (batch.isEmpty()) {
+                        Log.d(TAG, "No more peer identities to process, finished at offset $offset")
+                        break
+                    }
+
+                    Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${batch.size} peer identities (offset $offset)")
+
+                    reticulumProtocol.restorePeerIdentities(batch)
+                        .onSuccess { count ->
+                            totalRestored += count
+                            Log.d(TAG, "✓ Restored $count peer identities from batch (total: $totalRestored)")
+                        }
+                        .onFailure { error ->
+                            Log.w(TAG, "Failed to restore peer identity batch at offset $offset: ${error.message}", error)
+                        }
+
+                    if (batch.size < batchSize) break
+                    offset += batchSize
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing peer identity batch at offset $offset", e)
+                    break
+                }
+            }
+
+            Log.d(TAG, "✓ Batch restore complete: $totalRestored peer identities restored")
+        }
+
+        /**
+         * Restore announce identities in batches to prevent OOM on devices with large amounts of announce data.
+         * Uses pagination to load announces in manageable chunks instead of loading everything at once.
+         */
+        private suspend fun restoreAnnounceIdentitiesInBatches() {
+            if (reticulumProtocol !is ServiceReticulumProtocol) {
+                Log.d(TAG, "ServiceReticulumProtocol not available for announce identity restoration")
+                return
+            }
+
+            val batchSize = 500 // Process 500 announces at a time to limit memory usage
+            var offset = 0
+            var totalRestored = 0
+
+            Log.d(TAG, "Starting batched announce identity restoration (batch size: $batchSize)")
+
+            while (true) {
+                try {
+                    val announcesBatch = database.announceDao().getAnnouncesBatch(batchSize, offset)
+                    
+                    if (announcesBatch.isEmpty()) {
+                        Log.d(TAG, "No more announces to process, finished at offset $offset")
+                        break
+                    }
+
+                    Log.d(TAG, "Processing batch ${offset / batchSize + 1}: ${announcesBatch.size} announces (offset $offset)")
+
+                    // Map announces to (destinationHash, publicKey) for this batch
+                    val announceIdentities = announcesBatch.map { announce ->
+                        announce.destinationHash to announce.publicKey
+                    }
+
+                    // Restore this batch
+                    reticulumProtocol.restoreAnnounceIdentities(announceIdentities)
+                        .onSuccess { count ->
+                            totalRestored += count
+                            Log.d(TAG, "✓ Restored $count identities from batch (total: $totalRestored)")
+                        }
+                        .onFailure { error ->
+                            Log.w(TAG, "Failed to restore batch at offset $offset: ${error.message}", error)
+                            // Continue with next batch even if this one fails
+                        }
+
+                    // If we got fewer than requested, we've reached the end
+                    if (announcesBatch.size < batchSize) {
+                        Log.d(TAG, "Reached end of announces (got ${announcesBatch.size} < $batchSize)")
+                        break
+                    }
+
+                    offset += batchSize
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing announce batch at offset $offset", e)
+                    break
+                }
+            }
+
+            Log.d(TAG, "✓ Batch restore complete: $totalRestored announce identities restored")
         }
     }

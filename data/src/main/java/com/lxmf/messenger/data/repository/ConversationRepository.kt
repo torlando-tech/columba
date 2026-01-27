@@ -414,6 +414,24 @@ class ConversationRepository
             return identitiesWithKeys
         }
 
+        /**
+         * Get peer identities in batches to prevent OOM when loading large amounts of data.
+         * Used for batched identity restoration.
+         * 
+         * @param limit Number of peer identities to return in this batch
+         * @param offset Number of peer identities to skip (for pagination)
+         * @return List of peer identities as (peerHash, publicKey) pairs
+         */
+        suspend fun getPeerIdentitiesBatch(limit: Int, offset: Int): List<Pair<String, ByteArray>> {
+            val peerIdentitiesBatch = peerIdentityDao.getPeerIdentitiesBatch(limit, offset)
+            
+            val identitiesWithKeys = peerIdentitiesBatch.map { peerIdentity ->
+                peerIdentity.peerHash to peerIdentity.publicKey
+            }
+
+            return identitiesWithKeys
+        }
+
         suspend fun getMessageById(messageId: String): MessageEntity? {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)

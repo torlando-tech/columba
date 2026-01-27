@@ -113,6 +113,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import kotlinx.coroutines.launch
 
 private const val TAG = "ContactsScreen"
@@ -131,6 +132,9 @@ fun ContactsScreen(
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
+    val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as androidx.activity.ComponentActivity)
+    val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsState()
+    val effectivePendingSharedText = sharedTextFromViewModel
     val groupedContacts by viewModel.groupedContacts.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -520,7 +524,11 @@ fun ContactsScreen(
                                             pendingContactToShow = contact
                                             showPendingContactSheet = true
                                         } else {
-                                            onContactClick(contact.destinationHash, contact.displayName)
+                                            if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                onStartChat(contact.destinationHash, contact.displayName)
+                                            } else {
+                                                onContactClick(contact.destinationHash, contact.displayName)
+                                            }
                                         }
                                     },
                                     onPinToggle = { viewModel.togglePin(contact.destinationHash) },
@@ -560,7 +568,11 @@ fun ContactsScreen(
                                             pendingContactToShow = contact
                                             showPendingContactSheet = true
                                         } else {
-                                            onContactClick(contact.destinationHash, contact.displayName)
+                                            if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                onStartChat(contact.destinationHash, contact.displayName)
+                                            } else {
+                                                onContactClick(contact.destinationHash, contact.displayName)
+                                            }
                                         }
                                     },
                                     onPinToggle = { viewModel.togglePin(contact.destinationHash) },

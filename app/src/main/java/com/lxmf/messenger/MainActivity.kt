@@ -101,7 +101,12 @@ import com.lxmf.messenger.ui.theme.ColumbaTheme
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import com.lxmf.messenger.viewmodel.MainViewModel
+import com.lxmf.messenger.viewmodel.MigrationViewModel
+import com.lxmf.messenger.viewmodel.NotificationSettingsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
+import com.lxmf.messenger.viewmodel.SettingsViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -329,6 +334,15 @@ class MainActivity : ComponentActivity() {
                     pendingNavigation.value = PendingNavigation.AddContact(lxmaUrl)
                 }
             }
+            Intent.ACTION_SEND -> {
+                if (intent.type == "text/plain") {
+                    val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                    if (!sharedText.isNullOrBlank()) {
+                        Log.d(TAG, "Received shared text: ${sharedText.take(120)}")
+                        pendingNavigation.value = PendingNavigation.SharedText(sharedText)
+                    }
+                }
+            }
             CallNotificationHelper.ACTION_OPEN_CALL -> {
                 // Handle incoming call notification tap
                 val identityHash = intent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
@@ -463,6 +477,8 @@ sealed class PendingNavigation {
 
     data class AddContact(val lxmaUrl: String) : PendingNavigation()
 
+    data class SharedText(val text: String) : PendingNavigation()
+
     data class IncomingCall(val identityHash: String) : PendingNavigation()
 
     data class AnswerCall(val identityHash: String) : PendingNavigation()
@@ -506,6 +522,8 @@ fun ColumbaNavigation(
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as ComponentActivity)
 
     // Track if we're currently navigating to answer a call (prevents race with callState observer)
     var isAnsweringCall by remember { mutableStateOf(false) }
@@ -582,6 +600,18 @@ fun ColumbaNavigation(
                     }
                     pendingContactAdd = navigation.lxmaUrl
                     Log.d("ColumbaNavigation", "Navigated to contacts for deep link: ${navigation.lxmaUrl}")
+                }
+                is PendingNavigation.SharedText -> {
+                    sharedTextViewModel.setText(navigation.text)
+                    selectedTab = 1
+                    navController.navigate(Screen.Contacts.route) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                    Log.d("ColumbaNavigation", "Handled shared text intent")
                 }
                 is PendingNavigation.IncomingCall -> {
                     // Navigate to incoming call screen
@@ -917,6 +947,11 @@ fun ColumbaNavigation(
                                 val contacts = contactsViewModel.contacts.value
                                 val contact = contacts.find { it.destinationHash == destinationHash }
                                 val peerName = contact?.displayName ?: destinationHash.take(16)
+                                val encodedHash = Uri.encode(destinationHash)
+                                val encodedName = Uri.encode(peerName)
+                                navController.navigate("messaging/$encodedHash/$encodedName")
+                            },
+                            onStartChat = { destinationHash, peerName ->
                                 val encodedHash = Uri.encode(destinationHash)
                                 val encodedName = Uri.encode(peerName)
                                 navController.navigate("messaging/$encodedHash/$encodedName")

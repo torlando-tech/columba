@@ -35,6 +35,13 @@ class SharedTextViewModel
             return current.text
         }
 
+        fun clearIfUnassigned() {
+            val current = _sharedText.value ?: return
+            if (current.targetDestinationHash == null) {
+                _sharedText.value = null
+            }
+        }
+
         fun clear() {
             _sharedText.value = null
         }

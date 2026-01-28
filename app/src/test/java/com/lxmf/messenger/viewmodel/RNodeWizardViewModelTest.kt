@@ -691,14 +691,14 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
-    fun `updateSpreadingFactor sets error for SF below 7`() =
+    fun `updateSpreadingFactor sets error for SF below 5`() =
         runViewModelTest {
             advanceUntilIdle()
 
             viewModel.state.test {
                 awaitItem() // Initial
 
-                viewModel.updateSpreadingFactor("6")
+                viewModel.updateSpreadingFactor("4")
                 advanceUntilIdle()
 
                 val state = awaitItem()

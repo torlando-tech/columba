@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Current Position
 
-Phase: 2.1 (Clear Announces Preserves Contacts)
-Plan: 2 of 2 complete
-Status: Phase complete
-Last activity: 2026-01-28 — Completed 02.1-02-PLAN.md (Test contact-preserving deletion)
+Phase: 2.2 (Offline Map Tile Rendering)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-01-28 — Completed 02.2-01-PLAN.md (Cache style JSON during download)
 
-Progress: [███████████] 100% (8/8 total plans: 6 from phases 1-2 + 2/2 from phase 2.1)
+Progress: [███████████░] 90% (9/10 total plans: 6 from phases 1-2 + 2/2 from phase 2.1 + 1/2 from phase 2.2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 5m 24s
-- Total execution time: 43m 13s
+- Total plans completed: 9
+- Average duration: 6m 49s
+- Total execution time: 61m 35s
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [███████████] 100% (8/8 total plans: 6 from phas
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
 | 02-relay-loop-fix | 3/3 | 16m 19s | 5m 26s |
 | 02.1-clear-announces | 2/2 | 8m 12s | 4m 6s |
+| 02.2-offline-maps | 1/2 | 18m 22s | 18m 22s |
 
 **Recent Trend:**
-- Last 3 plans: 27m 11s (02-03), 2m 58s (02.1-01), 5m 14s (02.1-02)
-- Trend: Fast execution for focused bug fixes and tests
+- Last 3 plans: 2m 58s (02.1-01), 5m 14s (02.1-02), 18m 22s (02.2-01)
+- Trend: Longer for database migrations + test fixes, faster for focused changes
 
 *Updated after each plan completion*
 
@@ -61,6 +62,8 @@ Recent decisions affecting current work:
 - Use SQL subquery (NOT IN) for contact-aware filtering instead of joins (02.1-01)
 - Preserve original deleteAllAnnounces() for backward compatibility and testing (02.1-01)
 - Fall back to deleteAllAnnounces() if no active identity (02.1-01)
+- Launch style JSON fetch in separate coroutine (non-blocking) to avoid delaying UI updates (02.2-01)
+- Use 5-second timeout on URL fetch to prevent infinite hangs in tests and slow networks (02.2-01)
 
 ### Roadmap Evolution
 
@@ -96,9 +99,9 @@ Also pending from plans:
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 02.1-02-PLAN.md - Test contact-preserving deletion
+Stopped at: Completed 02.2-01-PLAN.md - Cache style JSON during download
 Resume file: None
-Next: Phase 2.2 - Offline Map Tile Rendering (#354)
+Next: Plan 02.2-02 - Load cached style for offline rendering
 
 ## Phase 2 Completion Summary
 

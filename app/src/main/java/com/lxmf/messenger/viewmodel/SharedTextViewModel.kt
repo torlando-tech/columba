@@ -10,17 +10,29 @@ import kotlinx.coroutines.flow.StateFlow
 class SharedTextViewModel
     @Inject
     constructor() : ViewModel() {
-        private val _sharedText = MutableStateFlow<String?>(null)
-        val sharedText: StateFlow<String?> = _sharedText
+        data class PendingSharedText(
+            val text: String,
+            val targetDestinationHash: String? = null,
+        )
+
+        private val _sharedText = MutableStateFlow<PendingSharedText?>(null)
+        val sharedText: StateFlow<PendingSharedText?> = _sharedText
 
         fun setText(text: String) {
-            _sharedText.value = text
+            _sharedText.value = PendingSharedText(text = text)
         }
 
-        fun consumeText(): String? {
-            val current = _sharedText.value
+        fun assignToDestination(destinationHash: String) {
+            val current = _sharedText.value ?: return
+            if (current.targetDestinationHash != null) return
+            _sharedText.value = current.copy(targetDestinationHash = destinationHash)
+        }
+
+        fun consumeForDestination(destinationHash: String): String? {
+            val current = _sharedText.value ?: return null
+            if (current.targetDestinationHash != destinationHash) return null
             _sharedText.value = null
-            return current
+            return current.text
         }
 
         fun clear() {

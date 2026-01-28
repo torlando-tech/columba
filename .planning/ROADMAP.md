@@ -13,7 +13,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 - [x] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
 - [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
-- [ ] **Phase 2.2: Offline Map Tile Rendering** - Fix offline maps failing to render after extended offline period (#354) (INSERTED)
+- [x] **Phase 2.2: Offline Map Tile Rendering** - Fix offline maps failing to render after extended offline period (#354) (INSERTED)
 
 ## Phase Details
 
@@ -77,8 +77,8 @@ Plans:
 **Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 02.2-01-PLAN.md — Add localStylePath to DB schema and cache style JSON during download
-- [ ] 02.2-02-PLAN.md — Load local style JSON when offline and update MapScreen (depends on 02.2-01)
+- [x] 02.2-01-PLAN.md — Add localStylePath to DB schema and cache style JSON during download
+- [x] 02.2-02-PLAN.md — Load local style JSON when offline and update MapScreen (depends on 02.2-01)
 
 ## Progress
 
@@ -90,4 +90,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 | 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
 | 2. Relay Loop Fix | 0/3 | Not started | - |
 | 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
-| 2.2. Offline Map Tile Rendering (INSERTED) | 0/2 | Not started | - |
+| 2.2. Offline Map Tile Rendering (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |

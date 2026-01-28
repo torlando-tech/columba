@@ -191,7 +191,7 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateSpreadingFactor at boundaries`() {
-        assertTrue(RNodeConfigValidator.validateSpreadingFactor("7").isValid)
+        assertTrue(RNodeConfigValidator.validateSpreadingFactor("5").isValid)
         assertTrue(RNodeConfigValidator.validateSpreadingFactor("12").isValid)
     }
 

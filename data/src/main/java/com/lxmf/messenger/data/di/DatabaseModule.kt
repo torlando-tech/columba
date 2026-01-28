@@ -68,6 +68,7 @@ object DatabaseModule {
             MIGRATION_31_32,
             MIGRATION_32_33,
             MIGRATION_33_34,
+            MIGRATION_34_35,
         )
     }
 
@@ -1398,81 +1399,68 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 34 to 35: Add localStylePath to offline_map_regions table
+    // Stores the absolute path to a locally cached style JSON file for offline map rendering
+    // This fixes the offline map rendering bug where HTTP cache expiration prevents tile display
+    private val MIGRATION_34_35 =
+        object : Migration(34, 35) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE offline_map_regions ADD COLUMN localStylePath TEXT DEFAULT NULL",
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
     fun provideColumbaDatabase(
         @ApplicationContext context: Context,
-    ): ColumbaDatabase {
-        return Room.databaseBuilder(
-            context,
-            ColumbaDatabase::class.java,
-            DATABASE_NAME,
-        )
-            .addMigrations(*ALL_MIGRATIONS)
+    ): ColumbaDatabase =
+        Room
+            .databaseBuilder(
+                context,
+                ColumbaDatabase::class.java,
+                DATABASE_NAME,
+            ).addMigrations(*ALL_MIGRATIONS)
             .enableMultiInstanceInvalidation()
             .build()
-    }
 
     @Provides
-    fun provideConversationDao(database: ColumbaDatabase): ConversationDao {
-        return database.conversationDao()
-    }
+    fun provideConversationDao(database: ColumbaDatabase): ConversationDao = database.conversationDao()
 
     @Provides
-    fun provideMessageDao(database: ColumbaDatabase): MessageDao {
-        return database.messageDao()
-    }
+    fun provideMessageDao(database: ColumbaDatabase): MessageDao = database.messageDao()
 
     @Provides
-    fun provideAnnounceDao(database: ColumbaDatabase): AnnounceDao {
-        return database.announceDao()
-    }
+    fun provideAnnounceDao(database: ColumbaDatabase): AnnounceDao = database.announceDao()
 
     @Provides
-    fun providePeerIdentityDao(database: ColumbaDatabase): PeerIdentityDao {
-        return database.peerIdentityDao()
-    }
+    fun providePeerIdentityDao(database: ColumbaDatabase): PeerIdentityDao = database.peerIdentityDao()
 
     @Provides
-    fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao {
-        return database.peerIconDao()
-    }
+    fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao = database.peerIconDao()
 
     @Provides
-    fun provideContactDao(database: ColumbaDatabase): ContactDao {
-        return database.contactDao()
-    }
+    fun provideContactDao(database: ColumbaDatabase): ContactDao = database.contactDao()
 
     @Provides
-    fun provideCustomThemeDao(database: ColumbaDatabase): CustomThemeDao {
-        return database.customThemeDao()
-    }
+    fun provideCustomThemeDao(database: ColumbaDatabase): CustomThemeDao = database.customThemeDao()
 
     @Provides
-    fun provideLocalIdentityDao(database: ColumbaDatabase): LocalIdentityDao {
-        return database.localIdentityDao()
-    }
+    fun provideLocalIdentityDao(database: ColumbaDatabase): LocalIdentityDao = database.localIdentityDao()
 
     @Provides
-    fun provideReceivedLocationDao(database: ColumbaDatabase): ReceivedLocationDao {
-        return database.receivedLocationDao()
-    }
+    fun provideReceivedLocationDao(database: ColumbaDatabase): ReceivedLocationDao = database.receivedLocationDao()
 
     @Provides
-    fun provideOfflineMapRegionDao(database: ColumbaDatabase): OfflineMapRegionDao {
-        return database.offlineMapRegionDao()
-    }
+    fun provideOfflineMapRegionDao(database: ColumbaDatabase): OfflineMapRegionDao = database.offlineMapRegionDao()
 
     @Provides
-    fun provideRmspServerDao(database: ColumbaDatabase): RmspServerDao {
-        return database.rmspServerDao()
-    }
+    fun provideRmspServerDao(database: ColumbaDatabase): RmspServerDao = database.rmspServerDao()
 
     @Provides
     @Singleton
     @Suppress("InjectDispatcher") // This IS the DI provider for the IO dispatcher
-    fun provideIODispatcher(): CoroutineDispatcher {
-        return Dispatchers.IO
-    }
+    fun provideIODispatcher(): CoroutineDispatcher = Dispatchers.IO
 }

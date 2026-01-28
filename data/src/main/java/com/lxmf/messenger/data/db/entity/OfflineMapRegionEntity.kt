@@ -54,6 +54,8 @@ data class OfflineMapRegionEntity(
     val tileVersion: String? = null,
     /** MapLibre's internal region ID for OfflineManager API (null for legacy MBTiles regions) */
     val maplibreRegionId: Long? = null,
+    /** Path to locally cached style JSON file for offline rendering (null if not cached) */
+    val localStylePath: String? = null,
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

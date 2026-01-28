@@ -30,6 +30,8 @@ data class OfflineMapRegion(
     val tileVersion: String?,
     /** MapLibre's internal region ID for OfflineManager API (null for legacy MBTiles regions) */
     val maplibreRegionId: Long? = null,
+    /** Path to locally cached style JSON file for offline rendering (null if not cached) */
+    val localStylePath: String? = null,
 ) {
     enum class Status {
         PENDING,
@@ -46,14 +48,13 @@ data class OfflineMapRegion(
     /**
      * Get a human-readable size string.
      */
-    fun getSizeString(): String {
-        return when {
+    fun getSizeString(): String =
+        when {
             sizeBytes < 1024 -> "$sizeBytes B"
             sizeBytes < 1024 * 1024 -> "${sizeBytes / 1024} KB"
             sizeBytes < 1024 * 1024 * 1024 -> "${sizeBytes / (1024 * 1024)} MB"
             else -> "%.1f GB".format(sizeBytes / (1024.0 * 1024.0 * 1024.0))
         }
-    }
 }
 
 /**
@@ -69,27 +70,23 @@ class OfflineMapRegionRepository
         /**
          * Get all offline map regions as a Flow.
          */
-        fun getAllRegions(): Flow<List<OfflineMapRegion>> {
-            return offlineMapRegionDao.getAllRegions().map { entities ->
+        fun getAllRegions(): Flow<List<OfflineMapRegion>> =
+            offlineMapRegionDao.getAllRegions().map { entities ->
                 entities.map { it.toOfflineMapRegion() }
             }
-        }
 
         /**
          * Get all completed regions.
          */
-        fun getCompletedRegions(): Flow<List<OfflineMapRegion>> {
-            return offlineMapRegionDao.getCompletedRegions().map { entities ->
+        fun getCompletedRegions(): Flow<List<OfflineMapRegion>> =
+            offlineMapRegionDao.getCompletedRegions().map { entities ->
                 entities.map { it.toOfflineMapRegion() }
             }
-        }
 
         /**
          * Get a specific region by ID.
          */
-        suspend fun getRegionById(id: Long): OfflineMapRegion? {
-            return offlineMapRegionDao.getRegionById(id)?.toOfflineMapRegion()
-        }
+        suspend fun getRegionById(id: Long): OfflineMapRegion? = offlineMapRegionDao.getRegionById(id)?.toOfflineMapRegion()
 
         /**
          * Create a new pending region.
@@ -213,16 +210,12 @@ class OfflineMapRegionRepository
         /**
          * Get total storage used by completed offline maps.
          */
-        fun getTotalStorageUsed(): Flow<Long?> {
-            return offlineMapRegionDao.getTotalStorageUsed()
-        }
+        fun getTotalStorageUsed(): Flow<Long?> = offlineMapRegionDao.getTotalStorageUsed()
 
         /**
          * Get count of regions.
          */
-        suspend fun getCount(): Int {
-            return offlineMapRegionDao.getCount()
-        }
+        suspend fun getCount(): Int = offlineMapRegionDao.getCount()
 
         /**
          * Find the nearest completed region to a location.
@@ -230,9 +223,7 @@ class OfflineMapRegionRepository
         suspend fun findNearestRegion(
             latitude: Double,
             longitude: Double,
-        ): OfflineMapRegion? {
-            return offlineMapRegionDao.findNearestRegion(latitude, longitude)?.toOfflineMapRegion()
-        }
+        ): OfflineMapRegion? = offlineMapRegionDao.findNearestRegion(latitude, longitude)?.toOfflineMapRegion()
 
         /**
          * Find orphaned MBTiles files not tracked in the database.
@@ -241,25 +232,23 @@ class OfflineMapRegionRepository
          */
         suspend fun findOrphanedFiles(offlineMapsDir: java.io.File): List<java.io.File> {
             val trackedPaths = offlineMapRegionDao.getAllMbtilesPaths().toSet()
-            return offlineMapsDir.listFiles { file ->
-                file.extension == "mbtiles" && file.absolutePath !in trackedPaths
-            }?.toList() ?: emptyList()
+            return offlineMapsDir
+                .listFiles { file ->
+                    file.extension == "mbtiles" && file.absolutePath !in trackedPaths
+                }?.toList() ?: emptyList()
         }
 
         /**
          * Get all MapLibre region IDs tracked in the database.
          * Used for detecting orphaned MapLibre regions.
          */
-        suspend fun getAllMaplibreRegionIds(): List<Long> {
-            return offlineMapRegionDao.getAllMaplibreRegionIds()
-        }
+        suspend fun getAllMaplibreRegionIds(): List<Long> = offlineMapRegionDao.getAllMaplibreRegionIds()
 
         /**
          * Get a region by its MapLibre region ID.
          */
-        suspend fun getRegionByMaplibreId(maplibreRegionId: Long): OfflineMapRegion? {
-            return offlineMapRegionDao.getRegionByMaplibreId(maplibreRegionId)?.toOfflineMapRegion()
-        }
+        suspend fun getRegionByMaplibreId(maplibreRegionId: Long): OfflineMapRegion? =
+            offlineMapRegionDao.getRegionByMaplibreId(maplibreRegionId)?.toOfflineMapRegion()
 
         /**
          * Update the MapLibre region ID for a region.
@@ -270,6 +259,22 @@ class OfflineMapRegionRepository
         ) {
             offlineMapRegionDao.updateMaplibreRegionId(id, maplibreRegionId)
         }
+
+        /**
+         * Update the local style JSON file path for a region.
+         */
+        suspend fun updateLocalStylePath(
+            id: Long,
+            localStylePath: String,
+        ) {
+            offlineMapRegionDao.updateLocalStylePath(id, localStylePath)
+        }
+
+        /**
+         * Get the first completed region with a locally cached style JSON file.
+         * Returns the domain model (not the entity) so callers don't depend on Room internals.
+         */
+        suspend fun getFirstCompletedRegionWithStyle(): OfflineMapRegion? = offlineMapRegionDao.getFirstCompletedRegionWithLocalStyle()?.toOfflineMapRegion()
 
         /**
          * Import an orphaned MBTiles file into the database.
@@ -369,8 +374,8 @@ class OfflineMapRegionRepository
 /**
  * Extension function to convert entity to domain model.
  */
-private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
-    return OfflineMapRegion(
+private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion =
+    OfflineMapRegion(
         id = id,
         name = name,
         centerLatitude = centerLatitude,
@@ -400,17 +405,16 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion {
             },
         tileVersion = tileVersion,
         maplibreRegionId = maplibreRegionId,
+        localStylePath = localStylePath,
     )
-}
 
 /**
  * Extension function to convert domain status to entity status.
  */
-private fun OfflineMapRegion.Status.toEntityStatus(): String {
-    return when (this) {
+private fun OfflineMapRegion.Status.toEntityStatus(): String =
+    when (this) {
         OfflineMapRegion.Status.PENDING -> OfflineMapRegionEntity.STATUS_PENDING
         OfflineMapRegion.Status.DOWNLOADING -> OfflineMapRegionEntity.STATUS_DOWNLOADING
         OfflineMapRegion.Status.COMPLETE -> OfflineMapRegionEntity.STATUS_COMPLETE
         OfflineMapRegion.Status.ERROR -> OfflineMapRegionEntity.STATUS_ERROR
     }
-}

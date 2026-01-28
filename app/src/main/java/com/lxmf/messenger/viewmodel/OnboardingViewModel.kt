@@ -156,11 +156,11 @@ class OnboardingViewModel
                     // Update display name in database
                     val activeIdentity = identityRepository.getActiveIdentitySync()
                     if (activeIdentity != null) {
-                        identityRepository.updateDisplayName(activeIdentity.identityHash, nameToSave)
+                        identityRepository
+                            .updateDisplayName(activeIdentity.identityHash, nameToSave)
                             .onSuccess {
                                 Log.d(TAG, "Display name set to: $nameToSave")
-                            }
-                            .onFailure { error ->
+                            }.onFailure { error ->
                                 Log.e(TAG, "Failed to update display name", error)
                                 hasWarnings = true
                             }
@@ -179,11 +179,11 @@ class OnboardingViewModel
 
                     // Restart service to apply changes
                     Log.d(TAG, "Restarting service to apply onboarding settings...")
-                    interfaceConfigManager.applyInterfaceChanges()
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
                         .onSuccess {
                             Log.d(TAG, "Service restarted with new settings")
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.w(TAG, "Failed to restart service (settings saved but may need manual restart)", error)
                             hasWarnings = true
                         }
@@ -306,6 +306,9 @@ class OnboardingViewModel
          * Skip onboarding with default settings.
          * Creates only AutoInterface (local WiFi) with default display name.
          *
+         * Navigates immediately after saving settings, then applies interface changes
+         * in the background. User sees loading state on Chats screen while service starts.
+         *
          * @param onComplete Callback invoked after skipping
          */
         fun skipOnboarding(onComplete: () -> Unit) {
@@ -316,11 +319,11 @@ class OnboardingViewModel
                     // Set default display name
                     val activeIdentity = identityRepository.getActiveIdentitySync()
                     if (activeIdentity != null) {
-                        identityRepository.updateDisplayName(activeIdentity.identityHash, DEFAULT_DISPLAY_NAME)
+                        identityRepository
+                            .updateDisplayName(activeIdentity.identityHash, DEFAULT_DISPLAY_NAME)
                             .onSuccess {
                                 Log.d(TAG, "Display name set to default: $DEFAULT_DISPLAY_NAME")
-                            }
-                            .onFailure { error ->
+                            }.onFailure { error ->
                                 Log.e(TAG, "Failed to set default display name", error)
                             }
                     }
@@ -341,28 +344,29 @@ class OnboardingViewModel
                     // Mark onboarding as completed
                     settingsRepository.markOnboardingCompleted()
 
-                    // Restart service to apply changes
-                    Log.d(TAG, "Restarting service to apply default settings...")
-                    interfaceConfigManager.applyInterfaceChanges()
+                    // Navigate immediately - user sees loading state on Chats screen
+                    _state.value =
+                        _state.value.copy(
+                            isSaving = false,
+                            hasCompletedOnboarding = true,
+                        )
+                    Log.d(TAG, "Onboarding skipped, navigating to main screen")
+                    onComplete()
+
+                    // Apply interface changes in background (service restart takes 8-12 seconds)
+                    // User sees "Loading conversations..." while this completes
+                    Log.d(TAG, "Applying interface changes in background...")
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
                         .onSuccess {
                             Log.d(TAG, "Service restarted with default settings")
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.w(
                                 TAG,
                                 "Failed to restart service (settings saved but may need manual restart)",
                                 error,
                             )
                         }
-
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            hasCompletedOnboarding = true,
-                        )
-                    Log.d(TAG, "Onboarding skipped, using default settings")
-
-                    onComplete()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error skipping onboarding", e)
                     _state.value =

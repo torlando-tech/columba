@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Fix the performance degradation and relay selection loop bugs so users have a stable, responsive app experience.
-**Current focus:** Phase 2.1 - Clear Announces Preserves Contacts
+**Current focus:** Phase 2.2 - Offline Map Tile Rendering
 
 ## Current Position
 
@@ -67,6 +67,10 @@ Recent decisions affecting current work:
 - Phase 2.1 inserted after Phase 2: Clear Announces Preserves Contacts — #365 (URGENT)
   - "Clear All Announces" deletes contact announces, breaking ability to open new conversations
   - Fix: exempt My Contacts announces from the bulk delete
+- Phase 2.2 inserted after Phase 2.1: Offline Map Tile Rendering — #354 (URGENT)
+  - Downloaded offline maps stop rendering after extended offline period (days)
+  - Likely cause: offline code path still uses network style URL, so MapLibre can't resolve layer definitions when fully offline
+  - Fix: ensure offline style loading explicitly uses local tile data without network dependency
 
 ### Pending Todos
 
@@ -94,7 +98,7 @@ Also pending from plans:
 Last session: 2026-01-28
 Stopped at: Completed 02.1-02-PLAN.md - Test contact-preserving deletion
 Resume file: None
-Next: Phase 2.1 complete - all roadmap items finished
+Next: Phase 2.2 - Offline Map Tile Rendering (#354)
 
 ## Phase 2 Completion Summary
 

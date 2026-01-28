@@ -83,7 +83,7 @@ fun ChatsScreen(
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     viewModel: ChatsViewModel = hiltViewModel(),
 ) {
-    val conversations by viewModel.conversations.collectAsState()
+    val chatsState by viewModel.chatsState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
@@ -123,7 +123,7 @@ fun ChatsScreen(
         topBar = {
             SearchableTopAppBar(
                 title = "Chats",
-                subtitle = "${conversations.size} ${if (conversations.size == 1) "conversation" else "conversations"}",
+                subtitle = "${chatsState.conversations.size} ${if (chatsState.conversations.size == 1) "conversation" else "conversations"}",
                 isSearching = isSearching,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery.value = it },
@@ -156,94 +156,107 @@ fun ChatsScreen(
             )
         },
     ) { paddingValues ->
-        if (conversations.isEmpty()) {
-            EmptyChatsState(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-            )
-        } else {
-            LazyColumn(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .consumeWindowInsets(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(conversations, key = { it.peerHash }) { conversation ->
-                    // Per-card state for context menu
-                    val hapticFeedback = LocalHapticFeedback.current
-                    var showMenu by remember { mutableStateOf(false) }
-                    val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
+        when {
+            chatsState.isLoading -> {
+                LoadingConversationsState(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                )
+            }
+            chatsState.conversations.isEmpty() -> {
+                EmptyChatsState(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                )
+            }
+            else -> {
+                LazyColumn(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .consumeWindowInsets(paddingValues),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(chatsState.conversations, key = { it.peerHash }) { conversation ->
+                        // Per-card state for context menu
+                        val hapticFeedback = LocalHapticFeedback.current
+                        var showMenu by remember { mutableStateOf(false) }
+                        val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
 
-                    // Wrap card and menu in Box to anchor menu to card
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        ConversationCard(
-                            conversation = conversation,
-                            isSaved = isSaved,
-                            onClick = { onChatClick(conversation.peerHash, conversation.displayName) },
-                            onLongPress = {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showMenu = true
-                            },
-                            onStarClick = {
-                                if (isSaved) {
-                                    viewModel.removeFromContacts(conversation.peerHash)
-                                    Toast.makeText(
-                                        context,
-                                        "Removed ${conversation.displayName} from Contacts",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                } else {
+                        // Wrap card and menu in Box to anchor menu to card
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            ConversationCard(
+                                conversation = conversation,
+                                isSaved = isSaved,
+                                onClick = { onChatClick(conversation.peerHash, conversation.displayName) },
+                                onLongPress = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showMenu = true
+                                },
+                                onStarClick = {
+                                    if (isSaved) {
+                                        viewModel.removeFromContacts(conversation.peerHash)
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "Removed ${conversation.displayName} from Contacts",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                    } else {
+                                        viewModel.saveToContacts(conversation)
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "Saved ${conversation.displayName} to Contacts",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                    }
+                                },
+                            )
+
+                            // Context menu anchored to this card
+                            ConversationContextMenu(
+                                expanded = showMenu,
+                                onDismiss = { showMenu = false },
+                                isSaved = isSaved,
+                                onSaveToContacts = {
                                     viewModel.saveToContacts(conversation)
-                                    Toast.makeText(
-                                        context,
-                                        "Saved ${conversation.displayName} to Contacts",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                }
-                            },
-                        )
-
-                        // Context menu anchored to this card
-                        ConversationContextMenu(
-                            expanded = showMenu,
-                            onDismiss = { showMenu = false },
-                            isSaved = isSaved,
-                            onSaveToContacts = {
-                                viewModel.saveToContacts(conversation)
-                                showMenu = false
-                                Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
-                            },
-                            onRemoveFromContacts = {
-                                viewModel.removeFromContacts(conversation.peerHash)
-                                showMenu = false
-                                Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
-                            },
-                            onMarkAsUnread = {
-                                viewModel.markAsUnread(conversation.peerHash)
-                                showMenu = false
-                                Toast.makeText(context, "Marked as unread", Toast.LENGTH_SHORT).show()
-                            },
-                            onDeleteConversation = {
-                                showMenu = false
-                                selectedConversation = conversation
-                                showDeleteDialog = true
-                            },
-                            onViewDetails = {
-                                showMenu = false
-                                onViewPeerDetails(conversation.peerHash)
-                            },
-                        )
+                                    showMenu = false
+                                    Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
+                                },
+                                onRemoveFromContacts = {
+                                    viewModel.removeFromContacts(conversation.peerHash)
+                                    showMenu = false
+                                    Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
+                                },
+                                onMarkAsUnread = {
+                                    viewModel.markAsUnread(conversation.peerHash)
+                                    showMenu = false
+                                    Toast.makeText(context, "Marked as unread", Toast.LENGTH_SHORT).show()
+                                },
+                                onDeleteConversation = {
+                                    showMenu = false
+                                    selectedConversation = conversation
+                                    showDeleteDialog = true
+                                },
+                                onViewDetails = {
+                                    showMenu = false
+                                    onViewPeerDetails(conversation.peerHash)
+                                },
+                            )
+                        }
                     }
-                }
 
-                // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
-                item {
-                    Spacer(modifier = Modifier.height(100.dp))
+                    // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
+                    item {
+                        Spacer(modifier = Modifier.height(100.dp))
+                    }
                 }
             }
         }
@@ -547,6 +560,25 @@ fun DeleteConversationDialog(
 }
 
 @Composable
+fun LoadingConversationsState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Loading conversations...",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 fun EmptyChatsState(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
@@ -575,9 +607,7 @@ fun EmptyChatsState(modifier: Modifier = Modifier) {
 }
 
 // Helper function to convert hex string to byte array (for identicon)
-private fun String.hexStringToByteArray(): ByteArray {
-    return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-}
+private fun String.hexStringToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
 // Reuse timestamp formatting from MessagingScreen
 private fun formatTimestamp(timestamp: Long): String {

@@ -197,7 +197,7 @@ fun MessagingScreen(
     val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as ComponentActivity)
 
     LaunchedEffect(destinationHash) {
-        val pending = sharedTextViewModel.consumeText()
+        val pending = sharedTextViewModel.consumeForDestination(destinationHash)
         if (!pending.isNullOrBlank() && messageText.isBlank()) {
             messageText = pending.trim()
         }

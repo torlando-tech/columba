@@ -134,7 +134,7 @@ fun ContactsScreen(
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as androidx.activity.ComponentActivity)
     val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsState()
-    val effectivePendingSharedText = sharedTextFromViewModel
+    val effectivePendingSharedText = sharedTextFromViewModel?.text
 
     val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
@@ -544,7 +544,12 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
+                                                if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    onStartChat(contact.destinationHash, contact.displayName)
+                                                } else {
+                                                    onContactClick(contact.destinationHash, contact.displayName)
+                                                }
                                             }
                                         },
                                         onPinToggle = { viewModel.togglePin(contact.destinationHash) },
@@ -571,7 +576,6 @@ fun ContactsScreen(
                                         )
                                     }
                                 }
-<<<<<<< HEAD
                                 items(
                                     contactsState.groupedContacts.all,
                                     key = { contact -> contact.destinationHash },
@@ -585,7 +589,12 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
+                                                if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    onStartChat(contact.destinationHash, contact.displayName)
+                                                } else {
+                                                    onContactClick(contact.destinationHash, contact.displayName)
+                                                }
                                             }
                                         },
                                         onPinToggle = { viewModel.togglePin(contact.destinationHash) },
@@ -599,121 +608,6 @@ fun ContactsScreen(
                                     )
                                 }
                             }
-=======
-                            }
-                            item(key = "relay_${relay.destinationHash}") {
-                                ContactListItemWithMenu(
-                                    contact = relay,
-                                    onClick = {
-                                        if (relay.status == ContactStatus.PENDING_IDENTITY ||
-                                            relay.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = relay
-                                            showPendingContactSheet = true
-                                        } else {
-                                            onContactClick(relay.destinationHash, relay.displayName)
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(relay.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = relay.destinationHash
-                                        editNicknameCurrentValue = relay.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(relay.destinationHash) },
-                                    onRemove = {
-                                        relayToUnset = relay
-                                        showUnsetRelayDialog = true
-                                    },
-                                )
-                            }
-                        }
-
-                        // Pinned contacts section
-                        if (groupedContacts.pinned.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "PINNED",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
-                                )
-                            }
-                            items(
-                                groupedContacts.pinned,
-                                key = { contact -> "pinned_${contact.destinationHash}" },
-                            ) { contact ->
-                                ContactListItemWithMenu(
-                                    contact = contact,
-                                    onClick = {
-                                        if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                            contact.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = contact
-                                            showPendingContactSheet = true
-                                        } else {
-                                            if (!effectivePendingSharedText.isNullOrBlank()) {
-                                                onStartChat(contact.destinationHash, contact.displayName)
-                                            } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
-                                            }
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(contact.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = contact.destinationHash
-                                        editNicknameCurrentValue = contact.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(contact.destinationHash) },
-                                    onRemove = { viewModel.deleteContact(contact.destinationHash) },
-                                )
-                            }
-                        }
-
-                        // All contacts section
-                        if (groupedContacts.all.isNotEmpty()) {
-                            if (groupedContacts.relay != null || groupedContacts.pinned.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        text = "ALL CONTACTS",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-                                    )
-                                }
-                            }
-                            items(
-                                groupedContacts.all,
-                                key = { contact -> contact.destinationHash },
-                            ) { contact ->
-                                ContactListItemWithMenu(
-                                    contact = contact,
-                                    onClick = {
-                                        if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                            contact.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = contact
-                                            showPendingContactSheet = true
-                                        } else {
-                                            if (!effectivePendingSharedText.isNullOrBlank()) {
-                                                onStartChat(contact.destinationHash, contact.displayName)
-                                            } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
-                                            }
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(contact.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = contact.destinationHash
-                                        editNicknameCurrentValue = contact.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(contact.destinationHash) },
-                                    onRemove = { viewModel.deleteContact(contact.destinationHash) },
-                                )
-                            }
->>>>>>> dfce5e11 (add share to colomba capabilities)
                         }
                     }
                 }

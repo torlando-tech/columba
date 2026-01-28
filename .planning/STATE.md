@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 ## Current Position
 
 Phase: 2.2 (Offline Map Tile Rendering)
-Plan: 1 of 2 complete
-Status: In progress
-Last activity: 2026-01-28 — Completed 02.2-01-PLAN.md (Cache style JSON during download)
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-01-28 — Completed 02.2-02-PLAN.md (Load local style for offline rendering)
 
-Progress: [███████████░] 90% (9/10 total plans: 6 from phases 1-2 + 2/2 from phase 2.1 + 1/2 from phase 2.2)
+Progress: [████████████] 100% (10/10 total plans: 6 from phases 1-2 + 2/2 from phase 2.1 + 2/2 from phase 2.2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 6m 49s
-- Total execution time: 61m 35s
+- Total plans completed: 10
+- Average duration: 7m 0s
+- Total execution time: 69m 35s
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [███████████░] 90% (9/10 total plans: 6 from p
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
 | 02-relay-loop-fix | 3/3 | 16m 19s | 5m 26s |
 | 02.1-clear-announces | 2/2 | 8m 12s | 4m 6s |
-| 02.2-offline-maps | 1/2 | 18m 22s | 18m 22s |
+| 02.2-offline-maps | 2/2 | 26m 22s | 13m 11s |
 
 **Recent Trend:**
-- Last 3 plans: 2m 58s (02.1-01), 5m 14s (02.1-02), 18m 22s (02.2-01)
-- Trend: Longer for database migrations + test fixes, faster for focused changes
+- Last 3 plans: 5m 14s (02.1-02), 18m 22s (02.2-01), 8m (02.2-02)
+- Trend: Database migrations slower, UI-only changes faster
 
 *Updated after each plan completion*
 
@@ -64,6 +64,8 @@ Recent decisions affecting current work:
 - Fall back to deleteAllAnnounces() if no active identity (02.1-01)
 - Launch style JSON fetch in separate coroutine (non-blocking) to avoid delaying UI updates (02.2-01)
 - Use 5-second timeout on URL fetch to prevent infinite hangs in tests and slow networks (02.2-01)
+- Use fromJson() instead of fromUri() for local style files to avoid HTTP cache dependency (02.2-02)
+- Fall back to HTTP style URL if cached style file doesn't exist (backward compatibility) (02.2-02)
 
 ### Roadmap Evolution
 
@@ -99,9 +101,9 @@ Also pending from plans:
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 02.2-01-PLAN.md - Cache style JSON during download
+Stopped at: Completed 02.2-02-PLAN.md - Load cached style for offline rendering
 Resume file: None
-Next: Plan 02.2-02 - Load cached style for offline rendering
+Next: All planned phases complete (Phase 1, 2, 2.1, 2.2)
 
 ## Phase 2 Completion Summary
 
@@ -146,4 +148,36 @@ All 2 plans executed successfully:
 **Production readiness:**
 - Ready for merge and release
 - Fixes critical UX bug preventing users from opening conversations with saved contacts
+- No pending blockers for this phase
+
+## Phase 2.2 Completion Summary
+
+**Phase 02.2 - Offline Map Tile Rendering: COMPLETE**
+
+All 2 plans executed successfully:
+- 02.2-01: Cache style JSON during download (18m 22s) ✓
+- 02.2-02: Load cached style for offline rendering (8m) ✓
+
+**Key outcomes:**
+- Issue #354 (offline maps lose rendering after days) resolved
+- Style JSON cached during offline map download to local files
+- MapLibre loads style from local JSON files when offline (not HTTP URL)
+- Full vector tile detail (roads, buildings, labels) renders indefinitely offline
+- Graceful fallback for regions without cached style (backward compatibility)
+- On-device verification confirmed working behavior
+
+**Technical implementation:**
+- Database migration 34→35 adds `localStylePath` column to offline map regions
+- Smart style resolution: check cache file → fall back to HTTP URL
+- MapScreen uses `Style.Builder().fromJson()` for offline local styles (not `fromUri()`)
+- Network disabled (allowNetwork = false) for offline modes
+- Non-blocking style caching with 5-second timeout
+
+**Testing confidence:** High - On-device testing confirmed, all unit tests pass
+
+**Production readiness:**
+- Ready for merge and release
+- Resolves critical offline UX bug (maps unusable after days offline)
+- Safe database migration (nullable column addition)
+- No regressions in online map functionality
 - No pending blockers for this phase

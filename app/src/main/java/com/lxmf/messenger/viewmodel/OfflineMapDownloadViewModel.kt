@@ -608,9 +608,6 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
-                                    // Fetch and cache style JSON for offline rendering
-                                    fetchAndCacheStyleJson(regionId)
-
                                     // Check if HTTP was enabled specifically for this download
                                     val wasEnabledForDownload =
                                         settingsRepository.httpEnabledForDownloadFlow.first()
@@ -634,6 +631,10 @@ class OfflineMapDownloadViewModel
                                             )
                                         }
                                     }
+
+                                    // Fetch and cache style JSON for offline rendering (async, non-blocking)
+                                    // Launch in separate coroutine so it doesn't block UI state updates
+                                    launch { fetchAndCacheStyleJson(regionId) }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to mark region complete in database", e)
                                     _state.update {
@@ -692,7 +693,11 @@ class OfflineMapDownloadViewModel
             withContext(Dispatchers.IO) {
                 try {
                     // Fetch style JSON from the same URL MapLibre uses
-                    val styleJson = java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
+                    // Use withTimeout to prevent test hangs (5 seconds should be plenty)
+                    val styleJson =
+                        kotlinx.coroutines.withTimeout(5000) {
+                            java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
+                        }
 
                     // Save to local file: filesDir/offline_styles/{regionId}.json
                     val styleDir = java.io.File(context.filesDir, "offline_styles")

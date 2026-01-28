@@ -13,6 +13,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 - [x] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
 - [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
+- [ ] **Phase 2.2: Offline Map Tile Rendering** - Fix offline maps failing to render after extended offline period (#354) (INSERTED)
 
 ## Phase Details
 
@@ -63,6 +64,22 @@ Plans:
 - [x] 02.1-01-PLAN.md — Fix DAO, Repository, ViewModel, and UI to preserve contact announces
 - [x] 02.1-02-PLAN.md — Add DAO and ViewModel tests for contact-preserving deletion (depends on 02.1-01)
 
+### Phase 2.2: Offline Map Tile Rendering (INSERTED)
+**Goal**: Offline maps that were previously downloaded render correctly after extended offline periods, ensuring the offline code path explicitly uses local tile data without depending on network-fetched style resources
+**Depends on**: Nothing (independent fix)
+**Requirements**: OFFLINE-MAP-01
+**Issue**: [#354](https://github.com/torlando-tech/columba/issues/354)
+**Success Criteria** (what must be TRUE):
+  1. User can download offline map tiles, go fully offline for multiple days, and still see their downloaded tiles render correctly
+  2. The offline style loading path explicitly serves tiles from the local cache/MBTiles without relying on a network-fetched style URL
+  3. Zooming into a region covered by downloaded offline tiles shows full vector tile detail (roads, buildings, labels), not just continent-level outlines
+  4. The offline map region list correctly reflects available regions and their tiles are accessible
+**Plans**: 2 plans in 2 waves
+
+Plans:
+- [ ] 02.2-01-PLAN.md — Add localStylePath to DB schema and cache style JSON during download
+- [ ] 02.2-02-PLAN.md — Load local style JSON when offline and update MapScreen (depends on 02.2-01)
+
 ## Progress
 
 **Execution Order:**
@@ -73,3 +90,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 | 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
 | 2. Relay Loop Fix | 0/3 | Not started | - |
 | 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
+| 2.2. Offline Map Tile Rendering (INSERTED) | 0/2 | Not started | - |

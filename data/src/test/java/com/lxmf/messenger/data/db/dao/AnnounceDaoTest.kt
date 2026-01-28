@@ -7,6 +7,8 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.db.entity.ContactEntity
+import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,15 +28,20 @@ import org.robolectric.annotation.Config
 class AnnounceDaoTest {
     private lateinit var database: ColumbaDatabase
     private lateinit var dao: AnnounceDao
+    private lateinit var contactDao: ContactDao
+    private lateinit var identityDao: LocalIdentityDao
 
     @Before
     fun setup() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database =
-            Room.inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
+            Room
+                .inMemoryDatabaseBuilder(context, ColumbaDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
         dao = database.announceDao()
+        contactDao = database.contactDao()
+        identityDao = database.localIdentityDao()
     }
 
     @After
@@ -72,6 +79,28 @@ class AnnounceDaoTest {
         stampCostFlexibility = stampCostFlexibility,
         peeringCost = if (stampCostFlexibility != null) 18 else null,
     )
+
+    private fun createTestContact(
+        destinationHash: String,
+        identityHash: String = "test_identity_hash",
+    ) = ContactEntity(
+        destinationHash = destinationHash,
+        identityHash = identityHash,
+        publicKey = ByteArray(32) { it.toByte() },
+        addedTimestamp = System.currentTimeMillis(),
+        addedVia = "ANNOUNCE",
+    )
+
+    private fun createTestIdentity(identityHash: String = "test_identity_hash") =
+        LocalIdentityEntity(
+            identityHash = identityHash,
+            displayName = "Test Identity",
+            destinationHash = "dest_$identityHash",
+            filePath = "/test/path",
+            createdTimestamp = System.currentTimeMillis(),
+            lastUsedTimestamp = System.currentTimeMillis(),
+            isActive = true,
+        )
 
     // ========== getTopPropagationNodes Tests ==========
 
@@ -301,5 +330,129 @@ class AnnounceDaoTest {
             assertEquals(5, counts.find { it.nodeType == "PROPAGATION_NODE" }?.count)
             assertEquals(3, counts.find { it.nodeType == "PEER" }?.count)
             assertEquals(2, counts.find { it.nodeType == "NODE" }?.count)
+        }
+
+    // ========== deleteAllAnnouncesExceptContacts Tests ==========
+
+    @Test
+    fun deleteAllAnnouncesExceptContacts_removesNonContactAnnounces() =
+        runTest {
+            // Given - 2 announces, 1 contact for dest_hash_1
+            val identity = createTestIdentity("test_identity_hash")
+            identityDao.insert(identity)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_1"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_2"))
+
+            val contact = createTestContact("dest_hash_1", "test_identity_hash")
+            contactDao.insertContact(contact)
+
+            // When
+            dao.deleteAllAnnouncesExceptContacts("test_identity_hash")
+
+            // Then - Only dest_hash_1 remains
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(1, remaining.size)
+            assertEquals("dest_hash_1", remaining[0].destinationHash)
+        }
+
+    @Test
+    fun deleteAllAnnouncesExceptContacts_preservesAllContactAnnounces() =
+        runTest {
+            // Given - 3 announces, all are contacts
+            val identity = createTestIdentity("test_identity_hash")
+            identityDao.insert(identity)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_1"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_2"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_3"))
+
+            contactDao.insertContact(createTestContact("dest_hash_1", "test_identity_hash"))
+            contactDao.insertContact(createTestContact("dest_hash_2", "test_identity_hash"))
+            contactDao.insertContact(createTestContact("dest_hash_3", "test_identity_hash"))
+
+            // When
+            dao.deleteAllAnnouncesExceptContacts("test_identity_hash")
+
+            // Then - All 3 announces remain
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(3, remaining.size)
+        }
+
+    @Test
+    fun deleteAllAnnouncesExceptContacts_doesNotPreserveContactsFromOtherIdentities() =
+        runTest {
+            // Given - 2 announces, contact for dest_hash_1 under identity_B (NOT active identity_A)
+            val identityA = createTestIdentity("identity_A")
+            val identityB = createTestIdentity("identity_B")
+            identityDao.insert(identityA)
+            identityDao.insert(identityB)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_1"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_2"))
+
+            // Contact belongs to identity_B, not identity_A
+            contactDao.insertContact(createTestContact("dest_hash_1", "identity_B"))
+
+            // When - Delete using identity_A (which has NO contacts)
+            dao.deleteAllAnnouncesExceptContacts("identity_A")
+
+            // Then - Both announces deleted (identity_A has no contacts)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(0, remaining.size)
+        }
+
+    @Test
+    fun deleteAllAnnouncesExceptContacts_deletesAllWhenNoContacts() =
+        runTest {
+            // Given - 3 announces, no contacts
+            val identity = createTestIdentity("some_identity_with_no_contacts")
+            identityDao.insert(identity)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_1"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_2"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_3"))
+
+            // When
+            dao.deleteAllAnnouncesExceptContacts("some_identity_with_no_contacts")
+
+            // Then - All announces deleted
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(0, remaining.size)
+        }
+
+    @Test
+    fun deleteAllAnnouncesExceptContacts_handlesEmptyAnnouncesTable() =
+        runTest {
+            // Given - No announces
+            val identity = createTestIdentity("test_identity_hash")
+            identityDao.insert(identity)
+
+            // When - Should not crash
+            dao.deleteAllAnnouncesExceptContacts("test_identity_hash")
+
+            // Then - Empty list
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(0, remaining.size)
+        }
+
+    @Test
+    fun deleteAllAnnounces_stillDeletesEverything() =
+        runTest {
+            // Given - 2 announces and 1 contact for dest_hash_1
+            val identity = createTestIdentity("test_identity_hash")
+            identityDao.insert(identity)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_1"))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "dest_hash_2"))
+
+            contactDao.insertContact(createTestContact("dest_hash_1", "test_identity_hash"))
+
+            // When - Use OLD deleteAllAnnounces (not the new contact-preserving version)
+            dao.deleteAllAnnounces()
+
+            // Then - All announces deleted (original behavior unchanged)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(0, remaining.size)
         }
 }

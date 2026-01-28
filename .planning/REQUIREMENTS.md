@@ -18,6 +18,10 @@ Requirements for this bug fix milestone. Each maps to roadmap phases.
 - [ ] **RELAY-01**: Relay auto-selection does not loop (add/remove/add cycle)
 - [ ] **RELAY-02**: Root cause of automatic relay unset identified and fixed
 
+### Clear Announces (#365)
+
+- [x] **ANNOUNCE-01**: Clear All Announces preserves contacts in My Contacts
+
 ## v2 Requirements
 
 Deferred bug fixes to address in a future milestone.
@@ -50,12 +54,13 @@ Which phases cover which requirements.
 | PERF-03 | Phase 1 | Pending |
 | RELAY-01 | Phase 2 | Pending |
 | RELAY-02 | Phase 2 | Pending |
+| ANNOUNCE-01 | Phase 2.1 | Complete |
 
 **Coverage:**
-- v1 requirements: 5 total
-- Mapped to phases: 5
+- v1 requirements: 6 total
+- Mapped to phases: 6
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after roadmap creation*
+*Last updated: 2026-01-27 after phase 2.1 completion*

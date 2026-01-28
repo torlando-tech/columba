@@ -12,7 +12,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 
 - [x] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
-- [ ] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
+- [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
 
 ## Phase Details
 
@@ -60,8 +60,8 @@ Plans:
 **Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 02.1-01-PLAN.md — Fix DAO, Repository, ViewModel, and UI to preserve contact announces
-- [ ] 02.1-02-PLAN.md — Add DAO and ViewModel tests for contact-preserving deletion (depends on 02.1-01)
+- [x] 02.1-01-PLAN.md — Fix DAO, Repository, ViewModel, and UI to preserve contact announces
+- [x] 02.1-02-PLAN.md — Add DAO and ViewModel tests for contact-preserving deletion (depends on 02.1-01)
 
 ## Progress
 
@@ -72,4 +72,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 |-------|----------------|--------|-----------|
 | 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
 | 2. Relay Loop Fix | 0/3 | Not started | - |
-| 2.1. Clear Announces Preserves Contacts (INSERTED) | 0/2 | Planned | - |
+| 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |

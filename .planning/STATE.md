@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Fix the performance degradation and relay selection loop bugs so users have a stable, responsive app experience.
-**Current focus:** Phase 2 - Relay Selection Loop Fixes
+**Current focus:** Phase 2.1 - Clear Announces Preserves Contacts
 
 ## Current Position
 
-Phase: 2 of 2 (Relay Selection Loop Fixes)
-Plan: 3 of 3 complete
-Status: Phase complete
-Last activity: 2026-01-25 — Completed 02-03-PLAN.md (State machine and loop prevention tests)
+Phase: 2.1 (Clear Announces Preserves Contacts)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-01-27 — Completed 02.1-01-PLAN.md (Identity-aware announce deletion)
 
-Progress: [██████████] 100% (6/6 total plans across both phases)
+Progress: [██████████░] 87.5% (7/8 total plans: 6 from phases 1-2 + 1/2 from phase 2.1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 5m 50s
-- Total execution time: 35m 1s
+- Total plans completed: 7
+- Average duration: 5m 23s
+- Total execution time: 37m 59s
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [██████████] 100% (6/6 total plans across both pha
 |-------|-------|------------|----------|
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
 | 02-relay-loop-fix | 3/3 | 16m 19s | 5m 26s |
+| 02.1-clear-announces | 1/2 | 2m 58s | 2m 58s |
 
 **Recent Trend:**
-- Last 3 plans: 3m 3s (02-01), 5m 5s (02-02), 27m 11s (02-03)
-- Trend: Variable (02-03 was comprehensive test addition - 9 new tests)
+- Last 3 plans: 5m 5s (02-02), 27m 11s (02-03), 2m 58s (02.1-01)
+- Trend: Fast execution for focused bug fixes
 
 *Updated after each plan completion*
 
@@ -57,6 +58,15 @@ Recent decisions affecting current work:
 - Send Sentry warning events when relay loop detected for diagnostics (02-02)
 - Use MutableSharedFlow to simulate reactive announce updates in state machine tests (02-03)
 - Test debounce with rapid emissions (100ms intervals) to verify batching (02-03)
+- Use SQL subquery (NOT IN) for contact-aware filtering instead of joins (02.1-01)
+- Preserve original deleteAllAnnounces() for backward compatibility and testing (02.1-01)
+- Fall back to deleteAllAnnounces() if no active identity (02.1-01)
+
+### Roadmap Evolution
+
+- Phase 2.1 inserted after Phase 2: Clear Announces Preserves Contacts — #365 (URGENT)
+  - "Clear All Announces" deletes contact announces, breaking ability to open new conversations
+  - Fix: exempt My Contacts announces from the bulk delete
 
 ### Pending Todos
 
@@ -81,10 +91,10 @@ Also pending from plans:
 
 ## Session Continuity
 
-Last session: 2026-01-25
-Stopped at: Completed 02-03-PLAN.md - State machine and loop prevention tests
+Last session: 2026-01-27
+Stopped at: Completed 02.1-01-PLAN.md - Identity-aware announce deletion
 Resume file: None
-Next: Phase 2 complete - All relay loop fix plans executed
+Next: Execute 02.1-02-PLAN.md (unit tests for contact preservation)
 
 ## Phase 2 Completion Summary
 

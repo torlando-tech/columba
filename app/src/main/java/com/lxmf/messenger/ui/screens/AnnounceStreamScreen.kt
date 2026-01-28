@@ -439,8 +439,7 @@ fun NodeTypeFilterDialog(
                                         } else {
                                             tempSelection + nodeType
                                         }
-                                }
-                                .padding(vertical = 4.dp),
+                                }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
@@ -486,8 +485,7 @@ fun NodeTypeFilterDialog(
                             .fillMaxWidth()
                             .clickable {
                                 tempShowAudio = !tempShowAudio
-                            }
-                            .padding(vertical = 4.dp),
+                            }.padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -853,7 +851,7 @@ fun ClearAllAnnouncesDialog(
             Text("Clear All Announces?")
         },
         text = {
-            Text("This will remove all discovered nodes from the list. They will reappear when they announce again.")
+            Text("This will remove all discovered nodes from the list, except those saved in My Contacts. Nodes will reappear when they announce again.")
         },
         confirmButton = {
             TextButton(

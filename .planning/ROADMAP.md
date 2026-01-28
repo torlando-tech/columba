@@ -12,6 +12,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 
 - [x] **Phase 1: Performance Fix** - Investigate and fix UI stuttering and progressive degradation
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
+- [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
 
 ## Phase Details
 
@@ -46,6 +47,22 @@ Plans:
 - [ ] 02-02-PLAN.md - Add loop detection, backoff, and Sentry diagnostics (depends on 02-01)
 - [ ] 02-03-PLAN.md - Add unit tests for state machine (depends on 02-01)
 
+### Phase 2.1: Clear Announces Preserves Contacts (INSERTED)
+**Goal**: "Clear All Announces" in the Network tab deletes all announces *except* those belonging to contacts in My Contacts, preserving the ability to open new conversations with saved contacts
+**Depends on**: Nothing (independent fix)
+**Requirements**: ANNOUNCE-01
+**Issue**: [#365](https://github.com/torlando-tech/columba/issues/365)
+**Success Criteria** (what must be TRUE):
+  1. User can tap "Clear All Announces" and all non-contact announces are removed
+  2. Announces belonging to contacts in My Contacts are preserved after clearing
+  3. User can still open a new conversation with any saved contact after clearing announces
+  4. "Node not found" error no longer appears when tapping a contact after clearing announces
+**Plans**: 2 plans in 2 waves
+
+Plans:
+- [x] 02.1-01-PLAN.md — Fix DAO, Repository, ViewModel, and UI to preserve contact announces
+- [x] 02.1-02-PLAN.md — Add DAO and ViewModel tests for contact-preserving deletion (depends on 02.1-01)
+
 ## Progress
 
 **Execution Order:**
@@ -55,3 +72,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 |-------|----------------|--------|-----------|
 | 1. Performance Fix | 3/3 | ✓ Complete | 2026-01-25 |
 | 2. Relay Loop Fix | 0/3 | Not started | - |
+| 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |

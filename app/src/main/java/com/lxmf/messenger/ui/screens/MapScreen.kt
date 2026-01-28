@@ -267,7 +267,8 @@ fun MapScreen(
         val hasFocusCoordinates = focusLatitude != null && focusLongitude != null
         if (!hasInitiallyCentered && hasFocusCoordinates) {
             val cameraPosition =
-                CameraPosition.Builder()
+                CameraPosition
+                    .Builder()
                     .target(LatLng(focusLatitude!!, focusLongitude!!))
                     .zoom(14.0)
                     .build()
@@ -282,7 +283,8 @@ fun MapScreen(
         val location = state.userLocation ?: return@LaunchedEffect
         if (!hasInitiallyCentered && focusLatitude == null) {
             val cameraPosition =
-                CameraPosition.Builder()
+                CameraPosition
+                    .Builder()
                     .target(LatLng(location.latitude, location.longitude))
                     .zoom(15.0)
                     .build()
@@ -330,6 +332,10 @@ fun MapScreen(
             when (styleResult) {
                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
                 is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
+                is MapStyleResult.OfflineWithLocalStyle -> {
+                    val styleJson = java.io.File(styleResult.localStylePath).readText()
+                    Style.Builder().fromJson(styleJson)
+                }
                 is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
                 is MapStyleResult.Unavailable -> {
                     // Set an empty style to clear the map - don't load HTTP tiles
@@ -420,6 +426,10 @@ fun MapScreen(
                             when (styleResult) {
                                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
                                 is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
+                                is MapStyleResult.OfflineWithLocalStyle -> {
+                                    val styleJson = java.io.File(styleResult.localStylePath).readText()
+                                    Style.Builder().fromJson(styleJson)
+                                }
                                 is MapStyleResult.Rmsp -> {
                                     // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
                                     Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
@@ -479,7 +489,8 @@ fun MapScreen(
                         val initialLat = state.userLocation?.latitude ?: 37.7749
                         val initialLng = state.userLocation?.longitude ?: -122.4194
                         val initialPosition =
-                            CameraPosition.Builder()
+                            CameraPosition
+                                .Builder()
                                 .target(LatLng(initialLat, initialLng))
                                 .zoom(if (state.userLocation != null) 15.0 else 12.0)
                                 .build()
@@ -553,15 +564,16 @@ fun MapScreen(
             val features =
                 state.contactMarkers.map { marker ->
                     val imageId = "marker-${marker.destinationHash}"
-                    Feature.fromGeometry(
-                        Point.fromLngLat(marker.longitude, marker.latitude),
-                    ).apply {
-                        addStringProperty("name", marker.displayName)
-                        addStringProperty("hash", marker.destinationHash)
-                        addStringProperty("imageId", imageId) // Pre-computed image ID
-                        addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
-                        addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
-                    }
+                    Feature
+                        .fromGeometry(
+                            Point.fromLngLat(marker.longitude, marker.latitude),
+                        ).apply {
+                            addStringProperty("name", marker.displayName)
+                            addStringProperty("hash", marker.destinationHash)
+                            addStringProperty("imageId", imageId) // Pre-computed image ID
+                            addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
+                            addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
+                        }
                 }
             val featureCollection = FeatureCollection.fromFeatures(features)
 
@@ -579,46 +591,47 @@ fun MapScreen(
                 // Only visible when approximateRadius > 0
                 val uncertaintyLayerId = "contact-markers-uncertainty-layer"
                 style.addLayer(
-                    CircleLayer(uncertaintyLayerId, sourceId).withProperties(
-                        // Circle radius scales with zoom - converts meters to screen pixels
-                        // At zoom 15, 1 pixel ≈ 1 meter, so we scale accordingly
-                        PropertyFactory.circleRadius(
-                            Expression.interpolate(
-                                Expression.linear(),
-                                Expression.zoom(),
-                                // At lower zooms, show smaller radius (it's farther out)
-                                // Continue shrinking below zoom 10 so it doesn't stay constant
-                                Expression.stop(2, Expression.division(Expression.get("approximateRadius"), Expression.literal(500))),
-                                Expression.stop(5, Expression.division(Expression.get("approximateRadius"), Expression.literal(200))),
-                                Expression.stop(8, Expression.division(Expression.get("approximateRadius"), Expression.literal(60))),
-                                Expression.stop(10, Expression.division(Expression.get("approximateRadius"), Expression.literal(30))),
-                                Expression.stop(12, Expression.division(Expression.get("approximateRadius"), Expression.literal(10))),
-                                Expression.stop(15, Expression.division(Expression.get("approximateRadius"), Expression.literal(3))),
-                                Expression.stop(18, Expression.product(Expression.get("approximateRadius"), Expression.literal(0.8))),
+                    CircleLayer(uncertaintyLayerId, sourceId)
+                        .withProperties(
+                            // Circle radius scales with zoom - converts meters to screen pixels
+                            // At zoom 15, 1 pixel ≈ 1 meter, so we scale accordingly
+                            PropertyFactory.circleRadius(
+                                Expression.interpolate(
+                                    Expression.linear(),
+                                    Expression.zoom(),
+                                    // At lower zooms, show smaller radius (it's farther out)
+                                    // Continue shrinking below zoom 10 so it doesn't stay constant
+                                    Expression.stop(2, Expression.division(Expression.get("approximateRadius"), Expression.literal(500))),
+                                    Expression.stop(5, Expression.division(Expression.get("approximateRadius"), Expression.literal(200))),
+                                    Expression.stop(8, Expression.division(Expression.get("approximateRadius"), Expression.literal(60))),
+                                    Expression.stop(10, Expression.division(Expression.get("approximateRadius"), Expression.literal(30))),
+                                    Expression.stop(12, Expression.division(Expression.get("approximateRadius"), Expression.literal(10))),
+                                    Expression.stop(15, Expression.division(Expression.get("approximateRadius"), Expression.literal(3))),
+                                    Expression.stop(18, Expression.product(Expression.get("approximateRadius"), Expression.literal(0.8))),
+                                ),
                             ),
+                            // Semi-transparent fill (Orange)
+                            PropertyFactory.circleColor(
+                                Expression.color(android.graphics.Color.parseColor("#FF5722")),
+                            ),
+                            PropertyFactory.circleOpacity(
+                                Expression.literal(0.15f),
+                            ),
+                            // Dashed stroke for the uncertainty boundary
+                            PropertyFactory.circleStrokeWidth(
+                                Expression.literal(2f),
+                            ),
+                            // Orange stroke
+                            PropertyFactory.circleStrokeColor(
+                                Expression.color(android.graphics.Color.parseColor("#FF5722")),
+                            ),
+                            PropertyFactory.circleStrokeOpacity(
+                                Expression.literal(0.4f),
+                            ),
+                        ).withFilter(
+                            // Only show for locations with approximateRadius > 0
+                            Expression.gt(Expression.get("approximateRadius"), Expression.literal(0)),
                         ),
-                        // Semi-transparent fill (Orange)
-                        PropertyFactory.circleColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")),
-                        ),
-                        PropertyFactory.circleOpacity(
-                            Expression.literal(0.15f),
-                        ),
-                        // Dashed stroke for the uncertainty boundary
-                        PropertyFactory.circleStrokeWidth(
-                            Expression.literal(2f),
-                        ),
-                        // Orange stroke
-                        PropertyFactory.circleStrokeColor(
-                            Expression.color(android.graphics.Color.parseColor("#FF5722")),
-                        ),
-                        PropertyFactory.circleStrokeOpacity(
-                            Expression.literal(0.4f),
-                        ),
-                    ).withFilter(
-                        // Only show for locations with approximateRadius > 0
-                        Expression.gt(Expression.get("approximateRadius"), Expression.literal(0)),
-                    ),
                 )
 
                 // SymbolLayer for custom marker icons (colored circle with initial + name)
@@ -678,12 +691,13 @@ fun MapScreen(
 
             // Create GeoJSON feature for the focus marker
             val feature =
-                Feature.fromGeometry(
-                    Point.fromLngLat(focusLongitude, focusLatitude),
-                ).apply {
-                    addStringProperty("name", focusLabel ?: "Location")
-                    addStringProperty("imageId", imageId)
-                }
+                Feature
+                    .fromGeometry(
+                        Point.fromLngLat(focusLongitude, focusLatitude),
+                    ).apply {
+                        addStringProperty("name", focusLabel ?: "Location")
+                        addStringProperty("imageId", imageId)
+                    }
             val featureCollection = FeatureCollection.fromFeatures(listOf(feature))
 
             // Update or create the source
@@ -720,8 +734,7 @@ fun MapScreen(
                                     Color.Transparent,
                                 ),
                         ),
-                    )
-                    .align(Alignment.TopStart),
+                    ).align(Alignment.TopStart),
         )
 
         // TopAppBar overlays map (transparent background)
@@ -800,7 +813,8 @@ fun MapScreen(
                         state.userLocation?.let { location ->
                             mapLibreMap?.let { map ->
                                 val cameraPosition =
-                                    CameraPosition.Builder()
+                                    CameraPosition
+                                        .Builder()
                                         .target(LatLng(location.latitude, location.longitude))
                                         .zoom(15.0)
                                         .build()
@@ -1190,8 +1204,8 @@ internal fun FocusInterfaceContent(
 /**
  * Format LoRa parameters for clipboard.
  */
-internal fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): String {
-    return buildString {
+internal fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): String =
+    buildString {
         appendLine("LoRa Parameters from: ${details.name}")
         appendLine("---")
         details.frequency?.let { freq ->
@@ -1210,7 +1224,6 @@ internal fun formatLoraParamsForClipboard(details: FocusInterfaceDetails): Strin
             appendLine("Modulation: $mod")
         }
     }.trim()
-}
 
 @Composable
 internal fun InterfaceDetailRow(
@@ -1399,14 +1412,15 @@ private fun startLocationUpdates(
     viewModel: MapViewModel,
 ) {
     val locationRequest =
-        LocationRequest.Builder(
-            Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-            // 30 seconds
-            30_000L,
-        ).apply {
-            setMinUpdateIntervalMillis(15_000L) // min interval
-            setMaxUpdateDelayMillis(60_000L) // max delay
-        }.build()
+        LocationRequest
+            .Builder(
+                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                // 30 seconds
+                30_000L,
+            ).apply {
+                setMinUpdateIntervalMillis(15_000L) // min interval
+                setMaxUpdateDelayMillis(60_000L) // max delay
+            }.build()
 
     val locationCallback =
         object : LocationCallback() {
@@ -1458,9 +1472,26 @@ internal fun ScaleBar(
     // Nice distance values in meters (up to 10,000 km for very zoomed out views)
     val niceDistances =
         listOf(
-            5, 10, 20, 50, 100, 200, 500,
-            1_000, 2_000, 5_000, 10_000, 20_000, 50_000,
-            100_000, 200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000,
+            5,
+            10,
+            20,
+            50,
+            100,
+            200,
+            500,
+            1_000,
+            2_000,
+            5_000,
+            10_000,
+            20_000,
+            50_000,
+            100_000,
+            200_000,
+            500_000,
+            1_000_000,
+            2_000_000,
+            5_000_000,
+            10_000_000,
         )
 
     // Find the best nice distance that fits in our range

@@ -14,6 +14,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
 - [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
 - [x] **Phase 2.2: Offline Map Tile Rendering** - Fix offline maps failing to render after extended offline period (#354) (INSERTED)
+- [ ] **Phase 2.3: Loading States for Tabs** - Show loading indicators instead of empty states while data loads (#341) (INSERTED)
 
 ## Phase Details
 
@@ -80,6 +81,22 @@ Plans:
 - [x] 02.2-01-PLAN.md — Add localStylePath to DB schema and cache style JSON during download
 - [x] 02.2-02-PLAN.md — Load local style JSON when offline and update MapScreen (depends on 02.2-01)
 
+### Phase 2.3: Loading States for Tabs (INSERTED)
+**Goal**: Show loading indicators while data initializes instead of flashing empty states ("No conversations yet", "No contacts yet") that confuse users into thinking no data exists
+**Depends on**: Nothing (independent fix)
+**Requirements**: UX-LOADING-01
+**Issue**: [#341](https://github.com/torlando-tech/columba/issues/341)
+**Success Criteria** (what must be TRUE):
+  1. User sees "Loading conversations..." when navigating to Chats tab before data loads
+  2. User sees "Loading contacts..." when navigating to Contacts tab before data loads
+  3. User does NOT see "No conversations yet" or "No contacts yet" while data is still loading
+  4. After Skip on onboarding, user sees loading state (not empty state) until data loads
+  5. Empty states only appear when data has finished loading AND is actually empty
+**Plans**: 1 plan in 1 wave
+
+Plans:
+- [ ] 02.3-01-PLAN.md — Add loading states to ChatsViewModel/Screen and ContactsViewModel/Screen
+
 ## Progress
 
 **Execution Order:**
@@ -91,3 +108,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 | 2. Relay Loop Fix | 0/3 | Not started | - |
 | 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
 | 2.2. Offline Map Tile Rendering (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
+| 2.3. Loading States for Tabs (INSERTED) | 0/1 | Not started | - |

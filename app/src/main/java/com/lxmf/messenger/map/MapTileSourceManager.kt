@@ -20,23 +20,41 @@ sealed class MapStyleResult {
     /**
      * Use online HTTP tiles (default).
      */
-    data class Online(val styleUrl: String) : MapStyleResult()
+    data class Online(
+        val styleUrl: String,
+    ) : MapStyleResult()
 
     /**
      * Use offline cached tiles (via MapLibre's OfflineManager).
      * Uses the same style URL as online - MapLibre serves cached tiles automatically.
      */
-    data class Offline(val styleUrl: String) : MapStyleResult()
+    data class Offline(
+        val styleUrl: String,
+    ) : MapStyleResult()
+
+    /**
+     * Use offline cached tiles with a locally stored style JSON file.
+     * The style JSON was fetched and cached during the offline map download.
+     * Uses fromJson() instead of fromUri() to avoid HTTP cache expiration.
+     */
+    data class OfflineWithLocalStyle(
+        val localStylePath: String,
+    ) : MapStyleResult()
 
     /**
      * Use RMSP server for tiles.
      */
-    data class Rmsp(val server: RmspServer, val styleJson: String) : MapStyleResult()
+    data class Rmsp(
+        val server: RmspServer,
+        val styleJson: String,
+    ) : MapStyleResult()
 
     /**
      * No map source available.
      */
-    data class Unavailable(val reason: String) : MapStyleResult()
+    data class Unavailable(
+        val reason: String,
+    ) : MapStyleResult()
 }
 
 /**
@@ -122,10 +140,18 @@ class MapTileSourceManager
                     MapStyleResult.Online(DEFAULT_STYLE_URL)
                 }
                 hasOffline -> {
-                    // Load the online style URL - MapLibre will serve cached tiles
-                    // without making network requests for areas covered by offline maps
-                    Log.d(TAG, "Using offline maps (loading style for cached tile access)")
-                    MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                    // Check if any completed region has a locally cached style JSON
+                    val regionWithStyle = offlineMapRegionRepository.getFirstCompletedRegionWithStyle()
+                    val stylePath = regionWithStyle?.localStylePath
+
+                    if (stylePath != null && java.io.File(stylePath).exists()) {
+                        Log.d(TAG, "Using offline maps with local style JSON: $stylePath")
+                        MapStyleResult.OfflineWithLocalStyle(stylePath)
+                    } else {
+                        // Fallback to HTTP style URL (works if HTTP cache hasn't expired)
+                        Log.w(TAG, "No local style JSON found, falling back to HTTP style URL")
+                        MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                    }
                 }
                 rmspEnabled -> {
                     val servers = rmspServerRepository.getNearestServers(1).first()
@@ -147,36 +173,28 @@ class MapTileSourceManager
         /**
          * Observe offline regions that could be used for the map.
          */
-        fun observeOfflineRegions(): Flow<List<OfflineMapRegion>> {
-            return offlineMapRegionRepository.getCompletedRegions()
-        }
+        fun observeOfflineRegions(): Flow<List<OfflineMapRegion>> = offlineMapRegionRepository.getCompletedRegions()
 
         /**
          * Observe available RMSP servers.
          */
-        fun observeRmspServers(): Flow<List<RmspServer>> {
-            return rmspServerRepository.getAllServers()
-        }
+        fun observeRmspServers(): Flow<List<RmspServer>> = rmspServerRepository.getAllServers()
 
         /**
          * Check if any offline maps are available.
          */
-        fun hasOfflineMaps(): Flow<Boolean> {
-            return offlineMapRegionRepository.getCompletedRegions().map { it.isNotEmpty() }
-        }
+        fun hasOfflineMaps(): Flow<Boolean> = offlineMapRegionRepository.getCompletedRegions().map { it.isNotEmpty() }
 
         /**
          * Check if any RMSP servers are available.
          */
-        fun hasRmspServers(): Flow<Boolean> {
-            return rmspServerRepository.hasServers()
-        }
+        fun hasRmspServers(): Flow<Boolean> = rmspServerRepository.hasServers()
 
         /**
          * Observe the combined availability of map sources.
          */
-        fun observeSourceAvailability(): Flow<SourceAvailability> {
-            return combine(
+        fun observeSourceAvailability(): Flow<SourceAvailability> =
+            combine(
                 hasOfflineMaps(),
                 hasRmspServers(),
                 httpEnabledFlow,
@@ -189,14 +207,11 @@ class MapTileSourceManager
                     rmspEnabled = rmspEnabled,
                 )
             }
-        }
 
         /**
          * Get the count of RMSP servers.
          */
-        fun observeRmspServerCount(): Flow<Int> {
-            return rmspServerRepository.getAllServers().map { it.size }
-        }
+        fun observeRmspServerCount(): Flow<Int> = rmspServerRepository.getAllServers().map { it.size }
 
         /**
          * Save HTTP enabled setting.

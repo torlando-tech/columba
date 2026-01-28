@@ -333,8 +333,13 @@ fun MapScreen(
                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
                 is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
                 is MapStyleResult.OfflineWithLocalStyle -> {
-                    val styleJson = java.io.File(styleResult.localStylePath).readText()
-                    Style.Builder().fromJson(styleJson)
+                    try {
+                        val styleJson = java.io.File(styleResult.localStylePath).readText()
+                        Style.Builder().fromJson(styleJson)
+                    } catch (e: Exception) {
+                        Log.e("MapScreen", "Failed to read cached style JSON, falling back to HTTP", e)
+                        Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                    }
                 }
                 is MapStyleResult.Rmsp -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
                 is MapStyleResult.Unavailable -> {
@@ -427,8 +432,13 @@ fun MapScreen(
                                 is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
                                 is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
                                 is MapStyleResult.OfflineWithLocalStyle -> {
-                                    val styleJson = java.io.File(styleResult.localStylePath).readText()
-                                    Style.Builder().fromJson(styleJson)
+                                    try {
+                                        val styleJson = java.io.File(styleResult.localStylePath).readText()
+                                        Style.Builder().fromJson(styleJson)
+                                    } catch (e: Exception) {
+                                        Log.e("MapScreen", "Failed to read cached style JSON, falling back to HTTP", e)
+                                        Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
+                                    }
                                 }
                                 is MapStyleResult.Rmsp -> {
                                     // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)

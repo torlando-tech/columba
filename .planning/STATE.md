@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Fix the performance degradation and relay selection loop bugs so users have a stable, responsive app experience.
-**Current focus:** Phase 2.1 - Clear Announces Preserves Contacts
+**Current focus:** Phase 2.2 - Offline Map Tile Rendering
 
 ## Current Position
 
-Phase: 2.1 (Clear Announces Preserves Contacts)
+Phase: 2.2 (Offline Map Tile Rendering)
 Plan: 2 of 2 complete
 Status: Phase complete
-Last activity: 2026-01-28 — Completed 02.1-02-PLAN.md (Test contact-preserving deletion)
+Last activity: 2026-01-28 — Completed 02.2-02-PLAN.md (Load local style for offline rendering)
 
-Progress: [███████████] 100% (8/8 total plans: 6 from phases 1-2 + 2/2 from phase 2.1)
+Progress: [████████████] 100% (10/10 total plans: 6 from phases 1-2 + 2/2 from phase 2.1 + 2/2 from phase 2.2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 5m 24s
-- Total execution time: 43m 13s
+- Total plans completed: 10
+- Average duration: 7m 0s
+- Total execution time: 69m 35s
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [███████████] 100% (8/8 total plans: 6 from phas
 | 01-performance-fix | 3/3 | 18m 42s | 6m 14s |
 | 02-relay-loop-fix | 3/3 | 16m 19s | 5m 26s |
 | 02.1-clear-announces | 2/2 | 8m 12s | 4m 6s |
+| 02.2-offline-maps | 2/2 | 26m 22s | 13m 11s |
 
 **Recent Trend:**
-- Last 3 plans: 27m 11s (02-03), 2m 58s (02.1-01), 5m 14s (02.1-02)
-- Trend: Fast execution for focused bug fixes and tests
+- Last 3 plans: 5m 14s (02.1-02), 18m 22s (02.2-01), 8m (02.2-02)
+- Trend: Database migrations slower, UI-only changes faster
 
 *Updated after each plan completion*
 
@@ -61,12 +62,20 @@ Recent decisions affecting current work:
 - Use SQL subquery (NOT IN) for contact-aware filtering instead of joins (02.1-01)
 - Preserve original deleteAllAnnounces() for backward compatibility and testing (02.1-01)
 - Fall back to deleteAllAnnounces() if no active identity (02.1-01)
+- Launch style JSON fetch in separate coroutine (non-blocking) to avoid delaying UI updates (02.2-01)
+- Use 5-second timeout on URL fetch to prevent infinite hangs in tests and slow networks (02.2-01)
+- Use fromJson() instead of fromUri() for local style files to avoid HTTP cache dependency (02.2-02)
+- Fall back to HTTP style URL if cached style file doesn't exist (backward compatibility) (02.2-02)
 
 ### Roadmap Evolution
 
 - Phase 2.1 inserted after Phase 2: Clear Announces Preserves Contacts — #365 (URGENT)
   - "Clear All Announces" deletes contact announces, breaking ability to open new conversations
   - Fix: exempt My Contacts announces from the bulk delete
+- Phase 2.2 inserted after Phase 2.1: Offline Map Tile Rendering — #354 (URGENT)
+  - Downloaded offline maps stop rendering after extended offline period (days)
+  - Likely cause: offline code path still uses network style URL, so MapLibre can't resolve layer definitions when fully offline
+  - Fix: ensure offline style loading explicitly uses local tile data without network dependency
 
 ### Pending Todos
 
@@ -92,9 +101,9 @@ Also pending from plans:
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 02.1-02-PLAN.md - Test contact-preserving deletion
+Stopped at: Completed 02.2-02-PLAN.md - Load cached style for offline rendering
 Resume file: None
-Next: Phase 2.1 complete - all roadmap items finished
+Next: All planned phases complete (Phase 1, 2, 2.1, 2.2)
 
 ## Phase 2 Completion Summary
 
@@ -139,4 +148,36 @@ All 2 plans executed successfully:
 **Production readiness:**
 - Ready for merge and release
 - Fixes critical UX bug preventing users from opening conversations with saved contacts
+- No pending blockers for this phase
+
+## Phase 2.2 Completion Summary
+
+**Phase 02.2 - Offline Map Tile Rendering: COMPLETE**
+
+All 2 plans executed successfully:
+- 02.2-01: Cache style JSON during download (18m 22s) ✓
+- 02.2-02: Load cached style for offline rendering (8m) ✓
+
+**Key outcomes:**
+- Issue #354 (offline maps lose rendering after days) resolved
+- Style JSON cached during offline map download to local files
+- MapLibre loads style from local JSON files when offline (not HTTP URL)
+- Full vector tile detail (roads, buildings, labels) renders indefinitely offline
+- Graceful fallback for regions without cached style (backward compatibility)
+- On-device verification confirmed working behavior
+
+**Technical implementation:**
+- Database migration 34→35 adds `localStylePath` column to offline map regions
+- Smart style resolution: check cache file → fall back to HTTP URL
+- MapScreen uses `Style.Builder().fromJson()` for offline local styles (not `fromUri()`)
+- Network disabled (allowNetwork = false) for offline modes
+- Non-blocking style caching with 5-second timeout
+
+**Testing confidence:** High - On-device testing confirmed, all unit tests pass
+
+**Production readiness:**
+- Ready for merge and release
+- Resolves critical offline UX bug (maps unusable after days offline)
+- Safe database migration (nullable column addition)
+- No regressions in online map functionality
 - No pending blockers for this phase

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import java.util.Locale
@@ -48,7 +49,10 @@ enum class DownloadWizardStep {
 /**
  * Radius option for offline map download.
  */
-enum class RadiusOption(val km: Int, val label: String) {
+enum class RadiusOption(
+    val km: Int,
+    val label: String,
+) {
     SMALL(5, "5 km"),
     MEDIUM(10, "10 km"),
     LARGE(25, "25 km"),
@@ -121,14 +125,13 @@ data class OfflineMapDownloadState(
     /**
      * Get a human-readable estimated size string.
      */
-    fun getEstimatedSizeString(): String {
-        return when {
+    fun getEstimatedSizeString(): String =
+        when {
             estimatedSizeBytes < 1024 -> "$estimatedSizeBytes B"
             estimatedSizeBytes < 1024 * 1024 -> "${estimatedSizeBytes / 1024} KB"
             estimatedSizeBytes < 1024 * 1024 * 1024 -> "${estimatedSizeBytes / (1024 * 1024)} MB"
             else -> "%.1f GB".format(estimatedSizeBytes / (1024.0 * 1024.0 * 1024.0))
         }
-    }
 }
 
 /**
@@ -516,7 +519,8 @@ class OfflineMapDownloadViewModel
             val southwest = LatLng(centerLat - latDelta, centerLon - lonDelta)
             val northeast = LatLng(centerLat + latDelta, centerLon + lonDelta)
 
-            return LatLngBounds.Builder()
+            return LatLngBounds
+                .Builder()
                 .include(southwest)
                 .include(northeast)
                 .build()
@@ -596,7 +600,10 @@ class OfflineMapDownloadViewModel
                                     // Mark as complete in database with MapLibre region ID
                                     offlineMapRegionRepository.markCompleteWithMaplibreId(
                                         id = regionId,
-                                        tileCount = _state.value.downloadProgress?.completedResources?.toInt() ?: 0,
+                                        tileCount =
+                                            _state.value.downloadProgress
+                                                ?.completedResources
+                                                ?.toInt() ?: 0,
                                         sizeBytes = sizeBytes,
                                         maplibreRegionId = maplibreRegionId,
                                     )
@@ -624,6 +631,10 @@ class OfflineMapDownloadViewModel
                                             )
                                         }
                                     }
+
+                                    // Fetch and cache style JSON for offline rendering (async, non-blocking)
+                                    // Launch in separate coroutine so it doesn't block UI state updates
+                                    launch { fetchAndCacheStyleJson(regionId) }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to mark region complete in database", e)
                                     _state.update {
@@ -667,6 +678,41 @@ class OfflineMapDownloadViewModel
                     _state.update {
                         it.copy(errorMessage = "Download failed: ${e.message}")
                     }
+                }
+            }
+        }
+
+        /**
+         * Fetch and cache the style JSON file locally for offline rendering.
+         * Called after download completes successfully (while device is still online).
+         *
+         * This is non-fatal - if it fails, the download is still considered successful
+         * and the map will work from HTTP cache until it expires.
+         */
+        private suspend fun fetchAndCacheStyleJson(regionId: Long) {
+            withContext(Dispatchers.IO) {
+                try {
+                    // Fetch style JSON from the same URL MapLibre uses
+                    // Use withTimeout to prevent test hangs (5 seconds should be plenty)
+                    val styleJson =
+                        kotlinx.coroutines.withTimeout(5000) {
+                            java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
+                        }
+
+                    // Save to local file: filesDir/offline_styles/{regionId}.json
+                    val styleDir = java.io.File(context.filesDir, "offline_styles")
+                    styleDir.mkdirs()
+                    val styleFile = java.io.File(styleDir, "$regionId.json")
+                    styleFile.writeText(styleJson)
+
+                    // Persist path to database
+                    offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
+
+                    Log.d(TAG, "Cached style JSON for region $regionId at ${styleFile.absolutePath}")
+                } catch (e: Exception) {
+                    // Non-fatal: download already succeeded, tiles are saved
+                    // The style will work from HTTP cache until it expires
+                    Log.w(TAG, "Failed to cache style JSON for region $regionId (non-fatal)", e)
                 }
             }
         }

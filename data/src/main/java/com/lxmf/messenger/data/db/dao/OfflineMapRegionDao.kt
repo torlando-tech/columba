@@ -207,4 +207,20 @@ interface OfflineMapRegionDao {
         id: Long,
         maplibreRegionId: Long,
     )
+
+    /**
+     * Update the local style JSON file path for a region.
+     */
+    @Query("UPDATE offline_map_regions SET localStylePath = :localStylePath WHERE id = :id")
+    suspend fun updateLocalStylePath(
+        id: Long,
+        localStylePath: String,
+    )
+
+    /**
+     * Get the first completed region with a locally cached style JSON file.
+     * Used by Plan 02 to load the cached style for offline rendering.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' AND localStylePath IS NOT NULL LIMIT 1")
+    suspend fun getFirstCompletedRegionWithLocalStyle(): OfflineMapRegionEntity?
 }

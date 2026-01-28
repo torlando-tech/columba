@@ -91,15 +91,14 @@ class OfflineMapDownloadViewModelTest {
         clearAllMocks()
     }
 
-    private fun createViewModel(): OfflineMapDownloadViewModel {
-        return OfflineMapDownloadViewModel(
+    private fun createViewModel(): OfflineMapDownloadViewModel =
+        OfflineMapDownloadViewModel(
             context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
             mapLibreOfflineManager = mockMapLibreOfflineManager,
             mapTileSourceManager = mockMapTileSourceManager,
             settingsRepository = mockSettingsRepository,
         )
-    }
 
     // region Initial State Tests
 
@@ -620,6 +619,7 @@ class OfflineMapDownloadViewModelTest {
 
             coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
             coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+            coEvery { offlineMapRegionRepository.updateLocalStylePath(any(), any()) } returns Unit
 
             // Capture the onComplete callback
             var capturedOnComplete: ((Long, Long) -> Unit)? = null
@@ -649,7 +649,7 @@ class OfflineMapDownloadViewModelTest {
             assertNotNull("onComplete callback should have been captured", capturedOnComplete)
             capturedOnComplete?.invoke(456L, 1500000L)
 
-            // Verify state
+            // Verify state (state update happens immediately, style caching is async and non-blocking)
             assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
             assertTrue(viewModel.state.value.isComplete)
         }

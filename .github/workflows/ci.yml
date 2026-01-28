@@ -307,7 +307,7 @@ jobs:
             robolectric-
 
       - name: Run unit tests and generate coverage report
-        run: ./gradlew testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4 --no-build-cache
+        run: ./gradlew testDebugUnitTest testNoSentryDebugUnitTest jacocoTestReport --stacktrace --max-workers=4 --no-build-cache
 
       - name: Upload unit test results
         if: always()

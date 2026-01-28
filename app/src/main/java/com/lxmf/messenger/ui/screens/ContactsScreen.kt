@@ -131,7 +131,7 @@ fun ContactsScreen(
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
-    val groupedContacts by viewModel.groupedContacts.collectAsState()
+    val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
@@ -165,10 +165,10 @@ fun ContactsScreen(
     }
 
     // Debug logging
-    LaunchedEffect(groupedContacts) {
+    LaunchedEffect(contactsState) {
         android.util.Log.d(
             "ContactsScreen",
-            "UI received: relay=${groupedContacts.relay?.displayName}, pinned=${groupedContacts.pinned.size}, all=${groupedContacts.all.size}",
+            "UI received: relay=${contactsState.groupedContacts.relay?.displayName}, pinned=${contactsState.groupedContacts.pinned.size}, all=${contactsState.groupedContacts.all.size}, isLoading=${contactsState.isLoading}",
         )
     }
     var showAddContactSheet by remember { mutableStateOf(false) }
@@ -420,158 +420,176 @@ fun ContactsScreen(
         when (selectedTab) {
             ContactsTab.MY_CONTACTS -> {
                 // My Contacts tab content
-                if (groupedContacts.relay == null && groupedContacts.pinned.isEmpty() && groupedContacts.all.isEmpty()) {
-                    EmptyContactsState(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues),
-                    )
-                } else {
-                    LazyColumn(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues)
-                                .consumeWindowInsets(paddingValues),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        // My Relay section (shown at top, separate from pinned)
-                        android.util.Log.d("ContactsScreen", "LazyColumn composing, relay=${groupedContacts.relay?.displayName}")
-                        groupedContacts.relay?.let { relay ->
-                            android.util.Log.d("ContactsScreen", "Rendering MY RELAY section for: ${relay.displayName}")
-                            item {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Hub,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "MY RELAY",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                    )
-                                    // Show "(auto)" badge if relay was auto-selected
-                                    if (currentRelayInfo?.isAutoSelected == true) {
+                when {
+                    contactsState.isLoading -> {
+                        LoadingContactsState(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues),
+                        )
+                    }
+                    contactsState.groupedContacts.relay == null &&
+                        contactsState.groupedContacts.pinned
+                            .isEmpty() &&
+                        contactsState.groupedContacts.all
+                            .isEmpty() -> {
+                        EmptyContactsState(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues),
+                        )
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues)
+                                    .consumeWindowInsets(paddingValues),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            // My Relay section (shown at top, separate from pinned)
+                            android.util.Log.d(
+                                "ContactsScreen",
+                                "LazyColumn composing, relay=${contactsState.groupedContacts.relay?.displayName}",
+                            )
+                            contactsState.groupedContacts.relay?.let { relay ->
+                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section for: ${relay.displayName}")
+                                item {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Hub,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                        )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "(auto)",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            text = "MY RELAY",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                        )
+                                        // Show "(auto)" badge if relay was auto-selected
+                                        if (currentRelayInfo?.isAutoSelected == true) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "(auto)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                                item(key = "relay_${relay.destinationHash}") {
+                                    ContactListItemWithMenu(
+                                        contact = relay,
+                                        onClick = {
+                                            if (relay.status == ContactStatus.PENDING_IDENTITY ||
+                                                relay.status == ContactStatus.UNRESOLVED
+                                            ) {
+                                                pendingContactToShow = relay
+                                                showPendingContactSheet = true
+                                            } else {
+                                                onContactClick(relay.destinationHash, relay.displayName)
+                                            }
+                                        },
+                                        onPinToggle = { viewModel.togglePin(relay.destinationHash) },
+                                        onEditNickname = {
+                                            editNicknameContactHash = relay.destinationHash
+                                            editNicknameCurrentValue = relay.customNickname
+                                            showEditNicknameDialog = true
+                                        },
+                                        onViewDetails = { onViewPeerDetails(relay.destinationHash) },
+                                        onRemove = {
+                                            relayToUnset = relay
+                                            showUnsetRelayDialog = true
+                                        },
+                                    )
+                                }
+                            }
+
+                            // Pinned contacts section
+                            if (contactsState.groupedContacts.pinned.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "PINNED",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                                    )
+                                }
+                                items(
+                                    contactsState.groupedContacts.pinned,
+                                    key = { contact -> "pinned_${contact.destinationHash}" },
+                                ) { contact ->
+                                    ContactListItemWithMenu(
+                                        contact = contact,
+                                        onClick = {
+                                            if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                                contact.status == ContactStatus.UNRESOLVED
+                                            ) {
+                                                pendingContactToShow = contact
+                                                showPendingContactSheet = true
+                                            } else {
+                                                onContactClick(contact.destinationHash, contact.displayName)
+                                            }
+                                        },
+                                        onPinToggle = { viewModel.togglePin(contact.destinationHash) },
+                                        onEditNickname = {
+                                            editNicknameContactHash = contact.destinationHash
+                                            editNicknameCurrentValue = contact.customNickname
+                                            showEditNicknameDialog = true
+                                        },
+                                        onViewDetails = { onViewPeerDetails(contact.destinationHash) },
+                                        onRemove = { viewModel.deleteContact(contact.destinationHash) },
+                                    )
+                                }
+                            }
+
+                            // All contacts section
+                            if (contactsState.groupedContacts.all.isNotEmpty()) {
+                                if (contactsState.groupedContacts.relay != null || contactsState.groupedContacts.pinned.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            text = "ALL CONTACTS",
+                                            style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
                                         )
                                     }
                                 }
-                            }
-                            item(key = "relay_${relay.destinationHash}") {
-                                ContactListItemWithMenu(
-                                    contact = relay,
-                                    onClick = {
-                                        if (relay.status == ContactStatus.PENDING_IDENTITY ||
-                                            relay.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = relay
-                                            showPendingContactSheet = true
-                                        } else {
-                                            onContactClick(relay.destinationHash, relay.displayName)
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(relay.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = relay.destinationHash
-                                        editNicknameCurrentValue = relay.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(relay.destinationHash) },
-                                    onRemove = {
-                                        relayToUnset = relay
-                                        showUnsetRelayDialog = true
-                                    },
-                                )
-                            }
-                        }
-
-                        // Pinned contacts section
-                        if (groupedContacts.pinned.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "PINNED",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
-                                )
-                            }
-                            items(
-                                groupedContacts.pinned,
-                                key = { contact -> "pinned_${contact.destinationHash}" },
-                            ) { contact ->
-                                ContactListItemWithMenu(
-                                    contact = contact,
-                                    onClick = {
-                                        if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                            contact.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = contact
-                                            showPendingContactSheet = true
-                                        } else {
-                                            onContactClick(contact.destinationHash, contact.displayName)
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(contact.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = contact.destinationHash
-                                        editNicknameCurrentValue = contact.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(contact.destinationHash) },
-                                    onRemove = { viewModel.deleteContact(contact.destinationHash) },
-                                )
-                            }
-                        }
-
-                        // All contacts section
-                        if (groupedContacts.all.isNotEmpty()) {
-                            if (groupedContacts.relay != null || groupedContacts.pinned.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        text = "ALL CONTACTS",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+                                items(
+                                    contactsState.groupedContacts.all,
+                                    key = { contact -> contact.destinationHash },
+                                ) { contact ->
+                                    ContactListItemWithMenu(
+                                        contact = contact,
+                                        onClick = {
+                                            if (contact.status == ContactStatus.PENDING_IDENTITY ||
+                                                contact.status == ContactStatus.UNRESOLVED
+                                            ) {
+                                                pendingContactToShow = contact
+                                                showPendingContactSheet = true
+                                            } else {
+                                                onContactClick(contact.destinationHash, contact.displayName)
+                                            }
+                                        },
+                                        onPinToggle = { viewModel.togglePin(contact.destinationHash) },
+                                        onEditNickname = {
+                                            editNicknameContactHash = contact.destinationHash
+                                            editNicknameCurrentValue = contact.customNickname
+                                            showEditNicknameDialog = true
+                                        },
+                                        onViewDetails = { onViewPeerDetails(contact.destinationHash) },
+                                        onRemove = { viewModel.deleteContact(contact.destinationHash) },
                                     )
                                 }
-                            }
-                            items(
-                                groupedContacts.all,
-                                key = { contact -> contact.destinationHash },
-                            ) { contact ->
-                                ContactListItemWithMenu(
-                                    contact = contact,
-                                    onClick = {
-                                        if (contact.status == ContactStatus.PENDING_IDENTITY ||
-                                            contact.status == ContactStatus.UNRESOLVED
-                                        ) {
-                                            pendingContactToShow = contact
-                                            showPendingContactSheet = true
-                                        } else {
-                                            onContactClick(contact.destinationHash, contact.displayName)
-                                        }
-                                    },
-                                    onPinToggle = { viewModel.togglePin(contact.destinationHash) },
-                                    onEditNickname = {
-                                        editNicknameContactHash = contact.destinationHash
-                                        editNicknameCurrentValue = contact.customNickname
-                                        showEditNicknameDialog = true
-                                    },
-                                    onViewDetails = { onViewPeerDetails(contact.destinationHash) },
-                                    onRemove = { viewModel.deleteContact(contact.destinationHash) },
-                                )
                             }
                         }
                     }
@@ -1117,8 +1135,7 @@ fun ContactListItem(
                                 .background(
                                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
                                     shape = RoundedCornerShape(4.dp),
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                ).padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
                             text = "RELAY",
@@ -1264,6 +1281,25 @@ fun ContactContextMenu(
                 )
             },
             onClick = onRemove,
+        )
+    }
+}
+
+@Composable
+fun LoadingContactsState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Loading contacts...",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

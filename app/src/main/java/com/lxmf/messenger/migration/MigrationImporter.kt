@@ -19,6 +19,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -43,6 +44,7 @@ class MigrationImporter
         private val interfaceDatabase: InterfaceDatabase,
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
+        private val propagationNodeManager: PropagationNodeManager,
     ) {
         companion object {
             private const val TAG = "MigrationImporter"
@@ -142,6 +144,11 @@ class MigrationImporter
                     onProgress(0.92f)
 
                     importSettings(bundle.settings, txResult.themeIdMap)
+                    onProgress(0.95f)
+
+                    // Restore relay settings after both the DB transaction and settings import
+                    // so DataStore writes are never inside a Room transaction scope.
+                    restoreRelaySettings(txResult.restoredRelayHash)
                     onProgress(1.0f)
 
                     Log.i(TAG, "Migration import complete")
@@ -171,6 +178,8 @@ class MigrationImporter
             val peerIdentitiesImported: Int,
             val customThemesImported: Int,
             val themeIdMap: Map<Long, Long>,
+            /** Destination hash of the relay contact restored from backup, if any. */
+            val restoredRelayHash: String?,
         )
 
         /**
@@ -207,7 +216,7 @@ class MigrationImporter
                     it.identityHash in importedIdentityHashes ||
                         database.localIdentityDao().identityExists(it.identityHash)
                 }
-            val contacts = importContacts(validContacts)
+            val contactResult = importContacts(validContacts)
             onProgress(0.75f)
 
             val announces = importAnnounces(bundle.announces)
@@ -219,7 +228,16 @@ class MigrationImporter
             val (themes, idMap) = importCustomThemes(bundle.customThemes)
             onProgress(0.82f)
 
-            return TransactionResult(identities, messages, contacts, announces, peerIdentities, themes, idMap)
+            return TransactionResult(
+                identities,
+                messages,
+                contactResult.imported,
+                announces,
+                peerIdentities,
+                themes,
+                idMap,
+                contactResult.relayHash,
+            )
         }
 
         private suspend fun importIdentities(
@@ -301,7 +319,10 @@ class MigrationImporter
             return entities.size
         }
 
-        private suspend fun importContacts(contacts: List<ContactExport>): Int {
+        private suspend fun importContacts(contacts: List<ContactExport>): ContactImportResult {
+            // Track relay restoration — written to DataStore after the transaction completes
+            var restoredRelayHash: String? = null
+
             val entities =
                 contacts.map { contact ->
                     // Determine status: use exported value, or infer from publicKey for backward compatibility
@@ -318,6 +339,16 @@ class MigrationImporter
                             ContactStatus.ACTIVE
                         }
 
+                    // Track which contact was the relay for settings restoration
+                    val isMyRelay = contact.isMyRelay == true
+                    if (isMyRelay) {
+                        if (restoredRelayHash != null) {
+                            Log.w(TAG, "Multiple relay contacts found in backup, using latest")
+                        }
+                        restoredRelayHash = contact.destinationHash
+                        Log.d(TAG, "Found relay contact: ${contact.customNickname ?: contact.destinationHash.take(12)}")
+                    }
+
                     ContactEntity(
                         destinationHash = contact.destinationHash,
                         identityHash = contact.identityHash,
@@ -330,11 +361,13 @@ class MigrationImporter
                         lastInteractionTimestamp = contact.lastInteractionTimestamp,
                         isPinned = contact.isPinned,
                         status = status,
+                        isMyRelay = isMyRelay,
                     )
                 }
             database.contactDao().insertContacts(entities)
             Log.d(TAG, "Imported ${entities.size} contacts")
-            return entities.size
+
+            return ContactImportResult(entities.size, restoredRelayHash)
         }
 
         private suspend fun importAnnounces(announces: List<AnnounceExport>): Int {
@@ -405,6 +438,8 @@ class MigrationImporter
             Log.d(TAG, "Imported $imported interfaces")
             return imported
         }
+
+        private data class ContactImportResult(val imported: Int, val relayHash: String?)
 
         private data class ThemeImportResult(val imported: Int, val idMap: Map<Long, Long>)
 
@@ -722,5 +757,47 @@ class MigrationImporter
             themeIdMap: Map<Long, Long>,
         ) {
             LegacySettingsImporter(settingsRepository).importAll(settings, themeIdMap)
+        }
+
+        /**
+         * Restore relay (propagation node) settings after the DB transaction and settings import.
+         *
+         * This runs AFTER importSettings, which may have already restored the relay preference
+         * from the backup's DataStore preferences. We only write from the contact's isMyRelay
+         * flag if importSettings didn't already restore a manual relay — this covers the case
+         * where an old backup has the contact flag but not the DataStore preference.
+         *
+         * If no relay was restored from either source and auto-select is enabled,
+         * trigger auto-selection so the user doesn't end up with no relay at all.
+         */
+        private suspend fun restoreRelaySettings(restoredRelayHash: String?) {
+            try {
+                val manualRelay = settingsRepository.getManualPropagationNode()
+
+                if (manualRelay != null) {
+                    // importSettings already restored the relay preference — nothing to do
+                    Log.d(TAG, "Relay already restored from settings: $manualRelay")
+                    return
+                }
+
+                if (restoredRelayHash != null) {
+                    // Contact had isMyRelay=true but settings didn't include the preference
+                    // (e.g., older backup format). Write it now.
+                    settingsRepository.saveManualPropagationNode(restoredRelayHash)
+                    settingsRepository.saveAutoSelectPropagationNode(false)
+                    Log.d(TAG, "Restored manual propagation node from contact flag: $restoredRelayHash")
+                    return
+                }
+
+                // No relay from either source — trigger auto-select if enabled
+                val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+                if (isAutoSelect) {
+                    Log.d(TAG, "No relay restored, auto-select enabled — triggering auto-selection")
+                    propagationNodeManager.enableAutoSelect()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to restore relay settings after import", e)
+                // Non-fatal — user can manually select a relay
+            }
         }
     }

@@ -177,9 +177,9 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateSpreadingFactor below minimum`() {
-        val result = RNodeConfigValidator.validateSpreadingFactor("6")
+        val result = RNodeConfigValidator.validateSpreadingFactor("4")
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("7"))
+        assertTrue(result.errorMessage!!.contains("5"))
     }
 
     @Test
@@ -191,7 +191,7 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateSpreadingFactor at boundaries`() {
-        assertTrue(RNodeConfigValidator.validateSpreadingFactor("7").isValid)
+        assertTrue(RNodeConfigValidator.validateSpreadingFactor("5").isValid)
         assertTrue(RNodeConfigValidator.validateSpreadingFactor("12").isValid)
     }
 

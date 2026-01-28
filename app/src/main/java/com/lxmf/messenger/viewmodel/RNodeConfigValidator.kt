@@ -49,7 +49,7 @@ object RNodeConfigValidator {
     // Hardware limits
     private const val MIN_BANDWIDTH = 7800
     private const val MAX_BANDWIDTH = 1625000
-    private const val MIN_SF = 7
+    private const val MIN_SF = 5
     private const val MAX_SF = 12
     private const val MIN_CR = 5
     private const val MAX_CR = 8

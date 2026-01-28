@@ -20,7 +20,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +31,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -66,7 +66,8 @@ class AnnounceStreamViewModel
 
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
-            announceRepository.getAnnounceCountFlow()
+            announceRepository
+                .getAnnounceCountFlow()
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
@@ -98,24 +99,25 @@ class AnnounceStreamViewModel
                     flowOf(PagingData.empty())
                 } else {
                     // Get paginated announces from repository
-                    announceRepository.getAnnouncesPaged(
-                        nodeTypes = typeStrings,
-                        searchQuery = query.trim(),
-                    ).map { pagingData ->
-                        // Apply in-memory filters for nodeType and audio aspect
-                        pagingData.filter { announce ->
-                            // Filter by nodeType
-                            // (exclude PEER if user didn't select it and we only added it for audio)
-                            val matchesNodeType =
-                                selectedTypes.map { it.name }.contains(announce.nodeType)
-                            val isAudioAnnounce = announce.aspect == "call.audio"
+                    announceRepository
+                        .getAnnouncesPaged(
+                            nodeTypes = typeStrings,
+                            searchQuery = query.trim(),
+                        ).map { pagingData ->
+                            // Apply in-memory filters for nodeType and audio aspect
+                            pagingData.filter { announce ->
+                                // Filter by nodeType
+                                // (exclude PEER if user didn't select it and we only added it for audio)
+                                val matchesNodeType =
+                                    selectedTypes.map { it.name }.contains(announce.nodeType)
+                                val isAudioAnnounce = announce.aspect == "call.audio"
 
-                            // Show announce if:
-                            // - It matches selected nodeType AND (showAudio OR not audio announce)
-                            // - OR it's audio announce AND showAudio is true
-                            (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+                                // Show announce if:
+                                // - It matches selected nodeType AND (showAudio OR not audio announce)
+                                // - OR it's audio announce AND showAudio is true
+                                (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+                            }
                         }
-                    }
                 }
             }.cachedIn(viewModelScope)
 
@@ -168,9 +170,10 @@ class AnnounceStreamViewModel
 
             try {
                 // Get path table hashes from RNS (Python call - must be off main thread)
-                val pathTableHashes = withContext(Dispatchers.IO) {
-                    reticulumProtocol.getPathTableHashes()
-                }
+                val pathTableHashes =
+                    withContext(Dispatchers.IO) {
+                        reticulumProtocol.getPathTableHashes()
+                    }
 
                 // Count announces that match the path table (database query - already on IO dispatcher in repository)
                 val count = announceRepository.countReachableAnnounces(pathTableHashes)
@@ -317,23 +320,17 @@ class AnnounceStreamViewModel
         /**
          * Check if an announce is already a contact (for star button state)
          */
-        suspend fun isContact(destinationHash: String): Boolean {
-            return contactRepository.hasContact(destinationHash)
-        }
+        suspend fun isContact(destinationHash: String): Boolean = contactRepository.hasContact(destinationHash)
 
         /**
          * Observe a specific announce reactively
          */
-        fun getAnnounceFlow(destinationHash: String): Flow<Announce?> {
-            return announceRepository.getAnnounceFlow(destinationHash)
-        }
+        fun getAnnounceFlow(destinationHash: String): Flow<Announce?> = announceRepository.getAnnounceFlow(destinationHash)
 
         /**
          * Observe contact status reactively
          */
-        fun isContactFlow(destinationHash: String): Flow<Boolean> {
-            return contactRepository.hasContactFlow(destinationHash)
-        }
+        fun isContactFlow(destinationHash: String): Flow<Boolean> = contactRepository.hasContactFlow(destinationHash)
 
         /**
          * Update the selected node types filter
@@ -415,9 +412,7 @@ class AnnounceStreamViewModel
         /**
          * Observe whether a destination is the user's current relay.
          */
-        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> {
-            return contactRepository.isMyRelayFlow(destinationHash)
-        }
+        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> = contactRepository.isMyRelayFlow(destinationHash)
 
         /**
          * Set a propagation node as the user's relay.
@@ -470,16 +465,24 @@ class AnnounceStreamViewModel
         }
 
         /**
-         * Delete all announces from the database.
+         * Delete all announces from the database, except those belonging to saved contacts.
+         * Preserves announces for contacts so users can still open conversations.
          * Nodes will reappear when they announce again.
          */
         fun deleteAllAnnounces() {
             viewModelScope.launch {
                 try {
-                    announceRepository.deleteAllAnnounces()
-                    Log.d(TAG, "Deleted all announces")
+                    val activeIdentity = identityRepository.getActiveIdentitySync()
+                    if (activeIdentity != null) {
+                        announceRepository.deleteAllAnnouncesExceptContacts(activeIdentity.identityHash)
+                        Log.d(TAG, "Deleted non-contact announces for identity: ${activeIdentity.identityHash}")
+                    } else {
+                        // Fallback: delete all if no active identity (shouldn't happen in normal use)
+                        announceRepository.deleteAllAnnounces()
+                        Log.d(TAG, "Deleted all announces (no active identity)")
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to delete all announces", e)
+                    Log.e(TAG, "Failed to delete announces", e)
                 }
             }
         }

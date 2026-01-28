@@ -36,13 +36,16 @@ interface AnnounceDao {
     /**
      * Get announces in batches to prevent OOM when loading large amounts of data.
      * Used for identity restoration with pagination.
-     * 
+     *
      * @param limit Number of announces to return in this batch
      * @param offset Number of announces to skip (for pagination)
      * @return List of announces sorted by most recently seen
      */
     @Query("SELECT * FROM announces ORDER BY lastSeenTimestamp DESC LIMIT :limit OFFSET :offset")
-    suspend fun getAnnouncesBatch(limit: Int, offset: Int): List<AnnounceEntity>
+    suspend fun getAnnouncesBatch(
+        limit: Int,
+        offset: Int,
+    ): List<AnnounceEntity>
 
     /**
      * Insert multiple announces at once (for import).
@@ -130,6 +133,24 @@ interface AnnounceDao {
      */
     @Query("DELETE FROM announces")
     suspend fun deleteAllAnnounces()
+
+    /**
+     * Delete all announces except those belonging to contacts of the specified identity.
+     * Preserves contact announces so users can still open conversations with saved contacts.
+     *
+     * @param identityHash The identity hash to filter contacts by
+     */
+    @Query(
+        """
+        DELETE FROM announces
+        WHERE destinationHash NOT IN (
+            SELECT destinationHash
+            FROM contacts
+            WHERE identityHash = :identityHash
+        )
+    """,
+    )
+    suspend fun deleteAllAnnouncesExceptContacts(identityHash: String)
 
     /**
      * Get count of all announces

@@ -111,22 +111,20 @@ class AnnounceRepository
          * Automatically updates UI when announces are added or updated.
          * Includes icon data from peer_icons table (LXMF message appearances).
          */
-        fun getAnnounces(): Flow<List<Announce>> {
-            return announceDao.getEnrichedAnnounces().map { enriched ->
+        fun getAnnounces(): Flow<List<Announce>> =
+            announceDao.getEnrichedAnnounces().map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Search announces by peer name or destination hash.
          * Automatically updates UI when matching announces are added or updated.
          * Includes icon data from peer_icons table.
          */
-        fun searchAnnounces(query: String): Flow<List<Announce>> {
-            return announceDao.searchEnrichedAnnounces(query).map { enriched ->
+        fun searchAnnounces(query: String): Flow<List<Announce>> =
+            announceDao.searchEnrichedAnnounces(query).map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Get announces filtered by node types as a Flow, sorted by most recently seen.
@@ -134,11 +132,10 @@ class AnnounceRepository
          * Includes icon data from peer_icons table.
          * @param nodeTypes List of node types to include (e.g., ["PEER", "NODE"])
          */
-        fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<Announce>> {
-            return announceDao.getEnrichedAnnouncesByTypes(nodeTypes).map { enriched ->
+        fun getAnnouncesByTypes(nodeTypes: List<String>): Flow<List<Announce>> =
+            announceDao.getEnrichedAnnouncesByTypes(nodeTypes).map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Get top propagation nodes sorted by hop count (ascending).
@@ -148,11 +145,10 @@ class AnnounceRepository
          * @param limit Maximum number of nodes to return (default 10)
          * @return Flow of propagation node announces sorted by nearest first
          */
-        fun getTopPropagationNodes(limit: Int = 10): Flow<List<Announce>> {
-            return announceDao.getEnrichedTopPropagationNodes(limit).map { enriched ->
+        fun getTopPropagationNodes(limit: Int = 10): Flow<List<Announce>> =
+            announceDao.getEnrichedTopPropagationNodes(limit).map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Get announces with pagination support. Combines node type filtering and search query.
@@ -166,8 +162,8 @@ class AnnounceRepository
         fun getAnnouncesPaged(
             nodeTypes: List<String>,
             searchQuery: String,
-        ): Flow<PagingData<Announce>> {
-            return Pager(
+        ): Flow<PagingData<Announce>> =
+            Pager(
                 config =
                     PagingConfig(
                         pageSize = 30,
@@ -194,14 +190,11 @@ class AnnounceRepository
             ).flow.map { pagingData ->
                 pagingData.map { enriched -> enriched.toAnnounce() }
             }
-        }
 
         /**
          * Get a specific announce by destination hash
          */
-        suspend fun getAnnounce(destinationHash: String): Announce? {
-            return announceDao.getAnnounce(destinationHash)?.toAnnounce()
-        }
+        suspend fun getAnnounce(destinationHash: String): Announce? = announceDao.getAnnounce(destinationHash)?.toAnnounce()
 
         /**
          * Find an announce by identity hash.
@@ -297,23 +290,17 @@ class AnnounceRepository
         /**
          * Check if an announce exists
          */
-        suspend fun announceExists(destinationHash: String): Boolean {
-            return announceDao.announceExists(destinationHash)
-        }
+        suspend fun announceExists(destinationHash: String): Boolean = announceDao.announceExists(destinationHash)
 
         /**
          * Get total count of announces
          */
-        suspend fun getAnnounceCount(): Int {
-            return announceDao.getAnnounceCount()
-        }
+        suspend fun getAnnounceCount(): Int = announceDao.getAnnounceCount()
 
         /**
          * Get total count of announces as a Flow for reactive UI updates.
          */
-        fun getAnnounceCountFlow(): Flow<Int> {
-            return announceDao.getAnnounceCountFlow()
-        }
+        fun getAnnounceCountFlow(): Flow<Int> = announceDao.getAnnounceCountFlow()
 
         /**
          * Count announces that match the given path table hashes.
@@ -334,22 +321,20 @@ class AnnounceRepository
          * Automatically updates UI when favorites are added or removed.
          * Includes icon data from peer_icons table.
          */
-        fun getFavoriteAnnounces(): Flow<List<Announce>> {
-            return announceDao.getEnrichedFavoriteAnnounces().map { enriched ->
+        fun getFavoriteAnnounces(): Flow<List<Announce>> =
+            announceDao.getEnrichedFavoriteAnnounces().map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Search favorite announces by peer name or destination hash.
          * Automatically updates UI when matching favorites are added or removed.
          * Includes icon data from peer_icons table.
          */
-        fun searchFavoriteAnnounces(query: String): Flow<List<Announce>> {
-            return announceDao.searchEnrichedFavoriteAnnounces(query).map { enriched ->
+        fun searchFavoriteAnnounces(query: String): Flow<List<Announce>> =
+            announceDao.searchEnrichedFavoriteAnnounces(query).map { enriched ->
                 enriched.map { it.toAnnounce() }
             }
-        }
 
         /**
          * Toggle favorite status for an announce.
@@ -377,19 +362,16 @@ class AnnounceRepository
         /**
          * Get count of favorite announces as a Flow.
          */
-        fun getFavoriteCount(): Flow<Int> {
-            return announceDao.getFavoriteCount()
-        }
+        fun getFavoriteCount(): Flow<Int> = announceDao.getFavoriteCount()
 
         /**
          * Get a specific announce as Flow (for observing favorite status changes).
          * Includes icon data from peer_icons table.
          */
-        fun getAnnounceFlow(destinationHash: String): Flow<Announce?> {
-            return announceDao.getEnrichedAnnounceFlow(destinationHash).map { enriched ->
+        fun getAnnounceFlow(destinationHash: String): Flow<Announce?> =
+            announceDao.getEnrichedAnnounceFlow(destinationHash).map { enriched ->
                 enriched?.toAnnounce()
             }
-        }
 
         /**
          * Delete all announces (for testing/debugging)
@@ -399,13 +381,21 @@ class AnnounceRepository
         }
 
         /**
+         * Delete all announces except those belonging to contacts of the specified identity.
+         * Preserves contact announces so users can still open conversations with saved contacts.
+         *
+         * @param identityHash The identity hash to filter contacts by
+         */
+        suspend fun deleteAllAnnouncesExceptContacts(identityHash: String) {
+            announceDao.deleteAllAnnouncesExceptContacts(identityHash)
+        }
+
+        /**
          * Get count of announces grouped by nodeType.
          * Used for debugging relay selection issues.
          * Returns list of (nodeType, count) pairs.
          */
-        suspend fun getNodeTypeCounts(): List<Pair<String, Int>> {
-            return announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
-        }
+        suspend fun getNodeTypeCounts(): List<Pair<String, Int>> = announceDao.getNodeTypeCounts().map { it.nodeType to it.count }
 
         // Note: This mapping is only used for non-UI operations (export, toggle favorite, etc.)
         // For UI display, use enriched queries that join peer_icons for icon data

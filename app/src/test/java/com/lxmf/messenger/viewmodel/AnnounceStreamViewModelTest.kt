@@ -120,6 +120,7 @@ class AnnounceStreamViewModelTest {
         coEvery { announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } just Runs
         coEvery { announceRepository.getAnnounceCount() } returns 0
         coEvery { announceRepository.countReachableAnnounces(any()) } returns 0
+        coEvery { announceRepository.deleteAllAnnouncesExceptContacts(any()) } just Runs
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
         coEvery { reticulumProtocol.getPathTableHashes() } returns emptyList()
         coEvery { announceRepository.setFavorite(any(), any()) } just Runs
@@ -865,7 +866,7 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
-    fun `deleteAllAnnounces calls repository`() =
+    fun `deleteAllAnnounces preserves contact announces via identity-aware delete`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.deleteAllAnnounces() } just Runs
@@ -877,15 +878,16 @@ class AnnounceStreamViewModelTest {
             viewModel.deleteAllAnnounces()
             advanceUntilIdle()
 
-            // Verify repository was called
-            coVerify { announceRepository.deleteAllAnnounces() }
+            // Verify new identity-aware method was called (testLocalIdentity is returned by default)
+            coVerify { announceRepository.deleteAllAnnouncesExceptContacts(testLocalIdentity.identityHash) }
+            coVerify(exactly = 0) { announceRepository.deleteAllAnnounces() }
         }
 
     @Test
     fun `deleteAllAnnounces handles errors gracefully`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
-            coEvery { announceRepository.deleteAllAnnounces() } throws Exception("Database error")
+            coEvery { announceRepository.deleteAllAnnouncesExceptContacts(any()) } throws Exception("Database error")
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
@@ -894,10 +896,30 @@ class AnnounceStreamViewModelTest {
             viewModel.deleteAllAnnounces()
             advanceUntilIdle()
 
-            // Verify delete was attempted
-            coVerify { announceRepository.deleteAllAnnounces() }
+            // Verify delete was attempted with identity-aware method
+            coVerify { announceRepository.deleteAllAnnouncesExceptContacts(testLocalIdentity.identityHash) }
 
             // ViewModel should still be functioning
             assertNotNull(viewModel)
+        }
+
+    @Test
+    fun `deleteAllAnnounces falls back to deleteAll when no active identity`() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
+            coEvery { announceRepository.deleteAllAnnounces() } just Runs
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            advanceUntilIdle()
+
+            // Delete all announces
+            viewModel.deleteAllAnnounces()
+            advanceUntilIdle()
+
+            // Verify old method was called (fallback behavior)
+            coVerify { announceRepository.deleteAllAnnounces() }
+            // Verify new method was NOT called
+            coVerify(exactly = 0) { announceRepository.deleteAllAnnouncesExceptContacts(any()) }
         }
 }

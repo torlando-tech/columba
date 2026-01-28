@@ -138,8 +138,6 @@ android {
             dimension = "telemetry"
             // Empty DSN - Sentry fully disabled (no init, no network calls)
             buildConfigField("String", "SENTRY_DSN", "\"\"")
-            // Suffix to distinguish APK in app drawer
-            applicationIdSuffix = ".nosentry"
         }
     }
 

@@ -603,8 +603,8 @@ fun ColumbaNavigation(
                 }
                 is PendingNavigation.SharedText -> {
                     sharedTextViewModel.setText(navigation.text)
-                    selectedTab = 1
-                    navController.navigate(Screen.Contacts.route) {
+                    selectedTab = 0
+                    navController.navigate(Screen.Chats.route) {
                         popUpTo(navController.graph.startDestinationId) {
                             saveState = true
                         }

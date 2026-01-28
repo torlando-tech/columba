@@ -71,6 +71,7 @@ import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,6 +90,9 @@ fun ChatsScreen(
     val syncProgress by viewModel.syncProgress.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as androidx.activity.ComponentActivity)
+
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -96,9 +100,6 @@ fun ChatsScreen(
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
-
-    // Context for Toast notifications
-    val context = LocalContext.current
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -194,7 +195,10 @@ fun ChatsScreen(
                             ConversationCard(
                                 conversation = conversation,
                                 isSaved = isSaved,
-                                onClick = { onChatClick(conversation.peerHash, conversation.displayName) },
+                                onClick = {
+                                    sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    onChatClick(conversation.peerHash, conversation.displayName)
+                                },
                                 onLongPress = {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     showMenu = true
@@ -202,33 +206,16 @@ fun ChatsScreen(
                                 onStarClick = {
                                     if (isSaved) {
                                         viewModel.removeFromContacts(conversation.peerHash)
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                "Removed ${conversation.displayName} from Contacts",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                        Toast.makeText(
+                                            context,
+                                            "Removed ${conversation.displayName} from Contacts",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
                                     } else {
                                         viewModel.saveToContacts(conversation)
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                "Saved ${conversation.displayName} to Contacts",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                        showMenu = false
+                                        Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                     }
-                                },
-                            )
-
-                            // Context menu anchored to this card
-                            ConversationContextMenu(
-                                expanded = showMenu,
-                                onDismiss = { showMenu = false },
-                                isSaved = isSaved,
-                                onSaveToContacts = {
-                                    viewModel.saveToContacts(conversation)
-                                    showMenu = false
-                                    Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                 },
                                 onRemoveFromContacts = {
                                     viewModel.removeFromContacts(conversation.peerHash)

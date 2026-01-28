@@ -14,7 +14,7 @@ This milestone addresses two high-priority bugs reported after the 0.7.2 pre-rel
 - [ ] **Phase 2: Relay Loop Fix** - Investigate and fix the relay auto-selection loop
 - [x] **Phase 2.1: Clear Announces Preserves Contacts** - Fix Clear All Announces to exempt My Contacts (#365) (INSERTED)
 - [x] **Phase 2.2: Offline Map Tile Rendering** - Fix offline maps failing to render after extended offline period (#354) (INSERTED)
-- [ ] **Phase 2.3: Loading States for Tabs** - Show loading indicators instead of empty states while data loads (#341) (INSERTED)
+- [x] **Phase 2.3: Loading States for Tabs** - Show loading indicators instead of empty states while data loads (#341) (INSERTED)
 
 ## Phase Details
 
@@ -95,7 +95,7 @@ Plans:
 **Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 02.3-01-PLAN.md — Add loading states to ChatsViewModel/Screen and ContactsViewModel/Screen
+- [x] 02.3-01-PLAN.md — Add loading states to ChatsViewModel/Screen and ContactsViewModel/Screen
 
 ## Progress
 
@@ -108,4 +108,4 @@ Phases 1 and 2 are independent and can be worked in any order.
 | 2. Relay Loop Fix | 0/3 | Not started | - |
 | 2.1. Clear Announces Preserves Contacts (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
 | 2.2. Offline Map Tile Rendering (INSERTED) | 2/2 | ✓ Complete | 2026-01-27 |
-| 2.3. Loading States for Tabs (INSERTED) | 0/1 | Not started | - |
+| 2.3. Loading States for Tabs (INSERTED) | 1/1 | ✓ Complete | 2026-01-28 |

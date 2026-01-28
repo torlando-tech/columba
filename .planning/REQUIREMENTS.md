@@ -26,6 +26,10 @@ Requirements for this bug fix milestone. Each maps to roadmap phases.
 
 - [x] **OFFLINE-MAP-01**: Offline maps render correctly after extended offline periods
 
+### Loading States (#341)
+
+- [x] **UX-LOADING-01**: Show loading indicators instead of flashing empty states while data loads
+
 ## v2 Requirements
 
 Deferred bug fixes to address in a future milestone.
@@ -60,12 +64,13 @@ Which phases cover which requirements.
 | RELAY-02 | Phase 2 | Pending |
 | ANNOUNCE-01 | Phase 2.1 | Complete |
 | OFFLINE-MAP-01 | Phase 2.2 | Complete |
+| UX-LOADING-01 | Phase 2.3 | Complete |
 
 **Coverage:**
-- v1 requirements: 7 total
+- v1 requirements: 8 total
 - Mapped to phases: 7
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-27 after phase 2.2 completion*
+*Last updated: 2026-01-28 after phase 2.3 completion*

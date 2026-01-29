@@ -49,9 +49,7 @@ class PythonWrapperManager(
         /**
          * Helper to safely get values from Python dict.
          */
-        fun PyObject.getDictValue(key: String): PyObject? {
-            return this.callAttr("get", key)
-        }
+        fun PyObject.getDictValue(key: String): PyObject? = this.callAttr("get", key)
     }
 
     /**
@@ -362,8 +360,8 @@ class PythonWrapperManager(
      *
      * @return true if call manager was initialized successfully
      */
-    fun setupCallManager(): Boolean {
-        return withWrapper { wrapper ->
+    fun setupCallManager(): Boolean =
+        withWrapper { wrapper ->
             try {
                 // Get audio bridge singleton
                 val audioBridge = KotlinAudioBridge.getInstance(context)
@@ -380,13 +378,23 @@ class PythonWrapperManager(
 
                 @Suppress("UNCHECKED_CAST")
                 val resultDict = result?.asMap() as? Map<PyObject, PyObject>
-                val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                val success =
+                    resultDict
+                        ?.entries
+                        ?.find { it.key.toString() == "success" }
+                        ?.value
+                        ?.toBoolean() ?: false
 
                 if (success) {
                     Log.i(TAG, "📞 CallManager initialized successfully")
                     true
                 } else {
-                    val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                    val error =
+                        resultDict
+                            ?.entries
+                            ?.find { it.key.toString() == "error" }
+                            ?.value
+                            ?.toString() ?: "Unknown error"
                     Log.e(TAG, "Failed to initialize CallManager: $error")
                     false
                 }
@@ -395,7 +403,6 @@ class PythonWrapperManager(
                 false
             }
         } ?: false
-    }
 
     /**
      * Set native Kotlin stamp generator callback.
@@ -436,7 +443,8 @@ class PythonWrapperManager(
 
         // Python expects synchronous return from this callback
         val result =
-            runBlocking(Dispatchers.Default) { // THREADING: allowed
+            runBlocking(Dispatchers.Default) {
+                // THREADING: allowed
                 generator.generateStamp(workblock, stampCost)
             }
 
@@ -473,6 +481,10 @@ class PythonWrapperManager(
 
     /**
      * Get debug info from the wrapper.
+     *
+     * MEMORY: Callers must NOT store the returned PyObject - extract values immediately.
+     * The PyObject is managed by Chaquopy and will be cleaned up automatically when
+     * the withWrapper block completes in the calling code.
      */
     fun getDebugInfo(): PyObject? =
         withWrapper { wrapper ->
@@ -525,8 +537,8 @@ class PythonWrapperManager(
     /**
      * Sanitize error messages to hide Python internals from user.
      */
-    private fun sanitizeErrorMessage(error: String): String {
-        return when {
+    private fun sanitizeErrorMessage(error: String): String =
+        when {
             error.contains("NoneType") -> "Network initialization failed"
             error.contains("AttributeError") -> "Configuration error"
             error.contains("ImportError") || error.contains("ModuleNotFoundError") -> "Missing network components"
@@ -537,7 +549,6 @@ class PythonWrapperManager(
             error.length > 100 -> "Network initialization error"
             else -> error
         }
-    }
 
     /**
      * Convert ByteArray to hex string for logging.
@@ -558,11 +569,13 @@ class PythonWrapperManager(
             try {
                 val servers = wrapper.callAttr("get_rmsp_servers")?.asList() ?: return@withWrapper null
                 // Convert Python list to JSON array string
-                org.json.JSONArray().apply {
-                    servers.forEach { server ->
-                        put(org.json.JSONObject(server.toString()))
-                    }
-                }.toString()
+                org.json
+                    .JSONArray()
+                    .apply {
+                        servers.forEach { server ->
+                            put(org.json.JSONObject(server.toString()))
+                        }
+                    }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to get RMSP servers: ${e.message}", e)
                 null
@@ -581,11 +594,13 @@ class PythonWrapperManager(
                 val servers =
                     wrapper.callAttr("get_rmsp_servers_for_geohash", geohash)?.asList()
                         ?: return@withWrapper null
-                org.json.JSONArray().apply {
-                    servers.forEach { server ->
-                        put(org.json.JSONObject(server.toString()))
-                    }
-                }.toString()
+                org.json
+                    .JSONArray()
+                    .apply {
+                        servers.forEach { server ->
+                            put(org.json.JSONObject(server.toString()))
+                        }
+                    }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to get RMSP servers for geohash: ${e.message}", e)
                 null
@@ -604,11 +619,13 @@ class PythonWrapperManager(
                 val servers =
                     wrapper.callAttr("get_nearest_rmsp_servers", limit)?.asList()
                         ?: return@withWrapper null
-                org.json.JSONArray().apply {
-                    servers.forEach { server ->
-                        put(org.json.JSONObject(server.toString()))
-                    }
-                }.toString()
+                org.json
+                    .JSONArray()
+                    .apply {
+                        servers.forEach { server ->
+                            put(org.json.JSONObject(server.toString()))
+                        }
+                    }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to get nearest RMSP servers: ${e.message}", e)
                 null

@@ -59,12 +59,12 @@ Plans:
   1. Memory growth rate reduced to sustainable level (measurable via profiling)
   2. App survives 5+ days continuous runtime without OOM (verified via extended testing)
   3. Zero OOM crashes in Sentry for 7 days post-release
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Profile Python/Reticulum memory usage
-- [ ] 05-02: Implement memory leak fixes
-- [ ] 05-03: Verify fixes with extended runtime testing
+- [ ] 05-01-PLAN.md - Add memory profiling infrastructure (tracemalloc + build flag)
+- [ ] 05-02-PLAN.md - Identify and fix memory leaks
+- [ ] 05-03-PLAN.md - Verify fixes with extended runtime testing
 
 ### Phase 6: Native Stability Verification
 **Goal**: Confirm MapLibre native crashes are resolved by memory optimization

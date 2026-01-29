@@ -206,11 +206,8 @@ fun ChatsScreen(
                                 onStarClick = {
                                     if (isSaved) {
                                         viewModel.removeFromContacts(conversation.peerHash)
-                                        Toast.makeText(
-                                            context,
-                                            "Removed ${conversation.displayName} from Contacts",
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        showMenu = false
+                                        Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
                                     } else {
                                         viewModel.saveToContacts(conversation)
                                         showMenu = false

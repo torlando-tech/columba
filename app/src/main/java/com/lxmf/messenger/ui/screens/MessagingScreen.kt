@@ -195,11 +195,20 @@ fun MessagingScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as ComponentActivity)
+    val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
-    LaunchedEffect(destinationHash) {
+    LaunchedEffect(destinationHash, sharedTextFromViewModel) {
         val pending = sharedTextViewModel.consumeForDestination(destinationHash)
-        if (!pending.isNullOrBlank() && messageText.isBlank()) {
-            messageText = pending.trim()
+        if (!pending.isNullOrBlank()) {
+            val trimmed = pending.trim()
+            messageText =
+                if (messageText.isBlank()) {
+                    trimmed
+                } else if (messageText.contains(trimmed)) {
+                    messageText
+                } else {
+                    messageText.trimEnd() + "\n" + trimmed
+                }
         }
     }
 

@@ -38,10 +38,15 @@ import javax.inject.Singleton
  */
 sealed class SyncResult {
     /** Sync completed successfully */
-    data class Success(val messagesReceived: Int) : SyncResult()
+    data class Success(
+        val messagesReceived: Int,
+    ) : SyncResult()
 
     /** Sync failed with an error */
-    data class Error(val message: String, val errorCode: Int? = null) : SyncResult()
+    data class Error(
+        val message: String,
+        val errorCode: Int? = null,
+    ) : SyncResult()
 
     /** No relay is configured */
     data object NoRelay : SyncResult()
@@ -58,7 +63,10 @@ sealed class SyncProgress {
 
     data object Starting : SyncProgress()
 
-    data class InProgress(val stateName: String, val progress: Float) : SyncProgress()
+    data class InProgress(
+        val stateName: String,
+        val progress: Float,
+    ) : SyncProgress()
 
     data object Complete : SyncProgress()
 }
@@ -83,7 +91,9 @@ sealed class RelayLoadState {
     data object Loading : RelayLoadState()
 
     /** Relay state has been loaded from database */
-    data class Loaded(val relay: RelayInfo?) : RelayLoadState()
+    data class Loaded(
+        val relay: RelayInfo?,
+    ) : RelayLoadState()
 }
 
 /**
@@ -95,7 +105,9 @@ sealed class AvailableRelaysState {
     data object Loading : AvailableRelaysState()
 
     /** Relays have been loaded from database */
-    data class Loaded(val relays: List<RelayInfo>) : AvailableRelaysState()
+    data class Loaded(
+        val relays: List<RelayInfo>,
+    ) : AvailableRelaysState()
 }
 
 /**
@@ -105,12 +117,15 @@ sealed class AvailableRelaysState {
 enum class RelaySelectionState {
     /** Ready to auto-select. Only state where selection can trigger. */
     IDLE,
+
     /** Selection triggered, waiting for database update to complete. */
     SELECTING,
+
     /** Relay selected and stable. Cooldown active before returning to IDLE. */
     STABLE,
+
     /** Loop detected. Exponential backoff in progress before returning to IDLE. */
-    BACKING_OFF
+    BACKING_OFF,
 }
 
 /**
@@ -195,11 +210,11 @@ class PropagationNodeManager
          * This allows distinguishing "loading" from "no relay configured".
          */
         val currentRelayState: StateFlow<RelayLoadState> =
-            contactRepository.getMyRelayFlow()
+            contactRepository
+                .getMyRelayFlow()
                 .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
                     RelayLoadState.Loaded(buildRelayInfo(contact, isAutoSelect))
-                }
-                .stateIn(scope, SharingStarted.Eagerly, RelayLoadState.Loading)
+                }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), RelayLoadState.Loading)
 
         /**
          * Current relay derived from database (single source of truth).
@@ -209,7 +224,7 @@ class PropagationNodeManager
         val currentRelay: StateFlow<RelayInfo?> =
             currentRelayState
                 .map { state -> (state as? RelayLoadState.Loaded)?.relay }
-                .stateIn(scope, SharingStarted.Eagerly, null)
+                .stateIn(scope, SharingStarted.WhileSubscribed(5000L), null)
 
         /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
@@ -218,7 +233,8 @@ class PropagationNodeManager
          * Uses optimized SQL query with LIMIT to fetch only 10 rows.
          */
         val availableRelaysState: StateFlow<AvailableRelaysState> =
-            announceRepository.getTopPropagationNodes(limit = 10)
+            announceRepository
+                .getTopPropagationNodes(limit = 10)
                 .map { announces ->
                     Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
                     val relays =
@@ -232,8 +248,7 @@ class PropagationNodeManager
                             )
                         }
                     AvailableRelaysState.Loaded(relays)
-                }
-                .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)
+                }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -690,11 +705,12 @@ class PropagationNodeManager
             // - If no announce, creates pending contact
             if (!contactRepository.hasContact(destinationHash)) {
                 val result = contactRepository.addPendingContact(destinationHash, nickname)
-                result.onSuccess { addResult ->
-                    Log.d(TAG, "Added contact for manual relay: $addResult")
-                }.onFailure { error ->
-                    Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
-                }
+                result
+                    .onSuccess { addResult ->
+                        Log.d(TAG, "Added contact for manual relay: $addResult")
+                    }.onFailure { error ->
+                        Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
+                    }
             }
 
             // This updates the database, which triggers currentRelay Flow,
@@ -730,15 +746,16 @@ class PropagationNodeManager
 
             // Find the best available propagation node, respecting any exclusion
             val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
-            val candidates = if (excludedRelayHash != null) {
-                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                if (filtered.size < propagationNodes.size) {
-                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+            val candidates =
+                if (excludedRelayHash != null) {
+                    val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                    if (filtered.size < propagationNodes.size) {
+                        Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                    }
+                    filtered
+                } else {
+                    propagationNodes
                 }
-                filtered
-            } else {
-                propagationNodes
-            }
             val nearest = candidates.minByOrNull { it.hops }
 
             if (nearest != null) {
@@ -804,34 +821,38 @@ class PropagationNodeManager
          * @param destinationHash The selected relay's destination hash
          * @param reason Reason for selection (for logging)
          */
-        private suspend fun recordSelection(destinationHash: String, reason: String) {
+        private suspend fun recordSelection(
+            destinationHash: String,
+            reason: String,
+        ) {
             val now = System.currentTimeMillis()
             val windowStart = now - loopWindowMs
 
             // Synchronize deque access — callers run on both Dispatchers.Main and Default
-            val (recentCount, hashes) = synchronized(recentSelections) {
-                recentSelections.addLast(destinationHash to now)
+            val (recentCount, hashes) =
+                synchronized(recentSelections) {
+                    recentSelections.addLast(destinationHash to now)
 
-                // Keep only last 10 entries to bound memory
-                while (recentSelections.size > 10) {
-                    recentSelections.removeFirst()
-                }
+                    // Keep only last 10 entries to bound memory
+                    while (recentSelections.size > 10) {
+                        recentSelections.removeFirst()
+                    }
 
-                val count = recentSelections.count { it.second > windowStart }
-                val hashList = if (count >= loopThresholdCount) {
-                    recentSelections
-                        .filter { it.second > windowStart }
-                        .map { it.first.take(12) }
-                } else {
-                    emptyList()
+                    val count = recentSelections.count { it.second > windowStart }
+                    val hashList =
+                        if (count >= loopThresholdCount) {
+                            recentSelections
+                                .filter { it.second > windowStart }
+                                .map { it.first.take(12) }
+                        } else {
+                            emptyList()
+                        }
+                    count to hashList
                 }
-                count to hashList
-            }
 
             Log.i(TAG, "Relay selected: ${destinationHash.take(12)}... ($reason) [${recentCount}x in last 60s]")
 
             if (recentCount >= loopThresholdCount) {
-
                 Log.w(TAG, "⚠️ Relay loop detected! $recentCount selections in 60s: $hashes")
 
                 // Send Sentry event for diagnostics (per context decisions)
@@ -839,14 +860,14 @@ class PropagationNodeManager
                 try {
                     Sentry.captureMessage(
                         "Relay selection loop detected: $recentCount selections in 60s",
-                        SentryLevel.WARNING
+                        SentryLevel.WARNING,
                     )
                     Sentry.addBreadcrumb(
                         Breadcrumb().apply {
                             category = "relay"
                             message = "Loop detected: hashes=$hashes"
                             level = SentryLevel.WARNING
-                        }
+                        },
                     )
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to send Sentry event: ${e.message}")
@@ -858,22 +879,24 @@ class PropagationNodeManager
                 // Calculate exponential backoff: 1s, 2s, 4s, 8s... max 10 minutes
                 // Formula: 2^(recentCount - loopThreshold) seconds, capped at max
                 val exponent = (recentCount - loopThresholdCount).coerceAtLeast(0)
-                val backoffMs = minOf(
-                    (1L shl exponent) * 1000L, // 2^exponent * 1000ms
-                    maxBackoffMs
-                )
+                val backoffMs =
+                    minOf(
+                        (1L shl exponent) * 1000L, // 2^exponent * 1000ms
+                        maxBackoffMs,
+                    )
 
                 Log.w(TAG, "Entering backoff for ${backoffMs / 1000}s (exponent=$exponent)")
 
                 // Start backoff timer
                 backoffJob?.cancel()
-                backoffJob = scope.launch {
-                    delay(backoffMs)
-                    if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
-                        _selectionState.value = RelaySelectionState.IDLE
-                        Log.i(TAG, "Backoff complete, returning to IDLE")
+                backoffJob =
+                    scope.launch {
+                        delay(backoffMs)
+                        if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
+                            _selectionState.value = RelaySelectionState.IDLE
+                            Log.i(TAG, "Backoff complete, returning to IDLE")
+                        }
                     }
-                }
             }
         }
 
@@ -881,7 +904,8 @@ class PropagationNodeManager
          * Observe propagation node announces for auto-selection.
          */
         private suspend fun observePropagationNodeAnnounces() {
-            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+            announceRepository
+                .getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
                 .debounce(1000) // Batch rapid Room invalidation triggers (per research)
                 .collect { propagationNodes ->
                     // CRITICAL: Don't trigger selection if already selecting or in cooldown
@@ -904,15 +928,16 @@ class PropagationNodeManager
                         Log.i(TAG, "Relay selection started (state=SELECTING)")
 
                         // Find the nearest propagation node, excluding any recently-cleared relay
-                        val candidates = if (excludedRelayHash != null) {
-                            val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                            if (filtered.size < propagationNodes.size) {
-                                Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                        val candidates =
+                            if (excludedRelayHash != null) {
+                                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                                if (filtered.size < propagationNodes.size) {
+                                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                                }
+                                filtered
+                            } else {
+                                propagationNodes
                             }
-                            filtered
-                        } else {
-                            propagationNodes
-                        }
                         val nearest = candidates.minByOrNull { it.hops }
                         if (nearest != null) {
                             Log.i(
@@ -937,13 +962,14 @@ class PropagationNodeManager
 
                                 // Start cooldown timer
                                 cooldownJob?.cancel() // Cancel any existing cooldown
-                                cooldownJob = scope.launch {
-                                    delay(selectionCooldownMs)
-                                    if (_selectionState.value == RelaySelectionState.STABLE) {
-                                        _selectionState.value = RelaySelectionState.IDLE
-                                        Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                cooldownJob =
+                                    scope.launch {
+                                        delay(selectionCooldownMs)
+                                        if (_selectionState.value == RelaySelectionState.STABLE) {
+                                            _selectionState.value = RelaySelectionState.IDLE
+                                            Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                        }
                                     }
-                                }
                             } else {
                                 Log.w(TAG, "Relay selection triggered backoff - skipping STABLE transition")
                             }
@@ -965,9 +991,7 @@ class PropagationNodeManager
         /**
          * Convert hex string to ByteArray.
          */
-        private fun String.hexToByteArray(): ByteArray {
-            return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        }
+        private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
         // ==================== PROPAGATION NODE SYNC ====================
 
@@ -1044,15 +1068,16 @@ class PropagationNodeManager
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
-                result.onSuccess { state ->
-                    Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
-                    // Don't emit result or update timestamp here - let the observer handle it
-                }.onFailure { error ->
-                    Log.w(TAG, "Periodic sync request failed: ${error.message}")
-                    timeoutJob.cancel()
-                    _isSyncing.value = false
-                    _syncProgress.value = SyncProgress.Idle
-                }
+                result
+                    .onSuccess { state ->
+                        Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
+                        // Don't emit result or update timestamp here - let the observer handle it
+                    }.onFailure { error ->
+                        Log.w(TAG, "Periodic sync request failed: ${error.message}")
+                        timeoutJob.cancel()
+                        _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
+                    }
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting messages from propagation node", e)
                 timeoutJob.cancel()
@@ -1117,23 +1142,24 @@ class PropagationNodeManager
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
-                result.onSuccess { propState ->
-                    Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
-                    // Don't emit success here - wait for propagation state observer
-                    // to see PR_COMPLETE state (unless keepSyncingState is true,
-                    // in which case caller manages the state via timeout)
-                }.onFailure { error ->
-                    Log.w(TAG, "Manual sync request failed: ${error.message}")
-                    timeoutJob.cancel()
-                    if (!keepSyncingState) {
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
+                result
+                    .onSuccess { propState ->
+                        Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
+                        // Don't emit success here - wait for propagation state observer
+                        // to see PR_COMPLETE state (unless keepSyncingState is true,
+                        // in which case caller manages the state via timeout)
+                    }.onFailure { error ->
+                        Log.w(TAG, "Manual sync request failed: ${error.message}")
+                        timeoutJob.cancel()
+                        if (!keepSyncingState) {
+                            _isSyncing.value = false
+                            _syncProgress.value = SyncProgress.Idle
+                        }
+                        if (_isManualSync) {
+                            _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
+                            _isManualSync = false
+                        }
                     }
-                    if (_isManualSync) {
-                        _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
-                        _isManualSync = false
-                    }
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during manual sync", e)
                 timeoutJob.cancel()

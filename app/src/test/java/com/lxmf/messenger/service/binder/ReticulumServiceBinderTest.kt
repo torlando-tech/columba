@@ -8,6 +8,7 @@ import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
+import com.lxmf.messenger.service.manager.MemoryProfilerManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -53,6 +54,7 @@ class ReticulumServiceBinderTest {
     private lateinit var lockManager: LockManager
     private lateinit var maintenanceManager: MaintenanceManager
     private lateinit var healthCheckManager: HealthCheckManager
+    private lateinit var memoryProfilerManager: MemoryProfilerManager
     private lateinit var networkChangeManager: NetworkChangeManager
     private lateinit var notificationManager: ServiceNotificationManager
     private lateinit var bleCoordinator: BleCoordinator
@@ -78,6 +80,7 @@ class ReticulumServiceBinderTest {
         lockManager = mockk(relaxed = true)
         maintenanceManager = mockk(relaxed = true)
         healthCheckManager = mockk(relaxed = true)
+        memoryProfilerManager = mockk(relaxed = true)
         networkChangeManager = mockk(relaxed = true)
         notificationManager = mockk(relaxed = true)
         bleCoordinator = mockk(relaxed = true)
@@ -103,6 +106,7 @@ class ReticulumServiceBinderTest {
                 lockManager = lockManager,
                 maintenanceManager = maintenanceManager,
                 healthCheckManager = healthCheckManager,
+                memoryProfilerManager = memoryProfilerManager,
                 networkChangeManager = networkChangeManager,
                 notificationManager = notificationManager,
                 bleCoordinator = bleCoordinator,

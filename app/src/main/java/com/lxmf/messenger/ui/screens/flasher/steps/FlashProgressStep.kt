@@ -58,6 +58,16 @@ fun FlashProgressStep(
     isProvisioning: Boolean = false,
     onDeviceReset: () -> Unit = {},
 ) {
+    // Keep screen on during flashing to prevent interruption
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (view.context as? android.app.Activity)?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // Pulsing animation for the icon
     val infiniteTransition = rememberInfiniteTransition(label = "flashPulse")
     val alpha by infiniteTransition.animateFloat(

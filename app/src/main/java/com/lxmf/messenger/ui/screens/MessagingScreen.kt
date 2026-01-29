@@ -190,6 +190,7 @@ fun MessagingScreen(
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+
     var messageText by remember { mutableStateOf("") }
 
     val context = androidx.compose.ui.platform.LocalContext.current

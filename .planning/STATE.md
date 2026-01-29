@@ -5,29 +5,58 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.7.3 shipped — planning next milestone
+**Current focus:** v0.7.4-beta Bug Fixes - Phase 3 (ANR Elimination)
 
 ## Current Position
 
-Phase: Milestone complete
-Plan: N/A
-Status: Ready for next milestone
-Last activity: 2026-01-28 — v0.7.3 milestone archived
+Phase: 3 of 6 (ANR Elimination)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-29 - Roadmap created for v0.7.4-beta
 
-Progress: [████████████] 100% — v0.7.3 SHIPPED
+Progress: [░░░░░░░░░░░░] 0% — v0.7.4-beta starting
 
 ## Milestone Summary
 
-**v0.7.3 Bug Fixes — SHIPPED 2026-01-28**
+**v0.7.4-beta Bug Fixes - In Progress**
 
-- 5 phases (1, 2, 2.1, 2.2, 2.3)
-- 11 plans completed
-- 8/8 v1 requirements shipped
-- 4 days from start to ship
+| Phase | Goal | Requirements | Status |
+|-------|------|--------------|--------|
+| 3 | ANR Elimination | ANR-01 | Ready to plan |
+| 4 | Relay Loop Resolution | RELAY-03 | Not started |
+| 5 | Memory Optimization | MEM-01 | Not started |
+| 6 | Native Stability Verification | NATIVE-01 | Not started |
 
-See: .planning/MILESTONES.md for full details
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: -
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
+
+### Sentry Analysis (2026-01-29)
+
+**COLUMBA-3 (Relay Loop):**
+- Still happening on v0.7.3-beta despite fix
+- Stacktrace: `PropagationNodeManager.recordSelection` line 840
+- Seer suggests: Use `SharingStarted.WhileSubscribed` instead of eager StateFlow
+
+**COLUMBA-M (ANR):**
+- `DebugViewModel.<init>` -> `loadIdentityData` -> `getOrCreateDestination`
+- Makes synchronous IPC call to service during ViewModel init on main thread
+
+**COLUMBA-E (OOM):**
+- Known ~1.4 MB/min memory growth in Python/Reticulum layer
 
 ### Decisions
 
@@ -43,7 +72,7 @@ v0.7.3 milestone complete. Next milestone (v0.7.4) will address:
 ### Pending Todos
 
 3 todos in `.planning/todos/pending/`:
-- **Investigate native memory growth using Python profiling** (performance)
+- **Investigate native memory growth using Python profiling** (HIGH priority)
 - **Make discovered interfaces page event-driven** (ui)
 - **Refactor PropagationNodeManager to extract components** (architecture)
 
@@ -53,7 +82,7 @@ None blocking — ready for next milestone.
 
 ## Session Continuity
 
-Last session: 2026-01-28
-Stopped at: Milestone v0.7.3 completion
+Last session: 2026-01-29
+Stopped at: Roadmap created for v0.7.4-beta
 Resume file: None
-Next: `/gsd:new-milestone` to start v0.7.4
+Next: `/gsd:plan-phase 3`

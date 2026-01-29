@@ -442,11 +442,7 @@ class PythonWrapperManager(
         val generator = checkNotNull(stampGeneratorInstance) { "StampGenerator not initialized" }
 
         // Python expects synchronous return from this callback
-        val result =
-            runBlocking(Dispatchers.Default) {
-                // THREADING: allowed
-                generator.generateStamp(workblock, stampCost)
-            }
+        val result = runBlocking(Dispatchers.Default) { generator.generateStamp(workblock, stampCost) } // THREADING: allowed
 
         Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
 

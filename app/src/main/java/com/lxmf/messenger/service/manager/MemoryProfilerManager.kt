@@ -16,24 +16,28 @@ import kotlinx.coroutines.launch
  * - Python tracemalloc profiling (via PythonWrapperManager)
  * - Android native heap monitoring (dumpsys meminfo alternative)
  * - Periodic logging at synchronized 5-minute intervals
+ * - Sentry breadcrumbs for crash correlation
  *
- * IMPORTANT: Only active in debug builds (BuildConfig.ENABLE_MEMORY_PROFILING).
- * Zero overhead in release builds - all methods early-return.
+ * Enabled in all builds via BuildConfig.ENABLE_MEMORY_PROFILING.
+ * Memory stats are recorded as Sentry breadcrumbs for OOM investigation.
  *
  * Usage:
  *   val profiler = MemoryProfilerManager(wrapperManager, scope)
  *   profiler.startProfiling()  // Auto-checks build flag
  *   // ... wait 5 minutes ...
  *   // Check logcat: adb logcat -s MemoryProfilerManager:I
+ *   // Or view Sentry breadcrumbs on crash reports
  *   profiler.stopProfiling()
  */
 class MemoryProfilerManager(
     private val wrapperManager: PythonWrapperManager,
     private val scope: CoroutineScope,
 ) {
-    private val TAG = "MemoryProfilerManager"
-
     private var nativeHeapMonitorJob: Job? = null
+
+    companion object {
+        private const val TAG = "MemoryProfilerManager"
+    }
 
     /**
      * Start memory profiling with periodic snapshots.
@@ -140,6 +144,7 @@ class MemoryProfilerManager(
      * Log Android native heap and JVM memory info.
      *
      * Provides correlation data for Python heap growth analysis.
+     * Also records as Sentry breadcrumb for OOM crash investigation.
      * Format: "Memory: JVM=45MB/512MB, Native=120MB"
      */
     private fun logNativeHeapInfo() {
@@ -152,6 +157,18 @@ class MemoryProfilerManager(
             val nativeHeap = Debug.getNativeHeapAllocatedSize() / 1024 / 1024
 
             Log.i(TAG, "Memory: JVM=${usedMemory}MB/${maxMemory}MB, Native=${nativeHeap}MB")
+
+            // Record as Sentry breadcrumb for OOM investigation
+            val breadcrumb =
+                io.sentry.Breadcrumb().apply {
+                    category = "memory"
+                    message = "JVM=${usedMemory}MB/${maxMemory}MB, Native=${nativeHeap}MB"
+                    level = io.sentry.SentryLevel.INFO
+                    setData("jvm_used_mb", usedMemory)
+                    setData("jvm_max_mb", maxMemory)
+                    setData("native_mb", nativeHeap)
+                }
+            io.sentry.Sentry.addBreadcrumb(breadcrumb)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to get memory info: ${e.message}")
         }

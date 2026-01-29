@@ -232,37 +232,27 @@ class RNodeFlasher(
                     // Calculate the firmware hash from the binary for provisioning
                     val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
 
-                    if (isNativeUsb && firmwarePackage.platform == RNodePlatform.ESP32) {
-                        // ESP32-S3 native USB doesn't auto-reboot reliably
-                        // User needs to manually reset the device, then we'll provision
-                        Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
+                    // Wait for device reboot, then provision
+                    _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
 
-                        _flashState.value =
-                            FlashState.NeedsManualReset(
-                                firmwarePackage.board,
-                                "Flashing complete! Please press the RST button on your ${firmwarePackage.board.displayName}.",
-                                firmwareHash,
-                            )
-                    } else {
-                        // Standard flow: wait for reboot, then provision
-                        _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
+                    // Give device time to boot after hard reset
+                    // Native USB devices need more time for USB re-enumeration
+                    val rebootDelay = if (isNativeUsb) 6000L else 5000L
+                    kotlinx.coroutines.delay(rebootDelay)
 
-                        // Give device time to boot after esptool hard reset
-                        kotlinx.coroutines.delay(5000)
+                    // Provision the device (write EEPROM and set firmware hash)
+                    // provisionDevice() handles USB re-enumeration with retries
+                    val provisionSuccess =
+                        provisionDevice(
+                            deviceId,
+                            firmwarePackage.board,
+                            FrequencyBand.fromFilename(firmwarePackage.zipFile.name),
+                            firmwareHash,
+                        )
 
-                        // Provision the device (write EEPROM and set firmware hash)
-                        val provisionSuccess =
-                            provisionDevice(
-                                deviceId,
-                                firmwarePackage.board,
-                                FrequencyBand.fromFilename(firmwarePackage.zipFile.name),
-                                firmwareHash,
-                            )
-
-                        if (!provisionSuccess) {
-                            Log.w(TAG, "Provisioning failed, but flash was successful")
-                            // Don't fail the whole operation - flash succeeded
-                        }
+                    if (!provisionSuccess) {
+                        Log.w(TAG, "Provisioning failed, but flash was successful")
+                        // Don't fail the whole operation - flash succeeded
                     }
                 }
 
@@ -329,38 +319,28 @@ class RNodeFlasher(
                     }
 
                 if (success) {
-                    if (isNativeUsb && info.platform == RNodePlatform.ESP32) {
-                        // ESP32-S3 native USB doesn't auto-reboot reliably
-                        // User needs to manually reset the device, then we'll provision
-                        Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
-                        _flashState.value =
-                            FlashState.NeedsManualReset(
-                                info.board,
-                                "Flashing complete! Please press the RST button on your ${info.board.displayName}.",
-                                // No firmware hash available from stream - will be obtained from device
-                                null,
-                            )
-                    } else {
-                        // Standard flow: wait for reboot, then provision
-                        _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
+                    // Wait for device reboot, then provision
+                    _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
 
-                        // Give device time to boot after esptool hard reset
-                        kotlinx.coroutines.delay(5000)
+                    // Give device time to boot after hard reset
+                    // Native USB devices need more time for USB re-enumeration
+                    val rebootDelay = if (isNativeUsb) 6000L else 5000L
+                    kotlinx.coroutines.delay(rebootDelay)
 
-                        // Provision the device (write EEPROM and set firmware hash)
-                        // Note: firmwareHash is null - will be obtained from device
-                        val provisionSuccess =
-                            provisionDevice(
-                                deviceId,
-                                info.board,
-                                FrequencyBand.fromModelCode(info.model),
-                                null,
-                            )
+                    // Provision the device (write EEPROM and set firmware hash)
+                    // provisionDevice() handles USB re-enumeration with retries
+                    // Note: firmwareHash is null - will be obtained from device
+                    val provisionSuccess =
+                        provisionDevice(
+                            deviceId,
+                            info.board,
+                            FrequencyBand.fromModelCode(info.model),
+                            null,
+                        )
 
-                        if (!provisionSuccess) {
-                            Log.w(TAG, "Provisioning failed, but flash was successful")
-                            // Don't fail the whole operation - flash succeeded
-                        }
+                    if (!provisionSuccess) {
+                        Log.w(TAG, "Provisioning failed, but flash was successful")
+                        // Don't fail the whole operation - flash succeeded
                     }
                 }
 

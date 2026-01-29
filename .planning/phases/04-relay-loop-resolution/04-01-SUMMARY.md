@@ -84,10 +84,19 @@ Each task was committed atomically:
 - **Verification:** All 77 PropagationNodeManager tests pass
 - **Committed in:** dcbcccc2 (Task 2 commit)
 
+**2. [Rule 3 - Blocking] Fixed observeRelayChanges test collector mismatch**
+- **Found during:** Post-execution verification (background test run)
+- **Issue:** `start - observeRelayChanges clears Python on relay removal` test failed because it collected from `currentRelayState` but observeRelayChanges collects from `currentRelay`
+- **Root cause analysis:** With WhileSubscribed, the `currentRelay` flow needs its own active subscriber to propagate changes. Test was collecting from `currentRelayState` which didn't keep `currentRelay` hot for the internal observeRelayChanges coroutine.
+- **Fix:** Changed test to collect from `currentRelay` directly, ensuring the flow chain is fully active when observeRelayChanges processes emissions
+- **Files modified:** PropagationNodeManagerTest.kt
+- **Verification:** All 96 PropagationNodeManager tests pass
+- **Committed in:** 7b97e074 (orchestrator correction)
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 blocking)
-**Impact on plan:** Fix was necessary to verify code correctness. Tests now properly simulate production conditions where observeRelayChanges() maintains an active collector.
+**Total deviations:** 2 auto-fixed (2 blocking)
+**Impact on plan:** Fixes were necessary to verify code correctness. Tests now properly simulate production conditions where observeRelayChanges() maintains an active collector on `currentRelay`.
 
 ## Issues Encountered
 - Test debugging took significant time due to background task execution hiding output - resolved by running tests directly with increased timeout

@@ -32,6 +32,7 @@ from logging_utils import log_info, log_warning, log_debug
 _baseline_snapshot: Optional[tracemalloc.Snapshot] = None
 _profiling_active: bool = False
 _snapshot_timer: Optional[threading.Timer] = None
+_lock = threading.Lock()  # Synchronizes timer/profiling state access
 
 
 def start_profiling(nframes: int = 10) -> None:
@@ -145,23 +146,28 @@ def stop_profiling() -> None:
     Stop tracemalloc profiling and clear snapshots.
 
     Safe to call even if profiling not active.
+    Thread-safe: uses lock to prevent race with timer callback.
     """
     global _baseline_snapshot, _profiling_active, _snapshot_timer
 
-    # Cancel any pending snapshot timer
-    if _snapshot_timer is not None:
-        _snapshot_timer.cancel()
-        _snapshot_timer = None
+    with _lock:
+        # Cancel any pending snapshot timer
+        if _snapshot_timer is not None:
+            _snapshot_timer.cancel()
+            _snapshot_timer = None
 
-    if not _profiling_active:
-        log_debug("MemoryProfiler", "stop_profiling", "Profiling not active, nothing to stop")
-        return
+        if not _profiling_active:
+            log_debug("MemoryProfiler", "stop_profiling", "Profiling not active, nothing to stop")
+            return
 
+        # Set flag inside lock to prevent timer callback from rescheduling
+        _profiling_active = False
+
+    # These operations don't need the lock
     try:
         if tracemalloc.is_tracing():
             tracemalloc.stop()
         _baseline_snapshot = None
-        _profiling_active = False
         log_info("MemoryProfiler", "stop_profiling", "Profiling stopped and snapshots cleared")
     except Exception as e:
         log_warning("MemoryProfiler", "stop_profiling", f"Failed to stop profiling: {e}")
@@ -172,6 +178,7 @@ def _snapshot_timer_callback(interval_seconds: int) -> None:
     Internal callback for periodic snapshots.
 
     Takes a snapshot and reschedules the timer.
+    Thread-safe: uses lock to prevent race with stop_profiling.
 
     Args:
         interval_seconds: Snapshot interval
@@ -183,11 +190,12 @@ def _snapshot_timer_callback(interval_seconds: int) -> None:
     except Exception as e:
         log_warning("MemoryProfiler", "_snapshot_timer_callback", f"Snapshot failed: {e}")
 
-    # Reschedule if still profiling
-    if _profiling_active:
-        _snapshot_timer = threading.Timer(interval_seconds, _snapshot_timer_callback, args=(interval_seconds,))
-        _snapshot_timer.daemon = True  # Don't block shutdown
-        _snapshot_timer.start()
+    # Reschedule if still profiling (check under lock to prevent race)
+    with _lock:
+        if _profiling_active:
+            _snapshot_timer = threading.Timer(interval_seconds, _snapshot_timer_callback, args=(interval_seconds,))
+            _snapshot_timer.daemon = True  # Don't block shutdown
+            _snapshot_timer.start()
 
 
 def schedule_periodic_snapshots(interval_seconds: int = 300) -> None:

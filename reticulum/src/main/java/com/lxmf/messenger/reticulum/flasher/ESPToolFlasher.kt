@@ -402,35 +402,36 @@ class ESPToolFlasher(
      * ESP32-S3 with native USB uses a different sequence (USBJTAGSerialReset).
      */
     private suspend fun enterBootloader(): Boolean {
-        Log.d(TAG, "Entering bootloader via DTR/RTS sequence (S3=$currentBoardIsS3)")
+        Log.d(TAG, "Entering bootloader via DTR/RTS sequence (nativeUsb=$isNativeUsb, S3=$currentBoardIsS3)")
 
-        if (currentBoardIsS3) {
-            // ESP32-S3 USB-JTAG-Serial reset sequence (from esptool USBJTAGSerialReset)
-            // For native USB, the ROM bootloader watches for a specific PATTERN of DTR/RTS
-            // transitions to enter download mode - it's not about sampling IO0 state.
+        if (isNativeUsb) {
+            // USB-JTAG-Serial reset sequence (from esptool USBJTAGSerialReset)
+            // Used for ESP32-S3/C3/etc with native USB (VID 0x303A, PID 0x1001).
+            // The ROM bootloader watches for a specific PATTERN of DTR/RTS transitions
+            // to enter download mode - it's not about sampling IO0 state.
             // The sequence must traverse (1,1) state instead of (0,0) for reliable triggering.
-            Log.d(TAG, "S3 reset: Setting idle state (DTR=false, RTS=false)")
+            Log.d(TAG, "Native USB reset: Setting idle state (DTR=false, RTS=false)")
             usbBridge.setRts(false)
             usbBridge.setDtr(false) // Idle state
             delay(RESET_DELAY_MS) // esptool uses 100ms
 
-            Log.d(TAG, "S3 reset: Setting IO0 (DTR=true)")
+            Log.d(TAG, "Native USB reset: Setting IO0 (DTR=true)")
             usbBridge.setDtr(true) // Set IO0 signal
             usbBridge.setRts(false)
             delay(RESET_DELAY_MS) // esptool uses 100ms
 
             // Enter reset - traverses (1,1) state for reliable USB-JTAG-Serial triggering
-            Log.d(TAG, "S3 reset: Entering reset (RTS=true)")
+            Log.d(TAG, "Native USB reset: Entering reset (RTS=true)")
             usbBridge.setRts(true) // Reset chip
 
             // Critical: Release DTR while still in reset, then set RTS again
             // This specific sequence triggers download mode on USB-JTAG-Serial
-            Log.d(TAG, "S3 reset: Releasing DTR while in reset (DTR=false, RTS=true)")
+            Log.d(TAG, "Native USB reset: Releasing DTR while in reset (DTR=false, RTS=true)")
             usbBridge.setDtr(false)
             usbBridge.setRts(true) // Windows workaround: propagates DTR on usbser.sys driver
             delay(RESET_DELAY_MS) // esptool uses 100ms
 
-            Log.d(TAG, "S3 reset: Exiting reset (RTS=false)")
+            Log.d(TAG, "Native USB reset: Exiting reset (RTS=false)")
             usbBridge.setDtr(false) // Ensure DTR is false
             usbBridge.setRts(false) // Release reset - chip exits to bootloader
         } else {
@@ -446,10 +447,10 @@ class ESPToolFlasher(
             usbBridge.setDtr(false) // IO0=HIGH, done
         }
 
-        // For S3 native USB, the chip resets and the ROM bootloader re-enumerates USB.
+        // For native USB, the chip resets and the ROM bootloader re-enumerates USB.
         // We need extra time for this to settle.
-        if (currentBoardIsS3) {
-            Log.d(TAG, "S3 reset: Waiting for USB re-enumeration...")
+        if (isNativeUsb) {
+            Log.d(TAG, "Native USB reset: Waiting for USB re-enumeration...")
             delay(500) // Give time for ROM bootloader USB to come up
 
             // Read boot log like esptool does - look for "waiting for download" message
@@ -458,18 +459,18 @@ class ESPToolFlasher(
             val bootLogLen = usbBridge.readBlocking(bootLog, 200)
             if (bootLogLen > 0) {
                 val bootLogStr = bootLog.take(bootLogLen).toByteArray().decodeToString()
-                Log.d(TAG, "S3 reset: Boot log ($bootLogLen bytes): $bootLogStr")
+                Log.d(TAG, "Native USB reset: Boot log ($bootLogLen bytes): $bootLogStr")
                 if (bootLogStr.contains("waiting for download", ignoreCase = true)) {
-                    Log.d(TAG, "S3 reset: Detected 'waiting for download' - bootloader mode confirmed")
+                    Log.d(TAG, "Native USB reset: Detected 'waiting for download' - bootloader mode confirmed")
                 }
             } else {
-                Log.d(TAG, "S3 reset: No boot log received")
+                Log.d(TAG, "Native USB reset: No boot log received")
             }
         }
 
         // Clear any remaining garbage data from the port
         delay(BOOT_DELAY_MS)
-        usbBridge.drain(if (currentBoardIsS3) 300 else 200)
+        usbBridge.drain(if (isNativeUsb) 300 else 200)
 
         inBootloader = true
         return true

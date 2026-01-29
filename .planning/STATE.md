@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-28)
 
 ## Current Position
 
-Phase: 4 of 6 (Relay Loop Resolution)
+Phase: 5 of 6 (Memory Optimization)
 Plan: 01 of 01 complete
 Status: Phase complete
-Last activity: 2026-01-29 - Completed 04-01-PLAN.md
+Last activity: 2026-01-29 - Completed 05-01-PLAN.md
 
-Progress: [██████░░░░░░] 50% — Phase 4 complete (2/4 phases)
+Progress: [█████████░░░] 75% — Phase 5 complete (3/4 phases)
 
 ## Milestone Summary
 
@@ -24,15 +24,15 @@ Progress: [██████░░░░░░] 50% — Phase 4 complete (2/4 p
 |-------|------|--------------|--------|
 | 3 | ANR Elimination | ANR-01 | **Complete** |
 | 4 | Relay Loop Resolution | RELAY-03 | **Complete** |
-| 5 | Memory Optimization | MEM-01 | Not started |
+| 5 | Memory Optimization | MEM-01 | **Complete** |
 | 6 | Native Stability Verification | NATIVE-01 | Not started |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: ~54 min
-- Total execution time: ~54 min (Phase 4)
+- Total plans completed: 3
+- Average duration: ~32 min
+- Total execution time: ~63 min (Phases 4-5)
 
 **By Phase:**
 
@@ -40,6 +40,7 @@ Progress: [██████░░░░░░] 50% — Phase 4 complete (2/4 p
 |-------|-------|-------|----------|
 | 3 | 1 | - | - |
 | 4 | 1 | 54 min | 54 min |
+| 5 | 1 | 9 min | 9 min |
 
 *Updated after each plan completion*
 
@@ -60,6 +61,8 @@ Progress: [██████░░░░░░] 50% — Phase 4 complete (2/4 p
 
 **COLUMBA-E (OOM):**
 - Known ~1.4 MB/min memory growth in Python/Reticulum layer
+- **INSTRUMENTED in Phase 5** - Memory profiling infrastructure added (tracemalloc + native heap monitoring)
+- Investigation pending in next phase
 
 ### Decisions
 
@@ -67,6 +70,9 @@ Progress: [██████░░░░░░] 50% — Phase 4 complete (2/4 p
 |----------|-----------|-------|
 | WhileSubscribed(5000L) for relay StateFlows | Standard Android timeout - survives screen rotation without restarting upstream | 04-01 |
 | Keep state machine, debounce, loop detection | Defense-in-depth - WhileSubscribed addresses root cause, guards handle edge cases | 04-01 |
+| Use tracemalloc instead of memory_profiler | tracemalloc is stdlib (no dependencies), lower overhead, sufficient for leak detection | 05-01 |
+| 5-minute snapshot interval | Balances detection speed with overhead; leak grows at ~1.4 MB/min so 5min = ~7MB delta | 05-01 |
+| Debug-only via BuildConfig flag | Zero overhead in release builds; profiling instrumentation stays in codebase for future debugging | 05-01 |
 
 ### Roadmap Evolution
 
@@ -86,6 +92,8 @@ v0.7.3 milestone complete. Next milestone (v0.7.4) will address:
 
 - **WhileSubscribed(5000L)**: Standard timeout for Room-backed StateFlows that should stop collecting when UI is not observing
 - **Turbine test pattern**: Keep collector active inside test block when testing code that accesses StateFlow.value with WhileSubscribed
+- **BuildConfig feature flags**: Clean pattern for debug-only functionality with zero release overhead
+- **Synchronized multi-layer monitoring**: Align Python and Android monitoring intervals for easy correlation
 
 ### Blockers/Concerns
 
@@ -96,6 +104,6 @@ v0.7.3 milestone complete. Next milestone (v0.7.4) will address:
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Phase 4 verified complete
+Stopped at: Phase 5 complete (memory profiling infrastructure added)
 Resume file: None
-Next: `/gsd:discuss-phase 5` or `/gsd:plan-phase 5`
+Next: `/gsd:discuss-phase 6` or `/gsd:plan-phase 6`

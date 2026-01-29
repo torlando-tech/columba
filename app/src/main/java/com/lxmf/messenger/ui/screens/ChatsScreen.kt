@@ -214,6 +214,18 @@ fun ChatsScreen(
                                         Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                     }
                                 },
+                            )
+
+                            // Context menu anchored to this card
+                            ConversationContextMenu(
+                                expanded = showMenu,
+                                onDismiss = { showMenu = false },
+                                isSaved = isSaved,
+                                onSaveToContacts = {
+                                    viewModel.saveToContacts(conversation)
+                                    showMenu = false
+                                    Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
+                                },
                                 onRemoveFromContacts = {
                                     viewModel.removeFromContacts(conversation.peerHash)
                                     showMenu = false

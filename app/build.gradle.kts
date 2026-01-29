@@ -131,6 +131,7 @@ android {
     productFlavors {
         create("sentry") {
             dimension = "telemetry"
+            isDefault = true
             // SENTRY_DSN from environment - Sentry enabled in release builds
             buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
         }
@@ -486,4 +487,11 @@ tasks.register("printVersion") {
         println("versionName: ${android.defaultConfig.versionName}")
         println("versionCode: ${android.defaultConfig.versionCode}")
     }
+}
+
+// Convenience task: `./gradlew install` defaults to installSentryDebug
+tasks.register("install") {
+    dependsOn("installSentryDebug")
+    description = "Installs the sentry debug APK (shortcut for installSentryDebug)"
+    group = "Install"
 }

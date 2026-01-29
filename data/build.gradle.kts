@@ -64,6 +64,7 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation("androidx.test:core:1.5.0")
     testImplementation(libs.turbine)
+    testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation("androidx.test:core:1.5.0")
     androidTestImplementation("androidx.test:runner:1.5.2")

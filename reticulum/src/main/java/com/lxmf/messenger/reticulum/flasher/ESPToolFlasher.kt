@@ -255,9 +255,9 @@ class ESPToolFlasher(
                     Log.w(TAG, "Could not read chip detect register")
                 }
 
-                // ESP32-S3 native USB doesn't use baud rate (it's not UART)
-                // Only attempt baud rate change for non-S3 boards
-                if (!isS3) {
+                // Native USB doesn't use baud rate (it's not UART)
+                // Only attempt baud rate change for devices with USB-UART bridges
+                if (!isNativeUsb) {
                     progressCallback.onProgress(12, "Switching to high-speed mode...")
                     if (changeBaudRate(FLASH_BAUD)) {
                         delay(50)
@@ -267,7 +267,7 @@ class ESPToolFlasher(
                         Log.w(TAG, "Could not switch baud rate, continuing at $INITIAL_BAUD")
                     }
                 } else {
-                    Log.d(TAG, "Skipping baud rate change for ESP32-S3 USB")
+                    Log.d(TAG, "Skipping baud rate change for native USB (not UART)")
                 }
 
                 // SPI attach configures flash pins (required before flash operations)

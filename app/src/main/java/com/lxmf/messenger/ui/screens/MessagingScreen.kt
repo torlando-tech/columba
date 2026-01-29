@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
+import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -186,18 +187,6 @@ import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
 
-private fun cleanUrlForOpening(raw: String): String {
-    val trimmed = raw.trim()
-    return trimmed.trimEnd { ch -> ch in listOf('.', ',', ';', ':', '!', '?', ')', ']', '}') }
-}
-
-private fun toBrowsableUri(rawUrl: String): Uri {
-    val cleaned = cleanUrlForOpening(rawUrl)
-    val hasScheme = cleaned.startsWith("http://", ignoreCase = true) || cleaned.startsWith("https://", ignoreCase = true)
-    val withScheme = if (hasScheme) cleaned else "https://$cleaned"
-    return Uri.parse(withScheme)
-}
-
 @Composable
 private fun LinkifiedMessageText(
     text: String,
@@ -289,6 +278,7 @@ private fun LinkifiedMessageText(
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(url)))
                     } catch (e: Exception) {
+                        Log.w("MessagingScreen", "Unable to open link: $url", e)
                         Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
                     }
                 }

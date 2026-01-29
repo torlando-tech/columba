@@ -33,7 +33,7 @@ See git history for v0.7.3-beta milestone.
   1. DebugViewModel initializes without blocking main thread (no ANR on screen open)
   2. All IPC calls to service occur on IO dispatcher
   3. Zero ANRs from IPC in Sentry for 48 hours post-release
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [x] 03-01-PLAN.md - Move IPC methods to IO dispatcher with suspend functions
@@ -46,11 +46,10 @@ Plans:
   1. Relay selection settles on a single node without add/remove/add cycles
   2. StateFlow uses `SharingStarted.WhileSubscribed` (per Seer recommendation)
   3. Zero "Relay selection loop detected" warnings in Sentry for 48 hours
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: Investigate why v0.7.3 fix was insufficient
-- [ ] 04-02: Implement improved relay selection stability
+- [ ] 04-01-PLAN.md - Change StateFlow sharing from Eagerly to WhileSubscribed(5000L)
 
 ### Phase 5: Memory Optimization
 **Goal**: App runs indefinitely without OOM crashes
@@ -86,7 +85,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 3. ANR Elimination | 1/1 | Complete ✓ | 2026-01-29 |
-| 4. Relay Loop Resolution | 0/2 | Not started | - |
+| 3. ANR Elimination | 1/1 | Complete | 2026-01-29 |
+| 4. Relay Loop Resolution | 0/1 | Ready | - |
 | 5. Memory Optimization | 0/3 | Not started | - |
 | 6. Native Stability Verification | 0/1 | Not started | - |

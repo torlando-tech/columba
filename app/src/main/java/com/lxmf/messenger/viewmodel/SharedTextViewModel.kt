@@ -24,7 +24,6 @@ class SharedTextViewModel
 
         fun assignToDestination(destinationHash: String) {
             val current = _sharedText.value ?: return
-            if (current.targetDestinationHash != null) return
             _sharedText.value = current.copy(targetDestinationHash = destinationHash)
         }
 

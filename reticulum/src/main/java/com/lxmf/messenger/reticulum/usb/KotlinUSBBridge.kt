@@ -78,7 +78,7 @@ interface UsbConnectionListener {
  *
  * @property context Application context for USB access
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class KotlinUSBBridge(
     private val context: Context,
 ) : SerialInputOutputManager.Listener {
@@ -144,11 +144,10 @@ class KotlinUSBBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinUSBBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinUSBBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinUSBBridge(context.applicationContext).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -473,8 +472,8 @@ class KotlinUSBBridge(
         return devices
     }
 
-    private fun getDriverTypeName(driver: UsbSerialDriver): String {
-        return when (driver) {
+    private fun getDriverTypeName(driver: UsbSerialDriver): String =
+        when (driver) {
             is FtdiSerialDriver -> "FTDI"
             is Cp21xxSerialDriver -> "CP210x"
             is ProlificSerialDriver -> "PL2303"
@@ -482,7 +481,6 @@ class KotlinUSBBridge(
             is CdcAcmSerialDriver -> "CDC-ACM"
             else -> "Unknown"
         }
-    }
 
     private fun Int.toHexString(): String = "0x${this.toString(16).uppercase()}"
 
@@ -894,7 +892,7 @@ class KotlinUSBBridge(
             if (bytesRead > 0) {
                 val hex =
                     buffer.take(minOf(bytesRead, 32)).joinToString(" ") {
-                        String.format("%02X", it.toInt() and 0xFF)
+                        String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF)
                     }
                 Log.d(TAG, "readBlocking: got $bytesRead bytes: $hex")
             }
@@ -910,6 +908,7 @@ class KotlinUSBBridge(
      * This stops the SerialInputOutputManager so that readBlocking() can receive data.
      * Call disableRawMode() when done to restart async reads.
      */
+    @Suppress("NestedBlockDepth")
     fun enableRawMode() {
         Log.d(TAG, "Enabling raw mode (stopping SerialInputOutputManager)")
 
@@ -927,38 +926,52 @@ class KotlinUSBBridge(
             future?.cancel(true)
 
             // Wait for the manager thread to actually stop
-            try {
-                future?.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-            } catch (e: java.util.concurrent.CancellationException) {
-                // Expected - we cancelled it
-            } catch (e: java.util.concurrent.TimeoutException) {
-                Log.w(TAG, "Timeout waiting for SerialInputOutputManager to stop")
-            } catch (e: Exception) {
-                Log.w(TAG, "Error waiting for SerialInputOutputManager: ${e.message}")
-            }
+            waitForManagerStop(future)
             Log.d(TAG, "SerialInputOutputManager stopped")
 
             // Drain any data that was buffered by the serial port during async operation
-            val port = currentPort
-            if (port != null) {
-                try {
-                    val drainBuf = ByteArray(1024)
-                    var totalDrained = 0
-                    while (true) {
-                        val drained = port.read(drainBuf, 50)
-                        if (drained <= 0) break
-                        totalDrained += drained
-                    }
-                    if (totalDrained > 0) {
-                        Log.d(TAG, "Drained $totalDrained bytes from port after stopping manager")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error draining port: ${e.message}")
-                }
-            }
+            drainPortAfterManagerStop()
         }
         // Clear any buffered data in our queue
         readBuffer.clear()
+    }
+
+    /**
+     * Wait for the SerialInputOutputManager to stop, handling expected exceptions.
+     */
+    @Suppress("SwallowedException")
+    private fun waitForManagerStop(future: java.util.concurrent.Future<*>?) {
+        try {
+            future?.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.CancellationException) {
+            // Expected - we cancelled it, no action needed
+            Log.v(TAG, "Manager future cancelled as expected")
+        } catch (e: java.util.concurrent.TimeoutException) {
+            Log.w(TAG, "Timeout waiting for SerialInputOutputManager to stop")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error waiting for SerialInputOutputManager: ${e.message}")
+        }
+    }
+
+    /**
+     * Drain any data buffered by the serial port after stopping the manager.
+     */
+    private fun drainPortAfterManagerStop() {
+        val port = currentPort ?: return
+        try {
+            val drainBuf = ByteArray(1024)
+            var totalDrained = 0
+            while (true) {
+                val drained = port.read(drainBuf, 50)
+                if (drained <= 0) break
+                totalDrained += drained
+            }
+            if (totalDrained > 0) {
+                Log.d(TAG, "Drained $totalDrained bytes from port after stopping manager")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error draining port: ${e.message}")
+        }
     }
 
     /**

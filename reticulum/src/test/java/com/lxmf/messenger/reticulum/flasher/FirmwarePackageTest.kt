@@ -66,10 +66,10 @@ class GitHubReleaseTest {
         val release =
             GitHubRelease(
                 id = 1,
-                tag_name = "v1.78",
+                tagName = "v1.78",
                 name = "RNode Firmware 1.78",
-                created_at = "2024-01-01T00:00:00Z",
-                html_url = "https://github.com/markqvist/RNode_Firmware/releases/tag/v1.78",
+                createdAt = "2024-01-01T00:00:00Z",
+                htmlUrl = "https://github.com/markqvist/RNode_Firmware/releases/tag/v1.78",
             )
 
         assertEquals("1.78", release.version)
@@ -80,10 +80,10 @@ class GitHubReleaseTest {
         val release =
             GitHubRelease(
                 id = 1,
-                tag_name = "V1.78",
+                tagName = "V1.78",
                 name = "RNode Firmware 1.78",
-                created_at = "2024-01-01T00:00:00Z",
-                html_url = "https://github.com/test",
+                createdAt = "2024-01-01T00:00:00Z",
+                htmlUrl = "https://github.com/test",
             )
 
         assertEquals("1.78", release.version)
@@ -94,10 +94,10 @@ class GitHubReleaseTest {
         val release =
             GitHubRelease(
                 id = 1,
-                tag_name = "1.78",
+                tagName = "1.78",
                 name = "RNode Firmware 1.78",
-                created_at = "2024-01-01T00:00:00Z",
-                html_url = "https://github.com/test",
+                createdAt = "2024-01-01T00:00:00Z",
+                htmlUrl = "https://github.com/test",
             )
 
         assertEquals("1.78", release.version)
@@ -106,18 +106,17 @@ class GitHubReleaseTest {
 
 class GitHubAssetTest {
     @Test
-    fun `browserDownloadUrl alias works`() {
+    fun `browserDownloadUrl property works`() {
         val asset =
             GitHubAsset(
                 id = 1,
                 name = "firmware.zip",
                 size = 1000,
-                browser_download_url = "https://example.com/firmware.zip",
-                created_at = "2024-01-01T00:00:00Z",
-                updated_at = "2024-01-01T00:00:00Z",
+                browserDownloadUrl = "https://example.com/firmware.zip",
+                createdAt = "2024-01-01T00:00:00Z",
+                updatedAt = "2024-01-01T00:00:00Z",
             )
 
         assertEquals("https://example.com/firmware.zip", asset.browserDownloadUrl)
-        assertEquals(asset.browser_download_url, asset.browserDownloadUrl)
     }
 }

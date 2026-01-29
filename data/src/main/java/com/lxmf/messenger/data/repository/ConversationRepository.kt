@@ -69,6 +69,7 @@ data class ReplyPreview(
     val firstFileName: String?, // For file attachment preview
 )
 
+@Suppress("LargeClass")
 @Singleton
 class ConversationRepository
     @Inject
@@ -84,8 +85,8 @@ class ConversationRepository
          * Includes profile icon data from announces table.
          * Automatically switches when identity changes.
          */
-        fun getConversations(): Flow<List<Conversation>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getConversations(): Flow<List<Conversation>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 android.util.Log.d(
                     "ConversationRepository",
                     "getConversations: Active identity changed to " +
@@ -108,15 +109,14 @@ class ConversationRepository
                     }
                 }
             }
-        }
 
         /**
          * Search conversations by peer name for the active identity.
          * Includes profile icon data from announces table.
          * Automatically switches when identity changes.
          */
-        fun searchConversations(query: String): Flow<List<Conversation>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun searchConversations(query: String): Flow<List<Conversation>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
@@ -125,7 +125,6 @@ class ConversationRepository
                     }
                 }
             }
-        }
 
         /**
          * Get a single conversation by peer hash for the active identity
@@ -139,8 +138,8 @@ class ConversationRepository
          * Get all messages for a specific conversation for the active identity.
          * Automatically switches when identity changes.
          */
-        fun getMessages(peerHash: String): Flow<List<Message>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getMessages(peerHash: String): Flow<List<Message>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
@@ -149,7 +148,6 @@ class ConversationRepository
                     }
                 }
             }
-        }
 
         /**
          * Get messages for a specific conversation with pagination support for the active identity.
@@ -392,9 +390,7 @@ class ConversationRepository
          * Get a peer's public key from the peer_identities table.
          * Peer identities are global (not identity-scoped).
          */
-        suspend fun getPeerPublicKey(peerHash: String): ByteArray? {
-            return peerIdentityDao.getPeerIdentity(peerHash)?.publicKey
-        }
+        suspend fun getPeerPublicKey(peerHash: String): ByteArray? = peerIdentityDao.getPeerIdentity(peerHash)?.publicKey
 
         /**
          * Get all known peer identities for identity restoration.
@@ -445,9 +441,7 @@ class ConversationRepository
          * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
          * Returns a Flow that emits whenever the message changes in the database.
          */
-        fun observeMessageById(messageId: String): Flow<MessageEntity?> {
-            return messageDao.observeMessageById(messageId)
-        }
+        fun observeMessageById(messageId: String): Flow<MessageEntity?> = messageDao.observeMessageById(messageId)
 
         suspend fun updateMessageStatus(
             messageId: String,
@@ -931,12 +925,11 @@ class ConversationRepository
             private fun sanitizeText(
                 text: String,
                 maxLength: Int,
-            ): String {
-                return text
+            ): String =
+                text
                     .trim()
                     .replace(Regex("[\\p{C}&&[^\n\r]]"), "") // Remove control chars except newlines
                     .replace(Regex("[ \\t]+"), " ") // Normalize spaces/tabs, preserve newlines
                     .take(maxLength)
-            }
         }
     }

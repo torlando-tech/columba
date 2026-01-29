@@ -47,10 +47,13 @@ data class FirmwarePackage(
     fun delete(): Boolean = zipFile.delete()
 
     /**
-     * Calculate the SHA256 hash of the firmware binary (application.bin) for provisioning.
+     * Calculate the firmware hash for provisioning.
      *
-     * The RNode firmware hash is the SHA256 of the raw application binary,
-     * not the ZIP file. This hash is written to EEPROM during provisioning.
+     * For ESP32 devices, the RNode firmware binary has the SHA256 hash embedded in
+     * the last 32 bytes. This is the hash that rnodeconf extracts and writes to EEPROM.
+     * The embedded hash is: SHA256(firmware_data[0:-32]).
+     *
+     * For nRF52 devices, we calculate SHA256 of the entire binary (no embedded hash).
      *
      * @return 32-byte SHA256 hash as ByteArray, or null if extraction fails
      */
@@ -59,19 +62,8 @@ data class FirmwarePackage(
             ZipInputStream(zipFile.inputStream()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
-                    // Find the application binary - try various naming conventions
-                    if (entry.name.endsWith("application.bin") ||
-                        entry.name.endsWith(".bin") && !entry.name.contains("bootloader") &&
-                        !entry.name.contains("partition")
-                    ) {
-                        val digest = MessageDigest.getInstance("SHA-256")
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (zip.read(buffer).also { bytesRead = it } != -1) {
-                            digest.update(buffer, 0, bytesRead)
-                        }
-                        val hash = digest.digest()
-                        Log.d(TAG, "Calculated firmware binary hash: ${hash.joinToString("") { "%02x".format(it) }}")
+                    val hash = tryExtractHashForEntry(zip, entry)
+                    if (hash != null) {
                         return hash
                     }
                     entry = zip.nextEntry
@@ -80,8 +72,87 @@ data class FirmwarePackage(
             Log.w(TAG, "No application binary found in firmware ZIP")
             null
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to calculate firmware binary hash", e)
+            Log.e(TAG, "Failed to extract firmware binary hash", e)
             null
+        }
+    }
+
+    /**
+     * Try to extract or calculate hash if this entry is an application binary.
+     *
+     * For ESP32, extracts the embedded hash from the last 32 bytes of the binary.
+     * For nRF52, calculates SHA256 of the entire binary.
+     */
+    @Suppress("MagicNumber")
+    private fun tryExtractHashForEntry(
+        zip: ZipInputStream,
+        entry: java.util.zip.ZipEntry,
+    ): ByteArray? {
+        // Find the application binary - try various naming conventions
+        val isApplicationBinary =
+            entry.name.endsWith("application.bin") ||
+                (
+                    entry.name.endsWith(".bin") &&
+                        !entry.name.contains("bootloader") &&
+                        !entry.name.contains("partition") &&
+                        !entry.name.contains("boot_app0") &&
+                        !entry.name.contains("console")
+                )
+
+        if (!isApplicationBinary) {
+            return null
+        }
+
+        // Read entire binary into memory to access last 32 bytes
+        val firmwareData = zip.readBytes()
+        Log.d(TAG, "Read firmware binary: ${entry.name}, size=${firmwareData.size} bytes")
+
+        return when (platform) {
+            RNodePlatform.ESP32 -> {
+                // ESP32 firmware has SHA256 hash embedded in last 32 bytes
+                // This is what rnodeconf's get_partition_hash() extracts
+                if (firmwareData.size < 32) {
+                    Log.e(TAG, "Firmware binary too small to contain embedded hash")
+                    return null
+                }
+
+                // Extract the embedded hash (last 32 bytes)
+                val embeddedHash = firmwareData.takeLast(32).toByteArray()
+
+                // Validate by calculating SHA256 of data minus the last 32 bytes
+                val firmwareWithoutHash = firmwareData.dropLast(32).toByteArray()
+                val calculatedHash = MessageDigest.getInstance("SHA-256").digest(firmwareWithoutHash)
+
+                if (calculatedHash.contentEquals(embeddedHash)) {
+                    Log.d(
+                        TAG,
+                        "ESP32 firmware hash validated: ${embeddedHash.joinToString("") { "%02x".format(it) }}",
+                    )
+                    embeddedHash
+                } else {
+                    // Hash mismatch - firmware may be corrupted or doesn't have embedded hash
+                    Log.w(
+                        TAG,
+                        "ESP32 firmware hash mismatch! Embedded hash doesn't match calculated. " +
+                            "Embedded: ${embeddedHash.joinToString("") { "%02x".format(it) }}, " +
+                            "Calculated: ${calculatedHash.joinToString("") { "%02x".format(it) }}",
+                    )
+                    // Fall back to returning embedded hash anyway (trust the file)
+                    embeddedHash
+                }
+            }
+            RNodePlatform.NRF52 -> {
+                // nRF52 doesn't have embedded hash - calculate SHA256 of entire binary
+                val hash = MessageDigest.getInstance("SHA-256").digest(firmwareData)
+                Log.d(TAG, "nRF52 firmware hash calculated: ${hash.joinToString("") { "%02x".format(it) }}")
+                hash
+            }
+            else -> {
+                // For unknown platforms, calculate SHA256 of entire binary
+                val hash = MessageDigest.getInstance("SHA-256").digest(firmwareData)
+                Log.d(TAG, "Firmware hash calculated: ${hash.joinToString("") { "%02x".format(it) }}")
+                hash
+            }
         }
     }
 
@@ -126,14 +197,13 @@ data class FirmwarePackage(
 
         private val json = Json { ignoreUnknownKeys = true }
 
-        private fun parseFirmwareManifest(jsonString: String): FirmwareManifest? {
-            return try {
+        private fun parseFirmwareManifest(jsonString: String): FirmwareManifest? =
+            try {
                 json.decodeFromString<FirmwareManifest>(jsonString)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse manifest JSON", e)
                 null
             }
-        }
     }
 }
 
@@ -150,21 +220,19 @@ enum class FrequencyBand(
     ;
 
     companion object {
-        fun fromModelCode(model: Byte): FrequencyBand {
-            return when (model.toInt() and 0x0F) {
+        fun fromModelCode(model: Byte): FrequencyBand =
+            when (model.toInt() and 0x0F) {
                 0x01, 0x04, 0x05 -> BAND_868_915
                 0x02, 0x06, 0x07 -> BAND_433
                 else -> UNKNOWN
             }
-        }
 
-        fun fromFilename(filename: String): FrequencyBand {
-            return when {
+        fun fromFilename(filename: String): FrequencyBand =
+            when {
                 filename.contains("_433") -> BAND_433
                 filename.contains("_868") || filename.contains("_915") -> BAND_868_915
                 else -> BAND_868_915 // Default to 868/915
             }
-        }
     }
 }
 
@@ -185,30 +253,42 @@ data class ManifestContent(
 
 @Serializable
 data class ApplicationManifest(
-    val bin_file: String? = null,
-    val dat_file: String? = null,
-    val init_packet_data: InitPacketData? = null,
+    @kotlinx.serialization.SerialName("bin_file")
+    val binFile: String? = null,
+    @kotlinx.serialization.SerialName("dat_file")
+    val datFile: String? = null,
+    @kotlinx.serialization.SerialName("init_packet_data")
+    val initPacketData: InitPacketData? = null,
 )
 
 @Serializable
 data class SoftdeviceManifest(
-    val bin_file: String? = null,
-    val dat_file: String? = null,
+    @kotlinx.serialization.SerialName("bin_file")
+    val binFile: String? = null,
+    @kotlinx.serialization.SerialName("dat_file")
+    val datFile: String? = null,
 )
 
 @Serializable
 data class BootloaderManifest(
-    val bin_file: String? = null,
-    val dat_file: String? = null,
+    @kotlinx.serialization.SerialName("bin_file")
+    val binFile: String? = null,
+    @kotlinx.serialization.SerialName("dat_file")
+    val datFile: String? = null,
 )
 
 @Serializable
 data class InitPacketData(
-    val application_version: Int? = null,
-    val device_revision: Int? = null,
-    val device_type: Int? = null,
-    val firmware_crc16: Int? = null,
-    val softdevice_req: List<Int>? = null,
+    @kotlinx.serialization.SerialName("application_version")
+    val applicationVersion: Int? = null,
+    @kotlinx.serialization.SerialName("device_revision")
+    val deviceRevision: Int? = null,
+    @kotlinx.serialization.SerialName("device_type")
+    val deviceType: Int? = null,
+    @kotlinx.serialization.SerialName("firmware_crc16")
+    val firmwareCrc16: Int? = null,
+    @kotlinx.serialization.SerialName("softdevice_req")
+    val softdeviceReq: List<Int>? = null,
 )
 
 /**
@@ -251,18 +331,15 @@ class FirmwareRepository(
     /**
      * Get all downloaded firmware packages.
      */
-    fun getDownloadedFirmware(): List<FirmwarePackage> {
-        return firmwareDir.listFiles()?.filter { it.extension == "zip" }?.mapNotNull { file ->
+    fun getDownloadedFirmware(): List<FirmwarePackage> =
+        firmwareDir.listFiles()?.filter { it.extension == "zip" }?.mapNotNull { file ->
             parseFirmwareFile(file)
         } ?: emptyList()
-    }
 
     /**
      * Get firmware packages for a specific board.
      */
-    fun getFirmwareForBoard(board: RNodeBoard): List<FirmwarePackage> {
-        return getDownloadedFirmware().filter { it.board == board }
-    }
+    fun getFirmwareForBoard(board: RNodeBoard): List<FirmwarePackage> = getDownloadedFirmware().filter { it.board == board }
 
     /**
      * Get the latest firmware package for a board.
@@ -270,11 +347,10 @@ class FirmwareRepository(
     fun getLatestFirmware(
         board: RNodeBoard,
         frequencyBand: FrequencyBand,
-    ): FirmwarePackage? {
-        return getFirmwareForBoard(board)
+    ): FirmwarePackage? =
+        getFirmwareForBoard(board)
             .filter { it.frequencyBand == frequencyBand }
             .maxByOrNull { it.version }
-    }
 
     /**
      * Check if firmware update is available for a device.
@@ -341,9 +417,7 @@ class FirmwareRepository(
     /**
      * Get total size of cached firmware.
      */
-    fun getCacheSize(): Long {
-        return firmwareDir.listFiles()?.sumOf { it.length() } ?: 0
-    }
+    fun getCacheSize(): Long = firmwareDir.listFiles()?.sumOf { it.length() } ?: 0
 
     private fun parseFirmwareFile(file: File): FirmwarePackage? {
         val name = file.nameWithoutExtension

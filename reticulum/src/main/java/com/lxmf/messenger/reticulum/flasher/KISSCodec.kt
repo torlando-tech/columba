@@ -49,9 +49,7 @@ object KISSCodec {
     fun createFrame(
         command: Byte,
         data: List<Byte>,
-    ): ByteArray {
-        return createFrame(command, data.toByteArray())
-    }
+    ): ByteArray = createFrame(command, data.toByteArray())
 
     private fun addEscaped(
         frame: MutableList<Byte>,
@@ -147,7 +145,7 @@ class KISSFrameParser {
     /**
      * Process a single byte and return a frame if one is completed.
      */
-    @Suppress("MagicNumber")
+    @Suppress("MagicNumber", "ReturnCount")
     fun processByte(byte: Byte): KISSFrame? {
         when {
             byte == 0xC0.toByte() -> {

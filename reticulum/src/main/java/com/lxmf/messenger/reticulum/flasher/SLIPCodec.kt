@@ -48,9 +48,7 @@ object SLIPCodec {
     /**
      * Encode data bytes with SLIP escaping (without framing).
      */
-    fun encodeEscapeChars(data: List<Byte>): List<Byte> {
-        return encodeEscapeChars(data.toByteArray())
-    }
+    fun encodeEscapeChars(data: List<Byte>): List<Byte> = encodeEscapeChars(data.toByteArray())
 
     /**
      * Encode a complete SLIP frame with start and end delimiters.
@@ -66,9 +64,7 @@ object SLIPCodec {
     /**
      * Encode a complete SLIP frame with start and end delimiters.
      */
-    fun encodeFrame(data: List<Byte>): ByteArray {
-        return encodeFrame(data.toByteArray())
-    }
+    fun encodeFrame(data: List<Byte>): ByteArray = encodeFrame(data.toByteArray())
 
     /**
      * Decode a SLIP frame, removing escaping.
@@ -132,7 +128,9 @@ class SLIPFrameParser {
      * Result of processing bytes through the parser.
      */
     sealed class Result {
-        data class Frame(val data: ByteArray) : Result() {
+        data class Frame(
+            val data: ByteArray,
+        ) : Result() {
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true
                 if (other !is Frame) return false
@@ -153,7 +151,7 @@ class SLIPFrameParser {
      * @param byte The byte to process
      * @return Result indicating if a frame was completed
      */
-    @Suppress("MagicNumber")
+    @Suppress("MagicNumber", "ReturnCount")
     fun processByte(byte: Byte): Result {
         when {
             byte == 0xC0.toByte() -> {

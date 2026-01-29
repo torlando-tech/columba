@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.zip.ZipInputStream
 
 /**
@@ -39,7 +40,9 @@ class ESPToolFlasher(
      * This happens with ESP32-S3 native USB devices that don't support
      * automatic reset via DTR/RTS signals.
      */
-    class ManualBootModeRequired(message: String) : Exception(message)
+    class ManualBootModeRequired(
+        message: String,
+    ) : Exception(message)
 
     companion object {
         private const val TAG = "Columba:ESPTool"
@@ -59,19 +62,23 @@ class ESPToolFlasher(
         private const val ESP_FLASH_BEGIN: Byte = 0x02
         private const val ESP_FLASH_DATA: Byte = 0x03
         private const val ESP_FLASH_END: Byte = 0x04
-        private const val ESP_MEM_BEGIN: Byte = 0x05
-        private const val ESP_MEM_END: Byte = 0x06
-        private const val ESP_MEM_DATA: Byte = 0x07
+
+        // Memory commands (reserved for future use with stub loader)
+        // private const val ESP_MEM_BEGIN: Byte = 0x05
+        // private const val ESP_MEM_END: Byte = 0x06
+        // private const val ESP_MEM_DATA: Byte = 0x07
         private const val ESP_SYNC: Byte = 0x08
         private const val ESP_WRITE_REG: Byte = 0x09
         private const val ESP_READ_REG: Byte = 0x0A
-        private const val ESP_SPI_SET_PARAMS: Byte = 0x0B
+
+        // private const val ESP_SPI_SET_PARAMS: Byte = 0x0B // Reserved
         private const val ESP_SPI_ATTACH: Byte = 0x0D
         private const val ESP_CHANGE_BAUDRATE: Byte = 0x0F
-        private const val ESP_FLASH_DEFL_BEGIN: Byte = 0x10
-        private const val ESP_FLASH_DEFL_DATA: Byte = 0x11
-        private const val ESP_FLASH_DEFL_END: Byte = 0x12
-        private const val ESP_SPI_FLASH_MD5: Byte = 0x13
+        // Deflate commands (reserved - require stub loader)
+        // private const val ESP_FLASH_DEFL_BEGIN: Byte = 0x10
+        // private const val ESP_FLASH_DEFL_DATA: Byte = 0x11
+        // private const val ESP_FLASH_DEFL_END: Byte = 0x12
+        // private const val ESP_SPI_FLASH_MD5: Byte = 0x13
 
         // SLIP constants
         private const val SLIP_END: Byte = 0xC0.toByte()
@@ -101,8 +108,8 @@ class ESPToolFlasher(
         /**
          * Check if a board uses ESP32-S3 (different bootloader address).
          */
-        fun isEsp32S3(board: RNodeBoard): Boolean {
-            return when (board) {
+        fun isEsp32S3(board: RNodeBoard): Boolean =
+            when (board) {
                 RNodeBoard.TBEAM_S, // T-Beam Supreme
                 RNodeBoard.TDECK, // T-Deck
                 RNodeBoard.HELTEC_V3, // Heltec LoRa32 v3
@@ -110,14 +117,11 @@ class ESPToolFlasher(
                 -> true
                 else -> false
             }
-        }
 
         /**
          * Get the bootloader offset for a board.
          */
-        fun getBootloaderOffset(board: RNodeBoard): Int {
-            return if (isEsp32S3(board)) OFFSET_BOOTLOADER_ESP32_S3 else OFFSET_BOOTLOADER_ESP32
-        }
+        fun getBootloaderOffset(board: RNodeBoard): Int = if (isEsp32S3(board)) OFFSET_BOOTLOADER_ESP32_S3 else OFFSET_BOOTLOADER_ESP32
 
         // Bootloader entry timing
         private const val RESET_DELAY_MS = 100L
@@ -137,9 +141,7 @@ class ESPToolFlasher(
         fun isNativeUsbDevice(
             vendorId: Int,
             productId: Int,
-        ): Boolean {
-            return vendorId == ESPRESSIF_VID && productId == ESP32_S3_USB_JTAG_SERIAL_PID
-        }
+        ): Boolean = vendorId == ESPRESSIF_VID && productId == ESP32_S3_USB_JTAG_SERIAL_PID
     }
 
     private var inBootloader = false
@@ -173,6 +175,7 @@ class ESPToolFlasher(
      * @return true if flashing succeeded
      * @throws ManualBootModeRequired if the device needs manual bootloader entry
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun flash(
         firmwareZipStream: InputStream,
         deviceId: Int,
@@ -469,7 +472,7 @@ class ESPToolFlasher(
         if (drainedCount > 0) {
             val hex =
                 drained.take(minOf(drainedCount, 64)).joinToString(" ") {
-                    String.format("%02X", it.toInt() and 0xFF)
+                    String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF)
                 }
             Log.d(TAG, "Drained $drainedCount bytes before sync: $hex")
         }
@@ -680,7 +683,7 @@ class ESPToolFlasher(
         // Calculate timeout based on erase size - larger regions need more time
         val eraseMB = eraseSize.toDouble() / (1024 * 1024)
         val eraseTimeout = maxOf(MIN_ERASE_TIMEOUT_MS, (eraseMB * ERASE_TIMEOUT_PER_MB_MS).toLong())
-        Log.d(TAG, "Flash begin with ${eraseTimeout}ms timeout for ${String.format("%.2f", eraseMB)}MB erase")
+        Log.d(TAG, "Flash begin with ${eraseTimeout}ms timeout for ${String.format(Locale.ROOT, "%.2f", eraseMB)}MB erase")
 
         val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0, eraseTimeout)
         if (beginResponse == null) {
@@ -885,6 +888,7 @@ class ESPToolFlasher(
     /**
      * Read and decode a response from the bootloader.
      */
+    @Suppress("CyclomaticComplexMethod")
     private suspend fun readResponse(
         expectedCommand: Byte,
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
@@ -909,7 +913,7 @@ class ESPToolFlasher(
                     // Log first bytes received for debugging
                     val hex =
                         readBuffer.take(bytesRead).joinToString(" ") {
-                            String.format("%02X", it.toInt() and 0xFF)
+                            String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF)
                         }
                     Log.d(TAG, "Received $bytesRead bytes: $hex")
                 }
@@ -997,9 +1001,7 @@ class ESPToolFlasher(
      * Calculate MD5 hash for verification.
      */
     @Suppress("unused")
-    private fun calculateMd5(data: ByteArray): ByteArray {
-        return MessageDigest.getInstance("MD5").digest(data)
-    }
+    private fun calculateMd5(data: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(data)
 
     /**
      * Put a 32-bit value in little-endian format.
@@ -1030,8 +1032,10 @@ class ESPToolFlasher(
             while (entry != null) {
                 val name = entry.name.lowercase()
                 when {
-                    name.endsWith(".bin") && !name.contains("bootloader") &&
-                        !name.contains("partition") && !name.contains("boot_app0") -> {
+                    name.endsWith(".bin") &&
+                        !name.contains("bootloader") &&
+                        !name.contains("partition") &&
+                        !name.contains("boot_app0") -> {
                         application = zip.readBytes()
                     }
                     name.contains("bootloader") -> {

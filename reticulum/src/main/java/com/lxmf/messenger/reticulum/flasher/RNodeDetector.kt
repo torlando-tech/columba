@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Detects RNode devices over USB and retrieves their capabilities.
@@ -20,6 +21,7 @@ import java.security.MessageDigest
  *
  * Based on the device detection code in rnode.js from rnode-flasher.
  */
+@Suppress("TooManyFunctions")
 class RNodeDetector(
     private val usbBridge: KotlinUSBBridge,
 ) {
@@ -34,7 +36,6 @@ class RNodeDetector(
     }
 
     private val frameParser = KISSFrameParser()
-    private val pendingResponses = mutableMapOf<Byte, ByteArray?>()
 
     /**
      * Detect if the connected device is an RNode.
@@ -150,12 +151,11 @@ class RNodeDetector(
     /**
      * Read the ROM/EEPROM contents.
      */
-    private suspend fun readRom(): ByteArray? {
-        return sendCommandAndWait(
+    private suspend fun readRom(): ByteArray? =
+        sendCommandAndWait(
             RNodeConstants.CMD_ROM_READ,
             byteArrayOf(0x00),
         )
-    }
 
     /**
      * Parse ROM data into structured info.
@@ -377,7 +377,7 @@ class RNodeDetector(
                 Log.d(
                     TAG,
                     "Target firmware hash (EEPROM): ${targetHash.joinToString("") {
-                        String.format("%02x", it.toInt() and 0xFF)
+                        String.format(Locale.ROOT, "%02x", it.toInt() and 0xFF)
                     }}",
                 )
             }
@@ -389,7 +389,7 @@ class RNodeDetector(
                 Log.d(
                     TAG,
                     "Actual firmware hash (calculated): ${hash.joinToString("") {
-                        String.format("%02x", it.toInt() and 0xFF)
+                        String.format(Locale.ROOT, "%02x", it.toInt() and 0xFF)
                     }}",
                 )
                 return@withContext hash
@@ -412,7 +412,7 @@ class RNodeDetector(
             Log.d(
                 TAG,
                 "Setting firmware hash: ${hash.joinToString("") {
-                    String.format("%02x", it.toInt() and 0xFF)
+                    String.format(Locale.ROOT, "%02x", it.toInt() and 0xFF)
                 }}",
             )
 
@@ -466,8 +466,8 @@ class RNodeDetector(
                 val md5 = MessageDigest.getInstance("MD5")
                 val checksum = md5.digest(infoChunk)
 
-                Log.d(TAG, "Info chunk: ${infoChunk.joinToString(" ") { String.format("%02X", it.toInt() and 0xFF) }}")
-                Log.d(TAG, "Checksum: ${checksum.joinToString(" ") { String.format("%02X", it.toInt() and 0xFF) }}")
+                Log.d(TAG, "Info chunk: ${infoChunk.joinToString(" ") { String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF) }}")
+                Log.d(TAG, "Checksum: ${checksum.joinToString(" ") { String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF) }}")
 
                 // Blank signature (128 zeros)
                 val signature = ByteArray(SIGNATURE_LENGTH) { 0x00 }
@@ -577,7 +577,7 @@ class RNodeDetector(
             if (isAllZeros) {
                 Log.w(TAG, "Firmware hash is all zeros - this is unexpected, hash should be pre-calculated from firmware binary")
             } else {
-                Log.d(TAG, "Using firmware hash: ${firmwareHash.joinToString("") { String.format("%02x", it.toInt() and 0xFF) }}")
+                Log.d(TAG, "Using firmware hash: ${firmwareHash.joinToString("") { String.format(Locale.ROOT, "%02x", it.toInt() and 0xFF) }}")
             }
 
             if (!setFirmwareHash(firmwareHash)) {
@@ -759,10 +759,11 @@ class RNodeDetector(
      * - 0xX1, 0xX4, 0xX5: 868/915 MHz variants
      * - 0xX2, 0xX6, 0xX7: 433 MHz variants
      *
-     * @param board The board type
+     * @param board The board type (unused - model code is based solely on band)
      * @param band The frequency band
      * @return The model code byte
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun getModelForBoardAndBand(
         board: RNodeBoard,
         band: FrequencyBand,
@@ -783,14 +784,13 @@ class RNodeDetector(
      * Convert an integer to a 4-byte big-endian byte array.
      */
     @Suppress("MagicNumber")
-    private fun intToBytesBigEndian(value: Int): ByteArray {
-        return byteArrayOf(
+    private fun intToBytesBigEndian(value: Int): ByteArray =
+        byteArrayOf(
             ((value shr 24) and 0xFF).toByte(),
             ((value shr 16) and 0xFF).toByte(),
             ((value shr 8) and 0xFF).toByte(),
             (value and 0xFF).toByte(),
         )
-    }
 
     private data class RomInfo(
         val product: Byte,

@@ -176,6 +176,7 @@ class NordicDFUFlasher(
     /**
      * Send the firmware image using DFU protocol.
      */
+    @Suppress("ReturnCount")
     private suspend fun dfuSendImage(
         firmware: ByteArray,
         initPacket: ByteArray,
@@ -411,24 +412,22 @@ class NordicDFUFlasher(
     /**
      * Convert int32 to 4 bytes (little-endian).
      */
-    private fun int32ToBytes(value: Int): List<Byte> {
-        return listOf(
+    private fun int32ToBytes(value: Int): List<Byte> =
+        listOf(
             (value and 0xFF).toByte(),
             ((value shr 8) and 0xFF).toByte(),
             ((value shr 16) and 0xFF).toByte(),
             ((value shr 24) and 0xFF).toByte(),
         )
-    }
 
     /**
      * Convert int16 to 2 bytes (little-endian).
      */
-    private fun int16ToBytes(value: Int): List<Byte> {
-        return listOf(
+    private fun int16ToBytes(value: Int): List<Byte> =
+        listOf(
             (value and 0xFF).toByte(),
             ((value shr 8) and 0xFF).toByte(),
         )
-    }
 
     /**
      * Parse firmware ZIP file to extract firmware and init packet.

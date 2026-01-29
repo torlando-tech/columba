@@ -42,6 +42,7 @@ import java.io.InputStream
  * }
  * ```
  */
+@Suppress("TooManyFunctions")
 class RNodeFlasher(
     private val context: Context,
 ) {
@@ -66,11 +67,18 @@ class RNodeFlasher(
     sealed class FlashState {
         data object Idle : FlashState()
 
-        data class Detecting(val message: String) : FlashState()
+        data class Detecting(
+            val message: String,
+        ) : FlashState()
 
-        data class Progress(val percent: Int, val message: String) : FlashState()
+        data class Progress(
+            val percent: Int,
+            val message: String,
+        ) : FlashState()
 
-        data class Provisioning(val message: String) : FlashState()
+        data class Provisioning(
+            val message: String,
+        ) : FlashState()
 
         data class NeedsManualReset(
             val board: RNodeBoard,
@@ -99,24 +107,25 @@ class RNodeFlasher(
             }
         }
 
-        data class Complete(val deviceInfo: RNodeDeviceInfo?) : FlashState()
+        data class Complete(
+            val deviceInfo: RNodeDeviceInfo?,
+        ) : FlashState()
 
-        data class Error(val message: String, val recoverable: Boolean = true) : FlashState()
+        data class Error(
+            val message: String,
+            val recoverable: Boolean = true,
+        ) : FlashState()
     }
 
     /**
      * Get list of connected USB devices that could be RNodes.
      */
-    fun getConnectedDevices(): List<UsbDeviceInfo> {
-        return usbBridge.getConnectedUsbDevices()
-    }
+    fun getConnectedDevices(): List<UsbDeviceInfo> = usbBridge.getConnectedUsbDevices()
 
     /**
      * Check if we have USB permission for a device.
      */
-    fun hasPermission(deviceId: Int): Boolean {
-        return usbBridge.hasPermission(deviceId)
-    }
+    fun hasPermission(deviceId: Int): Boolean = usbBridge.hasPermission(deviceId)
 
     /**
      * Request USB permission for a device.
@@ -220,13 +229,13 @@ class RNodeFlasher(
                     }
 
                 if (success) {
+                    // Calculate the firmware hash from the binary for provisioning
+                    val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
+
                     if (isNativeUsb && firmwarePackage.platform == RNodePlatform.ESP32) {
                         // ESP32-S3 native USB doesn't auto-reboot reliably
                         // User needs to manually reset the device, then we'll provision
                         Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
-
-                        // Calculate the firmware hash from the binary for provisioning
-                        val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
 
                         _flashState.value =
                             FlashState.NeedsManualReset(
@@ -235,14 +244,25 @@ class RNodeFlasher(
                                 firmwareHash,
                             )
                     } else {
-                        // Standard flow: verify and complete
-                        _flashState.value = FlashState.Progress(98, "Verifying flash...")
+                        // Standard flow: wait for reboot, then provision
+                        _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
 
-                        // Give device time to boot
-                        kotlinx.coroutines.delay(2000)
+                        // Give device time to boot after esptool hard reset
+                        kotlinx.coroutines.delay(5000)
 
-                        val detectedInfo = detectDevice(deviceId)
-                        _flashState.value = FlashState.Complete(detectedInfo)
+                        // Provision the device (write EEPROM and set firmware hash)
+                        val provisionSuccess =
+                            provisionDevice(
+                                deviceId,
+                                firmwarePackage.board,
+                                FrequencyBand.fromFilename(firmwarePackage.zipFile.name),
+                                firmwareHash,
+                            )
+
+                        if (!provisionSuccess) {
+                            Log.w(TAG, "Provisioning failed, but flash was successful")
+                            // Don't fail the whole operation - flash succeeded
+                        }
                     }
                 }
 
@@ -311,14 +331,36 @@ class RNodeFlasher(
                 if (success) {
                     if (isNativeUsb && info.platform == RNodePlatform.ESP32) {
                         // ESP32-S3 native USB doesn't auto-reboot reliably
+                        // User needs to manually reset the device, then we'll provision
                         Log.i(TAG, "Flash complete. Native USB device needs manual reset for provisioning.")
                         _flashState.value =
                             FlashState.NeedsManualReset(
                                 info.board,
                                 "Flashing complete! Please press the RST button on your ${info.board.displayName}.",
+                                // No firmware hash available from stream - will be obtained from device
+                                null,
                             )
                     } else {
-                        _flashState.value = FlashState.Complete(info)
+                        // Standard flow: wait for reboot, then provision
+                        _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
+
+                        // Give device time to boot after esptool hard reset
+                        kotlinx.coroutines.delay(5000)
+
+                        // Provision the device (write EEPROM and set firmware hash)
+                        // Note: firmwareHash is null - will be obtained from device
+                        val provisionSuccess =
+                            provisionDevice(
+                                deviceId,
+                                info.board,
+                                FrequencyBand.fromModelCode(info.model),
+                                null,
+                            )
+
+                        if (!provisionSuccess) {
+                            Log.w(TAG, "Provisioning failed, but flash was successful")
+                            // Don't fail the whole operation - flash succeeded
+                        }
                     }
                 }
 
@@ -333,24 +375,22 @@ class RNodeFlasher(
     private suspend fun flashNrf52(
         deviceId: Int,
         firmwarePackage: FirmwarePackage,
-    ): Boolean {
-        return nordicDfuFlasher.flash(
+    ): Boolean =
+        nordicDfuFlasher.flash(
             firmwarePackage.getInputStream(),
             deviceId,
             createProgressCallback(),
         )
-    }
 
     private suspend fun flashNrf52Direct(
         deviceId: Int,
         firmwareStream: InputStream,
-    ): Boolean {
-        return nordicDfuFlasher.flash(
+    ): Boolean =
+        nordicDfuFlasher.flash(
             firmwareStream,
             deviceId,
             createProgressCallback(),
         )
-    }
 
     private suspend fun flashEsp32(
         deviceId: Int,
@@ -474,8 +514,8 @@ class RNodeFlasher(
         }
     }
 
-    private fun createProgressCallback(): NordicDFUFlasher.ProgressCallback {
-        return object : NordicDFUFlasher.ProgressCallback {
+    private fun createProgressCallback(): NordicDFUFlasher.ProgressCallback =
+        object : NordicDFUFlasher.ProgressCallback {
             override fun onProgress(
                 percent: Int,
                 message: String,
@@ -491,10 +531,9 @@ class RNodeFlasher(
                 // Complete state is set by the main flash function
             }
         }
-    }
 
-    private fun createEspProgressCallback(): ESPToolFlasher.ProgressCallback {
-        return object : ESPToolFlasher.ProgressCallback {
+    private fun createEspProgressCallback(): ESPToolFlasher.ProgressCallback =
+        object : ESPToolFlasher.ProgressCallback {
             override fun onProgress(
                 percent: Int,
                 message: String,
@@ -510,7 +549,6 @@ class RNodeFlasher(
                 // Complete state is set by the main flash function
             }
         }
-    }
 
     /**
      * Download and flash firmware for a board.
@@ -630,8 +668,8 @@ class RNodeFlasher(
      * Get console image input stream from assets.
      * The console image provides the web interface for ESP32-based RNodes.
      */
-    fun getConsoleImageStream(): InputStream? {
-        return try {
+    fun getConsoleImageStream(): InputStream? =
+        try {
             // Check for bundled console image
             val consoleFile = File(context.filesDir, "console_image.bin")
             if (consoleFile.exists()) {
@@ -644,7 +682,6 @@ class RNodeFlasher(
             Log.w(TAG, "Console image not available: ${e.message}")
             null
         }
-    }
 
     /**
      * Provision a freshly flashed device.
@@ -661,6 +698,7 @@ class RNodeFlasher(
      * @param firmwareHash The pre-calculated SHA256 hash of the firmware binary (optional)
      * @return true if provisioning succeeded
      */
+    @Suppress("LoopWithTooManyJumpStatements", "LongMethod", "CyclomaticComplexMethod")
     suspend fun provisionDevice(
         deviceId: Int,
         board: RNodeBoard,

@@ -245,21 +245,25 @@ class FirmwareDownloader {
 @Serializable
 data class GitHubRelease(
     val id: Long,
-    val tag_name: String,
+    @kotlinx.serialization.SerialName("tag_name")
+    val tagName: String,
     val name: String,
     val body: String? = null,
     val draft: Boolean = false,
     val prerelease: Boolean = false,
-    val created_at: String,
-    val published_at: String? = null,
+    @kotlinx.serialization.SerialName("created_at")
+    val createdAt: String,
+    @kotlinx.serialization.SerialName("published_at")
+    val publishedAt: String? = null,
     val assets: List<GitHubAsset> = emptyList(),
-    val html_url: String,
+    @kotlinx.serialization.SerialName("html_url")
+    val htmlUrl: String,
 ) {
     /**
      * Extract version number from tag name.
      */
     val version: String
-        get() = tag_name.removePrefix("v").removePrefix("V")
+        get() = tagName.removePrefix("v").removePrefix("V")
 }
 
 /**
@@ -270,13 +274,14 @@ data class GitHubAsset(
     val id: Long,
     val name: String,
     val size: Long,
-    val download_count: Int = 0,
-    val browser_download_url: String,
-    val content_type: String? = null,
-    val created_at: String,
-    val updated_at: String,
-) {
-    // Alias for cleaner access
-    val browserDownloadUrl: String
-        get() = browser_download_url
-}
+    @kotlinx.serialization.SerialName("download_count")
+    val downloadCount: Int = 0,
+    @kotlinx.serialization.SerialName("browser_download_url")
+    val browserDownloadUrl: String,
+    @kotlinx.serialization.SerialName("content_type")
+    val contentType: String? = null,
+    @kotlinx.serialization.SerialName("created_at")
+    val createdAt: String,
+    @kotlinx.serialization.SerialName("updated_at")
+    val updatedAt: String,
+)

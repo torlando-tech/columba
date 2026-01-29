@@ -406,28 +406,33 @@ class ESPToolFlasher(
 
         if (currentBoardIsS3) {
             // ESP32-S3 USB-JTAG-Serial reset sequence (from esptool USBJTAGSerialReset)
-            // Note: For native USB, DTR/RTS are virtual and may not work with factory firmware.
-            // The ROM bootloader should support this, but if device isn't in bootloader yet,
-            // it depends on the running firmware supporting these signals.
+            // For native USB, the ROM bootloader watches for a specific PATTERN of DTR/RTS
+            // transitions to enter download mode - it's not about sampling IO0 state.
+            // The sequence must traverse (1,1) state instead of (0,0) for reliable triggering.
             Log.d(TAG, "S3 reset: Setting idle state (DTR=false, RTS=false)")
             usbBridge.setRts(false)
             usbBridge.setDtr(false) // Idle state
-            delay(RESET_DELAY_MS_USB)
+            delay(RESET_DELAY_MS) // esptool uses 100ms
 
-            Log.d(TAG, "S3 reset: Setting IO0=LOW (DTR=true)")
-            usbBridge.setDtr(true) // IO0=LOW (boot mode select)
+            Log.d(TAG, "S3 reset: Setting IO0 (DTR=true)")
+            usbBridge.setDtr(true) // Set IO0 signal
             usbBridge.setRts(false)
-            delay(RESET_DELAY_MS_USB)
+            delay(RESET_DELAY_MS) // esptool uses 100ms
 
-            Log.d(TAG, "S3 reset: Entering reset (RTS=true, keeping DTR=true)")
-            usbBridge.setRts(true) // EN=LOW (enter reset)
-            usbBridge.setDtr(true) // Keep IO0=LOW during reset! (was incorrectly false)
-            delay(RESET_DELAY_MS_USB)
+            // Enter reset - traverses (1,1) state for reliable USB-JTAG-Serial triggering
+            Log.d(TAG, "S3 reset: Entering reset (RTS=true)")
+            usbBridge.setRts(true) // Reset chip
 
-            Log.d(TAG, "S3 reset: Exiting reset (RTS=false, DTR=false)")
-            usbBridge.setRts(false) // EN=HIGH (exit reset - IO0 still LOW, enters bootloader)
-            delay(RESET_DELAY_MS_USB / 2)
-            usbBridge.setDtr(false) // Now release IO0
+            // Critical: Release DTR while still in reset, then set RTS again
+            // This specific sequence triggers download mode on USB-JTAG-Serial
+            Log.d(TAG, "S3 reset: Releasing DTR while in reset (DTR=false, RTS=true)")
+            usbBridge.setDtr(false)
+            usbBridge.setRts(true) // Windows workaround: propagates DTR on usbser.sys driver
+            delay(RESET_DELAY_MS) // esptool uses 100ms
+
+            Log.d(TAG, "S3 reset: Exiting reset (RTS=false)")
+            usbBridge.setDtr(false) // Ensure DTR is false
+            usbBridge.setRts(false) // Release reset - chip exits to bootloader
         } else {
             // Classic ESP32 reset sequence (from esptool ClassicReset)
             usbBridge.setDtr(false) // IO0=HIGH
@@ -446,9 +451,23 @@ class ESPToolFlasher(
         if (currentBoardIsS3) {
             Log.d(TAG, "S3 reset: Waiting for USB re-enumeration...")
             delay(500) // Give time for ROM bootloader USB to come up
+
+            // Read boot log like esptool does - look for "waiting for download" message
+            // This helps detect if bootloader mode was entered successfully
+            val bootLog = ByteArray(512)
+            val bootLogLen = usbBridge.readBlocking(bootLog, 200)
+            if (bootLogLen > 0) {
+                val bootLogStr = bootLog.take(bootLogLen).toByteArray().decodeToString()
+                Log.d(TAG, "S3 reset: Boot log ($bootLogLen bytes): $bootLogStr")
+                if (bootLogStr.contains("waiting for download", ignoreCase = true)) {
+                    Log.d(TAG, "S3 reset: Detected 'waiting for download' - bootloader mode confirmed")
+                }
+            } else {
+                Log.d(TAG, "S3 reset: No boot log received")
+            }
         }
 
-        // Clear any garbage data from the port
+        // Clear any remaining garbage data from the port
         delay(BOOT_DELAY_MS)
         usbBridge.drain(if (currentBoardIsS3) 300 else 200)
 
@@ -529,8 +548,11 @@ class ESPToolFlasher(
                     syncData[i] = 0x55
                 }
 
-                // Try multiple times
+                // Try multiple times (esptool uses 5 attempts with 50ms delays)
                 repeat(10) { attempt ->
+                    // Flush input/output before each attempt (like esptool's flush_input/flushOutput)
+                    usbBridge.drain(50)
+
                     val response = sendCommand(ESP_SYNC, syncData, 0)
 
                     if (response != null && response.isNotEmpty()) {
@@ -543,7 +565,7 @@ class ESPToolFlasher(
                         return@withTimeoutOrNull true
                     }
 
-                    delay(100)
+                    delay(50) // esptool uses 50ms between attempts
                 }
 
                 Log.e(TAG, "Sync failed after 10 attempts")

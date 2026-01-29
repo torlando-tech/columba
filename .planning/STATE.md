@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.7.4-beta Bug Fixes - Phase 4 (Relay Loop Resolution)
+**Current focus:** v0.7.4-beta Bug Fixes - Phase 4 (Relay Loop Resolution) Complete
 
 ## Current Position
 
 Phase: 4 of 6 (Relay Loop Resolution)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-29 - Phase 3 complete, starting Phase 4
+Plan: 01 of 01 complete
+Status: Phase complete
+Last activity: 2026-01-29 - Completed 04-01-PLAN.md
 
-Progress: [███░░░░░░░░░] 25% — Phase 3 complete
+Progress: [████░░░░░░░░] 33% — Phase 4 complete
 
 ## Milestone Summary
 
@@ -23,22 +23,23 @@ Progress: [███░░░░░░░░░] 25% — Phase 3 complete
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 3 | ANR Elimination | ANR-01 | **Complete** |
-| 4 | Relay Loop Resolution | RELAY-03 | Ready to plan |
+| 4 | Relay Loop Resolution | RELAY-03 | **Complete** |
 | 5 | Memory Optimization | MEM-01 | Not started |
 | 6 | Native Stability Verification | NATIVE-01 | Not started |
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: -
-- Total execution time: -
+- Total plans completed: 2
+- Average duration: ~54 min
+- Total execution time: ~54 min (Phase 4)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 3 | 1 | - | - |
+| 4 | 1 | 54 min | 54 min |
 
 *Updated after each plan completion*
 
@@ -50,6 +51,7 @@ Progress: [███░░░░░░░░░] 25% — Phase 3 complete
 - Still happening on v0.7.3-beta despite fix
 - Stacktrace: `PropagationNodeManager.recordSelection` line 840
 - Seer suggests: Use `SharingStarted.WhileSubscribed` instead of eager StateFlow
+- **FIXED in Phase 4** - Changed to WhileSubscribed(5000L), pending post-deployment verification
 
 **COLUMBA-M (ANR):**
 - `DebugViewModel.<init>` -> `loadIdentityData` -> `getOrCreateDestination`
@@ -61,7 +63,10 @@ Progress: [███░░░░░░░░░] 25% — Phase 3 complete
 
 ### Decisions
 
-Decisions logged in PROJECT.md Key Decisions table.
+| Decision | Rationale | Phase |
+|----------|-----------|-------|
+| WhileSubscribed(5000L) for relay StateFlows | Standard Android timeout - survives screen rotation without restarting upstream | 04-01 |
+| Keep state machine, debounce, loop detection | Defense-in-depth - WhileSubscribed addresses root cause, guards handle edge cases | 04-01 |
 
 ### Roadmap Evolution
 
@@ -77,13 +82,20 @@ v0.7.3 milestone complete. Next milestone (v0.7.4) will address:
 - **Make discovered interfaces page event-driven** (ui)
 - **Refactor PropagationNodeManager to extract components** (architecture)
 
+### Patterns Established
+
+- **WhileSubscribed(5000L)**: Standard timeout for Room-backed StateFlows that should stop collecting when UI is not observing
+- **Turbine test pattern**: Keep collector active inside test block when testing code that accesses StateFlow.value with WhileSubscribed
+
 ### Blockers/Concerns
 
-None blocking — ready for next milestone.
+**Post-deployment verification needed:**
+- RELAY-03-C: 48-hour zero "Relay selection loop detected" warnings in Sentry
+- Fix is based on Sentry AI (Seer) recommendation + Android best practices
 
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Phase 3 complete, starting Phase 4
+Stopped at: Completed 04-01-PLAN.md (Phase 4 complete)
 Resume file: None
-Next: `/gsd:plan-phase 4`
+Next: Phase 5 (Memory Optimization) or Phase 6 (Native Stability Verification)

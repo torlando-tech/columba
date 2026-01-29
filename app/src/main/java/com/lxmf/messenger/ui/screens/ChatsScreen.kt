@@ -54,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -189,6 +190,7 @@ fun ChatsScreen(
                         val hapticFeedback = LocalHapticFeedback.current
                         var showMenu by remember { mutableStateOf(false) }
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
+                        val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -196,7 +198,9 @@ fun ChatsScreen(
                                 conversation = conversation,
                                 isSaved = isSaved,
                                 onClick = {
-                                    sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    if (pendingSharedText != null) {
+                                        sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    }
                                     onChatClick(conversation.peerHash, conversation.displayName)
                                 },
                                 onLongPress = {

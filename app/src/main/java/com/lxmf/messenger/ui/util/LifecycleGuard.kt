@@ -14,7 +14,6 @@ import androidx.lifecycle.LifecycleOwner
  * This guard prevents those crashes by checking if the activity is at least STARTED.
  */
 object LifecycleGuard {
-
     /**
      * Checks if the lifecycle owner is in a state where window-based UI can be shown safely.
      *
@@ -50,4 +49,3 @@ object LifecycleGuard {
         return state.isAtLeast(Lifecycle.State.STARTED)
     }
 }
-

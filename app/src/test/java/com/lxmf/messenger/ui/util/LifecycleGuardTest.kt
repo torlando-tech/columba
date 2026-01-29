@@ -2,7 +2,6 @@ package com.lxmf.messenger.ui.util
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,7 +19,6 @@ import org.mockito.Mockito.`when`
  * the activity is at least in the STARTED state.
  */
 class LifecycleGuardTest {
-
     // ========== State-based Tests ==========
 
     @Test
@@ -124,11 +122,12 @@ class LifecycleGuardTest {
 
     @Test
     fun `all lifecycle states below STARTED are inactive for windows`() {
-        val inactiveStates = listOf(
-            Lifecycle.State.DESTROYED,
-            Lifecycle.State.INITIALIZED,
-            Lifecycle.State.CREATED,
-        )
+        val inactiveStates =
+            listOf(
+                Lifecycle.State.DESTROYED,
+                Lifecycle.State.INITIALIZED,
+                Lifecycle.State.CREATED,
+            )
 
         inactiveStates.forEach { state ->
             assertFalse(
@@ -140,10 +139,11 @@ class LifecycleGuardTest {
 
     @Test
     fun `all lifecycle states at or above STARTED are active for windows`() {
-        val activeStates = listOf(
-            Lifecycle.State.STARTED,
-            Lifecycle.State.RESUMED,
-        )
+        val activeStates =
+            listOf(
+                Lifecycle.State.STARTED,
+                Lifecycle.State.RESUMED,
+            )
 
         activeStates.forEach { state ->
             assertTrue(

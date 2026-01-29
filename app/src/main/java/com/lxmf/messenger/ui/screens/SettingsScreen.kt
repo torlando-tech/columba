@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
-import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
@@ -60,11 +59,13 @@ import com.lxmf.messenger.ui.screens.settings.cards.MessageDeliveryRetrievalCard
 import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
+import com.lxmf.messenger.ui.screens.settings.cards.RNodeFlasherCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReport
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.DeviceInfoUtil
@@ -88,6 +89,7 @@ fun SettingsScreen(
     onNavigateToCustomThemes: () -> Unit = {},
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
+    onNavigateToFlasher: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -380,6 +382,12 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.DATA_MIGRATION.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.DATA_MIGRATION, it) },
                     onNavigateToMigration = onNavigateToMigration,
+                )
+
+                RNodeFlasherCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.RNODE_FLASHER.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.RNODE_FLASHER, it) },
+                    onOpenFlasher = onNavigateToFlasher,
                 )
 
                 // About section

@@ -78,7 +78,7 @@ interface UsbConnectionListener {
  *
  * @property context Application context for USB access
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class KotlinUSBBridge(
     private val context: Context,
 ) : SerialInputOutputManager.Listener {
@@ -144,11 +144,10 @@ class KotlinUSBBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinUSBBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinUSBBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinUSBBridge(context.applicationContext).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -158,10 +157,12 @@ class KotlinUSBBridge(
     private var currentDriver: UsbSerialDriver? = null
     private var currentPort: UsbSerialPort? = null
     private var ioManager: SerialInputOutputManager? = null
+    private var ioManagerFuture: java.util.concurrent.Future<*>? = null
     private var connectedDeviceId: Int? = null
 
     // Thread-safe state flags
     private val isConnected = AtomicBoolean(false)
+    private val rawModeEnabled = AtomicBoolean(false)
 
     // Read buffer for non-blocking reads
     private val readBuffer = ConcurrentLinkedQueue<Byte>()
@@ -471,8 +472,8 @@ class KotlinUSBBridge(
         return devices
     }
 
-    private fun getDriverTypeName(driver: UsbSerialDriver): String {
-        return when (driver) {
+    private fun getDriverTypeName(driver: UsbSerialDriver): String =
+        when (driver) {
             is FtdiSerialDriver -> "FTDI"
             is Cp21xxSerialDriver -> "CP210x"
             is ProlificSerialDriver -> "PL2303"
@@ -480,7 +481,6 @@ class KotlinUSBBridge(
             is CdcAcmSerialDriver -> "CDC-ACM"
             else -> "Unknown"
         }
-    }
 
     private fun Int.toHexString(): String = "0x${this.toString(16).uppercase()}"
 
@@ -660,7 +660,7 @@ class KotlinUSBBridge(
             val manager = SerialInputOutputManager(port, this)
             manager.readTimeout = 100 // Small timeout to reduce CPU usage
             ioManager = manager
-            ioExecutor.submit(manager)
+            ioManagerFuture = ioExecutor.submit(manager)
 
             Log.i(TAG, "Connected to USB device $deviceId (${getDriverTypeName(driver)}) at $baudRate baud")
 
@@ -692,6 +692,8 @@ class KotlinUSBBridge(
         // Stop I/O manager
         ioManager?.stop()
         ioManager = null
+        ioManagerFuture?.cancel(true)
+        ioManagerFuture = null
 
         // Close port
         try {
@@ -759,6 +761,271 @@ class KotlinUSBBridge(
      * @return Device ID or null if not connected
      */
     fun getConnectedDeviceId(): Int? = if (isConnected.get()) connectedDeviceId else null
+
+    /**
+     * Change the baud rate of the current connection.
+     * Used for DFU mode entry (1200 baud touch) and flashing protocols.
+     *
+     * @param baudRate New baud rate to set
+     * @return true if successful, false otherwise
+     */
+    fun setBaudRate(baudRate: Int): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set baud rate - not connected")
+            return false
+        }
+
+        val port =
+            currentPort ?: run {
+                Log.e(TAG, "Port is null")
+                return false
+            }
+
+        return synchronized(this) {
+            try {
+                port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
+                Log.d(TAG, "Baud rate changed to $baudRate")
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to change baud rate to $baudRate", e)
+                false
+            }
+        }
+    }
+
+    /**
+     * Set DTR (Data Terminal Ready) line state.
+     * Used by ESP32 bootloader entry sequence.
+     *
+     * @param state true to assert DTR, false to deassert
+     * @return true if successful, false otherwise
+     */
+    fun setDtr(state: Boolean): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set DTR - not connected")
+            return false
+        }
+
+        val port = currentPort ?: return false
+
+        return try {
+            port.dtr = state
+            Log.v(TAG, "DTR set to $state")
+            true
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "DTR not supported: ${e.message}")
+            false
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to set DTR", e)
+            false
+        }
+    }
+
+    /**
+     * Set RTS (Request To Send) line state.
+     * Used by ESP32 bootloader entry sequence.
+     *
+     * @param state true to assert RTS, false to deassert
+     * @return true if successful, false otherwise
+     */
+    fun setRts(state: Boolean): Boolean {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot set RTS - not connected")
+            return false
+        }
+
+        val port = currentPort ?: return false
+
+        return try {
+            port.rts = state
+            Log.v(TAG, "RTS set to $state")
+            true
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "RTS not supported: ${e.message}")
+            false
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to set RTS", e)
+            false
+        }
+    }
+
+    /**
+     * Set both DTR and RTS simultaneously.
+     * Used for ESP32 bootloader entry timing.
+     *
+     * @param dtrState DTR line state
+     * @param rtsState RTS line state
+     */
+    fun setDtrRts(
+        dtrState: Boolean,
+        rtsState: Boolean,
+    ) {
+        setDtr(dtrState)
+        setRts(rtsState)
+    }
+
+    /**
+     * Perform a blocking read with timeout.
+     * Used by flashing protocols that need synchronous communication.
+     *
+     * @param buffer Buffer to read into
+     * @param timeoutMs Read timeout in milliseconds
+     * @return Number of bytes read, or -1 on error
+     */
+    fun readBlocking(
+        buffer: ByteArray,
+        timeoutMs: Int,
+    ): Int {
+        if (!isConnected.get()) {
+            Log.w(TAG, "Cannot read - not connected")
+            return -1
+        }
+
+        val port =
+            currentPort ?: run {
+                Log.w(TAG, "readBlocking: port is null")
+                return -1
+            }
+
+        return try {
+            val bytesRead = port.read(buffer, timeoutMs)
+            if (bytesRead > 0) {
+                val hex =
+                    buffer.take(minOf(bytesRead, 32)).joinToString(" ") {
+                        String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF)
+                    }
+                Log.d(TAG, "readBlocking: got $bytesRead bytes: $hex")
+            }
+            bytesRead
+        } catch (e: IOException) {
+            Log.e(TAG, "Blocking read failed", e)
+            -1
+        }
+    }
+
+    /**
+     * Enable raw/blocking mode for ESPTool flashing.
+     * This stops the SerialInputOutputManager so that readBlocking() can receive data.
+     * Call disableRawMode() when done to restart async reads.
+     */
+    @Suppress("NestedBlockDepth")
+    fun enableRawMode() {
+        Log.d(TAG, "Enabling raw mode (stopping SerialInputOutputManager)")
+
+        // Set flag FIRST so onNewData ignores any data that arrives
+        rawModeEnabled.set(true)
+
+        val manager = ioManager
+        val future = ioManagerFuture
+        if (manager != null) {
+            manager.stop()
+            ioManager = null
+            ioManagerFuture = null
+
+            // Cancel the future to interrupt the thread if it's blocked
+            future?.cancel(true)
+
+            // Wait for the manager thread to actually stop
+            waitForManagerStop(future)
+            Log.d(TAG, "SerialInputOutputManager stopped")
+
+            // Drain any data that was buffered by the serial port during async operation
+            drainPortAfterManagerStop()
+        }
+        // Clear any buffered data in our queue
+        readBuffer.clear()
+    }
+
+    /**
+     * Wait for the SerialInputOutputManager to stop, handling expected exceptions.
+     */
+    @Suppress("SwallowedException")
+    private fun waitForManagerStop(future: java.util.concurrent.Future<*>?) {
+        try {
+            future?.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.CancellationException) {
+            // Expected - we cancelled it, no action needed
+            Log.v(TAG, "Manager future cancelled as expected")
+        } catch (e: java.util.concurrent.TimeoutException) {
+            Log.w(TAG, "Timeout waiting for SerialInputOutputManager to stop")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error waiting for SerialInputOutputManager: ${e.message}")
+        }
+    }
+
+    /**
+     * Drain any data buffered by the serial port after stopping the manager.
+     */
+    private fun drainPortAfterManagerStop() {
+        val port = currentPort ?: return
+        try {
+            val drainBuf = ByteArray(1024)
+            var totalDrained = 0
+            while (true) {
+                val drained = port.read(drainBuf, 50)
+                if (drained <= 0) break
+                totalDrained += drained
+            }
+            if (totalDrained > 0) {
+                Log.d(TAG, "Drained $totalDrained bytes from port after stopping manager")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error draining port: ${e.message}")
+        }
+    }
+
+    /**
+     * Disable raw mode and restart async reads.
+     * Call this after flashing is complete to restore normal operation.
+     */
+    fun disableRawMode() {
+        Log.d(TAG, "Disabling raw mode")
+        rawModeEnabled.set(false)
+
+        val port = currentPort ?: return
+        if (ioManager != null) {
+            Log.d(TAG, "ioManager already exists, not creating new one")
+            return
+        }
+        Log.d(TAG, "Restarting SerialInputOutputManager")
+        val manager = SerialInputOutputManager(port, this)
+        manager.readTimeout = 100
+        ioManager = manager
+        ioManagerFuture = ioExecutor.submit(manager)
+    }
+
+    /**
+     * Clear the read buffer.
+     * Used before starting a flashing operation to ensure clean state.
+     */
+    fun clearReadBuffer() {
+        readBuffer.clear()
+        Log.d(TAG, "Read buffer cleared")
+    }
+
+    /**
+     * Drain any pending data from the serial port.
+     * Used to synchronize before flashing operations.
+     *
+     * @param timeoutMs Maximum time to wait for data
+     */
+    fun drain(timeoutMs: Int = 100) {
+        val tempBuffer = ByteArray(1024)
+        var totalDrained = 0
+        val startTime = System.currentTimeMillis()
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            val bytesRead = readBlocking(tempBuffer, 10)
+            if (bytesRead <= 0) break
+            totalDrained += bytesRead
+        }
+
+        readBuffer.clear()
+
+        if (totalDrained > 0) {
+            Log.d(TAG, "Drained $totalDrained bytes from serial port")
+        }
+    }
 
     /**
      * Write data to the USB device.
@@ -829,6 +1096,13 @@ class KotlinUSBBridge(
      */
     override fun onNewData(data: ByteArray) {
         if (data.isNotEmpty()) {
+            // In raw mode, the ioManager should be stopped but if it's still running,
+            // don't process the data - it will be read via readBlocking() instead
+            if (rawModeEnabled.get()) {
+                Log.v(TAG, "USB received ${data.size} bytes (ignored - raw mode)")
+                return
+            }
+
             Log.v(TAG, "USB received ${data.size} bytes")
 
             // Add to read buffer

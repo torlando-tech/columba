@@ -3,6 +3,7 @@ plugins {
     kotlin("android")
     id("com.google.devtools.ksp")
     kotlin("plugin.parcelize")
+    kotlin("plugin.serialization")
     id("com.google.dagger.hilt.android")
     id("com.chaquo.python")
 }
@@ -67,6 +68,9 @@ dependencies {
 
     // MessagePack
     implementation(libs.msgpack)
+
+    // Serialization (for firmware manifest JSON parsing)
+    implementation(libs.serialization.json)
 
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
     implementation("io.sentry:sentry-android:8.29.0")

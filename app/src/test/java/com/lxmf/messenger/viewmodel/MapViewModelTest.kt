@@ -1224,7 +1224,16 @@ class MapViewModelTest {
             assertTrue(viewModel.state.value.isPermissionCardDismissed)
 
             // When: ViewModel is recreated with the same SavedStateHandle (simulates tab switch)
-            val viewModel2 = MapViewModel(savedStateHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            val viewModel2 =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                )
 
             // Then: Permission card should still be dismissed
             viewModel2.state.test {
@@ -1257,13 +1266,15 @@ class MapViewModelTest {
         runTest {
             // Given: First ViewModel dismisses the card
             val handle1 = SavedStateHandle()
-            val vm1 = MapViewModel(handle1, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            val vm1 =
+                MapViewModel(handle1, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
             vm1.dismissPermissionCard()
             assertTrue(vm1.state.value.isPermissionCardDismissed)
 
             // When: A completely separate ViewModel is created with a different handle
             val handle2 = SavedStateHandle()
-            val vm2 = MapViewModel(handle2, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+            val vm2 =
+                MapViewModel(handle2, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
 
             // Then: The second ViewModel should NOT have the card dismissed
             assertFalse(vm2.state.value.isPermissionCardDismissed)

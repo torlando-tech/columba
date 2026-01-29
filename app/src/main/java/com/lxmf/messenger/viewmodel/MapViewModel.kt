@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.location.Location
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
@@ -15,7 +16,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.model.SharingDuration
-import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,15 +123,16 @@ class MapViewModel
             internal var enablePeriodicRefresh = true
         }
 
-        private val _state = MutableStateFlow(
-            MapState(
-                // Restore permission card dismissed state from SavedStateHandle
-                // This survives tab switches (Navigation saveState/restoreState) and process death,
-                // but resets on fresh app launch — matching the expected 0.6.x behavior.
-                // Fixes issue #342: permission card reappearing on every tab switch.
-                isPermissionCardDismissed = savedStateHandle.get<Boolean>(KEY_PERMISSION_CARD_DISMISSED) ?: false,
-            ),
-        )
+        private val _state =
+            MutableStateFlow(
+                MapState(
+                    // Restore permission card dismissed state from SavedStateHandle
+                    // This survives tab switches (Navigation saveState/restoreState) and process death,
+                    // but resets on fresh app launch — matching the expected 0.6.x behavior.
+                    // Fixes issue #342: permission card reappearing on every tab switch.
+                    isPermissionCardDismissed = savedStateHandle.get<Boolean>(KEY_PERMISSION_CARD_DISMISSED) ?: false,
+                ),
+            )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
         // Refresh trigger for periodic staleness recalculation

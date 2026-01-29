@@ -58,7 +58,6 @@ data class FlasherUiState(
     val isRefreshingDevices: Boolean = false,
     val permissionPending: Boolean = false,
     val permissionError: String? = null,
-    val bootloaderMode: Boolean = false, // Skip detection for fresh devices in bootloader
     // Step 2: Device Detection
     val isDetecting: Boolean = false,
     val detectedInfo: RNodeDeviceInfo? = null,
@@ -141,20 +140,9 @@ class FlasherViewModel
         fun enableSkipDetectionMode() {
             Log.d(TAG, "Skip detection mode enabled (for bootloader flashing)")
             skipDetectionMode = true
-            _state.update { it.copy(bootloaderMode = true, useManualBoardSelection = true) }
-        }
-
-        /**
-         * Toggle bootloader mode on/off.
-         * When enabled, device detection is skipped and user must select board manually.
-         * Also disables USB auto-navigation to prevent interfering with bootloader.
-         */
-        fun setBootloaderMode(enabled: Boolean) {
-            Log.d(TAG, "Bootloader mode set to: $enabled")
-            skipDetectionMode = enabled
             // Disable USB auto-navigation when bootloader mode is active
-            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = enabled
-            _state.update { it.copy(bootloaderMode = enabled, useManualBoardSelection = enabled) }
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = true
+            _state.update { it.copy(useManualBoardSelection = true) }
         }
 
         private fun observeFlashState() {
@@ -651,8 +639,9 @@ class FlasherViewModel
         // ==================== Step 5: Complete ====================
 
         fun flashAnother() {
-            // Reset bootloader mode
-            setBootloaderMode(false)
+            // Reset skip detection mode
+            skipDetectionMode = false
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
             _state.update {
                 FlasherUiState(
                     currentStep = FlasherStep.DEVICE_SELECTION,

@@ -219,10 +219,8 @@ fun RNodeFlasherScreen(
                             isRefreshing = state.isRefreshingDevices,
                             permissionPending = state.permissionPending,
                             permissionError = state.permissionError,
-                            bootloaderMode = state.bootloaderMode,
                             onDeviceSelected = { viewModel.selectDevice(it) },
                             onRefresh = { viewModel.refreshDevices() },
-                            onBootloaderModeChanged = { viewModel.setBootloaderMode(it) },
                         )
 
                     FlasherStep.DEVICE_DETECTION ->

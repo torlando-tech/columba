@@ -25,7 +25,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,10 +38,6 @@ import com.lxmf.messenger.reticulum.usb.UsbDeviceInfo
  *
  * Displays a list of connected USB devices that could be RNodes.
  * Users can select a device and refresh the list if needed.
- *
- * @param bootloaderMode When enabled, skips device detection and goes directly to
- *                       firmware selection. Use this when flashing a fresh device
- *                       that's already in bootloader mode.
  */
 @Composable
 fun DeviceSelectionStep(
@@ -51,10 +46,8 @@ fun DeviceSelectionStep(
     isRefreshing: Boolean,
     permissionPending: Boolean,
     permissionError: String?,
-    bootloaderMode: Boolean,
     onDeviceSelected: (UsbDeviceInfo) -> Unit,
     onRefresh: () -> Unit,
-    onBootloaderModeChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -153,55 +146,6 @@ fun DeviceSelectionStep(
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
-            }
-        }
-
-        // Bootloader mode toggle
-        Card(
-            colors =
-                CardDefaults.cardColors(
-                    containerColor =
-                        if (bootloaderMode) {
-                            MaterialTheme.colorScheme.tertiaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                ),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-        ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Bootloader Mode",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text =
-                            if (bootloaderMode) {
-                                "Enabled - Will skip detection and go straight to firmware selection"
-                            } else {
-                                "Enable for fresh devices already in bootloader mode"
-                            },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = bootloaderMode,
-                    onCheckedChange = onBootloaderModeChanged,
-                )
             }
         }
 

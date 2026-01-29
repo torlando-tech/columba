@@ -19,7 +19,7 @@ See git history for v0.7.3-beta milestone.
 **Milestone Goal:** Address critical production issues identified via Sentry monitoring.
 
 - [x] **Phase 3: ANR Elimination** - Fix synchronous IPC on main thread
-- [ ] **Phase 4: Relay Loop Resolution** - Investigate and fix COLUMBA-3 regression
+- [x] **Phase 4: Relay Loop Resolution** - Investigate and fix COLUMBA-3 regression
 - [ ] **Phase 5: Memory Optimization** - Address OOM-causing memory growth
 - [ ] **Phase 6: Native Stability Verification** - Verify MapLibre crashes after memory fix
 
@@ -49,7 +49,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md - Change StateFlow sharing from Eagerly to WhileSubscribed(5000L)
+- [x] 04-01-PLAN.md - Change StateFlow sharing from Eagerly to WhileSubscribed(5000L)
 
 ### Phase 5: Memory Optimization
 **Goal**: App runs indefinitely without OOM crashes
@@ -86,6 +86,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 3. ANR Elimination | 1/1 | Complete | 2026-01-29 |
-| 4. Relay Loop Resolution | 0/1 | Ready | - |
+| 4. Relay Loop Resolution | 1/1 | Complete | 2026-01-29 |
 | 5. Memory Optimization | 0/3 | Not started | - |
 | 6. Native Stability Verification | 0/1 | Not started | - |

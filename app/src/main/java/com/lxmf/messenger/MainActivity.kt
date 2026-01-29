@@ -274,7 +274,9 @@ class MainActivity : ComponentActivity() {
 
         // Initialize JankStats for frame monitoring (Phase 1 Plan 01-03)
         window.decorView.post {
-            jankStats = androidx.metrics.performance.JankStats.createAndTrack(window, jankFrameListener)
+            jankStats =
+                androidx.metrics.performance.JankStats
+                    .createAndTrack(window, jankFrameListener)
             jankStats.isTrackingEnabled = true
             Log.d(TAG, "JankStats initialized and tracking enabled")
         }
@@ -453,16 +455,16 @@ class MainActivity : ComponentActivity() {
                     }
                     Log.d(TAG, "🔌 pendingNavigation set to InterfaceStats(${existingInterface.id})")
                 } else {
-                    // Device is not configured - navigate to RNode wizard with USB pre-selected
-                    Log.d(TAG, "🔌 USB device is not configured - launching RNode wizard")
+                    // Device is not configured - navigate to action screen to choose flash or configure
+                    Log.d(TAG, "🔌 USB device is not configured - launching action screen")
                     pendingNavigation.value =
-                        PendingNavigation.RNodeWizardWithUsb(
+                        PendingNavigation.UsbDeviceAction(
                             usbDeviceId = usbDevice.deviceId,
                             vendorId = usbDevice.vendorId,
                             productId = usbDevice.productId,
                             deviceName = usbDevice.deviceName,
                         )
-                    Log.d(TAG, "🔌 pendingNavigation set to RNodeWizardWithUsb")
+                    Log.d(TAG, "🔌 pendingNavigation set to UsbDeviceAction")
                 }
                 Log.d(TAG, "🔌 pendingNavigation.value is now: ${pendingNavigation.value}")
             } catch (e: Exception) {
@@ -476,18 +478,39 @@ class MainActivity : ComponentActivity() {
  * Represents a pending navigation action from an intent.
  */
 sealed class PendingNavigation {
-    data class AnnounceDetail(val destinationHash: String) : PendingNavigation()
+    data class AnnounceDetail(
+        val destinationHash: String,
+    ) : PendingNavigation()
 
-    data class Conversation(val destinationHash: String, val peerName: String) : PendingNavigation()
+    data class Conversation(
+        val destinationHash: String,
+        val peerName: String,
+    ) : PendingNavigation()
 
-    data class AddContact(val lxmaUrl: String) : PendingNavigation()
+    data class AddContact(
+        val lxmaUrl: String,
+    ) : PendingNavigation()
 
-    data class IncomingCall(val identityHash: String) : PendingNavigation()
+    data class IncomingCall(
+        val identityHash: String,
+    ) : PendingNavigation()
 
-    data class AnswerCall(val identityHash: String) : PendingNavigation()
+    data class AnswerCall(
+        val identityHash: String,
+    ) : PendingNavigation()
 
     /** Navigate to interface stats screen for an existing configured interface */
-    data class InterfaceStats(val interfaceId: Long) : PendingNavigation()
+    data class InterfaceStats(
+        val interfaceId: Long,
+    ) : PendingNavigation()
+
+    /** Navigate to USB device action screen to choose between flash or configure */
+    data class UsbDeviceAction(
+        val usbDeviceId: Int,
+        val vendorId: Int,
+        val productId: Int,
+        val deviceName: String,
+    ) : PendingNavigation()
 
     /** Navigate to RNode wizard with USB device pre-selected */
     data class RNodeWizardWithUsb(
@@ -506,7 +529,11 @@ sealed class PendingNavigation {
     ) : PendingNavigation()
 }
 
-sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+sealed class Screen(
+    val route: String,
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
     object Welcome : Screen("welcome", "Welcome", Icons.Default.Sensors)
 
     object Chats : Screen("chats", "Chats", Icons.Default.Chat)
@@ -539,7 +566,8 @@ fun ColumbaNavigation(
 
     // Access SettingsViewModel to get theme preference
     val settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel =
-        androidx.hilt.navigation.compose.hiltViewModel()
+        androidx.hilt.navigation.compose
+            .hiltViewModel()
 
     // Collect settings state (includes theme preference)
     val settingsState by settingsViewModel.state.collectAsState()
@@ -650,6 +678,17 @@ fun ColumbaNavigation(
                         }
                         Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
                     }
+                }
+                is PendingNavigation.UsbDeviceAction -> {
+                    // Navigate to USB device action screen
+                    val route =
+                        "usb_device_action" +
+                            "?usbDeviceId=${navigation.usbDeviceId}" +
+                            "&usbVendorId=${navigation.vendorId}" +
+                            "&usbProductId=${navigation.productId}" +
+                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                    navController.navigate(route)
+                    Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
                 }
                 is PendingNavigation.RNodeWizardWithUsb -> {
                     // Navigate to RNode wizard with USB pre-selected
@@ -820,6 +859,7 @@ fun ColumbaNavigation(
             "rnode_wizard",
             "tcp_client_wizard",
             "rnode_flasher",
+            "usb_device_action",
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
@@ -1173,6 +1213,66 @@ fun ColumbaNavigation(
                             },
                             onNavigateToFlasher = {
                                 navController.navigate("rnode_flasher")
+                            },
+                        )
+                    }
+
+                    composable(
+                        route =
+                            "usb_device_action" +
+                                "?usbDeviceId={usbDeviceId}" +
+                                "&usbVendorId={usbVendorId}" +
+                                "&usbProductId={usbProductId}" +
+                                "&usbDeviceName={usbDeviceName}",
+                        arguments =
+                            listOf(
+                                navArgument("usbDeviceId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbVendorId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbProductId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbDeviceName") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                    nullable = true
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
+                        val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
+                        val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
+                        val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+                        com.lxmf.messenger.ui.screens.UsbDeviceActionScreen(
+                            deviceName = usbDeviceName,
+                            onNavigateBack = { navController.popBackStack() },
+                            onFlashFirmware = {
+                                val route =
+                                    "rnode_flasher" +
+                                        "?usbDeviceId=$usbDeviceId" +
+                                        "&usbVendorId=$usbVendorId" +
+                                        "&usbProductId=$usbProductId" +
+                                        "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                navController.navigate(route) {
+                                    popUpTo("usb_device_action") { inclusive = true }
+                                }
+                            },
+                            onConfigureRNode = {
+                                val route =
+                                    "rnode_wizard?connectionType=usb" +
+                                        "&usbDeviceId=$usbDeviceId" +
+                                        "&usbVendorId=$usbVendorId" +
+                                        "&usbProductId=$usbProductId" +
+                                        "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                navController.navigate(route) {
+                                    popUpTo("usb_device_action") { inclusive = true }
+                                }
                             },
                         )
                     }

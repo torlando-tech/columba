@@ -67,6 +67,7 @@ data class FlasherUiState(
     // Step 3: Firmware Selection
     val selectedBoard: RNodeBoard? = null,
     val selectedBand: FrequencyBand = FrequencyBand.BAND_868_915,
+    val bandExplicitlySelected: Boolean = false, // User must click a band chip
     val availableFirmware: List<FirmwarePackage> = emptyList(),
     val selectedFirmware: FirmwarePackage? = null,
     val availableVersions: List<String> = emptyList(),
@@ -325,13 +326,17 @@ class FlasherViewModel
                         Log.i(TAG, "Detected device: ${deviceInfo.board.displayName}")
                         // If board is unknown, enable manual selection mode
                         val needsManualSelection = deviceInfo.board == RNodeBoard.UNKNOWN
+                        val detectedBand = FrequencyBand.fromModelCode(deviceInfo.model)
+                        // Band is known if it's not UNKNOWN (comes from device EEPROM)
+                        val bandKnown = detectedBand != FrequencyBand.UNKNOWN
                         _state.update {
                             it.copy(
                                 isDetecting = false,
                                 detectedInfo = deviceInfo,
                                 // Don't set selectedBoard if unknown - user must select manually
                                 selectedBoard = if (needsManualSelection) null else deviceInfo.board,
-                                selectedBand = FrequencyBand.fromModelCode(deviceInfo.model),
+                                selectedBand = if (bandKnown) detectedBand else FrequencyBand.BAND_868_915,
+                                bandExplicitlySelected = bandKnown, // Auto-confirm if detected from device
                                 useManualBoardSelection = needsManualSelection,
                             )
                         }
@@ -385,7 +390,9 @@ class FlasherViewModel
             _state.update {
                 it.copy(
                     selectedBoard = board,
+                    bandExplicitlySelected = false, // Require band re-selection for new board
                     selectedFirmware = null,
+                    selectedVersion = null, // Clear version when board changes
                 )
             }
             loadAvailableFirmware()
@@ -395,14 +402,21 @@ class FlasherViewModel
             _state.update {
                 it.copy(
                     selectedBand = band,
+                    bandExplicitlySelected = true, // User clicked a band chip
                     selectedFirmware = null,
+                    selectedVersion = null, // Clear version when band changes
                 )
             }
             loadAvailableFirmware()
         }
 
         fun selectFirmware(firmware: FirmwarePackage) {
-            _state.update { it.copy(selectedFirmware = firmware) }
+            _state.update {
+                it.copy(
+                    selectedFirmware = firmware,
+                    selectedVersion = null, // Clear version since we have cached firmware
+                )
+            }
         }
 
         private fun loadAvailableFirmware() {
@@ -438,11 +452,17 @@ class FlasherViewModel
                 try {
                     val releases = flasher.firmwareDownloader.getAvailableReleases()
                     if (releases != null) {
-                        val versions = releases.map { it.version }
+                        // Filter out versions that are already cached for this board+band
+                        val cachedVersions =
+                            _state.value.availableFirmware
+                                .map { it.version }
+                                .toSet()
+                        val versions = releases.map { it.version }.filter { it !in cachedVersions }
                         _state.update {
                             it.copy(
                                 availableVersions = versions,
-                                selectedVersion = versions.firstOrNull(),
+                                // Only auto-select a version if no firmware is already selected
+                                selectedVersion = if (it.selectedFirmware == null) versions.firstOrNull() else null,
                             )
                         }
                     }
@@ -457,47 +477,41 @@ class FlasherViewModel
             val board = _state.value.selectedBoard ?: return
             val band = _state.value.selectedBand
 
-            _state.update {
-                it.copy(
-                    isDownloadingFirmware = true,
-                    downloadProgress = 0,
-                    downloadError = null,
-                )
+            // First check if this version is already cached for the selected board+band
+            val existingCached = _state.value.availableFirmware.find { it.version == version }
+            if (existingCached != null) {
+                // Already cached - just select it
+                Log.d(TAG, "Version $version already cached, selecting it")
+                _state.update {
+                    it.copy(
+                        selectedFirmware = existingCached,
+                        selectedVersion = null, // Clear version since we have firmware
+                    )
+                }
+                return
             }
 
-            viewModelScope.launch {
-                try {
-                    // Check if already cached
-                    val existing = flasher.firmwareRepository.getLatestFirmware(board, band)
-                    if (existing != null && existing.version == version) {
-                        _state.update {
-                            it.copy(
-                                isDownloadingFirmware = false,
-                                selectedFirmware = existing,
-                            )
-                        }
-                        return@launch
-                    }
-
-                    // TODO: Implement actual download with progress callback
-                    // For now, using downloadAndFlash internally handles this
-
-                    _state.update { it.copy(isDownloadingFirmware = false) }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Firmware download failed", e)
-                    _state.update {
-                        it.copy(
-                            isDownloadingFirmware = false,
-                            downloadError = "Download failed: ${e.message}",
-                        )
-                    }
-                }
+            // Not cached - record the version selection for download during flash
+            Log.d(TAG, "Selected version $version for download (board: ${board.displayName}, band: ${band.displayName})")
+            _state.update {
+                it.copy(
+                    selectedVersion = version,
+                    selectedFirmware = null, // Clear firmware since we'll download
+                    downloadError = null,
+                )
             }
         }
 
         fun canProceedFromFirmwareSelection(): Boolean {
             val currentState = _state.value
-            return currentState.selectedBoard != null && !currentState.isDownloadingFirmware
+            // Require:
+            // 1. Board selection
+            // 2. Explicit band selection (user clicked a band chip OR detected from device)
+            // 3. Either a cached firmware OR a version to download
+            return currentState.selectedBoard != null &&
+                currentState.bandExplicitlySelected &&
+                !currentState.isDownloadingFirmware &&
+                (currentState.selectedFirmware != null || currentState.selectedVersion != null)
         }
 
         // ==================== Step 4: Flash Progress ====================

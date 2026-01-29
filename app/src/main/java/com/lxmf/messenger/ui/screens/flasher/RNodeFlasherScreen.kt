@@ -238,6 +238,7 @@ fun RNodeFlasherScreen(
                         FirmwareSelectionStep(
                             selectedBoard = state.selectedBoard,
                             selectedBand = state.selectedBand,
+                            bandExplicitlySelected = state.bandExplicitlySelected,
                             availableFirmware = state.availableFirmware,
                             selectedFirmware = state.selectedFirmware,
                             availableVersions = state.availableVersions,

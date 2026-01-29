@@ -56,6 +56,7 @@ import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 fun FirmwareSelectionStep(
     selectedBoard: RNodeBoard?,
     selectedBand: FrequencyBand,
+    bandExplicitlySelected: Boolean,
     availableFirmware: List<FirmwarePackage>,
     selectedFirmware: FirmwarePackage?,
     availableVersions: List<String>,
@@ -103,6 +104,7 @@ fun FirmwareSelectionStep(
         // Frequency band selection
         FrequencyBandCard(
             selectedBand = selectedBand,
+            bandExplicitlySelected = bandExplicitlySelected,
             onBandSelected = onBandSelected,
         )
 
@@ -266,16 +268,33 @@ private fun BoardSelectionCard(
 @Composable
 private fun FrequencyBandCard(
     selectedBand: FrequencyBand,
+    bandExplicitlySelected: Boolean,
     onBandSelected: (FrequencyBand) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (!bandExplicitlySelected) {
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.RadioButtonChecked,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint =
+                        if (!bandExplicitlySelected) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -283,6 +302,14 @@ private fun FrequencyBandCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                 )
+                if (!bandExplicitlySelected) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "(Required)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -290,8 +317,9 @@ private fun FrequencyBandCard(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Only show as "selected" if user has explicitly confirmed
                 FilterChip(
-                    selected = selectedBand == FrequencyBand.BAND_868_915,
+                    selected = bandExplicitlySelected && selectedBand == FrequencyBand.BAND_868_915,
                     onClick = { onBandSelected(FrequencyBand.BAND_868_915) },
                     label = { Text("868/915 MHz") },
                     colors =
@@ -300,7 +328,7 @@ private fun FrequencyBandCard(
                         ),
                 )
                 FilterChip(
-                    selected = selectedBand == FrequencyBand.BAND_433,
+                    selected = bandExplicitlySelected && selectedBand == FrequencyBand.BAND_433,
                     onClick = { onBandSelected(FrequencyBand.BAND_433) },
                     label = { Text("433 MHz") },
                     colors =
@@ -311,9 +339,19 @@ private fun FrequencyBandCard(
             }
 
             Text(
-                text = "Select the frequency band that matches your regional regulations",
+                text =
+                    if (!bandExplicitlySelected) {
+                        "⚠️ Click a frequency band to confirm your selection"
+                    } else {
+                        "Select the frequency band that matches your regional regulations"
+                    },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color =
+                    if (!bandExplicitlySelected) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
@@ -480,27 +518,60 @@ private fun FirmwareVersionCard(
                 }
             }
 
-            // Show selected firmware info
-            selectedFirmware?.let { firmware ->
-                Spacer(modifier = Modifier.height(16.dp))
-                Card(
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "Selected: ${firmware.board.displayName} v${firmware.version}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "Band: ${firmware.frequencyBand.displayName} | Platform: ${firmware.platform.name}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            // Show selected firmware info OR selected version for download
+            when {
+                selectedFirmware != null -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Selected: ${selectedFirmware.board.displayName} v${selectedFirmware.version}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "Band: ${selectedFirmware.frequencyBand.displayName} | Platform: ${selectedFirmware.platform.name}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
+                }
+                selectedVersion != null && selectedBoard != null -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            ),
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Will download: v$selectedVersion",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            Text(
+                                text = "Firmware will be downloaded when you proceed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+                selectedBoard != null && availableFirmware.isNotEmpty() || availableVersions.isNotEmpty() -> {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Select a firmware version above to continue",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         }

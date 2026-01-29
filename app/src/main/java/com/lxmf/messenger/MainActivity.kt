@@ -59,8 +59,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.compose.rememberNavController
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -462,6 +462,23 @@ fun ColumbaNavigation(
 
     val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as ComponentActivity)
 
+    // Clear pending shared text deterministically if the user leaves Chats/Contacts
+    // without selecting a destination.
+    var lastRoute by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect { entry ->
+            val route = entry.destination.route
+            val wasInPickDestinationFlow = lastRoute == Screen.Chats.route || lastRoute == Screen.Contacts.route
+            val isInPickDestinationFlow = route == Screen.Chats.route || route == Screen.Contacts.route
+
+            if (wasInPickDestinationFlow && !isInPickDestinationFlow) {
+                sharedTextViewModel.clearIfUnassigned()
+            }
+
+            lastRoute = route
+        }
+    }
+
     // Track if we're currently navigating to answer a call (prevents race with callState observer)
     var isAnsweringCall by remember { mutableStateOf(false) }
 
@@ -542,12 +559,15 @@ fun ColumbaNavigation(
                     sharedTextViewModel.setText(navigation.text)
 
                     selectedTab = 0
-                    navController.navigate(Screen.Chats.route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+                    val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
+                    if (!poppedToChats) {
+                        navController.navigate(Screen.Chats.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                     Log.d("ColumbaNavigation", "Handled shared text intent")
                 }

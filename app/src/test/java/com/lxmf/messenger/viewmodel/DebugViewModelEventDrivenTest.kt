@@ -98,8 +98,8 @@ class DebugViewModelEventDrivenTest {
                 appName = "lxmf",
                 aspects = listOf("delivery"),
             )
-        every { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
-        every { mockProtocol.getLxmfDestination() } returns Result.success(mockDestination)
+        coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
+        coEvery { mockProtocol.getLxmfDestination() } returns Result.success(mockDestination)
         // Also mock createIdentity in case the code falls back to it
         coEvery { mockProtocol.createIdentity() } returns Result.success(mockIdentity)
     }
@@ -393,7 +393,7 @@ class DebugViewModelEventDrivenTest {
     fun `generateShareText returns null when publicKey is null`() =
         runTest {
             // Given - make identity loading fail so publicKey remains null
-            every { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
             coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
             val viewModel =
@@ -417,7 +417,7 @@ class DebugViewModelEventDrivenTest {
     fun `generateShareText returns null when destinationHash is null`() =
         runTest {
             // Given - make destination loading fail so destinationHash remains null
-            every { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
             coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
             val viewModel =

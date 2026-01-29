@@ -166,16 +166,28 @@ fun MapScreen(
     focusLabel: String? = null,
     // Optional full interface details for bottom sheet
     focusInterfaceDetails: FocusInterfaceDetails? = null,
+    // Permission UI state - managed by parent to survive tab switches (issue #342)
+    permissionSheetDismissed: Boolean = false,
+    onPermissionSheetDismissed: () -> Unit = {},
+    permissionCardDismissed: Boolean = false,
+    onPermissionCardDismissed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
+    // Debug logging for permission state
+    Log.d(
+        "MapScreen",
+        "State: hasLocationPermission=${state.hasLocationPermission}, permissionSheetDismissed=$permissionSheetDismissed, permissionCardDismissed=$permissionCardDismissed",
+    )
+
     // Show permission sheet only if permission not granted and user hasn't dismissed it
+    // permissionSheetDismissed is managed by parent (MainActivity) to survive tab switches (issue #342)
     val showPermissionSheet =
         !state.hasLocationPermission &&
-            !state.hasUserDismissedPermissionSheet
+            !permissionSheetDismissed
     var showShareLocationSheet by remember { mutableStateOf(false) }
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     var showFocusInterfaceSheet by remember { mutableStateOf(false) }
@@ -874,10 +886,14 @@ fun MapScreen(
         // Tap a marker to open the contact detail bottom sheet
 
         // Show hint card if no location permission and not dismissed
-        if (!state.hasLocationPermission && !state.isPermissionCardDismissed) {
+        // permissionCardDismissed is managed by parent (MainActivity) to survive tab switches (issue #342)
+        if (!state.hasLocationPermission && !permissionCardDismissed) {
             EmptyMapStateCard(
                 contactCount = state.contactMarkers.size,
-                onDismiss = { viewModel.dismissPermissionCard() },
+                onDismiss = {
+                    onPermissionCardDismissed()
+                    viewModel.dismissPermissionCard()
+                },
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -921,8 +937,12 @@ fun MapScreen(
     // Permission bottom sheet
     if (showPermissionSheet) {
         LocationPermissionBottomSheet(
-            onDismiss = { viewModel.dismissLocationPermissionSheet() },
+            onDismiss = {
+                onPermissionSheetDismissed()
+                viewModel.dismissLocationPermissionSheet()
+            },
             onRequestPermissions = {
+                onPermissionSheetDismissed()
                 viewModel.dismissLocationPermissionSheet()
                 permissionLauncher.launch(
                     LocationPermissionManager.getRequiredPermissions().toTypedArray(),

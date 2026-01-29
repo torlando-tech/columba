@@ -304,33 +304,38 @@ class PropagationNodeManagerTest {
                 )
             manager.start()
 
-            // Wait for initial relay to be processed
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
-                    state = awaitItem()
+            // Keep both currentRelayState AND currentRelay active throughout test
+            // With WhileSubscribed(5000L), we need active collectors on both for changes to propagate
+            // through the full chain to observeRelayChanges
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for initial relay to be processed
+                var relay = awaitItem()
+                while (relay == null) {
+                    relay = awaitItem()
                 }
+
+                // Verify initial sync happened and allow coroutines to complete
+                advanceUntilIdle()
+                coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
+                io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
+
+                // When: Relay is removed (while collector is active)
+                myRelayFlow.value = null
+
+                // Wait for currentRelay to emit null
+                relay = awaitItem()
+                while (relay != null) {
+                    relay = awaitItem()
+                }
+
+                // Allow observeRelayChanges coroutine to process the null emission
+                advanceUntilIdle()
+
+                // Then: Should clear Python layer
+                coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
+
                 cancelAndConsumeRemainingEvents()
             }
-
-            // Verify initial sync happened
-            coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
-            io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
-
-            // When: Relay is removed
-            myRelayFlow.value = null
-
-            // Wait for StateFlow to settle with null
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while ((state as? RelayLoadState.Loaded)?.relay != null) {
-                    state = awaitItem()
-                }
-                cancelAndConsumeRemainingEvents()
-            }
-
-            // Then: Should clear Python layer
-            coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
 
             manager.stop()
         }
@@ -541,35 +546,32 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
-            // Wait for the StateFlow to update with correct hops
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading) {
-                    state = awaitItem()
+            // Keep StateFlow active and wait for relay to load using Turbine
+            // With WhileSubscribed(5000L), we need an active collector for .value to work
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for relay with correct hops
+                var relay = awaitItem()
+                while (relay == null || relay.hops != 2) {
+                    relay = awaitItem()
                 }
-                val loaded = state as RelayLoadState.Loaded
-                // Wait until we have the relay with correct hops
-                if (loaded.relay?.hops != 2) {
-                    // May need another emission after announce is fetched
-                    awaitItem()
-                }
+
+                // Clear verifications from setup
+                io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
+
+                // When: New node at 5 hops (farther) - call while collector is active
+                manager.onPropagationNodeAnnounce(
+                    destinationHash = testDestHash2,
+                    displayName = "Far Relay",
+                    hops = 5,
+                    publicKey = testPublicKey,
+                )
+                advanceUntilIdle()
+
+                // Then: Should NOT switch - current relay is closer
+                coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
+
                 cancelAndConsumeRemainingEvents()
             }
-
-            // Clear verifications from setup
-            io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
-
-            // When: New node at 5 hops (farther)
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash2,
-                displayName = "Far Relay",
-                hops = 5,
-                publicKey = testPublicKey,
-            )
-            advanceUntilIdle()
-
-            // Then: Should NOT switch - current relay is closer
-            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
         }
 
     @Test
@@ -590,33 +592,32 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
-            // Wait for the StateFlow to update with correct hops
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading) {
-                    state = awaitItem()
+            // Keep StateFlow active and wait for relay to load using Turbine
+            // With WhileSubscribed(5000L), we need an active collector for .value to work
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for relay with correct hops
+                var relay = awaitItem()
+                while (relay == null || relay.hops != 3) {
+                    relay = awaitItem()
                 }
-                val loaded = state as RelayLoadState.Loaded
-                if (loaded.relay?.hops != 3) {
-                    awaitItem()
-                }
+
+                // Clear verifications from setup
+                io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
+
+                // When: Different node at same hops - call while collector is active
+                manager.onPropagationNodeAnnounce(
+                    destinationHash = testDestHash2,
+                    displayName = "Other Relay",
+                    hops = 3,
+                    publicKey = testPublicKey,
+                )
+                advanceUntilIdle()
+
+                // Then: Should NOT switch - same hops, keep current
+                coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
+
                 cancelAndConsumeRemainingEvents()
             }
-
-            // Clear verifications from setup
-            io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
-
-            // When: Different node at same hops
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash2,
-                displayName = "Other Relay",
-                hops = 3,
-                publicKey = testPublicKey,
-            )
-            advanceUntilIdle()
-
-            // Then: Should NOT switch - same hops, keep current
-            coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
         }
 
     @Test
@@ -1248,15 +1249,6 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
-            // Wait for currentRelayState to become Loaded
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading) {
-                    state = awaitItem()
-                }
-                cancelAndConsumeRemainingEvents()
-            }
-
             val mockSyncState =
                 com.lxmf.messenger.reticulum.protocol.PropagationState(
                     state = 0,
@@ -1267,12 +1259,24 @@ class PropagationNodeManagerTest {
             coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
-            // When
-            manager.syncWithPropagationNode()
-            advanceUntilIdle()
+            // Keep StateFlow active and wait for relay to load using Turbine
+            // With WhileSubscribed(5000L), we need an active collector for .value to work
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for relay to be set
+                var relay = awaitItem()
+                while (relay == null) {
+                    relay = awaitItem()
+                }
 
-            // Then: Should call requestMessagesFromPropagationNode
-            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+                // When - call while collector is active
+                manager.syncWithPropagationNode()
+                advanceUntilIdle()
+
+                // Then: Should call requestMessagesFromPropagationNode
+                coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+                cancelAndConsumeRemainingEvents()
+            }
         }
 
     @Test
@@ -1299,15 +1303,6 @@ class PropagationNodeManagerTest {
                     isMyRelay = true,
                 )
 
-            // Wait for currentRelayState to become Loaded
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading) {
-                    state = awaitItem()
-                }
-                cancelAndConsumeRemainingEvents()
-            }
-
             val mockSyncState =
                 com.lxmf.messenger.reticulum.protocol.PropagationState(
                     state = 0,
@@ -1318,12 +1313,24 @@ class PropagationNodeManagerTest {
             coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
-            // When: Call sync
-            manager.syncWithPropagationNode()
-            advanceUntilIdle()
+            // Keep StateFlow active and wait for relay to load using Turbine
+            // With WhileSubscribed(5000L), we need an active collector for .value to work
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for relay to be set
+                var relay = awaitItem()
+                while (relay == null) {
+                    relay = awaitItem()
+                }
 
-            // Then: Protocol should be called
-            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+                // When: Call sync - while collector is active
+                manager.syncWithPropagationNode()
+                advanceUntilIdle()
+
+                // Then: Protocol should be called
+                coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+                cancelAndConsumeRemainingEvents()
+            }
         }
 
     @Test
@@ -2525,277 +2532,296 @@ class PropagationNodeManagerTest {
     // ========== State Machine Tests (Phase 2 - Relay Loop Fix) ==========
 
     @Test
-    fun `selectionState - starts as IDLE`() = runTest {
-        // When: Manager is created
-        // Then: Selection state should start as IDLE
-        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
-    }
-
-    @Test
-    fun `selectionState - transitions to STABLE after auto-selection`() = runTest {
-        // Given: Auto-select enabled with propagation nodes available
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announce = TestFactories.createAnnounce(
-            destinationHash = testDestHash,
-            nodeType = "PROPAGATION_NODE",
-            hops = 2
-        )
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
-
-        // When: Manager starts and receives announces
-        manager.start()
-        advanceUntilIdle()
-
-        // Emit announces after debounce period
-        announcesFlow.emit(listOf(announce))
-        advanceUntilIdle()
-
-        // Allow debounce (1000ms) + processing
-        testScheduler.advanceTimeBy(1500)
-        advanceUntilIdle()
-
-        // Then: State should be STABLE (selection completed, in cooldown)
-        manager.selectionState.test(timeout = 5.seconds) {
-            val state = awaitItem()
-            assertTrue(
-                "Expected STABLE or IDLE, got $state",
-                state == RelaySelectionState.STABLE || state == RelaySelectionState.IDLE
-            )
-            cancelAndIgnoreRemainingEvents()
+    fun `selectionState - starts as IDLE`() =
+        runTest {
+            // When: Manager is created
+            // Then: Selection state should start as IDLE
+            assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
         }
 
-        manager.stop()
-    }
-
     @Test
-    fun `selectionState - returns to IDLE after cooldown`() = runTest {
-        // Given: Auto-select enabled with propagation nodes
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announce = TestFactories.createAnnounce(
-            destinationHash = testDestHash,
-            nodeType = "PROPAGATION_NODE",
-            hops = 2
-        )
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+    fun `selectionState - transitions to STABLE after auto-selection`() =
+        runTest {
+            // Given: Auto-select enabled with propagation nodes available
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 2,
+                )
+            val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
 
-        // When: Manager starts and processes selection
-        manager.start()
-        advanceUntilIdle()
-
-        announcesFlow.emit(listOf(announce))
-        advanceUntilIdle()
-
-        // Advance past debounce (1s) + cooldown (30s) + buffer
-        testScheduler.advanceTimeBy(35_000)
-        advanceUntilIdle()
-
-        // Then: State should return to IDLE after cooldown
-        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
-
-        manager.stop()
-    }
-
-    @Test
-    fun `auto-select - skips selection when state is not IDLE`() = runTest {
-        // Given: Auto-select enabled with propagation nodes
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announce = TestFactories.createAnnounce(
-            destinationHash = testDestHash,
-            nodeType = "PROPAGATION_NODE",
-            hops = 2
-        )
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
-
-        // When: Manager starts
-        manager.start()
-        advanceUntilIdle()
-
-        // First emission triggers selection
-        announcesFlow.emit(listOf(announce))
-        testScheduler.advanceTimeBy(1500) // Past debounce
-        advanceUntilIdle()
-
-        // Record setAsMyRelay call count
-        val callsAfterFirst = mutableListOf<String>()
-        coEvery { contactRepository.setAsMyRelay(capture(callsAfterFirst), any()) } answers {
-            myRelayFlow.value = TestFactories.createContactEntity(
-                destinationHash = callsAfterFirst.last(),
-                isMyRelay = true
-            )
-        }
-
-        // Second emission should be blocked by state guard (still in STABLE/cooldown)
-        val announce2 = TestFactories.createAnnounce(
-            destinationHash = testDestHash2,
-            nodeType = "PROPAGATION_NODE",
-            hops = 1 // Lower hop count - would normally trigger switch
-        )
-        announcesFlow.emit(listOf(announce2))
-        testScheduler.advanceTimeBy(1500)
-        advanceUntilIdle()
-
-        // Then: Second selection should NOT have called setAsMyRelay for testDestHash2
-        // because state guard blocked it (state was STABLE, not IDLE)
-        coVerify(atMost = 1) { contactRepository.setAsMyRelay(any(), any()) }
-
-        manager.stop()
-    }
-
-    @Test
-    fun `setManualRelay - resets state to IDLE`() = runTest {
-        // Given: Manager in some non-IDLE state (simulate by triggering auto-select)
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announce = TestFactories.createAnnounce(
-            destinationHash = testDestHash,
-            nodeType = "PROPAGATION_NODE",
-            hops = 2
-        )
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
-
-        manager.start()
-        advanceUntilIdle()
-
-        // Trigger auto-select to get into STABLE state
-        announcesFlow.emit(listOf(announce))
-        testScheduler.advanceTimeBy(1500)
-        advanceUntilIdle()
-
-        // State should be STABLE
-        assertTrue(
-            "Expected STABLE, got ${manager.selectionState.value}",
-            manager.selectionState.value == RelaySelectionState.STABLE ||
-            manager.selectionState.value == RelaySelectionState.IDLE
-        )
-
-        // When: User manually selects a relay
-        manager.setManualRelay(testDestHash2, "Manual Relay")
-        advanceUntilIdle()
-
-        // Then: State should be reset to IDLE (user action cancels auto-select)
-        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
-
-        manager.stop()
-    }
-
-    @Test
-    fun `clearRelay - resets state to IDLE`() = runTest {
-        // Given: Manager started
-        manager.start()
-        advanceUntilIdle()
-
-        // When: Relay is cleared
-        manager.clearRelay()
-        advanceUntilIdle()
-
-        // Then: State should be IDLE
-        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
-
-        manager.stop()
-    }
-
-    @Test
-    fun `enableAutoSelect - resets state to IDLE`() = runTest {
-        // Given: Manager started
-        manager.start()
-        advanceUntilIdle()
-
-        // When: Auto-select is enabled
-        manager.enableAutoSelect()
-        advanceUntilIdle()
-
-        // Then: State should be IDLE (ready for fresh auto-selection)
-        assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
-
-        manager.stop()
-    }
-
-    @Test
-    fun `auto-select - debounce batches rapid announce emissions`() = runTest {
-        // Given: Auto-select enabled
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
-
-        // Track setAsMyRelay calls
-        val relayCalls = mutableListOf<String>()
-        coEvery { contactRepository.setAsMyRelay(capture(relayCalls), any()) } answers {
-            myRelayFlow.value = TestFactories.createContactEntity(
-                destinationHash = relayCalls.last(),
-                isMyRelay = true
-            )
-        }
-
-        // When: Manager starts
-        manager.start()
-        advanceUntilIdle()
-
-        // Emit 5 rapid changes (simulating Room invalidation triggers)
-        // These should be debounced into a single selection
-        repeat(5) { i ->
-            val announce = TestFactories.createAnnounce(
-                destinationHash = testDestHash,
-                nodeType = "PROPAGATION_NODE",
-                hops = 2 + i // Different hop counts
-            )
-            announcesFlow.emit(listOf(announce))
-            testScheduler.advanceTimeBy(100) // 100ms between emissions (within 1s debounce)
+            // When: Manager starts and receives announces
+            manager.start()
             advanceUntilIdle()
+
+            // Emit announces after debounce period
+            announcesFlow.emit(listOf(announce))
+            advanceUntilIdle()
+
+            // Allow debounce (1000ms) + processing
+            testScheduler.advanceTimeBy(1500)
+            advanceUntilIdle()
+
+            // Then: State should be STABLE (selection completed, in cooldown)
+            manager.selectionState.test(timeout = 5.seconds) {
+                val state = awaitItem()
+                assertTrue(
+                    "Expected STABLE or IDLE, got $state",
+                    state == RelaySelectionState.STABLE || state == RelaySelectionState.IDLE,
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            manager.stop()
         }
-
-        // Advance past debounce period
-        testScheduler.advanceTimeBy(2000)
-        advanceUntilIdle()
-
-        // Then: Only ONE selection should have been made (debounce batched the rapid emissions)
-        // The last emitted value should be processed
-        assertTrue(
-            "Expected at most 1 setAsMyRelay call (debounce should batch), got ${relayCalls.size}",
-            relayCalls.size <= 1
-        )
-
-        manager.stop()
-    }
 
     @Test
-    fun `auto-select - processes announces and selects relay`() = runTest {
-        // Given: Auto-select enabled with propagation nodes available
-        coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-        val announce = TestFactories.createAnnounce(
-            destinationHash = testDestHash,
-            nodeType = "PROPAGATION_NODE",
-            hops = 2
-        )
-        // Use flowOf() which emits immediately when collection starts
-        // This tests that the selection flow works end-to-end
-        every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+    fun `selectionState - returns to IDLE after cooldown`() =
+        runTest {
+            // Given: Auto-select enabled with propagation nodes
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 2,
+                )
+            val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
 
-        // Track setAsMyRelay calls
-        var setAsMyRelayCalled = false
-        coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
-            setAsMyRelayCalled = true
-            myRelayFlow.value = TestFactories.createContactEntity(
-                destinationHash = testDestHash,
-                isMyRelay = true
-            )
+            // When: Manager starts and processes selection
+            manager.start()
+            advanceUntilIdle()
+
+            announcesFlow.emit(listOf(announce))
+            advanceUntilIdle()
+
+            // Advance past debounce (1s) + cooldown (30s) + buffer
+            testScheduler.advanceTimeBy(35_000)
+            advanceUntilIdle()
+
+            // Then: State should return to IDLE after cooldown
+            assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+            manager.stop()
         }
 
-        // When: Manager starts (which triggers observePropagationNodeAnnounces)
-        manager.start()
-        advanceUntilIdle()
+    @Test
+    fun `auto-select - skips selection when state is not IDLE`() =
+        runTest {
+            // Given: Auto-select enabled with propagation nodes
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 2,
+                )
+            val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
 
-        // Advance past debounce period (1000ms) + cooldown buffer
-        testScheduler.advanceTimeBy(2000)
-        advanceUntilIdle()
+            // When: Manager starts
+            manager.start()
+            advanceUntilIdle()
 
-        // Then: Selection should have been made
-        assertTrue("Expected setAsMyRelay to be called", setAsMyRelayCalled)
+            // First emission triggers selection
+            announcesFlow.emit(listOf(announce))
+            testScheduler.advanceTimeBy(1500) // Past debounce
+            advanceUntilIdle()
 
-        manager.stop()
-    }
+            // Record setAsMyRelay call count
+            val callsAfterFirst = mutableListOf<String>()
+            coEvery { contactRepository.setAsMyRelay(capture(callsAfterFirst), any()) } answers {
+                myRelayFlow.value =
+                    TestFactories.createContactEntity(
+                        destinationHash = callsAfterFirst.last(),
+                        isMyRelay = true,
+                    )
+            }
+
+            // Second emission should be blocked by state guard (still in STABLE/cooldown)
+            val announce2 =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash2,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 1, // Lower hop count - would normally trigger switch
+                )
+            announcesFlow.emit(listOf(announce2))
+            testScheduler.advanceTimeBy(1500)
+            advanceUntilIdle()
+
+            // Then: Second selection should NOT have called setAsMyRelay for testDestHash2
+            // because state guard blocked it (state was STABLE, not IDLE)
+            coVerify(atMost = 1) { contactRepository.setAsMyRelay(any(), any()) }
+
+            manager.stop()
+        }
+
+    @Test
+    fun `setManualRelay - resets state to IDLE`() =
+        runTest {
+            // Given: Manager in some non-IDLE state (simulate by triggering auto-select)
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 2,
+                )
+            val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+            manager.start()
+            advanceUntilIdle()
+
+            // Trigger auto-select to get into STABLE state
+            announcesFlow.emit(listOf(announce))
+            testScheduler.advanceTimeBy(1500)
+            advanceUntilIdle()
+
+            // State should be STABLE
+            assertTrue(
+                "Expected STABLE, got ${manager.selectionState.value}",
+                manager.selectionState.value == RelaySelectionState.STABLE ||
+                    manager.selectionState.value == RelaySelectionState.IDLE,
+            )
+
+            // When: User manually selects a relay
+            manager.setManualRelay(testDestHash2, "Manual Relay")
+            advanceUntilIdle()
+
+            // Then: State should be reset to IDLE (user action cancels auto-select)
+            assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+            manager.stop()
+        }
+
+    @Test
+    fun `clearRelay - resets state to IDLE`() =
+        runTest {
+            // Given: Manager started
+            manager.start()
+            advanceUntilIdle()
+
+            // When: Relay is cleared
+            manager.clearRelay()
+            advanceUntilIdle()
+
+            // Then: State should be IDLE
+            assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+            manager.stop()
+        }
+
+    @Test
+    fun `enableAutoSelect - resets state to IDLE`() =
+        runTest {
+            // Given: Manager started
+            manager.start()
+            advanceUntilIdle()
+
+            // When: Auto-select is enabled
+            manager.enableAutoSelect()
+            advanceUntilIdle()
+
+            // Then: State should be IDLE (ready for fresh auto-selection)
+            assertEquals(RelaySelectionState.IDLE, manager.selectionState.value)
+
+            manager.stop()
+        }
+
+    @Test
+    fun `auto-select - debounce batches rapid announce emissions`() =
+        runTest {
+            // Given: Auto-select enabled
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announcesFlow = MutableSharedFlow<List<com.lxmf.messenger.data.repository.Announce>>()
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
+
+            // Track setAsMyRelay calls
+            val relayCalls = mutableListOf<String>()
+            coEvery { contactRepository.setAsMyRelay(capture(relayCalls), any()) } answers {
+                myRelayFlow.value =
+                    TestFactories.createContactEntity(
+                        destinationHash = relayCalls.last(),
+                        isMyRelay = true,
+                    )
+            }
+
+            // When: Manager starts
+            manager.start()
+            advanceUntilIdle()
+
+            // Emit 5 rapid changes (simulating Room invalidation triggers)
+            // These should be debounced into a single selection
+            repeat(5) { i ->
+                val announce =
+                    TestFactories.createAnnounce(
+                        destinationHash = testDestHash,
+                        nodeType = "PROPAGATION_NODE",
+                        hops = 2 + i, // Different hop counts
+                    )
+                announcesFlow.emit(listOf(announce))
+                testScheduler.advanceTimeBy(100) // 100ms between emissions (within 1s debounce)
+                advanceUntilIdle()
+            }
+
+            // Advance past debounce period
+            testScheduler.advanceTimeBy(2000)
+            advanceUntilIdle()
+
+            // Then: Only ONE selection should have been made (debounce batched the rapid emissions)
+            // The last emitted value should be processed
+            assertTrue(
+                "Expected at most 1 setAsMyRelay call (debounce should batch), got ${relayCalls.size}",
+                relayCalls.size <= 1,
+            )
+
+            manager.stop()
+        }
+
+    @Test
+    fun `auto-select - processes announces and selects relay`() =
+        runTest {
+            // Given: Auto-select enabled with propagation nodes available
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            val announce =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    nodeType = "PROPAGATION_NODE",
+                    hops = 2,
+                )
+            // Use flowOf() which emits immediately when collection starts
+            // This tests that the selection flow works end-to-end
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            // Track setAsMyRelay calls
+            var setAsMyRelayCalled = false
+            coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
+                setAsMyRelayCalled = true
+                myRelayFlow.value =
+                    TestFactories.createContactEntity(
+                        destinationHash = testDestHash,
+                        isMyRelay = true,
+                    )
+            }
+
+            // When: Manager starts (which triggers observePropagationNodeAnnounces)
+            manager.start()
+            advanceUntilIdle()
+
+            // Advance past debounce period (1000ms) + cooldown buffer
+            testScheduler.advanceTimeBy(2000)
+            advanceUntilIdle()
+
+            // Then: Selection should have been made
+            assertTrue("Expected setAsMyRelay to be called", setAsMyRelayCalled)
+
+            manager.stop()
+        }
 
     // ========== excludeFromAutoSelect Tests ==========
 

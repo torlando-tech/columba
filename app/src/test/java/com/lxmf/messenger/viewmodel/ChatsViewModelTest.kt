@@ -100,15 +100,17 @@ class ChatsViewModelTest {
     }
 
     @Test
-    fun `initial state has empty conversations`() =
+    fun `initial state has empty conversations and is loading`() =
         runTest {
-            viewModel.conversations.test {
-                assertEquals(emptyList<Conversation>(), awaitItem())
+            viewModel.chatsState.test {
+                val state = awaitItem()
+                assertEquals(emptyList<Conversation>(), state.conversations)
+                assertEquals(true, state.isLoading)
             }
         }
 
     @Test
-    fun `conversations flow emits repository data`() =
+    fun `chatsState flow emits repository data`() =
         runTest {
             // Create fresh mocks and configure BEFORE creating ViewModel
             val repository: ConversationRepository = mockk()
@@ -119,14 +121,15 @@ class ChatsViewModelTest {
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
             // WhileSubscribed requires active collector - test() provides one
-            newViewModel.conversations.test {
-                // Skip initial value (emptyList), wait for actual data from repository
-                awaitItem() // Consume initialValue (emptyList)
+            newViewModel.chatsState.test {
+                // Skip initial loading state, wait for actual data from repository
+                awaitItem() // Consume initialValue (loading state)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
-                val conversations = awaitItem() // This will be the actual data
-                assertEquals(2, conversations.size)
-                assertEquals("Alice", conversations[0].peerName)
-                assertEquals("Bob", conversations[1].peerName)
+                val state = awaitItem() // This will be the actual data
+                assertEquals(2, state.conversations.size)
+                assertEquals("Alice", state.conversations[0].peerName)
+                assertEquals("Bob", state.conversations[1].peerName)
+                assertEquals(false, state.isLoading)
             }
         }
 
@@ -146,15 +149,15 @@ class ChatsViewModelTest {
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
-            newViewModel.conversations.test {
-                // Skip initial value, wait for actual data from repository
-                awaitItem() // Consume initialValue (emptyList)
+            newViewModel.chatsState.test {
+                // Skip initial loading state, wait for actual data from repository
+                awaitItem() // Consume initialValue (loading state)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
-                val conversations = awaitItem() // This will be the actual data
-                assertEquals(3, conversations.size)
-                assertEquals("Charlie", conversations[0].peerName) // Most recent
-                assertEquals("Bob", conversations[1].peerName)
-                assertEquals("Alice", conversations[2].peerName) // Oldest
+                val state = awaitItem() // This will be the actual data
+                assertEquals(3, state.conversations.size)
+                assertEquals("Charlie", state.conversations[0].peerName) // Most recent
+                assertEquals("Bob", state.conversations[1].peerName)
+                assertEquals("Alice", state.conversations[2].peerName) // Oldest
             }
         }
 
@@ -198,7 +201,7 @@ class ChatsViewModelTest {
         }
 
     @Test
-    fun `conversations flow updates when repository data changes`() =
+    fun `chatsState flow updates when repository data changes`() =
         runTest {
             // Create fresh mocks and configure BEFORE creating ViewModel
             val repository: ConversationRepository = mockk()
@@ -209,22 +212,22 @@ class ChatsViewModelTest {
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
             advanceUntilIdle()
 
-            newViewModel.conversations.test {
-                // Initial: empty
-                assertEquals(0, awaitItem().size)
+            newViewModel.chatsState.test {
+                // Initial: loading state with empty conversations
+                assertEquals(0, awaitItem().conversations.size)
 
                 // Add first conversation
                 conversationsFlow.value = listOf(testConversation1)
-                assertEquals(1, awaitItem().size)
+                assertEquals(1, awaitItem().conversations.size)
 
                 // Add second conversation
                 conversationsFlow.value = listOf(testConversation1, testConversation2)
-                val conversations = awaitItem()
-                assertEquals(2, conversations.size)
+                val state = awaitItem()
+                assertEquals(2, state.conversations.size)
 
                 // Remove one conversation
                 conversationsFlow.value = listOf(testConversation2)
-                assertEquals(1, awaitItem().size)
+                assertEquals(1, awaitItem().conversations.size)
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -246,11 +249,11 @@ class ChatsViewModelTest {
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
-            newViewModel.conversations.test {
-                // Skip initial value, wait for actual data from repository
-                awaitItem() // Consume initialValue (emptyList)
+            newViewModel.chatsState.test {
+                // Skip initial loading state, wait for actual data from repository
+                awaitItem() // Consume initialValue (loading state)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
-                val result = awaitItem() // This will be the actual data
+                val result = awaitItem().conversations // This will be the actual data
                 assertEquals(3, result.size)
                 assertEquals(5, result[0].unreadCount)
                 assertEquals(0, result[1].unreadCount)
@@ -274,11 +277,11 @@ class ChatsViewModelTest {
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
 
-            newViewModel.conversations.test {
-                // Skip initial value, wait for actual data from repository
-                awaitItem() // Consume initialValue (emptyList)
+            newViewModel.chatsState.test {
+                // Skip initial loading state, wait for actual data from repository
+                awaitItem() // Consume initialValue (loading state)
                 advanceUntilIdle() // Let WhileSubscribed start the upstream flow
-                val result = awaitItem() // This will be the actual data
+                val result = awaitItem().conversations // This will be the actual data
                 assertEquals(3, result.size)
                 assertNull(result[0].peerPublicKey)
                 assertNotNull(result[1].peerPublicKey)
@@ -287,17 +290,21 @@ class ChatsViewModelTest {
         }
 
     @Test
-    fun `conversations flow starts when subscribed`() =
+    fun `chatsState flow starts when subscribed`() =
         runTest {
             // WhileSubscribed starts only when there's an active subscriber
-            viewModel.conversations.test {
+            viewModel.chatsState.test {
+                // Verify we receive initial loading state with empty conversations
+                val state = awaitItem()
+                assertEquals(emptyList<Conversation>(), state.conversations)
+                assertEquals(true, state.isLoading)
+
                 advanceUntilIdle()
 
                 // Verify that getConversations is called when we subscribe
                 verify { conversationRepository.getConversations() }
 
-                // Verify we receive initial empty state
-                assertEquals(emptyList<Conversation>(), awaitItem())
+                cancelAndIgnoreRemainingEvents()
             }
         }
 }

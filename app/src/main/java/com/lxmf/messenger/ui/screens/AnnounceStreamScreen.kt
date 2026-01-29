@@ -678,64 +678,73 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
-    if (pagingItems.itemCount == 0) {
-        EmptyAnnounceState(modifier = modifier.fillMaxSize())
-    } else {
-        LazyColumn(
-            state = listState,
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(
-                count = pagingItems.itemCount,
-                key = pagingItems.itemKey { announce -> announce.destinationHash },
-            ) { index ->
-                val announce = pagingItems[index]
-                if (announce != null) {
-                    Box {
-                        AnnounceCard(
-                            announce = announce,
-                            onClick = {
-                                onPeerClick(announce.destinationHash, announce.peerName)
-                            },
-                            onFavoriteClick = {
-                                viewModel.toggleContact(announce.destinationHash)
-                            },
-                            onLongPress = {
-                                contextMenuAnnounce = announce
-                                showContextMenu = true
-                            },
-                        )
+    // Check loading state - show spinner while initial data loads
+    val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
 
-                        // Show context menu for this announce
-                        if (showContextMenu && contextMenuAnnounce == announce) {
-                            PeerContextMenu(
-                                expanded = true,
-                                onDismiss = { showContextMenu = false },
+    when {
+        isLoading -> {
+            LoadingNetworkState(modifier = modifier.fillMaxSize())
+        }
+        pagingItems.itemCount == 0 -> {
+            EmptyAnnounceState(modifier = modifier.fillMaxSize())
+        }
+        else -> {
+            LazyColumn(
+                state = listState,
+                modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(
+                    count = pagingItems.itemCount,
+                    key = pagingItems.itemKey { announce -> announce.destinationHash },
+                ) { index ->
+                    val announce = pagingItems[index]
+                    if (announce != null) {
+                        Box {
+                            AnnounceCard(
                                 announce = announce,
-                                onToggleFavorite = {
-                                    viewModel.toggleContact(announce.destinationHash)
-                                },
-                                onStartChat = {
-                                    onStartChat(announce.destinationHash, announce.peerName)
-                                },
-                                onViewDetails = {
+                                onClick = {
                                     onPeerClick(announce.destinationHash, announce.peerName)
                                 },
-                                onDeleteAnnounce = {
-                                    announceToDelete = announce
-                                    showDeleteDialog = true
+                                onFavoriteClick = {
+                                    viewModel.toggleContact(announce.destinationHash)
+                                },
+                                onLongPress = {
+                                    contextMenuAnnounce = announce
+                                    showContextMenu = true
                                 },
                             )
+
+                            // Show context menu for this announce
+                            if (showContextMenu && contextMenuAnnounce == announce) {
+                                PeerContextMenu(
+                                    expanded = true,
+                                    onDismiss = { showContextMenu = false },
+                                    announce = announce,
+                                    onToggleFavorite = {
+                                        viewModel.toggleContact(announce.destinationHash)
+                                    },
+                                    onStartChat = {
+                                        onStartChat(announce.destinationHash, announce.peerName)
+                                    },
+                                    onViewDetails = {
+                                        onPeerClick(announce.destinationHash, announce.peerName)
+                                    },
+                                    onDeleteAnnounce = {
+                                        announceToDelete = announce
+                                        showDeleteDialog = true
+                                    },
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // Bottom spacing for navigation bar
-            item {
-                Spacer(modifier = Modifier.height(100.dp))
+                // Bottom spacing for navigation bar
+                item {
+                    Spacer(modifier = Modifier.height(100.dp))
+                }
             }
         }
     }
@@ -754,6 +763,25 @@ fun AnnounceStreamContent(
                 showDeleteDialog = false
                 announceToDelete = null
             },
+        )
+    }
+}
+
+@Composable
+fun LoadingNetworkState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Loading network...",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

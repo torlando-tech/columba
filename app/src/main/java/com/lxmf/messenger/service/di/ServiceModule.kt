@@ -10,6 +10,7 @@ import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
+import com.lxmf.messenger.service.manager.MemoryProfilerManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -49,6 +50,7 @@ object ServiceModule {
         val lockManager: LockManager,
         val maintenanceManager: MaintenanceManager,
         val healthCheckManager: HealthCheckManager,
+        val memoryProfilerManager: MemoryProfilerManager,
         val networkChangeManager: NetworkChangeManager,
         val notificationManager: ServiceNotificationManager,
         val broadcaster: CallbackBroadcaster,
@@ -94,6 +96,10 @@ object ServiceModule {
         // Started after initialization completes (see ReticulumServiceBinder)
         val healthCheckManager = HealthCheckManager(wrapperManager, scope, onStaleHeartbeat)
 
+        // Phase 3.5: Memory profiling (depends on wrapperManager, scope)
+        // Debug builds only - zero overhead in release
+        val memoryProfilerManager = MemoryProfilerManager(wrapperManager, scope)
+
         // Phase 4: Network change monitoring (depends on lockManager)
         // Reacquires locks and triggers announce on network changes
         val networkChangeManager = NetworkChangeManager(context, lockManager, onNetworkChanged)
@@ -114,6 +120,7 @@ object ServiceModule {
             lockManager = lockManager,
             maintenanceManager = maintenanceManager,
             healthCheckManager = healthCheckManager,
+            memoryProfilerManager = memoryProfilerManager,
             networkChangeManager = networkChangeManager,
             notificationManager = notificationManager,
             broadcaster = broadcaster,
@@ -145,8 +152,8 @@ object ServiceModule {
         onInitialized: () -> Unit,
         onShutdown: () -> Unit,
         onForceExit: () -> Unit,
-    ): ReticulumServiceBinder {
-        return ReticulumServiceBinder(
+    ): ReticulumServiceBinder =
+        ReticulumServiceBinder(
             context = context,
             state = managers.state,
             wrapperManager = managers.wrapperManager,
@@ -158,6 +165,7 @@ object ServiceModule {
             lockManager = managers.lockManager,
             maintenanceManager = managers.maintenanceManager,
             healthCheckManager = managers.healthCheckManager,
+            memoryProfilerManager = managers.memoryProfilerManager,
             networkChangeManager = managers.networkChangeManager,
             notificationManager = managers.notificationManager,
             bleCoordinator = managers.bleCoordinator,
@@ -167,5 +175,4 @@ object ServiceModule {
             onShutdown = onShutdown,
             onForceExit = onForceExit,
         )
-    }
 }

@@ -209,12 +209,14 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("Boolean", "USE_RUST", "false")
+            buildConfigField("Boolean", "ENABLE_MEMORY_PROFILING", "false")
         }
         debug {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("Boolean", "USE_RUST", "false")
+            buildConfigField("Boolean", "ENABLE_MEMORY_PROFILING", "true")
             enableUnitTestCoverage = true
             enableAndroidTestCoverage = true
         }

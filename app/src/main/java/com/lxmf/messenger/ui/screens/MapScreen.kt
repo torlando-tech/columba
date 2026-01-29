@@ -166,9 +166,11 @@ fun MapScreen(
     focusLabel: String? = null,
     // Optional full interface details for bottom sheet
     focusInterfaceDetails: FocusInterfaceDetails? = null,
-    // Permission sheet state - managed by parent to survive tab switches (issue #342)
+    // Permission UI state - managed by parent to survive tab switches (issue #342)
     permissionSheetDismissed: Boolean = false,
     onPermissionSheetDismissed: () -> Unit = {},
+    permissionCardDismissed: Boolean = false,
+    onPermissionCardDismissed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -178,7 +180,7 @@ fun MapScreen(
     // Debug logging for permission state
     Log.d(
         "MapScreen",
-        "State: hasLocationPermission=${state.hasLocationPermission}, permissionSheetDismissed=$permissionSheetDismissed, isPermissionCardDismissed=${state.isPermissionCardDismissed}",
+        "State: hasLocationPermission=${state.hasLocationPermission}, permissionSheetDismissed=$permissionSheetDismissed, permissionCardDismissed=$permissionCardDismissed",
     )
 
     // Show permission sheet only if permission not granted and user hasn't dismissed it
@@ -884,10 +886,14 @@ fun MapScreen(
         // Tap a marker to open the contact detail bottom sheet
 
         // Show hint card if no location permission and not dismissed
-        if (!state.hasLocationPermission && !state.isPermissionCardDismissed) {
+        // permissionCardDismissed is managed by parent (MainActivity) to survive tab switches (issue #342)
+        if (!state.hasLocationPermission && !permissionCardDismissed) {
             EmptyMapStateCard(
                 contactCount = state.contactMarkers.size,
-                onDismiss = { viewModel.dismissPermissionCard() },
+                onDismiss = {
+                    onPermissionCardDismissed()
+                    viewModel.dismissPermissionCard()
+                },
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)

@@ -532,9 +532,10 @@ fun ColumbaNavigation(
     // Track if we're currently navigating to answer a call (prevents race with callState observer)
     var isAnsweringCall by remember { mutableStateOf(false) }
 
-    // Track if the Map screen's location permission sheet has been dismissed this session.
+    // Track if the Map screen's location permission UI has been dismissed this session.
     // Managed here (at MainActivity level) so it survives tab switches. Issue #342.
     var mapPermissionSheetDismissed by remember { mutableStateOf(false) }
+    var mapPermissionCardDismissed by remember { mutableStateOf(false) }
 
     // Access SettingsViewModel to get theme preference
     val settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel =
@@ -972,6 +973,8 @@ fun ColumbaNavigation(
                             },
                             permissionSheetDismissed = mapPermissionSheetDismissed,
                             onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                            permissionCardDismissed = mapPermissionCardDismissed,
+                            onPermissionCardDismissed = { mapPermissionCardDismissed = true },
                         )
                     }
 
@@ -1103,6 +1106,8 @@ fun ColumbaNavigation(
                             focusInterfaceDetails = focusDetails,
                             permissionSheetDismissed = mapPermissionSheetDismissed,
                             onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                            permissionCardDismissed = mapPermissionCardDismissed,
+                            onPermissionCardDismissed = { mapPermissionCardDismissed = true },
                         )
                     }
 

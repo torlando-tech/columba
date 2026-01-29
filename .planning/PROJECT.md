@@ -1,14 +1,12 @@
-# Columba 0.7.2 Bug Fixes
+# Columba
 
 ## What This Is
 
 Columba is an Android LXMF messenger built on the Reticulum mesh networking stack. It bridges Python (Reticulum/LXMF) with Kotlin via Chaquopy, supporting BLE, USB, and TCP interfaces for off-grid and resilient communication.
 
-This milestone focuses on fixing two high-priority bugs reported after the 0.7.2 pre-release.
-
 ## Core Value
 
-Fix the performance degradation and relay selection loop bugs so users have a stable, responsive app experience.
+Reliable off-grid messaging with a polished, responsive user experience.
 
 ## Requirements
 
@@ -17,45 +15,39 @@ Fix the performance degradation and relay selection loop bugs so users have a st
 - ✓ Multi-process architecture (UI + service) — existing
 - ✓ LXMF messaging over Reticulum — existing
 - ✓ BLE, USB (RNode), TCP interface support — existing
-- ✓ Interface Discovery feature — existing (0.7.2)
+- ✓ Interface Discovery feature — v0.7.2
 - ✓ Auto-relay selection — existing
+- ✓ **PERF-01**: App maintains responsive UI regardless of background operations — v0.7.3
+- ✓ **PERF-02**: No progressive performance degradation over app runtime — v0.7.3
+- ✓ **PERF-03**: Interface Discovery screen scrolls smoothly — v0.7.3
+- ✓ **RELAY-01**: Relay auto-selection does not loop (add/remove/add cycle) — v0.7.3
+- ✓ **RELAY-02**: Root cause of automatic relay unset identified and fixed — v0.7.3
+- ✓ **ANNOUNCE-01**: Clear All Announces preserves contacts in My Contacts — v0.7.3
+- ✓ **OFFLINE-MAP-01**: Offline maps render correctly after extended offline periods — v0.7.3
+- ✓ **UX-LOADING-01**: Show loading indicators instead of flashing empty states — v0.7.3
 
 ### Active
 
-- [ ] **PERF-01**: App maintains responsive UI regardless of background operations
-- [ ] **PERF-02**: No progressive performance degradation over app runtime
-- [ ] **PERF-03**: Interface Discovery screen scrolls smoothly
-- [ ] **RELAY-01**: Relay auto-selection does not loop (add/remove/add cycle)
-- [ ] **RELAY-02**: Root cause of automatic relay unset identified and fixed
+- [ ] **NOTF-01**: No duplicate notifications after service restart for already-read messages (#338)
+- [ ] **PERM-01**: Location permission dialog stays dismissed until app restart (#342)
+- [ ] Native memory growth investigation (~1.4 MB/min in Python layer)
 
 ### Out of Scope
 
-- #338 (duplicate notifications after restart) — deferred to next milestone
-- #342 (location permission dialog regression) — deferred to next milestone
-- New features — this is a bug fix milestone
+- iOS version — Android-first approach
+- Desktop version — mobile focus
 
 ## Context
 
-**Bug Reports:**
-- #340: Bad stuttering with Interface Discovery, app gets slower over time
-- #343: MY RELAY auto-selection loop (40+ add/remove cycles observed)
+**Current State (v0.7.3):**
+- ~205K lines of Kotlin
+- Tech stack: Kotlin, Compose, Hilt, Room, Chaquopy (Python bridge)
+- Sentry performance monitoring integrated (10% transactions, 5% profiling)
+- 137 commits, 107 files changed since v0.7.2-beta
 
-**Performance Symptoms:**
-- 2-3 second lag on button presses
-- Especially pronounced on Interface Discovery screen
-- Gets worse over time → suggests memory leak or accumulating work
-- Present even on high-end devices
-
-**Relay Loop Symptoms:**
-- Same relay added/removed repeatedly
-- Even manual "Unset as Relay" immediately triggers re-selection (by design)
-- The bug is whatever is triggering the automatic UNSET
-
-**Technical Context:**
-- Kotlin/Compose UI with Hilt DI
-- Service runs in separate `:reticulum` process
-- Python Reticulum via Chaquopy
-- Interface Discovery is new in 0.7.2
+**Known Issues:**
+- Native memory growth (~1.4 MB/min) in Python/Reticulum layer — needs tracemalloc investigation
+- PropagationNodeManager is large class — could extract RelaySelectionStateMachine
 
 ## Constraints
 
@@ -67,8 +59,15 @@ Fix the performance degradation and relay selection loop bugs so users have a st
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Focus on #340 and #343 first | Highest user impact, both high severity | — Pending |
-| Defer #338 and #342 | Lower severity, can address in next milestone | — Pending |
+| Focus on #340 and #343 first | Highest user impact, both high severity | ✓ Fixed in v0.7.3 |
+| Defer #338 and #342 | Lower severity, can address in next milestone | — Active for v0.7.4 |
+| State machine for relay selection | Explicit states prevent re-entrancy bugs | ✓ Loop eliminated |
+| 1s debounce + 30s cooldown | Prevents rapid Room invalidation triggers | ✓ No cascading |
+| Exponential backoff on loop detection | Graceful degradation if edge cases occur | ✓ Good |
+| @Stable annotations for Compose | Reduces unnecessary recompositions | ✓ Smooth scrolling |
+| SQL subquery for contact-aware delete | More efficient than app-side filtering | ✓ Good |
+| Cache MapLibre style JSON locally | Enables indefinite offline map rendering | ✓ Good |
+| Boolean isLoading flag pattern | Consistent with existing MapViewModel | ✓ Good |
 
 ---
-*Last updated: 2026-01-24 after initialization*
+*Last updated: 2026-01-28 after v0.7.3 milestone*

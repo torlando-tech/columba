@@ -100,6 +100,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
@@ -131,7 +133,7 @@ fun ContactsScreen(
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
-    val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as androidx.activity.ComponentActivity)
+    val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
     val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsState()
     val effectivePendingSharedText = sharedTextFromViewModel?.text
 

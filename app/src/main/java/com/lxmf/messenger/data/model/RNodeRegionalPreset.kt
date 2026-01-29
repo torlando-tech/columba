@@ -648,7 +648,7 @@ object FrequencySlotCalculator {
         return if (mhz == mhz.toLong().toDouble()) {
             "${mhz.toLong()} MHz"
         } else {
-            "%.3f MHz".format(mhz)
+            String.format(java.util.Locale.US, "%.3f MHz", mhz)
         }
     }
 }

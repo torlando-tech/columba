@@ -54,6 +54,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -98,7 +99,6 @@ import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
-import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -429,7 +429,6 @@ sealed class PendingNavigation {
 
     data class SharedText(val text: String) : PendingNavigation()
 
-    data class IncomingCall(val identityHash: String) : PendingNavigation()
     data class IncomingCall(
         val identityHash: String,
     ) : PendingNavigation()
@@ -484,7 +483,7 @@ fun ColumbaNavigation(
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val sharedTextViewModel: SharedTextViewModel = hiltViewModel(context as ComponentActivity)
+    val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
 
     // Clear pending shared text deterministically if the user leaves Chats/Contacts
     // without selecting a destination.

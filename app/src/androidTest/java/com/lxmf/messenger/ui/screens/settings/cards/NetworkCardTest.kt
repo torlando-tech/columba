@@ -6,7 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.lxmf.messenger.test.TestActivity
+import com.lxmf.messenger.test.TestHostActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -18,7 +18,7 @@ import org.junit.Test
  */
 class NetworkCardTest {
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<TestActivity>()
+    val composeTestRule = createAndroidComposeRule<TestHostActivity>()
 
     // ========== Header and Content Tests ==========
 
@@ -27,6 +27,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -42,6 +44,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -59,6 +63,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = false,
@@ -80,6 +86,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 transportNodeEnabled = true,
@@ -97,6 +105,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -115,6 +125,8 @@ class NetworkCardTest {
         var toggledValue: Boolean? = null
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 transportNodeEnabled = true,
@@ -138,6 +150,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -154,6 +168,8 @@ class NetworkCardTest {
         var clicked = false
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = { clicked = true },
                 onManageInterfaces = {},
             )
@@ -172,6 +188,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -188,6 +206,8 @@ class NetworkCardTest {
         var clicked = false
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = { clicked = true },
             )
@@ -208,6 +228,8 @@ class NetworkCardTest {
         // When - Using shared instance that is online
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = true,
@@ -225,6 +247,8 @@ class NetworkCardTest {
         // When - Shared instance went offline (using own instance now)
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = true,
@@ -242,6 +266,8 @@ class NetworkCardTest {
         // When - Not using shared instance
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = false,
@@ -258,6 +284,8 @@ class NetworkCardTest {
         // When - Using shared instance
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = true,
@@ -277,6 +305,8 @@ class NetworkCardTest {
         // When - Using shared instance
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 isSharedInstance = true,
@@ -296,6 +326,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 transportNodeEnabled = true,
@@ -312,6 +344,8 @@ class NetworkCardTest {
         // When
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
                 transportNodeEnabled = false,
@@ -328,6 +362,8 @@ class NetworkCardTest {
         // When - Use all defaults
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = {},
             )
@@ -349,6 +385,8 @@ class NetworkCardTest {
         var clickCount = 0
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = { clickCount++ },
                 onManageInterfaces = {},
             )
@@ -368,6 +406,8 @@ class NetworkCardTest {
         var clickCount = 0
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = { clickCount++ },
             )
@@ -387,6 +427,8 @@ class NetworkCardTest {
         var clickCount = 0
         composeTestRule.setContent {
             NetworkCard(
+                isExpanded = true,
+                onExpandedChange = {},
                 onViewStatus = {},
                 onManageInterfaces = { clickCount++ },
                 isSharedInstance = true,

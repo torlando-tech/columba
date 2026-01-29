@@ -468,7 +468,6 @@ dependencies {
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)
-    androidTestImplementation(libs.mockk.android)
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.turbine)
     androidTestImplementation(platform(libs.compose.bom))

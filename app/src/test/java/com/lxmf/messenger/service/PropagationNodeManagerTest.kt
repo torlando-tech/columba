@@ -304,33 +304,38 @@ class PropagationNodeManagerTest {
                 )
             manager.start()
 
-            // Wait for initial relay to be processed
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while (state is RelayLoadState.Loading || (state as? RelayLoadState.Loaded)?.relay == null) {
-                    state = awaitItem()
+            // Keep both currentRelayState AND currentRelay active throughout test
+            // With WhileSubscribed(5000L), we need active collectors on both for changes to propagate
+            // through the full chain to observeRelayChanges
+            manager.currentRelay.test(timeout = 5.seconds) {
+                // Wait for initial relay to be processed
+                var relay = awaitItem()
+                while (relay == null) {
+                    relay = awaitItem()
                 }
+
+                // Verify initial sync happened and allow coroutines to complete
+                advanceUntilIdle()
+                coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
+                io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
+
+                // When: Relay is removed (while collector is active)
+                myRelayFlow.value = null
+
+                // Wait for currentRelay to emit null
+                relay = awaitItem()
+                while (relay != null) {
+                    relay = awaitItem()
+                }
+
+                // Allow observeRelayChanges coroutine to process the null emission
+                advanceUntilIdle()
+
+                // Then: Should clear Python layer
+                coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
+
                 cancelAndConsumeRemainingEvents()
             }
-
-            // Verify initial sync happened
-            coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
-            io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
-
-            // When: Relay is removed
-            myRelayFlow.value = null
-
-            // Wait for StateFlow to settle with null
-            manager.currentRelayState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                while ((state as? RelayLoadState.Loaded)?.relay != null) {
-                    state = awaitItem()
-                }
-                cancelAndConsumeRemainingEvents()
-            }
-
-            // Then: Should clear Python layer
-            coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
 
             manager.stop()
         }

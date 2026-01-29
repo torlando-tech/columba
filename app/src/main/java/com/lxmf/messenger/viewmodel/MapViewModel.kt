@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.location.Location
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
@@ -15,7 +16,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.model.SharingDuration
-import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -114,6 +115,7 @@ class MapViewModel
             private const val GRACE_PERIOD_MS = 60 * 60 * 1000L // 1 hour
             private const val REFRESH_INTERVAL_MS = 30_000L // 30 seconds
             private const val KEY_PERMISSION_CARD_DISMISSED = "isPermissionCardDismissed"
+            private const val KEY_PERMISSION_SHEET_DISMISSED = "hasUserDismissedPermissionSheet"
 
             /**
              * Controls whether periodic refresh is enabled.
@@ -123,15 +125,20 @@ class MapViewModel
             internal var enablePeriodicRefresh = true
         }
 
-        private val _state = MutableStateFlow(
-            MapState(
-                // Restore permission card dismissed state from SavedStateHandle
-                // This survives tab switches (Navigation saveState/restoreState) and process death,
-                // but resets on fresh app launch — matching the expected 0.6.x behavior.
-                // Fixes issue #342: permission card reappearing on every tab switch.
-                isPermissionCardDismissed = savedStateHandle.get<Boolean>(KEY_PERMISSION_CARD_DISMISSED) ?: false,
-            ),
-        )
+        private val _state =
+            MutableStateFlow(
+                MapState(
+                    // Restore permission card dismissed state from SavedStateHandle
+                    // This survives tab switches (Navigation saveState/restoreState) and process death,
+                    // but resets on fresh app launch — matching the expected 0.6.x behavior.
+                    // Fixes issue #342: permission card reappearing on every tab switch.
+                    isPermissionCardDismissed = savedStateHandle.get<Boolean>(KEY_PERMISSION_CARD_DISMISSED) ?: false,
+                    // Restore permission sheet dismissed state from SavedStateHandle
+                    // This prevents the sheet from reappearing on every tab switch (same issue as the card).
+                    // DataStore flow will keep this in sync with app-level state for fresh launches.
+                    hasUserDismissedPermissionSheet = savedStateHandle.get<Boolean>(KEY_PERMISSION_SHEET_DISMISSED) ?: false,
+                ),
+            )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
         // Refresh trigger for periodic staleness recalculation
@@ -167,11 +174,17 @@ class MapViewModel
                 }
             }
 
-            // Collect location permission sheet dismissal state
+            // Collect location permission sheet dismissal state from DataStore
+            // This keeps SavedStateHandle in sync when MainActivity resets the state on fresh launch
+            // Skip the first emission to avoid overwriting SavedStateHandle on ViewModel recreation
             viewModelScope.launch {
-                settingsRepository.hasDismissedLocationPermissionSheetFlow.collect { dismissed ->
-                    _state.update { it.copy(hasUserDismissedPermissionSheet = dismissed) }
-                }
+                settingsRepository.hasDismissedLocationPermissionSheetFlow
+                    .drop(1) // Skip initial emission - SavedStateHandle is source of truth for current session
+                    .collect { dismissed ->
+                        // Only update on actual DataStore changes (e.g., MainActivity reset on fresh launch)
+                        savedStateHandle[KEY_PERMISSION_SHEET_DISMISSED] = dismissed
+                        _state.update { it.copy(hasUserDismissedPermissionSheet = dismissed) }
+                    }
             }
 
             // Collect received locations and convert to markers
@@ -363,9 +376,16 @@ class MapViewModel
 
         /**
          * Dismiss the location permission bottom sheet for the current app session.
-         * The dismissal state persists until the app is relaunched.
+         * Persisted via SavedStateHandle so it survives tab switches (Navigation
+         * saveState/restoreState) and process death, but resets on fresh app launch.
+         * Also saves to DataStore to allow app-level reset on fresh launch.
          */
         fun dismissLocationPermissionSheet() {
+            // Persist to SavedStateHandle for immediate tab switch survival (like permission card fix)
+            savedStateHandle[KEY_PERMISSION_SHEET_DISMISSED] = true
+            // Update state immediately (synchronously) so UI responds right away
+            _state.update { it.copy(hasUserDismissedPermissionSheet = true) }
+            // Also update DataStore for app-level state management (async)
             viewModelScope.launch {
                 settingsRepository.markLocationPermissionSheetDismissed()
             }

@@ -308,117 +308,142 @@ class ContactsViewModelTest {
     @Test
     fun `groupedContacts - separates relay`() =
         runTest {
-            // Given
-            val relay =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "relay_hash",
-                    displayName = "My Relay",
-                    isMyRelay = true,
+            // Given: Create fresh ViewModel with configured repository
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "relay_hash",
+                            displayName = "My Relay",
+                            isMyRelay = true,
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "regular_hash",
+                            displayName = "Regular Contact",
+                        ),
+                    ),
                 )
-            val regular =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "regular_hash",
-                    displayName = "Regular Contact",
-                )
-            contactsFlow.value = listOf(relay, regular)
-            advanceUntilIdle()
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
 
-            // Then
-            viewModel.groupedContacts.test {
-                skipItems(1)
-                advanceUntilIdle()
-                val groups = awaitItem()
+            // Then - wait for data to propagate through the flow chain
+            newViewModel.contactsState.test {
+                // Skip loading states until we get actual data
+                var groups = awaitItem().groupedContacts
+                while (groups.relay == null && groups.all.isEmpty()) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
                 assertNotNull(groups.relay)
                 assertEquals("My Relay", groups.relay?.displayName)
                 assertEquals(1, groups.all.size)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
     @Test
     fun `groupedContacts - separates pinned`() =
         runTest {
-            // Given
-            val pinned =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "pinned_hash",
-                    displayName = "Pinned Contact",
-                    isPinned = true,
+            // Given: Create fresh ViewModel with configured repository
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "pinned_hash",
+                            displayName = "Pinned Contact",
+                            isPinned = true,
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "regular_hash",
+                            displayName = "Regular Contact",
+                            isPinned = false,
+                        ),
+                    ),
                 )
-            val regular =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "regular_hash",
-                    displayName = "Regular Contact",
-                    isPinned = false,
-                )
-            contactsFlow.value = listOf(pinned, regular)
-            advanceUntilIdle()
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
 
-            // Then
-            viewModel.groupedContacts.test {
-                skipItems(1)
-                advanceUntilIdle()
-                val groups = awaitItem()
+            // Then - wait for data to propagate through the flow chain
+            newViewModel.contactsState.test {
+                var groups = awaitItem().groupedContacts
+                while (groups.pinned.isEmpty() && groups.all.isEmpty()) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
                 assertEquals(1, groups.pinned.size)
                 assertEquals("Pinned Contact", groups.pinned[0].displayName)
                 assertEquals(1, groups.all.size)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
     @Test
     fun `groupedContacts - excludes relay from pinned`() =
         runTest {
-            // Given: Relay is also pinned
-            val relay =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "relay_hash",
-                    displayName = "Relay",
-                    isMyRelay = true,
-                    isPinned = true,
+            // Given: Create fresh ViewModel with relay that is also pinned
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "relay_hash",
+                            displayName = "Relay",
+                            isMyRelay = true,
+                            isPinned = true,
+                        ),
+                    ),
                 )
-            contactsFlow.value = listOf(relay)
-            advanceUntilIdle()
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
 
-            // Then: Should be in relay, not pinned
-            viewModel.groupedContacts.test {
-                skipItems(1)
-                advanceUntilIdle()
-                val groups = awaitItem()
+            // Then: Should be in relay, not pinned - wait for data to propagate
+            newViewModel.contactsState.test {
+                var groups = awaitItem().groupedContacts
+                while (groups.relay == null) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
                 assertNotNull(groups.relay)
                 assertTrue(groups.pinned.isEmpty())
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
     @Test
     fun `groupedContacts - all group excludes relay and pinned`() =
         runTest {
-            // Given
-            val relay =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "relay_hash",
-                    displayName = "Relay",
-                    isMyRelay = true,
+            // Given: Create fresh ViewModel with configured repository
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "relay_hash",
+                            displayName = "Relay",
+                            isMyRelay = true,
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "pinned_hash",
+                            displayName = "Pinned",
+                            isPinned = true,
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "regular_hash",
+                            displayName = "Regular",
+                        ),
+                    ),
                 )
-            val pinned =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "pinned_hash",
-                    displayName = "Pinned",
-                    isPinned = true,
-                )
-            val regular =
-                TestFactories.createEnrichedContact(
-                    destinationHash = "regular_hash",
-                    displayName = "Regular",
-                )
-            contactsFlow.value = listOf(relay, pinned, regular)
-            advanceUntilIdle()
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
 
-            // Then
-            viewModel.groupedContacts.test {
-                skipItems(1)
-                advanceUntilIdle()
-                val groups = awaitItem()
+            // Then - wait for data to propagate through the flow chain
+            newViewModel.contactsState.test {
+                var groups = awaitItem().groupedContacts
+                while (groups.all.isEmpty()) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
                 assertEquals(1, groups.all.size)
                 assertEquals("Regular", groups.all[0].displayName)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 

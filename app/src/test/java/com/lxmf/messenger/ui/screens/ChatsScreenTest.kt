@@ -94,9 +94,10 @@ class ChatsScreenTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Are you sure you want to delete your conversation with Bob? This will permanently delete all messages.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Are you sure you want to delete your conversation with Bob? This will permanently delete all messages.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -890,10 +891,17 @@ class ChatsScreenTest {
         conversations: List<com.lxmf.messenger.data.repository.Conversation> = emptyList(),
         searchQuery: String = "",
         isSyncing: Boolean = false,
+        isLoading: Boolean = false,
     ): ChatsViewModel {
         val mockViewModel = mockk<ChatsViewModel>(relaxed = true)
 
-        every { mockViewModel.conversations } returns MutableStateFlow(conversations)
+        every { mockViewModel.chatsState } returns
+            MutableStateFlow(
+                com.lxmf.messenger.viewmodel.ChatsState(
+                    conversations = conversations,
+                    isLoading = isLoading,
+                ),
+            )
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.isSyncing } returns MutableStateFlow(isSyncing)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()

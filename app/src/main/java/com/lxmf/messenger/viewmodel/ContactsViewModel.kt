@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -133,6 +134,7 @@ class ContactsViewModel
             )
 
         // Grouped contacts for section headers (relay, pinned, all), with loading state
+        // onStart emits loading state each time flow is collected (tab switch, screen entry)
         val contactsState: StateFlow<ContactsState> =
             filteredContacts
                 .map { contacts ->
@@ -147,9 +149,15 @@ class ContactsViewModel
                             ),
                         isLoading = false,
                     )
+                }.onStart {
+                    emit(ContactsState(isLoading = true))
                 }.stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
+                    started =
+                        SharingStarted.WhileSubscribed(
+                            stopTimeoutMillis = 0,
+                            replayExpirationMillis = 0,
+                        ),
                     initialValue = ContactsState(isLoading = true),
                 )
 

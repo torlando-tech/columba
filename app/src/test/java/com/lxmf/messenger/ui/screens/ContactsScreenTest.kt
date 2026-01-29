@@ -72,9 +72,10 @@ class ContactsScreenTest {
             EmptyContactsState()
         }
 
-        composeTestRule.onNodeWithText(
-            "Star peers in the Announce Stream\nor add contacts via QR code",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Star peers in the Announce Stream\nor add contacts via QR code",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -1175,10 +1176,17 @@ class ContactsScreenTest {
         contactCount: Int = 0,
         searchQuery: String = "",
         currentRelayInfo: RelayInfo? = null,
+        isLoading: Boolean = false,
     ): ContactsViewModel {
         val mockViewModel = mockk<ContactsViewModel>(relaxed = true)
 
-        every { mockViewModel.groupedContacts } returns MutableStateFlow(groupedContacts)
+        every { mockViewModel.contactsState } returns
+            MutableStateFlow(
+                com.lxmf.messenger.viewmodel.ContactsState(
+                    groupedContacts = groupedContacts,
+                    isLoading = isLoading,
+                ),
+            )
         every { mockViewModel.contactCount } returns MutableStateFlow(contactCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.currentRelayInfo } returns MutableStateFlow(currentRelayInfo)

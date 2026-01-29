@@ -166,9 +166,11 @@ fun ContactsScreen(
 
     // Debug logging
     LaunchedEffect(contactsState) {
+        val groups = contactsState.groupedContacts
         android.util.Log.d(
             "ContactsScreen",
-            "UI received: relay=${contactsState.groupedContacts.relay?.displayName}, pinned=${contactsState.groupedContacts.pinned.size}, all=${contactsState.groupedContacts.all.size}, isLoading=${contactsState.isLoading}",
+            "UI received: relay=${groups.relay?.displayName}, pinned=${groups.pinned.size}, " +
+                "all=${groups.all.size}, isLoading=${contactsState.isLoading}",
         )
     }
     var showAddContactSheet by remember { mutableStateOf(false) }

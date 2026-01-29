@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -57,6 +58,7 @@ class ChatsViewModel
         val searchQuery = MutableStateFlow("")
 
         // Filtered conversations based on search query, with loading state
+        // onStart emits loading state each time flow is collected (tab switch, screen entry)
         val chatsState: StateFlow<ChatsState> =
             searchQuery
                 .flatMapLatest { query ->
@@ -70,9 +72,15 @@ class ChatsViewModel
                         conversations = conversations,
                         isLoading = false,
                     )
+                }.onStart {
+                    emit(ChatsState(isLoading = true))
                 }.stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
+                    started =
+                        SharingStarted.WhileSubscribed(
+                            stopTimeoutMillis = 0,
+                            replayExpirationMillis = 0,
+                        ),
                     initialValue = ChatsState(isLoading = true),
                 )
 

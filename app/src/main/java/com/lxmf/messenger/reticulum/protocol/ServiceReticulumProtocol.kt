@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -535,7 +536,9 @@ class ServiceReticulumProtocol(
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", "")
                     // Notify CallBridge of incoming call
-                    com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance().onIncomingCall(callerHash)
+                    com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                        .getInstance()
+                        .onIncomingCall(callerHash)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling incoming call callback", e)
                 }
@@ -549,7 +552,9 @@ class ServiceReticulumProtocol(
                     val remoteIdentity = json.optString("remote_identity", null)
 
                     // Notify CallBridge of state change
-                    val bridge = com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance()
+                    val bridge =
+                        com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                            .getInstance()
                     when (state) {
                         "ringing" -> bridge.onCallRinging(remoteIdentity ?: "")
                         "established" -> bridge.onCallEstablished(remoteIdentity ?: "")
@@ -568,7 +573,9 @@ class ServiceReticulumProtocol(
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", null)
                     // Notify CallBridge of call ended
-                    com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance().onCallEnded(callerHash)
+                    com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                        .getInstance()
+                        .onCallEnded(callerHash)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling call ended callback", e)
                 }
@@ -862,7 +869,8 @@ class ServiceReticulumProtocol(
                 )
 
             val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID)
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID)
                     .setContentTitle("Columba Mesh Network")
                     .setContentText(statusText)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(detailText))
@@ -971,23 +979,21 @@ class ServiceReticulumProtocol(
      * Get the current service status.
      * @return Result with status string: "SHUTDOWN", "INITIALIZING", "READY", or "ERROR:message"
      */
-    fun getStatus(): Result<String> {
-        return runCatching {
+    fun getStatus(): Result<String> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.getStatus()
         }
-    }
 
     /**
      * Check if the service is initialized and ready to use.
      * @return Result with true if initialized, false otherwise
      */
-    fun isInitialized(): Result<Boolean> {
-        return runCatching {
+    fun isInitialized(): Result<Boolean> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.isInitialized()
         }
-    }
 
     /**
      * Wait for the service to reach READY status.
@@ -996,8 +1002,8 @@ class ServiceReticulumProtocol(
      * @param timeoutMs Maximum time to wait in milliseconds (default 5000ms)
      * @return Result<Unit> Success if READY within timeout, failure otherwise
      */
-    suspend fun waitForReady(timeoutMs: Long = 5000): Result<Unit> {
-        return runCatching {
+    suspend fun waitForReady(timeoutMs: Long = 5000): Result<Unit> =
+        runCatching {
             val startTime = System.currentTimeMillis()
             Log.d(TAG, "Waiting for service to become READY (timeout: ${timeoutMs}ms)")
 
@@ -1023,10 +1029,9 @@ class ServiceReticulumProtocol(
                 throw RuntimeException("Timeout waiting for service to become READY (status: ${networkStatus.value})")
             }
         }
-    }
 
-    override suspend fun initialize(config: ReticulumConfig): Result<Unit> {
-        return runCatching {
+    override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             Log.d(TAG, "Initializing via service (async)")
@@ -1075,7 +1080,6 @@ class ServiceReticulumProtocol(
                 }
             }
         }
-    }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod") // Config serialization naturally grows with each interface type
     @androidx.annotation.VisibleForTesting
@@ -1191,8 +1195,8 @@ class ServiceReticulumProtocol(
         return json.toString()
     }
 
-    override suspend fun shutdown(): Result<Unit> {
-        return runCatching {
+    override suspend fun shutdown(): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             Log.d(TAG, "Initiating shutdown via service...")
@@ -1223,10 +1227,9 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "ServiceReticulumProtocol shutdown complete")
         }
-    }
 
-    override suspend fun createIdentity(): Result<Identity> {
-        return runCatching {
+    override suspend fun createIdentity(): Result<Identity> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.createIdentity()
@@ -1253,10 +1256,9 @@ class ServiceReticulumProtocol(
                 privateKey = privateKeyStr.toByteArrayFromBase64(),
             )
         }
-    }
 
-    override suspend fun loadIdentity(path: String): Result<Identity> {
-        return runCatching {
+    override suspend fun loadIdentity(path: String): Result<Identity> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.loadIdentity(path)
@@ -1272,13 +1274,12 @@ class ServiceReticulumProtocol(
                 privateKey = result.getString("private_key").toByteArrayFromBase64(),
             )
         }
-    }
 
     override suspend fun saveIdentity(
         identity: Identity,
         path: String,
-    ): Result<Unit> {
-        return runCatching {
+    ): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.saveIdentity(identity.privateKey ?: byteArrayOf(), path)
@@ -1289,10 +1290,9 @@ class ServiceReticulumProtocol(
                 throw RuntimeException(error)
             }
         }
-    }
 
-    override suspend fun recallIdentity(hash: ByteArray): Identity? {
-        return runCatching {
+    override suspend fun recallIdentity(hash: ByteArray): Identity? =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.recallIdentity(hash)
@@ -1321,10 +1321,9 @@ class ServiceReticulumProtocol(
                 null
             }
         }.getOrNull()
-    }
 
-    override suspend fun createIdentityWithName(displayName: String): Map<String, Any> {
-        return runCatching {
+    override suspend fun createIdentityWithName(displayName: String): Map<String, Any> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.createIdentityWithName(displayName)
             parseIdentityResultJson(resultJson)
@@ -1332,10 +1331,9 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Failed to create identity with name", e)
             mapOf("error" to (e.message ?: "Unknown error"))
         }
-    }
 
-    override suspend fun deleteIdentityFile(identityHash: String): Map<String, Any> {
-        return runCatching {
+    override suspend fun deleteIdentityFile(identityHash: String): Map<String, Any> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.deleteIdentityFile(identityHash)
 
@@ -1354,13 +1352,12 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Failed to delete identity file", e)
             mapOf("success" to false, "error" to (e.message ?: "Unknown error"))
         }
-    }
 
     override suspend fun importIdentityFile(
         fileData: ByteArray,
         displayName: String,
-    ): Map<String, Any> {
-        return runCatching {
+    ): Map<String, Any> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.importIdentityFile(fileData, displayName)
             parseIdentityResultJson(resultJson)
@@ -1368,27 +1365,25 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Failed to import identity file", e)
             mapOf("error" to (e.message ?: "Unknown error"))
         }
-    }
 
     override suspend fun exportIdentityFile(
         identityHash: String,
         filePath: String,
-    ): ByteArray {
-        return runCatching {
+    ): ByteArray =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             service.exportIdentityFile(identityHash, filePath)
         }.getOrElse { e ->
             Log.e(TAG, "Failed to export identity file", e)
             ByteArray(0)
         }
-    }
 
     override suspend fun recoverIdentityFile(
         identityHash: String,
         keyData: ByteArray,
         filePath: String,
-    ): Map<String, Any> {
-        return runCatching {
+    ): Map<String, Any> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = service.recoverIdentityFile(identityHash, keyData, filePath)
 
@@ -1410,7 +1405,6 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Failed to recover identity file", e)
             mapOf("success" to false, "error" to (e.message ?: "Unknown error"))
         }
-    }
 
     override suspend fun createDestination(
         identity: Identity,
@@ -1418,17 +1412,18 @@ class ServiceReticulumProtocol(
         type: DestinationType,
         appName: String,
         aspects: List<String>,
-    ): Result<Destination> {
-        return runCatching {
+    ): Result<Destination> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             // Build identity JSON (encode ByteArrays as Base64)
             val identityJson =
-                JSONObject().apply {
-                    put("hash", identity.hash.toBase64())
-                    put("public_key", identity.publicKey.toBase64())
-                    put("private_key", identity.privateKey.toBase64())
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("hash", identity.hash.toBase64())
+                        put("public_key", identity.publicKey.toBase64())
+                        put("private_key", identity.privateKey.toBase64())
+                    }.toString()
 
             // Build aspects JSON
             val aspectsJson = JSONArray(aspects).toString()
@@ -1470,13 +1465,12 @@ class ServiceReticulumProtocol(
                 aspects = aspects,
             )
         }
-    }
 
     override suspend fun announceDestination(
         destination: Destination,
         appData: ByteArray?,
-    ): Result<Unit> {
-        return runCatching {
+    ): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.announceDestination(destination.hash, appData)
@@ -1487,14 +1481,13 @@ class ServiceReticulumProtocol(
                 throw RuntimeException(error)
             }
         }
-    }
 
     override suspend fun sendPacket(
         destination: Destination,
         data: ByteArray,
         packetType: PacketType,
-    ): Result<PacketReceipt> {
-        return runCatching {
+    ): Result<PacketReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val typeStr =
@@ -1518,38 +1511,30 @@ class ServiceReticulumProtocol(
                 timestamp = result.optLong("timestamp", System.currentTimeMillis()),
             )
         }
-    }
 
     override fun observePackets(): Flow<ReceivedPacket> = packetFlow
 
-    override suspend fun establishLink(destination: Destination): Result<Link> {
-        return Result.failure(NotImplementedError("Links not yet implemented"))
-    }
+    override suspend fun establishLink(destination: Destination): Result<Link> = Result.failure(NotImplementedError("Links not yet implemented"))
 
-    override suspend fun closeLink(link: Link): Result<Unit> {
-        return Result.failure(NotImplementedError("Links not yet implemented"))
-    }
+    override suspend fun closeLink(link: Link): Result<Unit> = Result.failure(NotImplementedError("Links not yet implemented"))
 
     override suspend fun sendOverLink(
         link: Link,
         data: ByteArray,
-    ): Result<Unit> {
-        return Result.failure(NotImplementedError("Links not yet implemented"))
-    }
+    ): Result<Unit> = Result.failure(NotImplementedError("Links not yet implemented"))
 
     override fun observeLinks(): Flow<LinkEvent> = linkFlow
 
-    override suspend fun hasPath(destinationHash: ByteArray): Boolean {
-        return try {
+    override suspend fun hasPath(destinationHash: ByteArray): Boolean =
+        try {
             service?.hasPath(destinationHash) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Error checking path", e)
             false
         }
-    }
 
-    override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> {
-        return runCatching {
+    override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.requestPath(destinationHash)
@@ -1560,20 +1545,18 @@ class ServiceReticulumProtocol(
                 throw RuntimeException(error)
             }
         }
-    }
 
-    override fun getHopCount(destinationHash: ByteArray): Int? {
-        return try {
+    override fun getHopCount(destinationHash: ByteArray): Int? =
+        try {
             val count = service?.getHopCount(destinationHash) ?: -1
             if (count >= 0) count else null
         } catch (e: Exception) {
             Log.e(TAG, "Error getting hop count", e)
             null
         }
-    }
 
-    override suspend fun getPathTableHashes(): List<String> {
-        return try {
+    override suspend fun getPathTableHashes(): List<String> =
+        try {
             val jsonString = service?.getPathTableHashes() ?: "[]"
             val jsonArray = JSONArray(jsonString)
             List(jsonArray.length()) { jsonArray.getString(it) }
@@ -1581,7 +1564,6 @@ class ServiceReticulumProtocol(
             Log.e(TAG, "Error getting path table hashes", e)
             emptyList()
         }
-    }
 
     override suspend fun probeLinkSpeed(
         destinationHash: ByteArray,
@@ -1757,8 +1739,8 @@ class ServiceReticulumProtocol(
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
-    ): Result<MessageReceipt> {
-        return runCatching {
+    ): Result<MessageReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
@@ -1784,7 +1766,6 @@ class ServiceReticulumProtocol(
                 destinationHash = destHash,
             )
         }
-    }
 
     override fun observeMessages(): Flow<ReceivedMessage> = messageFlow
 
@@ -1794,8 +1775,8 @@ class ServiceReticulumProtocol(
      * Restore peer identities from stored public keys to enable message sending to known peers.
      * This should be called after initialization to restore identities from the database.
      */
-    fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> {
-        return runCatching {
+    fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             Log.d(TAG, "restorePeerIdentities: Processing ${peerIdentities.size} peer identities")
@@ -1846,14 +1827,13 @@ class ServiceReticulumProtocol(
                 error("Failed to restore peer identities: $error")
             }
         }
-    }
 
     /**
      * Restore announce identities from stored public keys to enable message sending to announced peers.
      * Uses bulk restore with direct dict population for maximum performance.
      */
-    fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> {
-        return runCatching {
+    fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             Log.d(TAG, "restoreAnnounceIdentities: Processing ${announces.size} announce identities")
@@ -1899,63 +1879,64 @@ class ServiceReticulumProtocol(
                 error("Failed to restore announce identities: $error")
             }
         }
-    }
 
     @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
-    fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> {
-        return runCatching {
-            val service = checkNotNull(this.service) { "Service not bound" }
+    suspend fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val service = checkNotNull(this@ServiceReticulumProtocol.service) { "Service not bound" }
 
-            val resultJson = service.lxmfDestination
-            val result = JSONObject(resultJson)
+                val resultJson = service.lxmfDestination
+                val result = JSONObject(resultJson)
 
-            require(!result.has("error")) { result.optString("error", "Unknown error") }
+                require(!result.has("error")) { result.optString("error", "Unknown error") }
 
-            val hashStr = result.optString("hash", null)
-            val hexHash = result.optString("hex_hash", null)
+                val hashStr = result.optString("hash", null)
+                val hexHash = result.optString("hex_hash", null)
 
-            require(hashStr != null && hexHash != null) { "Missing LXMF destination fields" }
+                require(hashStr != null && hexHash != null) { "Missing LXMF destination fields" }
 
-            // Get the identity to construct full destination object
-            val identity = getLxmfIdentity().getOrThrow()
+                // Get the identity to construct full destination object
+                val identity = getLxmfIdentity().getOrThrow()
 
-            com.lxmf.messenger.reticulum.model.Destination(
-                hash = hashStr.toByteArrayFromBase64() ?: byteArrayOf(),
-                hexHash = hexHash,
-                identity = identity,
-                direction = com.lxmf.messenger.reticulum.model.Direction.IN,
-                type = com.lxmf.messenger.reticulum.model.DestinationType.SINGLE,
-                appName = "lxmf",
-                aspects = listOf("delivery"),
-            )
-        }
-    }
-
-    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
-    fun getLxmfIdentity(): Result<Identity> {
-        return runCatching {
-            val service = checkNotNull(this.service) { "Service not bound" }
-
-            val resultJson = service.lxmfIdentity
-            val result = JSONObject(resultJson)
-
-            require(!result.has("error")) { result.optString("error", "Unknown error") }
-
-            val hashStr = result.optString("hash", null)
-            val publicKeyStr = result.optString("public_key", null)
-            val privateKeyStr = result.optString("private_key", null)
-
-            require(hashStr != null && publicKeyStr != null && privateKeyStr != null) {
-                "Missing LXMF identity fields"
+                com.lxmf.messenger.reticulum.model.Destination(
+                    hash = hashStr.toByteArrayFromBase64() ?: byteArrayOf(),
+                    hexHash = hexHash,
+                    identity = identity,
+                    direction = com.lxmf.messenger.reticulum.model.Direction.IN,
+                    type = com.lxmf.messenger.reticulum.model.DestinationType.SINGLE,
+                    appName = "lxmf",
+                    aspects = listOf("delivery"),
+                )
             }
-
-            Identity(
-                hash = hashStr.toByteArrayFromBase64() ?: byteArrayOf(),
-                publicKey = publicKeyStr.toByteArrayFromBase64() ?: byteArrayOf(),
-                privateKey = privateKeyStr.toByteArrayFromBase64(),
-            )
         }
-    }
+
+    @Suppress("ThrowsCount") // Multiple validation checks require distinct error messages
+    suspend fun getLxmfIdentity(): Result<Identity> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val service = checkNotNull(this@ServiceReticulumProtocol.service) { "Service not bound" }
+
+                val resultJson = service.lxmfIdentity
+                val result = JSONObject(resultJson)
+
+                require(!result.has("error")) { result.optString("error", "Unknown error") }
+
+                val hashStr = result.optString("hash", null)
+                val publicKeyStr = result.optString("public_key", null)
+                val privateKeyStr = result.optString("private_key", null)
+
+                require(hashStr != null && publicKeyStr != null && privateKeyStr != null) {
+                    "Missing LXMF identity fields"
+                }
+
+                Identity(
+                    hash = hashStr.toByteArrayFromBase64() ?: byteArrayOf(),
+                    publicKey = publicKeyStr.toByteArrayFromBase64() ?: byteArrayOf(),
+                    privateKey = privateKeyStr.toByteArrayFromBase64(),
+                )
+            }
+        }
 
     override suspend fun getDebugInfo(): Map<String, Any> {
         return try {
@@ -2116,8 +2097,8 @@ class ServiceReticulumProtocol(
 
     // ==================== PROPAGATION NODE SUPPORT ====================
 
-    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> {
-        return runCatching {
+    override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.setOutboundPropagationNode(destHash)
@@ -2130,10 +2111,9 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "Propagation node ${if (destHash != null) "set to ${destHash.toHexString()}" else "cleared"}")
         }
-    }
 
-    override suspend fun getOutboundPropagationNode(): Result<String?> {
-        return runCatching {
+    override suspend fun getOutboundPropagationNode(): Result<String?> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.getOutboundPropagationNode()
@@ -2146,13 +2126,12 @@ class ServiceReticulumProtocol(
 
             result.optString("propagation_node").takeIf { it.isNotEmpty() }
         }
-    }
 
     override suspend fun requestMessagesFromPropagationNode(
         identityPrivateKey: ByteArray?,
         maxMessages: Int,
-    ): Result<PropagationState> {
-        return runCatching {
+    ): Result<PropagationState> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.requestMessagesFromPropagationNode(identityPrivateKey, maxMessages)
@@ -2171,10 +2150,9 @@ class ServiceReticulumProtocol(
                 messagesReceived = result.optInt("messages_received", 0),
             )
         }
-    }
 
-    override suspend fun getPropagationState(): Result<PropagationState> {
-        return runCatching {
+    override suspend fun getPropagationState(): Result<PropagationState> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.getPropagationState()
@@ -2192,7 +2170,6 @@ class ServiceReticulumProtocol(
                 messagesReceived = result.optInt("messages_received", 0),
             )
         }
-    }
 
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
@@ -2205,8 +2182,8 @@ class ServiceReticulumProtocol(
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
         iconAppearance: IconAppearance?,
-    ): Result<MessageReceipt> {
-        return runCatching {
+    ): Result<MessageReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
@@ -2291,14 +2268,13 @@ class ServiceReticulumProtocol(
                 destinationHash = destHash,
             )
         }
-    }
 
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
         locationJson: String,
         sourceIdentity: Identity,
-    ): Result<MessageReceipt> {
-        return runCatching {
+    ): Result<MessageReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
@@ -2328,15 +2304,14 @@ class ServiceReticulumProtocol(
                 destinationHash = destHash,
             )
         }
-    }
 
     override suspend fun sendTelemetryRequest(
         destinationHash: ByteArray,
         sourceIdentity: Identity,
         timebase: Long?,
         isCollectorRequest: Boolean,
-    ): Result<MessageReceipt> {
-        return runCatching {
+    ): Result<MessageReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
@@ -2367,10 +2342,9 @@ class ServiceReticulumProtocol(
                 destinationHash = destHash,
             )
         }
-    }
 
-    override suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit> {
-        return runCatching {
+    override suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val resultJson = service.setTelemetryCollectorMode(enabled)
@@ -2383,10 +2357,9 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "📡 Telemetry collector mode ${if (enabled) "enabled" else "disabled"}")
         }
-    }
 
-    override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit> {
-        return runCatching {
+    override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val jsonArray = JSONArray(allowedHashes.toList())
@@ -2405,15 +2378,14 @@ class ServiceReticulumProtocol(
                 Log.d(TAG, "📡 Telemetry allowed requesters cleared (all allowed)")
             }
         }
-    }
 
     override suspend fun sendReaction(
         destinationHash: ByteArray,
         targetMessageId: String,
         emoji: String,
         sourceIdentity: Identity,
-    ): Result<MessageReceipt> {
-        return runCatching {
+    ): Result<MessageReceipt> =
+        runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
             val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
@@ -2444,7 +2416,6 @@ class ServiceReticulumProtocol(
                 destinationHash = destHash,
             )
         }
-    }
 
     // ==================== MESSAGE SIZE LIMITS ====================
 
@@ -2503,8 +2474,8 @@ class ServiceReticulumProtocol(
      *
      * @return true if a shared instance is available and responding, false otherwise
      */
-    suspend fun isSharedInstanceAvailable(): Boolean {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    suspend fun isSharedInstanceAvailable(): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 service?.isSharedInstanceAvailable ?: false
             } catch (e: Exception) {
@@ -2512,7 +2483,6 @@ class ServiceReticulumProtocol(
                 false
             }
         }
-    }
 
     /**
      * Trigger an auto-announce with the provided display name.
@@ -2522,8 +2492,8 @@ class ServiceReticulumProtocol(
      * @param displayName The display name to include in the announce app_data
      * @return Result indicating success or failure
      */
-    suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> {
-        return runCatching {
+    suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> =
+        runCatching {
             Log.d(TAG, "Triggering auto-announce with display name: $displayName")
 
             // Get LXMF identity and destination
@@ -2538,7 +2508,6 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "Auto-announce successful")
         }
-    }
 
     /**
      * Parse a message JSON string into a ReceivedMessage.
@@ -2747,8 +2716,8 @@ class ServiceReticulumProtocol(
         zoomMin: Int,
         zoomMax: Int,
         timeoutMs: Long = 3600_000L,
-    ): ByteArray? {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    ): ByteArray? =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2769,7 +2738,6 @@ class ServiceReticulumProtocol(
                 null
             }
         }
-    }
 
     // Helper extension functions
 
@@ -2787,50 +2755,42 @@ class ServiceReticulumProtocol(
         }
     }
 
-    private fun String.toByteArrayFromBase64(): ByteArray? {
-        return try {
+    private fun String.toByteArrayFromBase64(): ByteArray? =
+        try {
             android.util.Base64.decode(this, android.util.Base64.NO_WRAP)
         } catch (e: Exception) {
             null
         }
-    }
 
-    private fun ByteArray?.toBase64(): String? {
-        return this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-    }
+    private fun ByteArray?.toBase64(): String? = this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
 
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
-    }
+    private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 
     // Protocol version information (for About screen)
 
-    override suspend fun getReticulumVersion(): String? {
-        return try {
+    override suspend fun getReticulumVersion(): String? =
+        try {
             service?.getReticulumVersion()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get Reticulum version", e)
             null
         }
-    }
 
-    override suspend fun getLxmfVersion(): String? {
-        return try {
+    override suspend fun getLxmfVersion(): String? =
+        try {
             service?.getLxmfVersion()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get LXMF version", e)
             null
         }
-    }
 
-    override suspend fun getBleReticulumVersion(): String? {
-        return try {
+    override suspend fun getBleReticulumVersion(): String? =
+        try {
             service?.getBleReticulumVersion()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get BLE-Reticulum version", e)
             null
         }
-    }
 
     // ===========================================
     // Voice Call Methods (LXST)
@@ -2906,8 +2866,8 @@ class ServiceReticulumProtocol(
         }
     }
 
-    override suspend fun getCallState(): Result<VoiceCallState> {
-        return runCatching {
+    override suspend fun getCallState(): Result<VoiceCallState> =
+        runCatching {
             val svc = this.service ?: throw IllegalStateException("Service not bound")
             val resultJson = svc.callState
             val result = JSONObject(resultJson)
@@ -2919,5 +2879,4 @@ class ServiceReticulumProtocol(
                 profile = result.optString("profile", null),
             )
         }
-    }
 }

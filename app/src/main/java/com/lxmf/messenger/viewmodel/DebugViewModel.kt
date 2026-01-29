@@ -55,16 +55,12 @@ data class InterfaceInfo(
  * Determines if an interface row should be clickable in the UI.
  * Clickable when offline or when it has an error.
  */
-internal fun InterfaceInfo.isClickable(): Boolean {
-    return !online || error != null
-}
+internal fun InterfaceInfo.isClickable(): Boolean = !online || error != null
 
 /**
  * Determines the dialog title for an interface based on its state.
  */
-internal fun InterfaceInfo.getDialogTitle(): String {
-    return if (error != null) "Interface Failed" else "Interface Offline"
-}
+internal fun InterfaceInfo.getDialogTitle(): String = if (error != null) "Interface Failed" else "Interface Offline"
 
 /**
  * Represents the icon type for interface status display.
@@ -78,13 +74,12 @@ enum class InterfaceIconType {
 /**
  * Determines the icon type for an interface based on its state.
  */
-internal fun InterfaceInfo.getIconType(): InterfaceIconType {
-    return when {
+internal fun InterfaceInfo.getIconType(): InterfaceIconType =
+    when {
         online -> InterfaceIconType.CHECK_CIRCLE
         error != null -> InterfaceIconType.ERROR
         else -> InterfaceIconType.WARNING
     }
-}
 
 @androidx.compose.runtime.Immutable
 data class TestAnnounceResult(
@@ -152,12 +147,12 @@ class DebugViewModel
             viewModelScope.launch {
                 if (reticulumProtocol is ServiceReticulumProtocol) {
                     // Event-driven: collect debug info from service callbacks
-                    (reticulumProtocol as ServiceReticulumProtocol).debugInfoFlow
+                    (reticulumProtocol as ServiceReticulumProtocol)
+                        .debugInfoFlow
                         .onStart {
                             // Trigger initial fetch to get data before first event
                             fetchDebugInfo()
-                        }
-                        .collect { debugInfoJson ->
+                        }.collect { debugInfoJson ->
                             try {
                                 parseAndUpdateDebugInfo(debugInfoJson)
                             } catch (e: Exception) {
@@ -386,10 +381,11 @@ class DebugViewModel
                     Log.d(TAG, "Using display name: $displayName")
 
                     // Announce it with configured display name
-                    reticulumProtocol.announceDestination(
-                        destination = destination,
-                        appData = displayName.toByteArray(),
-                    ).getOrThrow()
+                    reticulumProtocol
+                        .announceDestination(
+                            destination = destination,
+                            appData = displayName.toByteArray(),
+                        ).getOrThrow()
 
                     Log.d(TAG, "Test announce sent successfully")
                     _testAnnounceResult.value =
@@ -448,7 +444,7 @@ class DebugViewModel
          * Get the LXMF delivery destination for test announces.
          * This reuses the destination already created by the LXMF router.
          */
-        private fun getOrCreateDestination(identity: com.lxmf.messenger.reticulum.model.Identity): com.lxmf.messenger.reticulum.model.Destination {
+        private suspend fun getOrCreateDestination(identity: com.lxmf.messenger.reticulum.model.Identity): com.lxmf.messenger.reticulum.model.Destination {
             // Return cached destination if available
             cachedDestination?.let {
                 Log.d(TAG, "Using cached destination")

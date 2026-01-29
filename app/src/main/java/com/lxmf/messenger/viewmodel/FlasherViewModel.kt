@@ -34,9 +34,13 @@ enum class FlasherStep {
  * Result of a flash operation.
  */
 sealed class FlashResult {
-    data class Success(val deviceInfo: RNodeDeviceInfo?) : FlashResult()
+    data class Success(
+        val deviceInfo: RNodeDeviceInfo?,
+    ) : FlashResult()
 
-    data class Failure(val error: String) : FlashResult()
+    data class Failure(
+        val error: String,
+    ) : FlashResult()
 
     data object Cancelled : FlashResult()
 }
@@ -155,92 +159,94 @@ class FlasherViewModel
         private fun observeFlashState() {
             viewModelScope.launch {
                 flasher.flashState.collect { flashState ->
-                    when (flashState) {
-                        is RNodeFlasher.FlashState.Idle -> {
-                            // Do nothing, maintain current UI state
-                        }
-                        is RNodeFlasher.FlashState.Detecting -> {
-                            _state.update {
-                                it.copy(
-                                    isDetecting = true,
-                                    flashMessage = flashState.message,
-                                )
-                            }
-                        }
-                        is RNodeFlasher.FlashState.Progress -> {
-                            _state.update {
-                                it.copy(
-                                    flashProgress = flashState.percent,
-                                    flashMessage = flashState.message,
-                                    isFlashing = true,
-                                    needsManualReset = false,
-                                    isProvisioning = false,
-                                )
-                            }
-                        }
-                        is RNodeFlasher.FlashState.NeedsManualReset -> {
-                            Log.i(TAG, "Device needs manual reset: ${flashState.message} (hash provided: ${flashState.firmwareHash != null})")
-                            // Store the firmware hash for provisioning after reset
-                            firmwareHashForProvisioning = flashState.firmwareHash
-                            _state.update {
-                                it.copy(
-                                    isFlashing = false,
-                                    needsManualReset = true,
-                                    resetMessage = flashState.message,
-                                    flashMessage = flashState.message,
-                                )
-                            }
-                        }
-                        is RNodeFlasher.FlashState.Provisioning -> {
-                            _state.update {
-                                it.copy(
-                                    isFlashing = false,
-                                    needsManualReset = false,
-                                    isProvisioning = true,
-                                    provisioningMessage = flashState.message,
-                                    flashMessage = flashState.message,
-                                )
-                            }
-                        }
-                        is RNodeFlasher.FlashState.Complete -> {
-                            _state.update {
-                                it.copy(
-                                    currentStep = FlasherStep.COMPLETE,
-                                    isFlashing = false,
-                                    needsManualReset = false,
-                                    isProvisioning = false,
-                                    flashResult = FlashResult.Success(flashState.deviceInfo),
-                                )
-                            }
-                        }
-                        is RNodeFlasher.FlashState.Error -> {
-                            if (_state.value.currentStep == FlasherStep.DEVICE_DETECTION) {
-                                _state.update {
-                                    it.copy(
-                                        isDetecting = false,
-                                        detectionError = flashState.message,
-                                    )
-                                }
-                            } else if (_state.value.currentStep == FlasherStep.FLASH_PROGRESS) {
-                                _state.update {
-                                    it.copy(
-                                        currentStep = FlasherStep.COMPLETE,
-                                        isFlashing = false,
-                                        needsManualReset = false,
-                                        isProvisioning = false,
-                                        flashResult = FlashResult.Failure(flashState.message),
-                                    )
-                                }
-                            } else {
-                                _state.update {
-                                    it.copy(
-                                        error = flashState.message,
-                                        isLoading = false,
-                                    )
-                                }
-                            }
-                        }
+                    handleFlashState(flashState)
+                }
+            }
+        }
+
+        private fun handleFlashState(flashState: RNodeFlasher.FlashState) {
+            when (flashState) {
+                is RNodeFlasher.FlashState.Idle -> Unit
+                is RNodeFlasher.FlashState.Detecting -> handleDetecting(flashState)
+                is RNodeFlasher.FlashState.Progress -> handleProgress(flashState)
+                is RNodeFlasher.FlashState.NeedsManualReset -> handleNeedsManualReset(flashState)
+                is RNodeFlasher.FlashState.Provisioning -> handleProvisioning(flashState)
+                is RNodeFlasher.FlashState.Complete -> handleComplete(flashState)
+                is RNodeFlasher.FlashState.Error -> handleError(flashState)
+            }
+        }
+
+        private fun handleDetecting(flashState: RNodeFlasher.FlashState.Detecting) {
+            _state.update { it.copy(isDetecting = true, flashMessage = flashState.message) }
+        }
+
+        private fun handleProgress(flashState: RNodeFlasher.FlashState.Progress) {
+            _state.update {
+                it.copy(
+                    flashProgress = flashState.percent,
+                    flashMessage = flashState.message,
+                    isFlashing = true,
+                    needsManualReset = false,
+                    isProvisioning = false,
+                )
+            }
+        }
+
+        private fun handleNeedsManualReset(flashState: RNodeFlasher.FlashState.NeedsManualReset) {
+            Log.i(TAG, "Device needs manual reset: ${flashState.message} (hash: ${flashState.firmwareHash != null})")
+            firmwareHashForProvisioning = flashState.firmwareHash
+            _state.update {
+                it.copy(
+                    isFlashing = false,
+                    needsManualReset = true,
+                    resetMessage = flashState.message,
+                    flashMessage = flashState.message,
+                )
+            }
+        }
+
+        private fun handleProvisioning(flashState: RNodeFlasher.FlashState.Provisioning) {
+            _state.update {
+                it.copy(
+                    isFlashing = false,
+                    needsManualReset = false,
+                    isProvisioning = true,
+                    provisioningMessage = flashState.message,
+                    flashMessage = flashState.message,
+                )
+            }
+        }
+
+        private fun handleComplete(flashState: RNodeFlasher.FlashState.Complete) {
+            _state.update {
+                it.copy(
+                    currentStep = FlasherStep.COMPLETE,
+                    isFlashing = false,
+                    needsManualReset = false,
+                    isProvisioning = false,
+                    flashResult = FlashResult.Success(flashState.deviceInfo),
+                )
+            }
+        }
+
+        private fun handleError(flashState: RNodeFlasher.FlashState.Error) {
+            when (_state.value.currentStep) {
+                FlasherStep.DEVICE_DETECTION -> {
+                    _state.update { it.copy(isDetecting = false, detectionError = flashState.message) }
+                }
+                FlasherStep.FLASH_PROGRESS -> {
+                    _state.update {
+                        it.copy(
+                            currentStep = FlasherStep.COMPLETE,
+                            isFlashing = false,
+                            needsManualReset = false,
+                            isProvisioning = false,
+                            flashResult = FlashResult.Failure(flashState.message),
+                        )
                     }
+                }
+                else -> {
+                    _state.update { it.copy(error = flashState.message, isLoading = false) }
                 }
             }
         }
@@ -407,7 +413,8 @@ class FlasherViewModel
                 try {
                     // Get cached firmware
                     val cachedFirmware =
-                        flasher.firmwareRepository.getFirmwareForBoard(board)
+                        flasher.firmwareRepository
+                            .getFirmwareForBoard(board)
                             .filter { it.frequencyBand == band }
 
                     _state.update {

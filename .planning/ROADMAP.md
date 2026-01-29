@@ -18,7 +18,7 @@ See git history for v0.7.3-beta milestone.
 
 **Milestone Goal:** Address critical production issues identified via Sentry monitoring.
 
-- [ ] **Phase 3: ANR Elimination** - Fix synchronous IPC on main thread
+- [x] **Phase 3: ANR Elimination** - Fix synchronous IPC on main thread
 - [ ] **Phase 4: Relay Loop Resolution** - Investigate and fix COLUMBA-3 regression
 - [ ] **Phase 5: Memory Optimization** - Address OOM-causing memory growth
 - [ ] **Phase 6: Native Stability Verification** - Verify MapLibre crashes after memory fix
@@ -36,7 +36,7 @@ See git history for v0.7.3-beta milestone.
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: Move ViewModel IPC to IO dispatcher
+- [x] 03-01-PLAN.md - Move IPC methods to IO dispatcher with suspend functions
 
 ### Phase 4: Relay Loop Resolution
 **Goal**: Relay selection completes without looping under any conditions
@@ -86,7 +86,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 3. ANR Elimination | 0/1 | Not started | - |
+| 3. ANR Elimination | 1/1 | Complete ✓ | 2026-01-29 |
 | 4. Relay Loop Resolution | 0/2 | Not started | - |
 | 5. Memory Optimization | 0/3 | Not started | - |
 | 6. Native Stability Verification | 0/1 | Not started | - |

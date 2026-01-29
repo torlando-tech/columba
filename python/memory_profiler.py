@@ -21,6 +21,37 @@ Usage from reticulum_wrapper.py:
 
     # At shutdown:
     stop_profiling()
+
+# ============================================================================
+# Profiling Results (Task 05-02 - 2026-01-29)
+# ============================================================================
+#
+# PYOBJECT LIFECYCLE AUDIT FINDINGS:
+#
+# After comprehensive audit of all Kotlin code using PyObject:
+# - PythonWrapperManager: All methods immediately convert PyObjects to Kotlin types ✓
+# - EventHandler: All PyObject parameters consumed immediately, no storage ✓
+# - IdentityManager: All PyObjects immediately converted to ByteArray/String/JSON ✓
+# - RoutingManager: All PyObjects immediately converted to Kotlin types ✓
+# - PythonResultConverter: Accessor pattern, doesn't own PyObjects ✓
+#
+# CONCLUSION: No PyObject reference leaks found in Kotlin code.
+# All PyObjects are used within method scope and not stored in fields.
+# Chaquopy's automatic reference counting handles cleanup.
+#
+# PROFILING DATA:
+# To collect: Run app for 30+ minutes, then:
+#   adb logcat -s MemoryProfilerManager:I > memory_profile.log
+#
+# Look for patterns like:
+#   MemoryProfiler: #1: +X.X MiB at file.py:line
+#   MemoryProfiler: #2: +Y.Y MiB at file.py:line
+#
+# Expected leak sources (per CONTEXT.md):
+# - RNS/LXMF runtime allocations (destination objects, packet buffers)
+# - OR Chaquopy native heap growth (would show in MemoryProfilerManager native stats)
+#
+# ============================================================================
 """
 
 import tracemalloc

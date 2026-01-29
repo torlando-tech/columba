@@ -32,64 +32,71 @@ class FirmwareDownloader {
      * Progress callback for downloads.
      */
     interface DownloadCallback {
-        fun onProgress(bytesDownloaded: Long, totalBytes: Long)
+        fun onProgress(
+            bytesDownloaded: Long,
+            totalBytes: Long,
+        )
+
         fun onComplete(data: ByteArray)
+
         fun onError(error: String)
     }
 
     /**
      * Get available firmware releases from GitHub.
      */
-    suspend fun getAvailableReleases(): List<GitHubRelease>? = withContext(Dispatchers.IO) {
-        try {
-            val url = URL(GITHUB_RELEASES)
-            val connection = url.openConnection() as HttpURLConnection
+    suspend fun getAvailableReleases(): List<GitHubRelease>? =
+        withContext(Dispatchers.IO) {
+            try {
+                val url = URL(GITHUB_RELEASES)
+                val connection = url.openConnection() as HttpURLConnection
 
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "GitHub API returned ${connection.responseCode}")
-                return@withContext null
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    Log.e(TAG, "GitHub API returned ${connection.responseCode}")
+                    return@withContext null
+                }
+
+                val responseBody = connection.inputStream.bufferedReader().readText()
+                json.decodeFromString<List<GitHubRelease>>(responseBody)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch releases", e)
+                null
             }
-
-            val responseBody = connection.inputStream.bufferedReader().readText()
-            json.decodeFromString<List<GitHubRelease>>(responseBody)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch releases", e)
-            null
         }
-    }
 
     /**
      * Get the latest release.
      */
-    suspend fun getLatestRelease(): GitHubRelease? = withContext(Dispatchers.IO) {
-        try {
-            val url = URL("$GITHUB_RELEASES/latest")
-            val connection = url.openConnection() as HttpURLConnection
+    suspend fun getLatestRelease(): GitHubRelease? =
+        withContext(Dispatchers.IO) {
+            try {
+                val url = URL("$GITHUB_RELEASES/latest")
+                val connection = url.openConnection() as HttpURLConnection
 
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "GitHub API returned ${connection.responseCode}")
-                return@withContext null
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    Log.e(TAG, "GitHub API returned ${connection.responseCode}")
+                    return@withContext null
+                }
+
+                val responseBody = connection.inputStream.bufferedReader().readText()
+                json.decodeFromString<GitHubRelease>(responseBody)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch latest release", e)
+                null
             }
-
-            val responseBody = connection.inputStream.bufferedReader().readText()
-            json.decodeFromString<GitHubRelease>(responseBody)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch latest release", e)
-            null
         }
-    }
 
     /**
      * Find firmware asset for a specific board and frequency band.
@@ -108,13 +115,14 @@ class FirmwareDownloader {
         val bandSuffix = frequencyBand.modelSuffix
 
         // First, try to find a band-specific firmware file
-        val bandSpecific = release.assets.find { asset ->
-            val name = asset.name.lowercase()
-            name.startsWith(prefix.lowercase()) &&
-                bandSuffix.isNotEmpty() &&
-                name.contains(bandSuffix.lowercase()) &&
-                name.endsWith(".zip")
-        }
+        val bandSpecific =
+            release.assets.find { asset ->
+                val name = asset.name.lowercase()
+                name.startsWith(prefix.lowercase()) &&
+                    bandSuffix.isNotEmpty() &&
+                    name.contains(bandSuffix.lowercase()) &&
+                    name.endsWith(".zip")
+            }
 
         if (bandSpecific != null) {
             return bandSpecific
@@ -134,38 +142,39 @@ class FirmwareDownloader {
     suspend fun downloadFirmware(
         asset: GitHubAsset,
         callback: DownloadCallback,
-    ): ByteArray? = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Downloading firmware: ${asset.name} (${asset.size} bytes)")
+    ): ByteArray? =
+        withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Downloading firmware: ${asset.name} (${asset.size} bytes)")
 
-            val url = URL(asset.browserDownloadUrl)
-            val connection = url.openConnection() as HttpURLConnection
+                val url = URL(asset.browserDownloadUrl)
+                val connection = url.openConnection() as HttpURLConnection
 
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                callback.onError("Download failed: HTTP ${connection.responseCode}")
-                return@withContext null
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    callback.onError("Download failed: HTTP ${connection.responseCode}")
+                    return@withContext null
+                }
+
+                val totalBytes = connection.contentLengthLong
+                val data = downloadWithProgress(connection.inputStream, totalBytes, callback)
+
+                if (data != null) {
+                    Log.d(TAG, "Download complete: ${data.size} bytes")
+                    callback.onComplete(data)
+                }
+
+                data
+            } catch (e: Exception) {
+                Log.e(TAG, "Download failed", e)
+                callback.onError("Download failed: ${e.message}")
+                null
             }
-
-            val totalBytes = connection.contentLengthLong
-            val data = downloadWithProgress(connection.inputStream, totalBytes, callback)
-
-            if (data != null) {
-                Log.d(TAG, "Download complete: ${data.size} bytes")
-                callback.onComplete(data)
-            }
-
-            data
-        } catch (e: Exception) {
-            Log.e(TAG, "Download failed", e)
-            callback.onError("Download failed: ${e.message}")
-            null
         }
-    }
 
     /**
      * Download firmware directly from URL.
@@ -173,39 +182,40 @@ class FirmwareDownloader {
     suspend fun downloadFromUrl(
         downloadUrl: String,
         callback: DownloadCallback,
-    ): ByteArray? = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Downloading from: $downloadUrl")
+    ): ByteArray? =
+        withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Downloading from: $downloadUrl")
 
-            val url = URL(downloadUrl)
-            val connection = url.openConnection() as HttpURLConnection
+                val url = URL(downloadUrl)
+                val connection = url.openConnection() as HttpURLConnection
 
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
+                connection.instanceFollowRedirects = true
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                callback.onError("Download failed: HTTP ${connection.responseCode}")
-                return@withContext null
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    callback.onError("Download failed: HTTP ${connection.responseCode}")
+                    return@withContext null
+                }
+
+                val totalBytes = connection.contentLengthLong
+                val data = downloadWithProgress(connection.inputStream, totalBytes, callback)
+
+                if (data != null) {
+                    Log.d(TAG, "Download complete: ${data.size} bytes")
+                    callback.onComplete(data)
+                }
+
+                data
+            } catch (e: Exception) {
+                Log.e(TAG, "Download failed", e)
+                callback.onError("Download failed: ${e.message}")
+                null
             }
-
-            val totalBytes = connection.contentLengthLong
-            val data = downloadWithProgress(connection.inputStream, totalBytes, callback)
-
-            if (data != null) {
-                Log.d(TAG, "Download complete: ${data.size} bytes")
-                callback.onComplete(data)
-            }
-
-            data
-        } catch (e: Exception) {
-            Log.e(TAG, "Download failed", e)
-            callback.onError("Download failed: ${e.message}")
-            null
         }
-    }
 
     private fun downloadWithProgress(
         inputStream: InputStream,

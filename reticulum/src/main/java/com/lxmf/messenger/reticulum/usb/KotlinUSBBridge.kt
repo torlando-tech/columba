@@ -777,10 +777,11 @@ class KotlinUSBBridge(
             return false
         }
 
-        val port = currentPort ?: run {
-            Log.e(TAG, "Port is null")
-            return false
-        }
+        val port =
+            currentPort ?: run {
+                Log.e(TAG, "Port is null")
+                return false
+            }
 
         return synchronized(this) {
             try {
@@ -857,7 +858,10 @@ class KotlinUSBBridge(
      * @param dtrState DTR line state
      * @param rtsState RTS line state
      */
-    fun setDtrRts(dtrState: Boolean, rtsState: Boolean) {
+    fun setDtrRts(
+        dtrState: Boolean,
+        rtsState: Boolean,
+    ) {
         setDtr(dtrState)
         setRts(rtsState)
     }
@@ -870,23 +874,28 @@ class KotlinUSBBridge(
      * @param timeoutMs Read timeout in milliseconds
      * @return Number of bytes read, or -1 on error
      */
-    fun readBlocking(buffer: ByteArray, timeoutMs: Int): Int {
+    fun readBlocking(
+        buffer: ByteArray,
+        timeoutMs: Int,
+    ): Int {
         if (!isConnected.get()) {
             Log.w(TAG, "Cannot read - not connected")
             return -1
         }
 
-        val port = currentPort ?: run {
-            Log.w(TAG, "readBlocking: port is null")
-            return -1
-        }
+        val port =
+            currentPort ?: run {
+                Log.w(TAG, "readBlocking: port is null")
+                return -1
+            }
 
         return try {
             val bytesRead = port.read(buffer, timeoutMs)
             if (bytesRead > 0) {
-                val hex = buffer.take(minOf(bytesRead, 32)).joinToString(" ") {
-                    String.format("%02X", it.toInt() and 0xFF)
-                }
+                val hex =
+                    buffer.take(minOf(bytesRead, 32)).joinToString(" ") {
+                        String.format("%02X", it.toInt() and 0xFF)
+                    }
                 Log.d(TAG, "readBlocking: got $bytesRead bytes: $hex")
             }
             bytesRead

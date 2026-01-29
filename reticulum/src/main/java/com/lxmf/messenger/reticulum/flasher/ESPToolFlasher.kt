@@ -40,6 +40,7 @@ class ESPToolFlasher(
      * automatic reset via DTR/RTS signals.
      */
     class ManualBootModeRequired(message: String) : Exception(message)
+
     companion object {
         private const val TAG = "Columba:ESPTool"
 
@@ -102,10 +103,10 @@ class ESPToolFlasher(
          */
         fun isEsp32S3(board: RNodeBoard): Boolean {
             return when (board) {
-                RNodeBoard.TBEAM_S,    // T-Beam Supreme
-                RNodeBoard.TDECK,      // T-Deck
-                RNodeBoard.HELTEC_V3,  // Heltec LoRa32 v3
-                RNodeBoard.HELTEC_V4,  // Heltec LoRa32 v4
+                RNodeBoard.TBEAM_S, // T-Beam Supreme
+                RNodeBoard.TDECK, // T-Deck
+                RNodeBoard.HELTEC_V3, // Heltec LoRa32 v3
+                RNodeBoard.HELTEC_V4, // Heltec LoRa32 v4
                 -> true
                 else -> false
             }
@@ -133,7 +134,10 @@ class ESPToolFlasher(
          * Check if a device uses ESP32-S3 native USB-JTAG-Serial.
          * These devices have virtual DTR/RTS that may not work for bootloader entry.
          */
-        fun isNativeUsbDevice(vendorId: Int, productId: Int): Boolean {
+        fun isNativeUsbDevice(
+            vendorId: Int,
+            productId: Int,
+        ): Boolean {
             return vendorId == ESPRESSIF_VID && productId == ESP32_S3_USB_JTAG_SERIAL_PID
         }
     }
@@ -146,8 +150,13 @@ class ESPToolFlasher(
      * Callback interface for flash progress updates.
      */
     interface ProgressCallback {
-        fun onProgress(percent: Int, message: String)
+        fun onProgress(
+            percent: Int,
+            message: String,
+        )
+
         fun onError(error: String)
+
         fun onComplete()
     }
 
@@ -172,203 +181,212 @@ class ESPToolFlasher(
         productId: Int = 0,
         consoleImageStream: InputStream? = null,
         progressCallback: ProgressCallback,
-    ): Boolean = withContext(Dispatchers.IO) {
-        val bootloaderOffset = getBootloaderOffset(board)
-        val isS3 = isEsp32S3(board)
-        currentBoardIsS3 = isS3
-        isNativeUsb = isNativeUsbDevice(vendorId, productId)
-        Log.d(TAG, "Flashing ${board.displayName}, ESP32-S3=$isS3, nativeUSB=$isNativeUsb, " +
-            "bootloader offset=0x${bootloaderOffset.toString(16)}")
-        try {
-            progressCallback.onProgress(0, "Parsing firmware package...")
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            val bootloaderOffset = getBootloaderOffset(board)
+            val isS3 = isEsp32S3(board)
+            currentBoardIsS3 = isS3
+            isNativeUsb = isNativeUsbDevice(vendorId, productId)
+            Log.d(
+                TAG,
+                "Flashing ${board.displayName}, ESP32-S3=$isS3, nativeUSB=$isNativeUsb, " +
+                    "bootloader offset=0x${bootloaderOffset.toString(16)}",
+            )
+            try {
+                progressCallback.onProgress(0, "Parsing firmware package...")
 
-            // Parse the firmware ZIP
-            val firmwareData = parseFirmwareZip(firmwareZipStream)
-            if (firmwareData == null) {
-                progressCallback.onError("Invalid firmware package")
-                return@withContext false
-            }
-
-            // Read console image if provided
-            val consoleImage = consoleImageStream?.readBytes()
-
-            progressCallback.onProgress(5, "Connecting to device...")
-
-            // Connect at initial baud rate
-            if (!usbBridge.connect(deviceId, INITIAL_BAUD)) {
-                progressCallback.onError("Failed to connect to device")
-                return@withContext false
-            }
-
-            // Enable raw mode for ESPTool - stops async reads so readBlocking() works
-            usbBridge.enableRawMode()
-
-            progressCallback.onProgress(8, "Syncing with bootloader...")
-
-            // First try to sync WITHOUT entering bootloader.
-            // This handles the case where user has manually entered bootloader mode.
-            // If we try enterBootloader() first, the DTR/RTS sequence would reset the chip
-            // and kick it out of bootloader mode.
-            var synced = trySyncQuick()
-
-            if (synced) {
-                Log.d(TAG, "Device already in bootloader mode (manual entry detected)")
-            } else {
-                // Not in bootloader yet, try to enter via DTR/RTS sequence
-                progressCallback.onProgress(9, "Entering bootloader...")
-                if (!enterBootloader()) {
-                    progressCallback.onError("Failed to enter bootloader mode")
+                // Parse the firmware ZIP
+                val firmwareData = parseFirmwareZip(firmwareZipStream)
+                if (firmwareData == null) {
+                    progressCallback.onError("Invalid firmware package")
                     return@withContext false
                 }
 
-                progressCallback.onProgress(10, "Syncing with bootloader...")
-                synced = sync()
-            }
+                // Read console image if provided
+                val consoleImage = consoleImageStream?.readBytes()
 
-            if (!synced) {
-                progressCallback.onError("Failed to sync with bootloader")
-                return@withContext false
-            }
+                progressCallback.onProgress(5, "Connecting to device...")
 
-            // Read chip detect register - this "activates" the bootloader for subsequent commands
-            progressCallback.onProgress(11, "Detecting chip...")
-            val chipMagic = readChipDetectReg()
-            if (chipMagic != null) {
-                Log.d(TAG, "Chip magic: 0x${chipMagic.toString(16)}")
-            } else {
-                Log.w(TAG, "Could not read chip detect register")
-            }
-
-            // ESP32-S3 native USB doesn't use baud rate (it's not UART)
-            // Only attempt baud rate change for non-S3 boards
-            if (!isS3) {
-                progressCallback.onProgress(12, "Switching to high-speed mode...")
-                if (changeBaudRate(FLASH_BAUD)) {
-                    delay(50)
-                    usbBridge.setBaudRate(FLASH_BAUD)
-                    Log.d(TAG, "Switched to $FLASH_BAUD baud")
-                } else {
-                    Log.w(TAG, "Could not switch baud rate, continuing at $INITIAL_BAUD")
+                // Connect at initial baud rate
+                if (!usbBridge.connect(deviceId, INITIAL_BAUD)) {
+                    progressCallback.onError("Failed to connect to device")
+                    return@withContext false
                 }
-            } else {
-                Log.d(TAG, "Skipping baud rate change for ESP32-S3 USB")
-            }
 
-            // SPI attach configures flash pins (required before flash operations)
-            progressCallback.onProgress(13, "Attaching SPI flash...")
-            if (!spiAttach()) {
-                Log.w(TAG, "SPI attach failed, attempting to continue anyway")
-            }
+                // Enable raw mode for ESPTool - stops async reads so readBlocking() works
+                usbBridge.enableRawMode()
 
-            progressCallback.onProgress(15, "Flashing bootloader...")
+                progressCallback.onProgress(8, "Syncing with bootloader...")
 
-            // Flash each region
-            var success = true
-            var currentProgress = 15
+                // First try to sync WITHOUT entering bootloader.
+                // This handles the case where user has manually entered bootloader mode.
+                // If we try enterBootloader() first, the DTR/RTS sequence would reset the chip
+                // and kick it out of bootloader mode.
+                var synced = trySyncQuick()
 
-            // Bootloader (if present)
-            firmwareData.bootloader?.let { bootloader ->
-                success = flashRegion(
-                    bootloader,
-                    bootloaderOffset,
-                    "bootloader",
-                    currentProgress,
-                    20,
-                    progressCallback,
-                )
+                if (synced) {
+                    Log.d(TAG, "Device already in bootloader mode (manual entry detected)")
+                } else {
+                    // Not in bootloader yet, try to enter via DTR/RTS sequence
+                    progressCallback.onProgress(9, "Entering bootloader...")
+                    if (!enterBootloader()) {
+                        progressCallback.onError("Failed to enter bootloader mode")
+                        return@withContext false
+                    }
+
+                    progressCallback.onProgress(10, "Syncing with bootloader...")
+                    synced = sync()
+                }
+
+                if (!synced) {
+                    progressCallback.onError("Failed to sync with bootloader")
+                    return@withContext false
+                }
+
+                // Read chip detect register - this "activates" the bootloader for subsequent commands
+                progressCallback.onProgress(11, "Detecting chip...")
+                val chipMagic = readChipDetectReg()
+                if (chipMagic != null) {
+                    Log.d(TAG, "Chip magic: 0x${chipMagic.toString(16)}")
+                } else {
+                    Log.w(TAG, "Could not read chip detect register")
+                }
+
+                // ESP32-S3 native USB doesn't use baud rate (it's not UART)
+                // Only attempt baud rate change for non-S3 boards
+                if (!isS3) {
+                    progressCallback.onProgress(12, "Switching to high-speed mode...")
+                    if (changeBaudRate(FLASH_BAUD)) {
+                        delay(50)
+                        usbBridge.setBaudRate(FLASH_BAUD)
+                        Log.d(TAG, "Switched to $FLASH_BAUD baud")
+                    } else {
+                        Log.w(TAG, "Could not switch baud rate, continuing at $INITIAL_BAUD")
+                    }
+                } else {
+                    Log.d(TAG, "Skipping baud rate change for ESP32-S3 USB")
+                }
+
+                // SPI attach configures flash pins (required before flash operations)
+                progressCallback.onProgress(13, "Attaching SPI flash...")
+                if (!spiAttach()) {
+                    Log.w(TAG, "SPI attach failed, attempting to continue anyway")
+                }
+
+                progressCallback.onProgress(15, "Flashing bootloader...")
+
+                // Flash each region
+                var success = true
+                var currentProgress = 15
+
+                // Bootloader (if present)
+                firmwareData.bootloader?.let { bootloader ->
+                    success =
+                        flashRegion(
+                            bootloader,
+                            bootloaderOffset,
+                            "bootloader",
+                            currentProgress,
+                            20,
+                            progressCallback,
+                        )
+                    if (!success) return@withContext false
+                    currentProgress = 20
+                }
+
+                progressCallback.onProgress(currentProgress, "Flashing partition table...")
+
+                // Partition table (if present)
+                firmwareData.partitions?.let { partitions ->
+                    success =
+                        flashRegion(
+                            partitions,
+                            OFFSET_PARTITIONS,
+                            "partition table",
+                            currentProgress,
+                            25,
+                            progressCallback,
+                        )
+                    if (!success) return@withContext false
+                    currentProgress = 25
+                }
+
+                // Boot app0 (if present)
+                firmwareData.bootApp0?.let { bootApp0 ->
+                    success =
+                        flashRegion(
+                            bootApp0,
+                            OFFSET_BOOT_APP0,
+                            "boot_app0",
+                            currentProgress,
+                            30,
+                            progressCallback,
+                        )
+                    if (!success) return@withContext false
+                    currentProgress = 30
+                }
+
+                progressCallback.onProgress(currentProgress, "Flashing application...")
+
+                // Main application (required)
+                success =
+                    flashRegion(
+                        firmwareData.application,
+                        OFFSET_APPLICATION,
+                        "application",
+                        currentProgress,
+                        80,
+                        progressCallback,
+                    )
                 if (!success) return@withContext false
-                currentProgress = 20
+
+                // Console image (SPIFFS)
+                consoleImage?.let { image ->
+                    progressCallback.onProgress(80, "Flashing console image...")
+                    success =
+                        flashRegion(
+                            image,
+                            OFFSET_CONSOLE,
+                            "console image",
+                            80,
+                            95,
+                            progressCallback,
+                        )
+                    if (!success) return@withContext false
+                }
+
+                progressCallback.onProgress(95, "Finalizing...")
+
+                // Send FLASH_END to tell bootloader to reboot and run application
+                sendFlashEnd(reboot = true)
+
+                // Give the device time to reboot
+                delay(500)
+
+                // Hard reset as backup (may not work on native USB but doesn't hurt)
+                hardReset()
+
+                progressCallback.onProgress(100, "Flash complete!")
+                progressCallback.onComplete()
+
+                true
+            } catch (e: ManualBootModeRequired) {
+                // Re-throw ManualBootModeRequired so it can be handled by the caller
+                // finally block will handle cleanup
+                Log.w(TAG, "Manual boot mode required", e)
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Flash failed", e)
+                progressCallback.onError("Flash failed: ${e.message}")
+                false
+            } finally {
+                // Disable raw mode before disconnecting to restore normal async reads
+                // (in case the connection is reused, though we disconnect anyway)
+                usbBridge.disableRawMode()
+                usbBridge.disconnect()
+                inBootloader = false
             }
-
-            progressCallback.onProgress(currentProgress, "Flashing partition table...")
-
-            // Partition table (if present)
-            firmwareData.partitions?.let { partitions ->
-                success = flashRegion(
-                    partitions,
-                    OFFSET_PARTITIONS,
-                    "partition table",
-                    currentProgress,
-                    25,
-                    progressCallback,
-                )
-                if (!success) return@withContext false
-                currentProgress = 25
-            }
-
-            // Boot app0 (if present)
-            firmwareData.bootApp0?.let { bootApp0 ->
-                success = flashRegion(
-                    bootApp0,
-                    OFFSET_BOOT_APP0,
-                    "boot_app0",
-                    currentProgress,
-                    30,
-                    progressCallback,
-                )
-                if (!success) return@withContext false
-                currentProgress = 30
-            }
-
-            progressCallback.onProgress(currentProgress, "Flashing application...")
-
-            // Main application (required)
-            success = flashRegion(
-                firmwareData.application,
-                OFFSET_APPLICATION,
-                "application",
-                currentProgress,
-                80,
-                progressCallback,
-            )
-            if (!success) return@withContext false
-
-            // Console image (SPIFFS)
-            consoleImage?.let { image ->
-                progressCallback.onProgress(80, "Flashing console image...")
-                success = flashRegion(
-                    image,
-                    OFFSET_CONSOLE,
-                    "console image",
-                    80,
-                    95,
-                    progressCallback,
-                )
-                if (!success) return@withContext false
-            }
-
-            progressCallback.onProgress(95, "Finalizing...")
-
-            // Send FLASH_END to tell bootloader to reboot and run application
-            sendFlashEnd(reboot = true)
-
-            // Give the device time to reboot
-            delay(500)
-
-            // Hard reset as backup (may not work on native USB but doesn't hurt)
-            hardReset()
-
-            progressCallback.onProgress(100, "Flash complete!")
-            progressCallback.onComplete()
-
-            true
-        } catch (e: ManualBootModeRequired) {
-            // Re-throw ManualBootModeRequired so it can be handled by the caller
-            // finally block will handle cleanup
-            Log.w(TAG, "Manual boot mode required", e)
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Flash failed", e)
-            progressCallback.onError("Flash failed: ${e.message}")
-            false
-        } finally {
-            // Disable raw mode before disconnecting to restore normal async reads
-            // (in case the connection is reused, though we disconnect anyway)
-            usbBridge.disableRawMode()
-            usbBridge.disconnect()
-            inBootloader = false
         }
-    }
 
     /**
      * Enter ESP32 bootloader using DTR/RTS sequence.
@@ -390,34 +408,34 @@ class ESPToolFlasher(
             // it depends on the running firmware supporting these signals.
             Log.d(TAG, "S3 reset: Setting idle state (DTR=false, RTS=false)")
             usbBridge.setRts(false)
-            usbBridge.setDtr(false)  // Idle state
+            usbBridge.setDtr(false) // Idle state
             delay(RESET_DELAY_MS_USB)
 
             Log.d(TAG, "S3 reset: Setting IO0=LOW (DTR=true)")
-            usbBridge.setDtr(true)   // IO0=LOW (boot mode select)
+            usbBridge.setDtr(true) // IO0=LOW (boot mode select)
             usbBridge.setRts(false)
             delay(RESET_DELAY_MS_USB)
 
             Log.d(TAG, "S3 reset: Entering reset (RTS=true, keeping DTR=true)")
-            usbBridge.setRts(true)   // EN=LOW (enter reset)
-            usbBridge.setDtr(true)   // Keep IO0=LOW during reset! (was incorrectly false)
+            usbBridge.setRts(true) // EN=LOW (enter reset)
+            usbBridge.setDtr(true) // Keep IO0=LOW during reset! (was incorrectly false)
             delay(RESET_DELAY_MS_USB)
 
             Log.d(TAG, "S3 reset: Exiting reset (RTS=false, DTR=false)")
-            usbBridge.setRts(false)  // EN=HIGH (exit reset - IO0 still LOW, enters bootloader)
+            usbBridge.setRts(false) // EN=HIGH (exit reset - IO0 still LOW, enters bootloader)
             delay(RESET_DELAY_MS_USB / 2)
-            usbBridge.setDtr(false)  // Now release IO0
+            usbBridge.setDtr(false) // Now release IO0
         } else {
             // Classic ESP32 reset sequence (from esptool ClassicReset)
-            usbBridge.setDtr(false)  // IO0=HIGH
-            usbBridge.setRts(true)   // EN=LOW, chip in reset
+            usbBridge.setDtr(false) // IO0=HIGH
+            usbBridge.setRts(true) // EN=LOW, chip in reset
             delay(RESET_DELAY_MS)
 
-            usbBridge.setDtr(true)   // IO0=LOW (will be sampled on reset release)
-            usbBridge.setRts(false)  // EN=HIGH, chip out of reset -> enters bootloader
+            usbBridge.setDtr(true) // IO0=LOW (will be sampled on reset release)
+            usbBridge.setRts(false) // EN=HIGH, chip out of reset -> enters bootloader
             delay(BOOT_DELAY_MS)
 
-            usbBridge.setDtr(false)  // IO0=HIGH, done
+            usbBridge.setDtr(false) // IO0=HIGH, done
         }
 
         // For S3 native USB, the chip resets and the ROM bootloader re-enumerates USB.
@@ -449,9 +467,10 @@ class ESPToolFlasher(
         val drained = ByteArray(256)
         val drainedCount = usbBridge.readBlocking(drained, 100)
         if (drainedCount > 0) {
-            val hex = drained.take(minOf(drainedCount, 64)).joinToString(" ") {
-                String.format("%02X", it.toInt() and 0xFF)
-            }
+            val hex =
+                drained.take(minOf(drainedCount, 64)).joinToString(" ") {
+                    String.format("%02X", it.toInt() and 0xFF)
+                }
             Log.d(TAG, "Drained $drainedCount bytes before sync: $hex")
         }
 
@@ -493,39 +512,40 @@ class ESPToolFlasher(
      * @throws ManualBootModeRequired if sync fails on native USB device
      */
     private suspend fun sync(): Boolean {
-        val result = withTimeoutOrNull(SYNC_TIMEOUT_MS) {
-            Log.d(TAG, "Syncing with bootloader...")
+        val result =
+            withTimeoutOrNull(SYNC_TIMEOUT_MS) {
+                Log.d(TAG, "Syncing with bootloader...")
 
-            // The sync packet is a series of 0x07 0x07 0x12 0x20 followed by 32 x 0x55
-            val syncData = ByteArray(36)
-            syncData[0] = 0x07
-            syncData[1] = 0x07
-            syncData[2] = 0x12
-            syncData[3] = 0x20
-            for (i in 4 until 36) {
-                syncData[i] = 0x55
-            }
-
-            // Try multiple times
-            repeat(10) { attempt ->
-                val response = sendCommand(ESP_SYNC, syncData, 0)
-
-                if (response != null && response.isNotEmpty()) {
-                    Log.d(TAG, "Sync successful on attempt ${attempt + 1}")
-
-                    // Read and discard any additional sync responses (esptool behavior)
-                    delay(50)
-                    usbBridge.drain(100)
-
-                    return@withTimeoutOrNull true
+                // The sync packet is a series of 0x07 0x07 0x12 0x20 followed by 32 x 0x55
+                val syncData = ByteArray(36)
+                syncData[0] = 0x07
+                syncData[1] = 0x07
+                syncData[2] = 0x12
+                syncData[3] = 0x20
+                for (i in 4 until 36) {
+                    syncData[i] = 0x55
                 }
 
-                delay(100)
-            }
+                // Try multiple times
+                repeat(10) { attempt ->
+                    val response = sendCommand(ESP_SYNC, syncData, 0)
 
-            Log.e(TAG, "Sync failed after 10 attempts")
-            false
-        } ?: false
+                    if (response != null && response.isNotEmpty()) {
+                        Log.d(TAG, "Sync successful on attempt ${attempt + 1}")
+
+                        // Read and discard any additional sync responses (esptool behavior)
+                        delay(50)
+                        usbBridge.drain(100)
+
+                        return@withTimeoutOrNull true
+                    }
+
+                    delay(100)
+                }
+
+                Log.e(TAG, "Sync failed after 10 attempts")
+                false
+            } ?: false
 
         if (!result && isNativeUsb) {
             Log.w(TAG, "Sync failed on native USB device - manual boot mode required")
@@ -537,7 +557,7 @@ class ESPToolFlasher(
                     "2. Press and release the RST button\n" +
                     "3. Release the PRG (or BOOT) button\n" +
                     "4. Try flashing again\n\n" +
-                    "Note: Once RNode firmware is installed, future updates will work automatically."
+                    "Note: Once RNode firmware is installed, future updates will work automatically.",
             )
         }
 
@@ -582,10 +602,11 @@ class ESPToolFlasher(
 
         if (response != null && response.size >= 8) {
             // Value is in bytes 4-7 of the response (the 'val' field)
-            val value = (response[4].toLong() and 0xFF) or
-                ((response[5].toLong() and 0xFF) shl 8) or
-                ((response[6].toLong() and 0xFF) shl 16) or
-                ((response[7].toLong() and 0xFF) shl 24)
+            val value =
+                (response[4].toLong() and 0xFF) or
+                    ((response[5].toLong() and 0xFF) shl 8) or
+                    ((response[6].toLong() and 0xFF) shl 16) or
+                    ((response[7].toLong() and 0xFF) shl 24)
             return value
         }
         return null
@@ -698,8 +719,9 @@ class ESPToolFlasher(
             }
 
             // Update progress
-            val blockProgress = startProgress +
-                ((blockNum + 1) * (endProgress - startProgress) / numBlocks)
+            val blockProgress =
+                startProgress +
+                    ((blockNum + 1) * (endProgress - startProgress) / numBlocks)
             progressCallback.onProgress(
                 blockProgress,
                 "Flashing $name: ${blockNum + 1}/$numBlocks",
@@ -747,7 +769,11 @@ class ESPToolFlasher(
     /**
      * Write to a register on the ESP32.
      */
-    private suspend fun writeReg(address: Int, value: Int, mask: Int) {
+    private suspend fun writeReg(
+        address: Int,
+        value: Int,
+        mask: Int,
+    ) {
         // WRITE_REG packet: addr (4) + value (4) + mask (4) + delay_us (4)
         val data = ByteArray(16)
         putUInt32LE(data, 0, address)
@@ -766,7 +792,7 @@ class ESPToolFlasher(
 
         val resetDelay = if (currentBoardIsS3) RESET_DELAY_MS_USB else RESET_DELAY_MS
 
-        usbBridge.setDtrRts(false, true)  // Assert RTS (EN low - reset)
+        usbBridge.setDtrRts(false, true) // Assert RTS (EN low - reset)
         delay(resetDelay)
         usbBridge.setDtrRts(false, false) // Release both
         delay(resetDelay)
@@ -791,8 +817,11 @@ class ESPToolFlasher(
 
         // SLIP encode and send
         val slipPacket = slipEncode(packet)
-        Log.d(TAG, "Sending command 0x${(command.toInt() and 0xFF).toString(16)}, " +
-            "data size=${data.size}, packet size=${slipPacket.size}")
+        Log.d(
+            TAG,
+            "Sending command 0x${(command.toInt() and 0xFF).toString(16)}, " +
+                "data size=${data.size}, packet size=${slipPacket.size}",
+        )
         val bytesWritten = usbBridge.write(slipPacket)
         Log.d(TAG, "Wrote $bytesWritten bytes")
 
@@ -806,7 +835,11 @@ class ESPToolFlasher(
     /**
      * Build a command packet.
      */
-    private fun buildCommandPacket(command: Byte, data: ByteArray, checksum: Int): ByteArray {
+    private fun buildCommandPacket(
+        command: Byte,
+        data: ByteArray,
+        checksum: Int,
+    ): ByteArray {
         // Packet format: direction (1) + command (1) + size (2) + checksum (4) + data
         val packet = ByteArray(8 + data.size)
 
@@ -874,9 +907,10 @@ class ESPToolFlasher(
                 totalBytesRead += bytesRead
                 if (totalBytesRead <= 64) {
                     // Log first bytes received for debugging
-                    val hex = readBuffer.take(bytesRead).joinToString(" ") {
-                        String.format("%02X", it.toInt() and 0xFF)
-                    }
+                    val hex =
+                        readBuffer.take(bytesRead).joinToString(" ") {
+                            String.format("%02X", it.toInt() and 0xFF)
+                        }
                     Log.d(TAG, "Received $bytesRead bytes: $hex")
                 }
 
@@ -896,18 +930,20 @@ class ESPToolFlasher(
                                     response[1] == expectedCommand
                                 ) {
                                     // Parse response: direction(1) + cmd(1) + size(2) + val(4) + data(size)
-                                    val dataLen = (response[2].toInt() and 0xFF) or
-                                        ((response[3].toInt() and 0xFF) shl 8)
+                                    val dataLen =
+                                        (response[2].toInt() and 0xFF) or
+                                            ((response[3].toInt() and 0xFF) shl 8)
 
                                     // Status is in the LAST 2 bytes of the data section
                                     // If no data, check the 'val' field instead
-                                    val status = if (dataLen >= 2) {
-                                        // Last 2 bytes of data (data starts at byte 8)
-                                        response.getOrNull(8 + dataLen - 2)?.toInt()?.and(0xFF) ?: 1
-                                    } else {
-                                        // For empty responses, val field indicates status (byte 4)
-                                        response.getOrNull(4)?.toInt()?.and(0xFF) ?: 1
-                                    }
+                                    val status =
+                                        if (dataLen >= 2) {
+                                            // Last 2 bytes of data (data starts at byte 8)
+                                            response.getOrNull(8 + dataLen - 2)?.toInt()?.and(0xFF) ?: 1
+                                        } else {
+                                            // For empty responses, val field indicates status (byte 4)
+                                            response.getOrNull(4)?.toInt()?.and(0xFF) ?: 1
+                                        }
 
                                     if (status == 0) {
                                         return@withTimeoutOrNull response
@@ -968,7 +1004,11 @@ class ESPToolFlasher(
     /**
      * Put a 32-bit value in little-endian format.
      */
-    private fun putUInt32LE(array: ByteArray, offset: Int, value: Int) {
+    private fun putUInt32LE(
+        array: ByteArray,
+        offset: Int,
+        value: Int,
+    ) {
         array[offset] = (value and 0xFF).toByte()
         array[offset + 1] = ((value shr 8) and 0xFF).toByte()
         array[offset + 2] = ((value shr 16) and 0xFF).toByte()

@@ -20,7 +20,10 @@ object CRC16 {
      * @param initialCrc Starting CRC value (default: 0xFFFF)
      * @return Calculated 16-bit CRC value
      */
-    fun calculate(data: ByteArray, initialCrc: Int = INITIAL_VALUE): Int {
+    fun calculate(
+        data: ByteArray,
+        initialCrc: Int = INITIAL_VALUE,
+    ): Int {
         var crc = initialCrc
 
         for (byte in data) {
@@ -48,7 +51,10 @@ object CRC16 {
     /**
      * Calculate CRC16 for the given byte list.
      */
-    fun calculate(data: List<Byte>, initialCrc: Int = INITIAL_VALUE): Int {
+    fun calculate(
+        data: List<Byte>,
+        initialCrc: Int = INITIAL_VALUE,
+    ): Int {
         return calculate(data.toByteArray(), initialCrc)
     }
 
@@ -60,9 +66,10 @@ object CRC16 {
      */
     fun appendCrc(data: List<Byte>): List<Byte> {
         val crc = calculate(data)
-        return data + listOf(
-            (crc and 0xFF).toByte(),
-            ((crc shr 8) and 0xFF).toByte(),
-        )
+        return data +
+            listOf(
+                (crc and 0xFF).toByte(),
+                ((crc shr 8) and 0xFF).toByte(),
+            )
     }
 }

@@ -69,8 +69,13 @@ class NordicDFUFlasher(
      * Callback interface for flash progress updates.
      */
     interface ProgressCallback {
-        fun onProgress(percent: Int, message: String)
+        fun onProgress(
+            percent: Int,
+            message: String,
+        )
+
         fun onError(error: String)
+
         fun onComplete()
     }
 
@@ -86,57 +91,59 @@ class NordicDFUFlasher(
         firmwareZipStream: InputStream,
         deviceId: Int,
         progressCallback: ProgressCallback,
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            progressCallback.onProgress(0, "Parsing firmware package...")
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                progressCallback.onProgress(0, "Parsing firmware package...")
 
-            // Parse the firmware ZIP
-            val firmwareData = parseFirmwareZip(firmwareZipStream)
-            if (firmwareData == null) {
-                progressCallback.onError("Invalid firmware package: missing required files")
-                return@withContext false
+                // Parse the firmware ZIP
+                val firmwareData = parseFirmwareZip(firmwareZipStream)
+                if (firmwareData == null) {
+                    progressCallback.onError("Invalid firmware package: missing required files")
+                    return@withContext false
+                }
+
+                progressCallback.onProgress(5, "Entering DFU mode...")
+
+                // Enter DFU mode (1200 baud touch)
+                if (!enterDfuMode(deviceId)) {
+                    progressCallback.onError("Failed to enter DFU mode")
+                    return@withContext false
+                }
+
+                progressCallback.onProgress(10, "Connecting to bootloader...")
+
+                // Connect at flash baud rate
+                if (!usbBridge.connect(deviceId, DFU_FLASH_BAUD)) {
+                    progressCallback.onError("Failed to connect to bootloader")
+                    return@withContext false
+                }
+
+                delay(SERIAL_PORT_OPEN_WAIT_MS)
+
+                progressCallback.onProgress(15, "Starting DFU transfer...")
+
+                // Send DFU packets
+                val success =
+                    dfuSendImage(
+                        firmwareData.firmware,
+                        firmwareData.initPacket,
+                        progressCallback,
+                    )
+
+                if (success) {
+                    progressCallback.onComplete()
+                }
+
+                success
+            } catch (e: Exception) {
+                Log.e(TAG, "Flash failed", e)
+                progressCallback.onError("Flash failed: ${e.message}")
+                false
+            } finally {
+                usbBridge.disconnect()
             }
-
-            progressCallback.onProgress(5, "Entering DFU mode...")
-
-            // Enter DFU mode (1200 baud touch)
-            if (!enterDfuMode(deviceId)) {
-                progressCallback.onError("Failed to enter DFU mode")
-                return@withContext false
-            }
-
-            progressCallback.onProgress(10, "Connecting to bootloader...")
-
-            // Connect at flash baud rate
-            if (!usbBridge.connect(deviceId, DFU_FLASH_BAUD)) {
-                progressCallback.onError("Failed to connect to bootloader")
-                return@withContext false
-            }
-
-            delay(SERIAL_PORT_OPEN_WAIT_MS)
-
-            progressCallback.onProgress(15, "Starting DFU transfer...")
-
-            // Send DFU packets
-            val success = dfuSendImage(
-                firmwareData.firmware,
-                firmwareData.initPacket,
-                progressCallback,
-            )
-
-            if (success) {
-                progressCallback.onComplete()
-            }
-
-            success
-        } catch (e: Exception) {
-            Log.e(TAG, "Flash failed", e)
-            progressCallback.onError("Flash failed: ${e.message}")
-            false
-        } finally {
-            usbBridge.disconnect()
         }
-    }
 
     /**
      * Enter DFU bootloader mode using the 1200 baud touch technique.
@@ -325,13 +332,14 @@ class NordicDFUFlasher(
         sequenceNumber = (sequenceNumber + 1) % 8
 
         // Create SLIP header
-        val slipHeader = createSlipHeader(
-            sequenceNumber,
-            DATA_INTEGRITY_CHECK_PRESENT,
-            RELIABLE_PACKET,
-            HCI_PACKET_TYPE,
-            frame.size,
-        )
+        val slipHeader =
+            createSlipHeader(
+                sequenceNumber,
+                DATA_INTEGRITY_CHECK_PRESENT,
+                RELIABLE_PACKET,
+                HCI_PACKET_TYPE,
+                frame.size,
+            )
 
         // Combine header and frame
         val data = slipHeader.toMutableList()

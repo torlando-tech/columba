@@ -12,10 +12,10 @@ package com.lxmf.messenger.reticulum.flasher
  */
 @Suppress("MagicNumber")
 object KISSCodec {
-    private const val FEND: Byte = 0xC0.toByte()    // Frame End
-    private const val FESC: Byte = 0xDB.toByte()    // Frame Escape
-    private const val TFEND: Byte = 0xDC.toByte()   // Transposed Frame End
-    private const val TFESC: Byte = 0xDD.toByte()   // Transposed Frame Escape
+    private const val FEND: Byte = 0xC0.toByte() // Frame End
+    private const val FESC: Byte = 0xDB.toByte() // Frame Escape
+    private const val TFEND: Byte = 0xDC.toByte() // Transposed Frame End
+    private const val TFESC: Byte = 0xDD.toByte() // Transposed Frame Escape
 
     /**
      * Create a KISS frame for the given command and data.
@@ -24,7 +24,10 @@ object KISSCodec {
      * @param data The data bytes (may be empty)
      * @return Complete KISS frame
      */
-    fun createFrame(command: Byte, data: ByteArray = ByteArray(0)): ByteArray {
+    fun createFrame(
+        command: Byte,
+        data: ByteArray = ByteArray(0),
+    ): ByteArray {
         val frame = mutableListOf<Byte>()
         frame.add(FEND)
 
@@ -43,11 +46,17 @@ object KISSCodec {
     /**
      * Create a KISS frame for the given command and data.
      */
-    fun createFrame(command: Byte, data: List<Byte>): ByteArray {
+    fun createFrame(
+        command: Byte,
+        data: List<Byte>,
+    ): ByteArray {
         return createFrame(command, data.toByteArray())
     }
 
-    private fun addEscaped(frame: MutableList<Byte>, byte: Byte) {
+    private fun addEscaped(
+        frame: MutableList<Byte>,
+        byte: Byte,
+    ) {
         when (byte) {
             FEND -> {
                 frame.add(FESC)

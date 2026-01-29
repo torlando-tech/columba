@@ -13,10 +13,10 @@ package com.lxmf.messenger.reticulum.flasher
 @Suppress("MagicNumber")
 object SLIPCodec {
     // SLIP special characters
-    private const val FEND: Byte = 0xC0.toByte()    // Frame End
-    private const val FESC: Byte = 0xDB.toByte()    // Frame Escape
-    private const val TFEND: Byte = 0xDC.toByte()   // Transposed Frame End (follows FESC)
-    private const val TFESC: Byte = 0xDD.toByte()   // Transposed Frame Escape (follows FESC)
+    private const val FEND: Byte = 0xC0.toByte() // Frame End
+    private const val FESC: Byte = 0xDB.toByte() // Frame Escape
+    private const val TFEND: Byte = 0xDC.toByte() // Transposed Frame End (follows FESC)
+    private const val TFESC: Byte = 0xDD.toByte() // Transposed Frame Escape (follows FESC)
 
     /**
      * Encode data bytes with SLIP escaping (without framing).
@@ -143,6 +143,7 @@ class SLIPFrameParser {
         }
 
         data object NoFrame : Result()
+
         data object InvalidEscape : Result()
     }
 

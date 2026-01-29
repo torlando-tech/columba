@@ -140,11 +140,11 @@ enum class RNodePlatform(val code: Byte) {
     AVR(RNodeConstants.PLATFORM_AVR),
     ESP32(RNodeConstants.PLATFORM_ESP32),
     NRF52(RNodeConstants.PLATFORM_NRF52),
-    UNKNOWN(0x00);
+    UNKNOWN(0x00),
+    ;
 
     companion object {
-        fun fromCode(code: Byte): RNodePlatform =
-            entries.find { it.code == code } ?: UNKNOWN
+        fun fromCode(code: Byte): RNodePlatform = entries.find { it.code == code } ?: UNKNOWN
     }
 }
 
@@ -156,11 +156,11 @@ enum class RNodeMcu(val code: Byte) {
     ATmega2560(RNodeConstants.MCU_2560),
     ESP32(RNodeConstants.MCU_ESP32),
     NRF52(RNodeConstants.MCU_NRF52),
-    UNKNOWN(0x00);
+    UNKNOWN(0x00),
+    ;
 
     companion object {
-        fun fromCode(code: Byte): RNodeMcu =
-            entries.find { it.code == code } ?: UNKNOWN
+        fun fromCode(code: Byte): RNodeMcu = entries.find { it.code == code } ?: UNKNOWN
     }
 }
 
@@ -256,11 +256,11 @@ enum class RNodeBoard(
         RNodePlatform.UNKNOWN,
         "Unknown",
         "unknown",
-    );
+    ),
+    ;
 
     companion object {
-        fun fromProductCode(code: Byte): RNodeBoard =
-            entries.find { it.productCode == code } ?: UNKNOWN
+        fun fromProductCode(code: Byte): RNodeBoard = entries.find { it.productCode == code } ?: UNKNOWN
     }
 }
 

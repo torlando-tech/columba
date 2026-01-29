@@ -105,12 +105,15 @@ sealed class AvailableRelaysState {
 enum class RelaySelectionState {
     /** Ready to auto-select. Only state where selection can trigger. */
     IDLE,
+
     /** Selection triggered, waiting for database update to complete. */
     SELECTING,
+
     /** Relay selected and stable. Cooldown active before returning to IDLE. */
     STABLE,
+
     /** Loop detected. Exponential backoff in progress before returning to IDLE. */
-    BACKING_OFF
+    BACKING_OFF,
 }
 
 /**
@@ -730,15 +733,16 @@ class PropagationNodeManager
 
             // Find the best available propagation node, respecting any exclusion
             val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
-            val candidates = if (excludedRelayHash != null) {
-                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                if (filtered.size < propagationNodes.size) {
-                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+            val candidates =
+                if (excludedRelayHash != null) {
+                    val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                    if (filtered.size < propagationNodes.size) {
+                        Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                    }
+                    filtered
+                } else {
+                    propagationNodes
                 }
-                filtered
-            } else {
-                propagationNodes
-            }
             val nearest = candidates.minByOrNull { it.hops }
 
             if (nearest != null) {
@@ -804,34 +808,38 @@ class PropagationNodeManager
          * @param destinationHash The selected relay's destination hash
          * @param reason Reason for selection (for logging)
          */
-        private suspend fun recordSelection(destinationHash: String, reason: String) {
+        private suspend fun recordSelection(
+            destinationHash: String,
+            reason: String,
+        ) {
             val now = System.currentTimeMillis()
             val windowStart = now - loopWindowMs
 
             // Synchronize deque access — callers run on both Dispatchers.Main and Default
-            val (recentCount, hashes) = synchronized(recentSelections) {
-                recentSelections.addLast(destinationHash to now)
+            val (recentCount, hashes) =
+                synchronized(recentSelections) {
+                    recentSelections.addLast(destinationHash to now)
 
-                // Keep only last 10 entries to bound memory
-                while (recentSelections.size > 10) {
-                    recentSelections.removeFirst()
-                }
+                    // Keep only last 10 entries to bound memory
+                    while (recentSelections.size > 10) {
+                        recentSelections.removeFirst()
+                    }
 
-                val count = recentSelections.count { it.second > windowStart }
-                val hashList = if (count >= loopThresholdCount) {
-                    recentSelections
-                        .filter { it.second > windowStart }
-                        .map { it.first.take(12) }
-                } else {
-                    emptyList()
+                    val count = recentSelections.count { it.second > windowStart }
+                    val hashList =
+                        if (count >= loopThresholdCount) {
+                            recentSelections
+                                .filter { it.second > windowStart }
+                                .map { it.first.take(12) }
+                        } else {
+                            emptyList()
+                        }
+                    count to hashList
                 }
-                count to hashList
-            }
 
             Log.i(TAG, "Relay selected: ${destinationHash.take(12)}... ($reason) [${recentCount}x in last 60s]")
 
             if (recentCount >= loopThresholdCount) {
-
                 Log.w(TAG, "⚠️ Relay loop detected! $recentCount selections in 60s: $hashes")
 
                 // Send Sentry event for diagnostics (per context decisions)
@@ -839,14 +847,14 @@ class PropagationNodeManager
                 try {
                     Sentry.captureMessage(
                         "Relay selection loop detected: $recentCount selections in 60s",
-                        SentryLevel.WARNING
+                        SentryLevel.WARNING,
                     )
                     Sentry.addBreadcrumb(
                         Breadcrumb().apply {
                             category = "relay"
                             message = "Loop detected: hashes=$hashes"
                             level = SentryLevel.WARNING
-                        }
+                        },
                     )
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to send Sentry event: ${e.message}")
@@ -858,22 +866,24 @@ class PropagationNodeManager
                 // Calculate exponential backoff: 1s, 2s, 4s, 8s... max 10 minutes
                 // Formula: 2^(recentCount - loopThreshold) seconds, capped at max
                 val exponent = (recentCount - loopThresholdCount).coerceAtLeast(0)
-                val backoffMs = minOf(
-                    (1L shl exponent) * 1000L, // 2^exponent * 1000ms
-                    maxBackoffMs
-                )
+                val backoffMs =
+                    minOf(
+                        (1L shl exponent) * 1000L, // 2^exponent * 1000ms
+                        maxBackoffMs,
+                    )
 
                 Log.w(TAG, "Entering backoff for ${backoffMs / 1000}s (exponent=$exponent)")
 
                 // Start backoff timer
                 backoffJob?.cancel()
-                backoffJob = scope.launch {
-                    delay(backoffMs)
-                    if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
-                        _selectionState.value = RelaySelectionState.IDLE
-                        Log.i(TAG, "Backoff complete, returning to IDLE")
+                backoffJob =
+                    scope.launch {
+                        delay(backoffMs)
+                        if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
+                            _selectionState.value = RelaySelectionState.IDLE
+                            Log.i(TAG, "Backoff complete, returning to IDLE")
+                        }
                     }
-                }
             }
         }
 
@@ -904,15 +914,16 @@ class PropagationNodeManager
                         Log.i(TAG, "Relay selection started (state=SELECTING)")
 
                         // Find the nearest propagation node, excluding any recently-cleared relay
-                        val candidates = if (excludedRelayHash != null) {
-                            val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                            if (filtered.size < propagationNodes.size) {
-                                Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                        val candidates =
+                            if (excludedRelayHash != null) {
+                                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
+                                if (filtered.size < propagationNodes.size) {
+                                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
+                                }
+                                filtered
+                            } else {
+                                propagationNodes
                             }
-                            filtered
-                        } else {
-                            propagationNodes
-                        }
                         val nearest = candidates.minByOrNull { it.hops }
                         if (nearest != null) {
                             Log.i(
@@ -937,13 +948,14 @@ class PropagationNodeManager
 
                                 // Start cooldown timer
                                 cooldownJob?.cancel() // Cancel any existing cooldown
-                                cooldownJob = scope.launch {
-                                    delay(selectionCooldownMs)
-                                    if (_selectionState.value == RelaySelectionState.STABLE) {
-                                        _selectionState.value = RelaySelectionState.IDLE
-                                        Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                cooldownJob =
+                                    scope.launch {
+                                        delay(selectionCooldownMs)
+                                        if (_selectionState.value == RelaySelectionState.STABLE) {
+                                            _selectionState.value = RelaySelectionState.IDLE
+                                            Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
+                                        }
                                     }
-                                }
                             } else {
                                 Log.w(TAG, "Relay selection triggered backoff - skipping STABLE transition")
                             }

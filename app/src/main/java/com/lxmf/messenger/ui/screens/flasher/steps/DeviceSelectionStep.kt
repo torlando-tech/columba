@@ -158,21 +158,25 @@ fun DeviceSelectionStep(
 
         // Bootloader mode toggle
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if (bootloaderMode) {
-                    MaterialTheme.colorScheme.tertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor =
+                        if (bootloaderMode) {
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -183,11 +187,12 @@ fun DeviceSelectionStep(
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = if (bootloaderMode) {
-                            "Enabled - Will skip detection and go straight to firmware selection"
-                        } else {
-                            "Enable for fresh devices already in bootloader mode"
-                        },
+                        text =
+                            if (bootloaderMode) {
+                                "Enabled - Will skip detection and go straight to firmware selection"
+                            } else {
+                                "Enable for fresh devices already in bootloader mode"
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -146,7 +146,8 @@ enum class FrequencyBand(
 ) {
     BAND_868_915("868/915 MHz", "_868"),
     BAND_433("433 MHz", "_433"),
-    UNKNOWN("Unknown", "");
+    UNKNOWN("Unknown", ""),
+    ;
 
     companion object {
         fun fromModelCode(model: Byte): FrequencyBand {
@@ -235,11 +236,12 @@ class FirmwareRepository(
         private const val FIRMWARE_DIR = "firmware"
 
         // Bundled firmware versions (update when new firmware is released)
-        val BUNDLED_FIRMWARE = mapOf(
-            RNodeBoard.RAK4631 to "1.78",
-            RNodeBoard.HELTEC_V3 to "1.78",
-            RNodeBoard.TBEAM to "1.78",
-        )
+        val BUNDLED_FIRMWARE =
+            mapOf(
+                RNodeBoard.RAK4631 to "1.78",
+                RNodeBoard.HELTEC_V3 to "1.78",
+                RNodeBoard.TBEAM to "1.78",
+            )
     }
 
     private val firmwareDir: File by lazy {
@@ -265,7 +267,10 @@ class FirmwareRepository(
     /**
      * Get the latest firmware package for a board.
      */
-    fun getLatestFirmware(board: RNodeBoard, frequencyBand: FrequencyBand): FirmwarePackage? {
+    fun getLatestFirmware(
+        board: RNodeBoard,
+        frequencyBand: FrequencyBand,
+    ): FirmwarePackage? {
         return getFirmwareForBoard(board)
             .filter { it.frequencyBand == frequencyBand }
             .maxByOrNull { it.version }
@@ -276,10 +281,11 @@ class FirmwareRepository(
      */
     fun isUpdateAvailable(deviceInfo: RNodeDeviceInfo): Boolean {
         val currentVersion = deviceInfo.firmwareVersion ?: return false
-        val latestPackage = getLatestFirmware(
-            deviceInfo.board,
-            FrequencyBand.fromModelCode(deviceInfo.model),
-        ) ?: return false
+        val latestPackage =
+            getLatestFirmware(
+                deviceInfo.board,
+                FrequencyBand.fromModelCode(deviceInfo.model),
+            ) ?: return false
 
         return compareVersions(latestPackage.version, currentVersion) > 0
     }
@@ -343,8 +349,9 @@ class FirmwareRepository(
         val name = file.nameWithoutExtension
 
         // Parse filename: {prefix}_{band}_v{version}
-        val board = RNodeBoard.entries.find { name.startsWith(it.firmwarePrefix) }
-            ?: return null
+        val board =
+            RNodeBoard.entries.find { name.startsWith(it.firmwarePrefix) }
+                ?: return null
 
         val frequencyBand = FrequencyBand.fromFilename(name)
 
@@ -362,7 +369,10 @@ class FirmwareRepository(
         )
     }
 
-    private fun compareVersions(v1: String, v2: String): Int {
+    private fun compareVersions(
+        v1: String,
+        v2: String,
+    ): Int {
         val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
         val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
 

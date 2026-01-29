@@ -10,7 +10,6 @@ import org.junit.Test
  * Unit tests for SLIP codec implementation.
  */
 class SLIPCodecTest {
-
     @Test
     fun `encodeEscapeChars returns unchanged data for no special characters`() {
         val data = byteArrayOf(0x01, 0x02, 0x03, 0x04)
@@ -125,7 +124,6 @@ class SLIPCodecTest {
  * Unit tests for SLIP frame parser.
  */
 class SLIPFrameParserTest {
-
     @Test
     fun `parser extracts single frame`() {
         val parser = SLIPFrameParser()
@@ -140,10 +138,17 @@ class SLIPFrameParserTest {
     @Test
     fun `parser extracts multiple frames`() {
         val parser = SLIPFrameParser()
-        val data = byteArrayOf(
-            0xC0.toByte(), 0x01, 0x02, 0xC0.toByte(),
-            0xC0.toByte(), 0x03, 0x04, 0xC0.toByte(),
-        )
+        val data =
+            byteArrayOf(
+                0xC0.toByte(),
+                0x01,
+                0x02,
+                0xC0.toByte(),
+                0xC0.toByte(),
+                0x03,
+                0x04,
+                0xC0.toByte(),
+            )
 
         val frames = parser.processBytes(data)
 

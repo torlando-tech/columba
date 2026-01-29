@@ -50,10 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.lxmf.messenger.ui.util.LifecycleGuard
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -99,6 +98,7 @@ import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -142,23 +142,26 @@ class MainActivity : ComponentActivity() {
     // JankStats for performance monitoring (Phase 1 Plan 01-03)
     private lateinit var jankStats: androidx.metrics.performance.JankStats
 
-    private val jankFrameListener = androidx.metrics.performance.JankStats.OnFrameListener { frameData ->
-        // Report janky frames to Sentry as breadcrumbs
-        if (frameData.isJank) {
-            val durationMs = frameData.frameDurationUiNanos / 1_000_000
-            io.sentry.Sentry.addBreadcrumb(io.sentry.Breadcrumb().apply {
-                category = "performance"
-                message = "Janky frame: ${durationMs}ms"
-                level = if (durationMs > 100) io.sentry.SentryLevel.WARNING else io.sentry.SentryLevel.INFO
-                setData("frame_duration_ms", durationMs)
-                val stateString = frameData.states.joinToString { "${it.key}=${it.value}" }
-                setData("states", stateString)
-            })
+    private val jankFrameListener =
+        androidx.metrics.performance.JankStats.OnFrameListener { frameData ->
+            // Report janky frames to Sentry as breadcrumbs
+            if (frameData.isJank) {
+                val durationMs = frameData.frameDurationUiNanos / 1_000_000
+                io.sentry.Sentry.addBreadcrumb(
+                    io.sentry.Breadcrumb().apply {
+                        category = "performance"
+                        message = "Janky frame: ${durationMs}ms"
+                        level = if (durationMs > 100) io.sentry.SentryLevel.WARNING else io.sentry.SentryLevel.INFO
+                        setData("frame_duration_ms", durationMs)
+                        val stateString = frameData.states.joinToString { "${it.key}=${it.value}" }
+                        setData("states", stateString)
+                    },
+                )
 
-            // Log for local debugging
-            Log.w(TAG, "Jank detected: ${durationMs}ms with states ${frameData.states}")
+                // Log for local debugging
+                Log.w(TAG, "Jank detected: ${durationMs}ms with states ${frameData.states}")
+            }
         }
-    }
 
     // Track last handled USB device to avoid double-processing
     private var lastHandledUsbDeviceId: Int = -1
@@ -1175,31 +1178,33 @@ fun ColumbaNavigation(
                     }
 
                     composable(
-                        route = "rnode_flasher?skipDetection={skipDetection}&usbDeviceId={usbDeviceId}" +
-                            "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
-                        arguments = listOf(
-                            navArgument("skipDetection") {
-                                type = NavType.BoolType
-                                defaultValue = false
-                            },
-                            navArgument("usbDeviceId") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("usbVendorId") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("usbProductId") {
-                                type = NavType.IntType
-                                defaultValue = -1
-                            },
-                            navArgument("usbDeviceName") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                                nullable = true
-                            },
-                        ),
+                        route =
+                            "rnode_flasher?skipDetection={skipDetection}&usbDeviceId={usbDeviceId}" +
+                                "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
+                        arguments =
+                            listOf(
+                                navArgument("skipDetection") {
+                                    type = NavType.BoolType
+                                    defaultValue = false
+                                },
+                                navArgument("usbDeviceId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbVendorId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbProductId") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                                navArgument("usbDeviceName") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
+                                    nullable = true
+                                },
+                            ),
                     ) { backStackEntry ->
                         val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
                         val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1

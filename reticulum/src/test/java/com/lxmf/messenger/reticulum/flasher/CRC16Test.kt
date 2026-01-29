@@ -10,7 +10,6 @@ import org.junit.Test
  * expected values.
  */
 class CRC16Test {
-
     @Test
     fun `calculate CRC16 for empty data returns initial value`() {
         val result = CRC16.calculate(ByteArray(0))
@@ -75,10 +74,17 @@ class CRC16Test {
     @Test
     fun `calculate CRC16 for DFU packet header`() {
         // Test with a typical DFU packet header structure
-        val header = byteArrayOf(
-            0x09, 0xEE.toByte(), 0x00, 0xF0.toByte(), // SLIP header
-            0x03, 0x00, 0x00, 0x00, // DFU_START_PACKET
-        )
+        val header =
+            byteArrayOf(
+                0x09,
+                0xEE.toByte(),
+                0x00,
+                0xF0.toByte(), // SLIP header
+                0x03,
+                0x00,
+                0x00,
+                0x00, // DFU_START_PACKET
+            )
         val result = CRC16.calculate(header)
         // Just verify it produces a valid 16-bit value
         assert(result in 0..0xFFFF)

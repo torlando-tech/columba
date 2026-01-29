@@ -9,7 +9,6 @@ import org.junit.Test
  * Unit tests for RNode constants, enums, and data classes.
  */
 class RNodeConstantsTest {
-
     @Test
     fun `KISS constants match protocol specification`() {
         assertEquals(0xC0.toByte(), RNodeConstants.KISS_FEND)
@@ -41,7 +40,6 @@ class RNodeConstantsTest {
 }
 
 class RNodePlatformTest {
-
     @Test
     fun `fromCode returns correct platform`() {
         assertEquals(RNodePlatform.AVR, RNodePlatform.fromCode(0x90.toByte()))
@@ -64,7 +62,6 @@ class RNodePlatformTest {
 }
 
 class RNodeMcuTest {
-
     @Test
     fun `fromCode returns correct MCU`() {
         assertEquals(RNodeMcu.ATmega1284P, RNodeMcu.fromCode(0x91.toByte()))
@@ -80,7 +77,6 @@ class RNodeMcuTest {
 }
 
 class RNodeBoardTest {
-
     @Test
     fun `fromProductCode returns correct board`() {
         assertEquals(RNodeBoard.RAK4631, RNodeBoard.fromProductCode(0x10))
@@ -119,57 +115,59 @@ class RNodeBoardTest {
 }
 
 class RNodeDeviceInfoTest {
-
     @Test
     fun `isFlashable returns true for known platforms and boards`() {
-        val info = RNodeDeviceInfo(
-            platform = RNodePlatform.NRF52,
-            mcu = RNodeMcu.NRF52,
-            board = RNodeBoard.RAK4631,
-            firmwareVersion = "1.78",
-            isProvisioned = true,
-            isConfigured = true,
-            serialNumber = 12345,
-            hardwareRevision = 1,
-            product = 0x10,
-            model = 0x11,
-        )
+        val info =
+            RNodeDeviceInfo(
+                platform = RNodePlatform.NRF52,
+                mcu = RNodeMcu.NRF52,
+                board = RNodeBoard.RAK4631,
+                firmwareVersion = "1.78",
+                isProvisioned = true,
+                isConfigured = true,
+                serialNumber = 12345,
+                hardwareRevision = 1,
+                product = 0x10,
+                model = 0x11,
+            )
 
         assertTrue(info.isFlashable)
     }
 
     @Test
     fun `isFlashable returns false for unknown platform`() {
-        val info = RNodeDeviceInfo(
-            platform = RNodePlatform.UNKNOWN,
-            mcu = RNodeMcu.UNKNOWN,
-            board = RNodeBoard.RAK4631,
-            firmwareVersion = null,
-            isProvisioned = false,
-            isConfigured = false,
-            serialNumber = null,
-            hardwareRevision = null,
-            product = 0,
-            model = 0,
-        )
+        val info =
+            RNodeDeviceInfo(
+                platform = RNodePlatform.UNKNOWN,
+                mcu = RNodeMcu.UNKNOWN,
+                board = RNodeBoard.RAK4631,
+                firmwareVersion = null,
+                isProvisioned = false,
+                isConfigured = false,
+                serialNumber = null,
+                hardwareRevision = null,
+                product = 0,
+                model = 0,
+            )
 
         assertFalse(info.isFlashable)
     }
 
     @Test
     fun `isFlashable returns false for unknown board`() {
-        val info = RNodeDeviceInfo(
-            platform = RNodePlatform.ESP32,
-            mcu = RNodeMcu.ESP32,
-            board = RNodeBoard.UNKNOWN,
-            firmwareVersion = null,
-            isProvisioned = false,
-            isConfigured = false,
-            serialNumber = null,
-            hardwareRevision = null,
-            product = 0,
-            model = 0,
-        )
+        val info =
+            RNodeDeviceInfo(
+                platform = RNodePlatform.ESP32,
+                mcu = RNodeMcu.ESP32,
+                board = RNodeBoard.UNKNOWN,
+                firmwareVersion = null,
+                isProvisioned = false,
+                isConfigured = false,
+                serialNumber = null,
+                hardwareRevision = null,
+                product = 0,
+                model = 0,
+            )
 
         assertFalse(info.isFlashable)
     }
@@ -198,25 +196,28 @@ class RNodeDeviceInfoTest {
         assertFalse(info.supportsEspTool)
     }
 
-    private fun createDeviceInfo(platform: RNodePlatform) = RNodeDeviceInfo(
-        platform = platform,
-        mcu = when (platform) {
-            RNodePlatform.NRF52 -> RNodeMcu.NRF52
-            RNodePlatform.ESP32 -> RNodeMcu.ESP32
-            RNodePlatform.AVR -> RNodeMcu.ATmega1284P
-            RNodePlatform.UNKNOWN -> RNodeMcu.UNKNOWN
-        },
-        board = when (platform) {
-            RNodePlatform.NRF52 -> RNodeBoard.RAK4631
-            RNodePlatform.ESP32 -> RNodeBoard.HELTEC_V3
-            else -> RNodeBoard.UNKNOWN
-        },
-        firmwareVersion = "1.78",
-        isProvisioned = true,
-        isConfigured = true,
-        serialNumber = 12345,
-        hardwareRevision = 1,
-        product = 0x10,
-        model = 0x11,
-    )
+    private fun createDeviceInfo(platform: RNodePlatform) =
+        RNodeDeviceInfo(
+            platform = platform,
+            mcu =
+                when (platform) {
+                    RNodePlatform.NRF52 -> RNodeMcu.NRF52
+                    RNodePlatform.ESP32 -> RNodeMcu.ESP32
+                    RNodePlatform.AVR -> RNodeMcu.ATmega1284P
+                    RNodePlatform.UNKNOWN -> RNodeMcu.UNKNOWN
+                },
+            board =
+                when (platform) {
+                    RNodePlatform.NRF52 -> RNodeBoard.RAK4631
+                    RNodePlatform.ESP32 -> RNodeBoard.HELTEC_V3
+                    else -> RNodeBoard.UNKNOWN
+                },
+            firmwareVersion = "1.78",
+            isProvisioned = true,
+            isConfigured = true,
+            serialNumber = 12345,
+            hardwareRevision = 1,
+            product = 0x10,
+            model = 0x11,
+        )
 }

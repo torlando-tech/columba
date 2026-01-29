@@ -7,7 +7,6 @@ import org.junit.Test
  * Unit tests for firmware package handling.
  */
 class FrequencyBandTest {
-
     @Test
     fun `fromModelCode returns 868_915 for appropriate model codes`() {
         assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x11))
@@ -62,59 +61,61 @@ class FrequencyBandTest {
 }
 
 class GitHubReleaseTest {
-
     @Test
     fun `version extracts from tag_name with v prefix`() {
-        val release = GitHubRelease(
-            id = 1,
-            tag_name = "v1.78",
-            name = "RNode Firmware 1.78",
-            created_at = "2024-01-01T00:00:00Z",
-            html_url = "https://github.com/markqvist/RNode_Firmware/releases/tag/v1.78",
-        )
+        val release =
+            GitHubRelease(
+                id = 1,
+                tag_name = "v1.78",
+                name = "RNode Firmware 1.78",
+                created_at = "2024-01-01T00:00:00Z",
+                html_url = "https://github.com/markqvist/RNode_Firmware/releases/tag/v1.78",
+            )
 
         assertEquals("1.78", release.version)
     }
 
     @Test
     fun `version extracts from tag_name with V prefix`() {
-        val release = GitHubRelease(
-            id = 1,
-            tag_name = "V1.78",
-            name = "RNode Firmware 1.78",
-            created_at = "2024-01-01T00:00:00Z",
-            html_url = "https://github.com/test",
-        )
+        val release =
+            GitHubRelease(
+                id = 1,
+                tag_name = "V1.78",
+                name = "RNode Firmware 1.78",
+                created_at = "2024-01-01T00:00:00Z",
+                html_url = "https://github.com/test",
+            )
 
         assertEquals("1.78", release.version)
     }
 
     @Test
     fun `version preserves tag without prefix`() {
-        val release = GitHubRelease(
-            id = 1,
-            tag_name = "1.78",
-            name = "RNode Firmware 1.78",
-            created_at = "2024-01-01T00:00:00Z",
-            html_url = "https://github.com/test",
-        )
+        val release =
+            GitHubRelease(
+                id = 1,
+                tag_name = "1.78",
+                name = "RNode Firmware 1.78",
+                created_at = "2024-01-01T00:00:00Z",
+                html_url = "https://github.com/test",
+            )
 
         assertEquals("1.78", release.version)
     }
 }
 
 class GitHubAssetTest {
-
     @Test
     fun `browserDownloadUrl alias works`() {
-        val asset = GitHubAsset(
-            id = 1,
-            name = "firmware.zip",
-            size = 1000,
-            browser_download_url = "https://example.com/firmware.zip",
-            created_at = "2024-01-01T00:00:00Z",
-            updated_at = "2024-01-01T00:00:00Z",
-        )
+        val asset =
+            GitHubAsset(
+                id = 1,
+                name = "firmware.zip",
+                size = 1000,
+                browser_download_url = "https://example.com/firmware.zip",
+                created_at = "2024-01-01T00:00:00Z",
+                updated_at = "2024-01-01T00:00:00Z",
+            )
 
         assertEquals("https://example.com/firmware.zip", asset.browserDownloadUrl)
         assertEquals(asset.browser_download_url, asset.browserDownloadUrl)

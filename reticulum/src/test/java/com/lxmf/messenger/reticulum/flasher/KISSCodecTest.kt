@@ -10,7 +10,6 @@ import org.junit.Test
  * Unit tests for KISS codec implementation.
  */
 class KISSCodecTest {
-
     @Test
     fun `createFrame adds FEND delimiters and command byte`() {
         val frame = KISSCodec.createFrame(0x08, byteArrayOf(0x73))
@@ -67,13 +66,14 @@ class KISSCodecTest {
     @Test
     fun `decodeFrame handles escape sequences`() {
         // Frame with escaped FEND in data
-        val frame = byteArrayOf(
-            0xC0.toByte(),
-            0x01,
-            0xDB.toByte(),
-            0xDC.toByte(), // Escaped FEND
-            0xC0.toByte(),
-        )
+        val frame =
+            byteArrayOf(
+                0xC0.toByte(),
+                0x01,
+                0xDB.toByte(),
+                0xDC.toByte(), // Escaped FEND
+                0xC0.toByte(),
+            )
         val result = KISSCodec.decodeFrame(frame)
 
         assertNotNull(result)
@@ -131,7 +131,6 @@ class KISSCodecTest {
  * Unit tests for KISS frame parser.
  */
 class KISSFrameParserTest {
-
     @Test
     fun `parser extracts command frame`() {
         val parser = KISSFrameParser()
@@ -173,10 +172,17 @@ class KISSFrameParserTest {
     @Test
     fun `parser extracts multiple frames`() {
         val parser = KISSFrameParser()
-        val data = byteArrayOf(
-            0xC0.toByte(), 0x01, 0x11, 0xC0.toByte(),
-            0xC0.toByte(), 0x02, 0x22, 0xC0.toByte(),
-        )
+        val data =
+            byteArrayOf(
+                0xC0.toByte(),
+                0x01,
+                0x11,
+                0xC0.toByte(),
+                0xC0.toByte(),
+                0x02,
+                0x22,
+                0xC0.toByte(),
+            )
 
         val frames = parser.processBytes(data)
 

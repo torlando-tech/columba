@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,12 +40,16 @@ sealed class AddContactResult {
     /**
      * Contact already exists in the contact list.
      */
-    data class AlreadyExists(val existingContact: EnrichedContact) : AddContactResult()
+    data class AlreadyExists(
+        val existingContact: EnrichedContact,
+    ) : AddContactResult()
 
     /**
      * An error occurred while adding the contact.
      */
-    data class Error(val message: String) : AddContactResult()
+    data class Error(
+        val message: String,
+    ) : AddContactResult()
 }
 
 /**
@@ -55,6 +61,14 @@ data class ContactGroups(
     val relay: EnrichedContact?,
     val pinned: List<EnrichedContact>,
     val all: List<EnrichedContact>,
+)
+
+/**
+ * UI state for the Contacts tab, including loading status.
+ */
+data class ContactsState(
+    val groupedContacts: ContactGroups = ContactGroups(null, emptyList(), emptyList()),
+    val isLoading: Boolean = true,
 )
 
 @HiltViewModel
@@ -119,27 +133,38 @@ class ContactsViewModel
                 initialValue = emptyList(),
             )
 
-        // Grouped contacts for section headers (relay, pinned, all)
-        val groupedContacts: StateFlow<ContactGroups> =
+        // Grouped contacts for section headers (relay, pinned, all), with loading state
+        // onStart emits loading state each time flow is collected (tab switch, screen entry)
+        val contactsState: StateFlow<ContactsState> =
             filteredContacts
-                .combine(MutableStateFlow(Unit)) { contacts, _ ->
+                .map { contacts ->
                     val relay = contacts.find { it.isMyRelay }
-                    Log.d(TAG, "GroupedContacts: ${contacts.size} filtered, relay=${relay?.displayName}")
-                    ContactGroups(
-                        relay = relay,
-                        pinned = contacts.filter { it.isPinned && !it.isMyRelay },
-                        all = contacts.filterNot { it.isPinned || it.isMyRelay },
+                    Log.d(TAG, "ContactsState: ${contacts.size} filtered, relay=${relay?.displayName}")
+                    ContactsState(
+                        groupedContacts =
+                            ContactGroups(
+                                relay = relay,
+                                pinned = contacts.filter { it.isPinned && !it.isMyRelay },
+                                all = contacts.filterNot { it.isPinned || it.isMyRelay },
+                            ),
+                        isLoading = false,
                     )
-                }
-                .stateIn(
+                }.onStart {
+                    emit(ContactsState(isLoading = true))
+                }.stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
-                    initialValue = ContactGroups(null, emptyList(), emptyList()),
+                    started =
+                        SharingStarted.WhileSubscribed(
+                            stopTimeoutMillis = 0,
+                            replayExpirationMillis = 0,
+                        ),
+                    initialValue = ContactsState(isLoading = true),
                 )
 
         // Contact count
         val contactCount: StateFlow<Int> =
-            contactRepository.getContactCountFlow()
+            contactRepository
+                .getContactCountFlow()
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
@@ -374,8 +399,8 @@ class ContactsViewModel
          * Decode QR code data and return the destination hash if valid.
          * This is used for checking duplicates before showing the confirmation dialog.
          */
-        fun decodeQrCode(qrData: String): Pair<String, ByteArray>? {
-            return try {
+        fun decodeQrCode(qrData: String): Pair<String, ByteArray>? =
+            try {
                 val decoded = IdentityQrCodeUtils.decodeFromQrString(qrData)
                 if (decoded != null) {
                     val hashHex = decoded.destinationHash.joinToString("") { "%02x".format(it) }
@@ -387,7 +412,6 @@ class ContactsViewModel
                 Log.e(TAG, "Failed to decode QR code data", e)
                 null
             }
-        }
 
         // ========== SIDEBAND IMPORT SUPPORT ==========
 

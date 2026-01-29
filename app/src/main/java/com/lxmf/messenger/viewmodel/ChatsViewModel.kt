@@ -15,10 +15,20 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+
+/**
+ * UI state for the Chats tab, including loading status.
+ */
+data class ChatsState(
+    val conversations: List<Conversation> = emptyList(),
+    val isLoading: Boolean = true,
+)
 
 @HiltViewModel
 class ChatsViewModel
@@ -47,8 +57,9 @@ class ChatsViewModel
         // Search query state
         val searchQuery = MutableStateFlow("")
 
-        // Filtered conversations based on search query
-        val conversations: StateFlow<List<Conversation>> =
+        // Filtered conversations based on search query, with loading state
+        // onStart emits loading state each time flow is collected (tab switch, screen entry)
+        val chatsState: StateFlow<ChatsState> =
             searchQuery
                 .flatMapLatest { query ->
                     if (query.isBlank()) {
@@ -56,11 +67,21 @@ class ChatsViewModel
                     } else {
                         conversationRepository.searchConversations(query)
                     }
-                }
-                .stateIn(
+                }.map { conversations ->
+                    ChatsState(
+                        conversations = conversations,
+                        isLoading = false,
+                    )
+                }.onStart {
+                    emit(ChatsState(isLoading = true))
+                }.stateIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
-                    initialValue = emptyList(),
+                    started =
+                        SharingStarted.WhileSubscribed(
+                            stopTimeoutMillis = 0,
+                            replayExpirationMillis = 0,
+                        ),
+                    initialValue = ChatsState(isLoading = true),
                 )
 
         fun deleteConversation(peerHash: String) {
@@ -132,16 +153,16 @@ class ChatsViewModel
          * Check if a peer is saved as a contact.
          * Uses a cache to prevent flickering when the LazyColumn recomposes.
          */
-        fun isContactSaved(peerHash: String): StateFlow<Boolean> {
-            return contactSavedCache.getOrPut(peerHash) {
-                contactRepository.hasContactFlow(peerHash)
+        fun isContactSaved(peerHash: String): StateFlow<Boolean> =
+            contactSavedCache.getOrPut(peerHash) {
+                contactRepository
+                    .hasContactFlow(peerHash)
                     .stateIn(
                         scope = viewModelScope,
                         started = SharingStarted.WhileSubscribed(5000),
                         initialValue = false,
                     )
             }
-        }
 
         /**
          * Trigger a manual sync with the propagation node.

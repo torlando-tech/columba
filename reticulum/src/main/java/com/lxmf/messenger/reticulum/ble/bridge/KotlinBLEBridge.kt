@@ -65,20 +65,35 @@ class KotlinBLEBridge(
         private const val TAG = "Columba:BLE:K:Bridge"
         private const val MAX_BLE_PACKET_SIZE = 512 // Maximum BLE packet size in bytes for validation
 
+        /**
+         * Controls whether dual connections (same peer connected as both central and peripheral)
+         * should be deduplicated down to a single connection.
+         *
+         * DISABLED (false): When a peer is connected via both central and peripheral, both
+         * connections are kept. The protocol handles this correctly - data is sent on only
+         * one path (central preferred). This is more stable because Android's BLE stack
+         * shares a single L2CAP link for both GATT connections, and closing one can trigger
+         * a 1-second idle timer that kills the other.
+         *
+         * ENABLED (true): One connection is closed based on identity hash comparison.
+         * This frees up a connection slot but can cause instability due to the L2CAP
+         * idle timer issue described above.
+         */
+        private const val DEDUPLICATION_ENABLED = false
+
         @Volatile
         private var instance: KotlinBLEBridge? = null
 
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinBLEBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinBLEBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinBLEBridge(
                     context.applicationContext,
                     context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager,
                 ).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -397,8 +412,8 @@ class KotlinBLEBridge(
      * Build JSON string of current connection details for listeners.
      */
     @Suppress("CyclomaticComplexMethod")
-    private fun buildConnectionDetailsJson(): String {
-        return try {
+    private fun buildConnectionDetailsJson(): String =
+        try {
             val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
             val jsonArray = org.json.JSONArray()
 
@@ -458,7 +473,6 @@ class KotlinBLEBridge(
             Log.e(TAG, "Error building connection details JSON", e)
             "[]"
         }
-    }
 
     // State
     @Volatile
@@ -826,22 +840,24 @@ class KotlinBLEBridge(
 
                     // Start scanning to discover peer devices
                     Log.d(TAG, "Starting BLE scanning after restart...")
-                    startScanning().onSuccess {
-                        Log.d(TAG, "Scanner started after restart")
-                    }.onFailure { error ->
-                        Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
-                    }
+                    startScanning()
+                        .onSuccess {
+                            Log.d(TAG, "Scanner started after restart")
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
+                        }
 
                     // Start advertising when identity is ready
                     if (savedIdentity != null) {
                         // Identity already available - advertise immediately
                         val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                         Log.d(TAG, "Starting BLE advertising after restart with system name '$systemDeviceName'...")
-                        startAdvertising(systemDeviceName).onSuccess {
-                            Log.d(TAG, "Advertiser started after restart")
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
-                        }
+                        startAdvertising(systemDeviceName)
+                            .onSuccess {
+                                Log.d(TAG, "Advertiser started after restart")
+                            }.onFailure { error ->
+                                Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
+                            }
                     } else {
                         // Wait for identity to be set by Python
                         Log.d(TAG, "Waiting for identity before starting advertising...")
@@ -849,11 +865,12 @@ class KotlinBLEBridge(
                             scope.launch {
                                 val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                                 Log.d(TAG, "Identity ready - starting BLE advertising with system name '$systemDeviceName'...")
-                                startAdvertising(systemDeviceName).onSuccess {
-                                    Log.d(TAG, "Advertiser started after identity set")
-                                }.onFailure { error ->
-                                    Log.e(TAG, "Failed to start advertising: ${error.message}", error)
-                                }
+                                startAdvertising(systemDeviceName)
+                                    .onSuccess {
+                                        Log.d(TAG, "Advertiser started after identity set")
+                                    }.onFailure { error ->
+                                        Log.e(TAG, "Failed to start advertising: ${error.message}", error)
+                                    }
                             }
                         }
 
@@ -907,11 +924,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start scanning - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            scannerInstance.startScanning().onSuccess {
-                Log.d(TAG, "Scanning started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start scanning", it)
-            }
+            scannerInstance
+                .startScanning()
+                .onSuccess {
+                    Log.d(TAG, "Scanning started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start scanning", it)
+                }
         }
 
     fun startScanningAsync() {
@@ -956,11 +975,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start advertising - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            advertiserInstance.startAdvertising(deviceName).onSuccess {
-                Log.d(TAG, "Advertising started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start advertising", it)
-            }
+            advertiserInstance
+                .startAdvertising(deviceName)
+                .onSuccess {
+                    Log.d(TAG, "Advertising started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start advertising", it)
+                }
         }
 
     fun stopAdvertisingAsync() {
@@ -1361,9 +1382,7 @@ class KotlinBLEBridge(
     /**
      * Get list of connected peer addresses.
      */
-    fun getConnectedPeers(): List<String> {
-        return connectedPeers.keys.toList()
-    }
+    fun getConnectedPeers(): List<String> = connectedPeers.keys.toList()
 
     /**
      * Get peer identity by address.
@@ -1371,9 +1390,7 @@ class KotlinBLEBridge(
      * @param address BLE MAC address
      * @return 32-character hex identity string, or null if unknown
      */
-    fun getPeerIdentity(address: String): String? {
-        return addressToIdentity[address]
-    }
+    fun getPeerIdentity(address: String): String? = addressToIdentity[address]
 
     /**
      * Get peer address by identity.
@@ -1381,9 +1398,7 @@ class KotlinBLEBridge(
      * @param identityHash 32-character hex identity string
      * @return BLE MAC address, or null if not connected
      */
-    fun getPeerAddress(identityHash: String): String? {
-        return identityToAddress[identityHash]
-    }
+    fun getPeerAddress(identityHash: String): String? = identityToAddress[identityHash]
 
     /**
      * Get the last known RSSI for a connected peer.
@@ -1589,9 +1604,7 @@ class KotlinBLEBridge(
      *
      * @return Total count of race conditions since bridge started
      */
-    fun getDualConnectionRaceCount(): Long {
-        return dualConnectionRaceCount
-    }
+    fun getDualConnectionRaceCount(): Long = dualConnectionRaceCount
 
     /**
      * Setup callbacks for all BLE components.
@@ -1710,7 +1723,7 @@ class KotlinBLEBridge(
      * Kotlin now reports ALL connections to Python, and Python decides which to close.
      * This follows the RFC architecture where protocol logic belongs in BLEInterface.
      */
-    @Suppress("LongMethod")
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     private suspend fun handlePeerConnected(
         address: String,
         mtu: Int,
@@ -1752,7 +1765,7 @@ class KotlinBLEBridge(
             }
 
             // Handle dual connection - decide which to keep based on identity comparison
-            if (peer.isCentral && peer.isPeripheral) {
+            if (DEDUPLICATION_ENABLED && peer.isCentral && peer.isPeripheral) {
                 dualConnectionRaceCount++
                 Log.d(TAG, "Dual connection count: $dualConnectionRaceCount")
 
@@ -1828,6 +1841,15 @@ class KotlinBLEBridge(
                         timestamp = System.currentTimeMillis(),
                         closingCentral = true,
                     )
+                // Send immediate keepalive on peripheral BEFORE closing central.
+                // When central disconnects, Android's GATT layer starts a 1-second idle timer.
+                // By sending traffic on the peripheral just before, we keep L2CAP active.
+                if (gattServer != null) {
+                    Log.d(TAG, "Deduplication: sending immediate keepalive to $address via peripheral")
+                    gattServer?.sendImmediateKeepalive(address)
+                } else {
+                    Log.w(TAG, "Deduplication: gattServer is null, cannot send immediate keepalive to $address")
+                }
                 Log.i(TAG, "Deduplication: disconnecting central connection to $address")
                 gattClient?.disconnect(address)
             }
@@ -1838,6 +1860,15 @@ class KotlinBLEBridge(
                         timestamp = System.currentTimeMillis(),
                         closingCentral = false,
                     )
+                // Send immediate keepalive on central BEFORE closing peripheral.
+                // When peripheral disconnects, Android's GATT layer starts a 1-second idle timer.
+                // By sending traffic on the central just before, we keep L2CAP active.
+                if (gattClient != null) {
+                    Log.d(TAG, "Deduplication: sending immediate keepalive to $address via central")
+                    gattClient?.sendImmediateKeepalive(address)
+                } else {
+                    Log.w(TAG, "Deduplication: gattClient is null, cannot send immediate keepalive to $address")
+                }
                 Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
                 gattServer?.disconnectCentral(address)
             }
@@ -2130,11 +2161,86 @@ class KotlinBLEBridge(
             return
         }
 
-        // Check for duplicate identity (Android MAC rotation) via Python callback
-        // Python's _check_duplicate_identity returns True if this identity is already connected
-        // at a different address, meaning this is a MAC rotation attempt that should be rejected.
+        // Check if this is a legitimate dual connection (same identity, opposite role).
+        // In dual connection scenarios:
+        // - Phone A connects as central to Phone B (A learns B's identity via handshake)
+        // - Phone B connects as central to Phone A (B learns A's identity via handshake)
+        // These arrive from different MACs but are the same identity - NOT MAC rotation.
+        // We should allow the connection if the existing peer is on the opposite role.
+        //
+        // Important: Also check connectedPeers for ANY peer with this identity that has the
+        // opposite role, not just the one in identityToAddress (which may not be set yet).
+        val existingAddress = identityToAddress[identityHash]
+
+        // Also scan all connected peers for this identity (handles race where identityToAddress
+        // isn't set yet but peer exists with identityHash set)
+        val existingPeerWithIdentity =
+            connectedPeers.values.find {
+                it.identityHash == identityHash && it.address != address
+            }
+
+        Log.d(
+            TAG,
+            "[DUAL_CHECK] identity=${identityHash.take(16)}, newAddr=$address, " +
+                "isCentral=$isCentralConnection, existingAddr=$existingAddress, " +
+                "existingPeerWithIdentity=${existingPeerWithIdentity?.address}",
+        )
+
+        // Determine if this is a dual connection scenario
+        var skipDuplicateCheck = false
+
+        // Check 1: Existing address in identityToAddress mapping
+        if (existingAddress != null && existingAddress != address) {
+            val existingPeer = connectedPeers[existingAddress]
+            if (existingPeer != null) {
+                val isDualConnection =
+                    when {
+                        isCentralConnection && existingPeer.isPeripheral && !existingPeer.isCentral -> true
+                        !isCentralConnection && existingPeer.isCentral && !existingPeer.isPeripheral -> true
+                        else -> false
+                    }
+                if (isDualConnection) {
+                    Log.i(
+                        TAG,
+                        "Allowing dual connection for ${identityHash.take(16)}...: " +
+                            "existing at $existingAddress (central=${existingPeer.isCentral}, peripheral=${existingPeer.isPeripheral}), " +
+                            "new at $address (isCentral=$isCentralConnection)",
+                    )
+                    skipDuplicateCheck = true
+                } else {
+                    Log.d(
+                        TAG,
+                        "[DUAL_CHECK] Not dual: existingPeer at $existingAddress has " +
+                            "central=${existingPeer.isCentral}, peripheral=${existingPeer.isPeripheral}",
+                    )
+                }
+            } else {
+                Log.d(TAG, "[DUAL_CHECK] No peer at existingAddress=$existingAddress")
+            }
+        }
+
+        // Check 2: Peer found by identity hash (handles race condition)
+        if (!skipDuplicateCheck && existingPeerWithIdentity != null) {
+            val isDualConnection =
+                when {
+                    isCentralConnection && existingPeerWithIdentity.isPeripheral && !existingPeerWithIdentity.isCentral -> true
+                    !isCentralConnection && existingPeerWithIdentity.isCentral && !existingPeerWithIdentity.isPeripheral -> true
+                    else -> false
+                }
+            if (isDualConnection) {
+                Log.i(
+                    TAG,
+                    "Allowing dual connection (via peer scan) for ${identityHash.take(16)}...: " +
+                        "existing at ${existingPeerWithIdentity.address} " +
+                        "(central=${existingPeerWithIdentity.isCentral}, peripheral=${existingPeerWithIdentity.isPeripheral}), " +
+                        "new at $address (isCentral=$isCentralConnection)",
+                )
+                skipDuplicateCheck = true
+            }
+        }
+
         val duplicateCallback = onDuplicateIdentityDetected
-        if (duplicateCallback != null) {
+        if (duplicateCallback != null && !skipDuplicateCheck) {
             try {
                 // Convert hex string to ByteArray for Python
                 val identityBytes = identityHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()

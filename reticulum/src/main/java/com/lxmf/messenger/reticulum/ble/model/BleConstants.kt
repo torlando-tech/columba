@@ -217,9 +217,22 @@ object BleConstants {
 
     /**
      * Connection keepalive interval in milliseconds.
-     * Send periodic packet every 15 seconds to prevent Android BLE supervision timeout.
-     * Android BLE connections timeout after 20-30 seconds of inactivity (status code 8).
-     * Keepalive packets keep the connection alive during idle periods.
+     * Send periodic packet every 7 seconds to prevent Android BLE idle disconnects.
+     *
+     * Android has multiple timeout mechanisms:
+     * - GATT supervision timeout: 20-30 seconds of inactivity (status code 8)
+     * - L2CAP idle timer: ~20 seconds with no active logical channels
+     *
+     * The L2CAP idle timer (`l2cu_no_dynamic_ccbs`) is more aggressive and can
+     * trigger even when data is being received if outgoing GATT operations fail.
+     * 7 seconds provides sufficient margin for both timeout mechanisms.
      */
-    const val CONNECTION_KEEPALIVE_INTERVAL_MS = 15000L // 15 seconds
+    const val CONNECTION_KEEPALIVE_INTERVAL_MS = 7000L // 7 seconds
+
+    /**
+     * Maximum consecutive keepalive write failures before disconnecting.
+     * Write failures indicate the GATT session is degraded even if data is still
+     * being received. Disconnect early to allow reconnection.
+     */
+    const val MAX_KEEPALIVE_WRITE_FAILURES = 2
 }

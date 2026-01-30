@@ -619,7 +619,12 @@ fun ContactsScreen(
                 // Network tab - show announces/discovered nodes
                 AnnounceStreamContent(
                     onPeerClick = { destinationHash, _ -> onViewPeerDetails(destinationHash) },
-                    onStartChat = onStartChat,
+                    onStartChat = { destinationHash, displayName ->
+                        if (!effectivePendingSharedText.isNullOrBlank()) {
+                            sharedTextViewModel.assignToDestination(destinationHash)
+                        }
+                        onStartChat(destinationHash, displayName)
+                    },
                     modifier =
                         Modifier
                             .fillMaxSize()

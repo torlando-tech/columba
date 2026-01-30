@@ -206,10 +206,17 @@ fun MessagingScreen(
             messageText =
                 if (messageText.isBlank()) {
                     trimmed
-                } else if (messageText.contains(trimmed)) {
-                    messageText
                 } else {
-                    messageText.trimEnd() + "\n" + trimmed
+                    val alreadyPresentAsExactLine =
+                        messageText
+                            .lineSequence()
+                            .any { it.trim() == trimmed }
+
+                    if (alreadyPresentAsExactLine) {
+                        messageText
+                    } else {
+                        messageText.trimEnd() + "\n" + trimmed
+                    }
                 }
         }
     }

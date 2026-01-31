@@ -6,11 +6,13 @@
 # numpy is required by LXST for audio processing
 numpy
 
-# RNS 1.1.3 with interface discovery and bootstrap support
-# Fork includes patched Link.py for shared instance RPC error handling:
-# - Catches exceptions in __update_phy_stats() to prevent crashes when
-#   connecting to another app's shared instance with mismatched RPC keys
-rns @ git+https://github.com/torlando-tech/Reticulum@rebase-1.1.3
+# RNS 1.1.3 with socket leak fix and RPC exception handling
+# Fork patches:
+# - TCPInterface/BackboneInterface: Close socket on connection failure
+#   to prevent resource leak (~780 leaked sockets/hour during reconnects)
+# - Link.py: Catch exceptions in __update_phy_stats() to prevent crashes
+#   when connecting to shared instance with mismatched RPC keys
+rns @ git+https://github.com/torlando-tech/Reticulum@fix/socket-leak-1.1.3
 
 # LXMF from fork with external stamp generator + receiving interface capture
 # Patches:

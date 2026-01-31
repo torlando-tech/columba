@@ -7373,7 +7373,7 @@ class ReticulumWrapper:
         log_debug("ReticulumWrapper", "_resolve_identity_file_path", f"No file found for hash {identity_hash[:16]}")
         return None
 
-    def create_identity(self, display_name: str) -> Dict:
+    def create_identity(self, display_name: str = None) -> Dict:
         """
         Create a new Reticulum identity and save it to a file.
 

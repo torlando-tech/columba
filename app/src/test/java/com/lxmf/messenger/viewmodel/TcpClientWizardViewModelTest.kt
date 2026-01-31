@@ -1309,10 +1309,11 @@ class TcpClientWizardViewModelTest {
             viewModel.updateInterfaceName("New Name")
             advanceUntilIdle()
 
-            viewModel.saveConfiguration()
+            val result = runCatching { viewModel.saveConfiguration() }
             advanceUntilIdle()
 
-            // Should call updateInterface, not insertInterface
+            // Should complete without throwing and call updateInterface, not insertInterface
+            assertTrue("saveConfiguration should complete without throwing", result.isSuccess)
             coVerify(exactly = 1) { interfaceRepository.updateInterface(42L, any()) }
             coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
         }

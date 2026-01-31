@@ -112,6 +112,9 @@ class SettingsViewModelTest {
         // Setup interface repository flow mock
         every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
 
+        // Setup contact repository mock
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
+
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
@@ -134,6 +137,18 @@ class SettingsViewModelTest {
         every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(false)
         every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
         every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
+        every { settingsRepository.incomingMessageSizeLimitKbFlow } returns flowOf(500)
+        every { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
+        every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
+        every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
+        every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
+        every { settingsRepository.lastTelemetrySendTimeFlow } returns flowOf(null)
+        every { settingsRepository.telemetryRequestEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryRequestIntervalSecondsFlow } returns flowOf(60)
+        every { settingsRepository.lastTelemetryRequestTimeFlow } returns flowOf(null)
+        every { settingsRepository.telemetryHostModeEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
 
         // Stub settings save methods
         coEvery { settingsRepository.savePreferOwnInstance(any()) } just Runs
@@ -155,6 +170,9 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveMapSourceHttpEnabled(any()) } just Runs
         coEvery { settingsRepository.saveMapSourceRmspEnabled(any()) } just Runs
         coEvery { settingsRepository.getCustomThemeById(any()) } returns null
+        coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveBlockUnknownSenders(any()) } just Runs
+        coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
 
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 

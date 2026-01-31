@@ -106,6 +106,7 @@ class ReticulumServiceBinderTest {
         every { eventHandler.stopAll() } just Runs
         every { lockManager.releaseAll() } just Runs
         every { networkStatusMock.set(any()) } just Runs
+        every { networkStatusMock.get() } returns "READY"
         every { broadcaster.broadcastStatusChange(any()) } just Runs
         every { notificationManager.updateNotification(any()) } just Runs
 

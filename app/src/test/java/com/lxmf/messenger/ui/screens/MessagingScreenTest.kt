@@ -773,17 +773,21 @@ class MessagingScreenTest {
         every { mockViewModel.loadedImageIds } returns MutableStateFlow(setOf(messageId))
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - should NOT trigger async image loading (already in loadedImageIds)
+        assertTrue("Screen composition should succeed", result.isSuccess)
         verify(exactly = 0) { mockViewModel.loadImageAsync(messageId, any()) }
     }
 
@@ -794,17 +798,21 @@ class MessagingScreenTest {
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(textMessage)))
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - should NOT trigger async image loading
+        assertTrue("Screen composition should succeed", result.isSuccess)
         verify(exactly = 0) { mockViewModel.loadImageAsync(any(), any()) }
     }
 
@@ -819,24 +827,28 @@ class MessagingScreenTest {
         every { mockViewModel.loadedImageIds } returns loadedIdsFlow
 
         // When - render initially
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
 
-        // Initial load should be triggered
-        verify { mockViewModel.loadImageAsync(messageId, any()) }
+                // Initial load should be triggered
+                verify { mockViewModel.loadImageAsync(messageId, any()) }
 
-        // Then - update loadedImageIds (simulating image loaded)
-        loadedIdsFlow.value = setOf(messageId)
-        composeTestRule.waitForIdle()
+                // Then - update loadedImageIds (simulating image loaded)
+                loadedIdsFlow.value = setOf(messageId)
+                composeTestRule.waitForIdle()
+            }
 
-        // Second load should not be triggered (image already in loadedImageIds)
+        // Then - second load should not be triggered (image already in loadedImageIds)
+        assertTrue("Screen composition and recomposition should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.loadImageAsync(messageId, any()) }
     }
 
@@ -848,17 +860,21 @@ class MessagingScreenTest {
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message1, message2)))
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - both should trigger async loads
+        assertTrue("Screen composition should succeed", result.isSuccess)
         verify { mockViewModel.loadImageAsync("img-msg-1", any()) }
         verify { mockViewModel.loadImageAsync("img-msg-2", any()) }
     }
@@ -871,17 +887,21 @@ class MessagingScreenTest {
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(message)))
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - should NOT trigger async load (fieldsJson is null)
+        assertTrue("Screen composition should succeed", result.isSuccess)
         verify(exactly = 0) { mockViewModel.loadImageAsync(any(), any()) }
     }
 

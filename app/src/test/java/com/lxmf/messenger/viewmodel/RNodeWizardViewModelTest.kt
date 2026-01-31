@@ -1275,6 +1275,8 @@ class RNodeWizardViewModelTest {
             every { mockEditor.apply() } returns Unit
 
             // Set up state with pending intent
+            // IntentSender is an Android system class with no interface - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
             val mockIntentSender = mockk<android.content.IntentSender>(relaxed = true)
             val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
             stateField.isAccessible = true
@@ -1309,10 +1311,14 @@ class RNodeWizardViewModelTest {
             stateField.isAccessible = true
             @Suppress("UNCHECKED_CAST")
             val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+
+            // IntentSender is an Android system class with no interface - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
+            val mockPendingIntent = mockk<android.content.IntentSender>(relaxed = true)
             stateFlow.update {
                 it.copy(
                     isAssociating = true,
-                    pendingAssociationIntent = mockk(relaxed = true),
+                    pendingAssociationIntent = mockPendingIntent,
                 )
             }
 

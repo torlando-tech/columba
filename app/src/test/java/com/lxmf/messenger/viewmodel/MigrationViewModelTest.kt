@@ -423,9 +423,11 @@ class MigrationViewModelTest {
             advanceUntilIdle()
 
             // Export
-            viewModel.exportData()
+            val result = runCatching { viewModel.exportData() }
             advanceUntilIdle()
 
+            // Assert operation completed successfully
+            assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = false
             coVerify { migrationExporter.exportData(any(), includeAttachments = false) }
         }
@@ -437,9 +439,11 @@ class MigrationViewModelTest {
             coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
 
             // Export without changing default
-            viewModel.exportData()
+            val result = runCatching { viewModel.exportData() }
             advanceUntilIdle()
 
+            // Assert operation completed successfully
+            assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = true
             coVerify { migrationExporter.exportData(any(), includeAttachments = true) }
         }

@@ -397,8 +397,9 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
         }
 
@@ -410,8 +411,9 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
         }
 
@@ -734,9 +736,11 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Call delete on multiple regions concurrently
-            viewModel.deleteRegion(region1)
-            viewModel.deleteRegion(region2)
+            val result1 = runCatching { viewModel.deleteRegion(region1) }
+            val result2 = runCatching { viewModel.deleteRegion(region2) }
 
+            assertTrue("First deleteRegion should complete without throwing", result1.isSuccess)
+            assertTrue("Second deleteRegion should complete without throwing", result2.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(1) }
             coVerify { offlineMapRegionRepository.deleteRegion(2) }
         }
@@ -865,10 +869,11 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Trigger deletion - with UnconfinedTestDispatcher this completes synchronously
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
             // Repository delete SHOULD be called even when file delete fails
             // This ensures the region is removed from the database to keep UI consistent
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
 
             // Cleanup

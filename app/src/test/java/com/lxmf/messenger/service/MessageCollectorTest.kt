@@ -174,11 +174,17 @@ class MessageCollectorTest {
                 )
 
             // When: Start collecting and emit the same message twice
-            messageCollector.startCollecting()
-            kotlinx.coroutines.delay(50)
+            val result =
+                runCatching {
+                    messageCollector.startCollecting()
+                    kotlinx.coroutines.delay(50)
 
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
+                    messageFlow.emit(testMessage)
+                    kotlinx.coroutines.delay(200)
+                }
+
+            // Then: Operation should complete without throwing
+            assertTrue("Message emission should complete without throwing", result.isSuccess)
 
             // First message should trigger notification
             coVerify(exactly = 1, timeout = 2000) {

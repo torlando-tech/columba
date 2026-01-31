@@ -257,10 +257,11 @@ class ThemeEditorViewModelTest {
             } returns 1L
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "New Theme",
@@ -307,10 +308,11 @@ class ThemeEditorViewModelTest {
             advanceUntilIdle()
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,
@@ -891,10 +893,11 @@ class ThemeEditorViewModelTest {
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 
             // When
-            viewModel.saveAndApplyTheme()
+            val result = runCatching { viewModel.saveAndApplyTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveAndApplyTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "Applied Theme",
@@ -953,10 +956,11 @@ class ThemeEditorViewModelTest {
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 
             // When
-            viewModel.saveAndApplyTheme()
+            val result = runCatching { viewModel.saveAndApplyTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveAndApplyTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,
@@ -1101,10 +1105,11 @@ class ThemeEditorViewModelTest {
             } returns 1L
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then - verify all three seed colors passed to repository
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "Three Seed Theme",
@@ -1199,10 +1204,11 @@ class ThemeEditorViewModelTest {
             viewModel.updateThemeName("Modified Theme")
             advanceUntilIdle()
 
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then - seed colors preserved in update call
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,

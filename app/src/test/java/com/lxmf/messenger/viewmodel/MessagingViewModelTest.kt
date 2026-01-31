@@ -139,6 +139,7 @@ class MessagingViewModelTest {
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
         every { propagationNodeManager.syncProgress } returns
             MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
+        every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
         coEvery { propagationNodeManager.triggerSync() } just Runs
         coEvery { propagationNodeManager.triggerSync(silent = any()) } just Runs
 
@@ -288,8 +289,11 @@ class MessagingViewModelTest {
             // Act: Send message
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
-            viewModel.sendMessage(testPeerHash, "Test message")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Message saved to database with "pending" status (will be updated to "delivered" by delivery status observer)
             coVerify {
@@ -330,8 +334,11 @@ class MessagingViewModelTest {
             // Act: Send message
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
-            viewModel.sendMessage(testPeerHash, "Test message")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed (even though send failed, method should not throw)
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Message saved with failed status
             coVerify {
@@ -364,8 +371,11 @@ class MessagingViewModelTest {
 
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
-            viewModel.sendMessage(testPeerHash, "Test")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Verify: Destination hash was converted to bytes
             coVerify {
@@ -536,8 +546,11 @@ class MessagingViewModelTest {
                 )
 
             // Attempt to send message
-            viewModelWithoutIdentity.sendMessage(testPeerHash, "Test")
+            val result = runCatching { viewModelWithoutIdentity.sendMessage(testPeerHash, "Test") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing (handles identity failure gracefully)
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Verify: sendLxmfMessageWithMethod was NOT called
             coVerify(exactly = 0) { failingProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
@@ -553,8 +566,11 @@ class MessagingViewModelTest {
             val messagesFlow = MutableStateFlow<PagingData<DataMessage>>(PagingData.empty())
             coEvery { conversationRepository.getMessagesPaged(testPeerHash) } returns messagesFlow
 
-            viewModel.loadMessages(testPeerHash, testPeerName)
+            val result = runCatching { viewModel.loadMessages(testPeerHash, testPeerName) }
             advanceUntilIdle()
+
+            // Assert: loadMessages completed successfully
+            assertTrue("loadMessages should complete without error", result.isSuccess)
 
             // Trigger the flow by collecting
             viewModel.messages.first()
@@ -727,8 +743,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Send message with leading/trailing whitespace
-            viewModel.sendMessage(testPeerHash, "  Test message  \n")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "  Test message  \n") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Message was trimmed before sending
             coVerify {
@@ -777,8 +796,11 @@ class MessagingViewModelTest {
 
             // Act: Send message exactly at max length (10000 chars)
             val maxLengthMessage = "a".repeat(10000)
-            viewModel.sendMessage(testPeerHash, maxLengthMessage)
+            val result = runCatching { viewModel.sendMessage(testPeerHash, maxLengthMessage) }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol was called (message is valid)
             coVerify(exactly = 1) {
@@ -814,8 +836,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Send message with valid hash
-            viewModel.sendMessage(validHash, "Test message")
+            val result = runCatching { viewModel.sendMessage(validHash, "Test message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol was called
             coVerify(exactly = 1) {
@@ -862,8 +887,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Send message with empty content but image attached
-            viewModel.sendMessage(testPeerHash, "")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol was called with image data
             // Note: Empty content is replaced with single space for Sideband compatibility
@@ -968,14 +996,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a retrying_propagated status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "retrying_propagated",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "retrying_propagated",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was called with retrying_propagated
             coVerify {
@@ -1030,14 +1064,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a delivered status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "delivered",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "delivered",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was called with delivered
             coVerify {
@@ -1090,14 +1130,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a failed status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "failed",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "failed",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was called with failed
             coVerify {
@@ -1138,14 +1184,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a status update for unknown message
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = unknownMessageHash,
-                    status = "delivered",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = unknownMessageHash,
+                            status = "delivered",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: getMessageById was called (with retries)
             coVerify(atLeast = 1) {
@@ -1156,8 +1208,6 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) {
                 conversationRepository.updateMessageStatus(unknownMessageHash, any())
             }
-
-            // Verify: No crash occurred - test completes successfully
         }
 
     // ========== STATUS DEGRADATION PROTECTION TESTS (Issue #257) ==========
@@ -1202,14 +1252,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a 'failed' status update (this is the spurious callback we want to block)
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "failed",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "failed",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 0) {
@@ -1257,14 +1313,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a 'failed' status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "failed",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "failed",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 0) {
@@ -1312,14 +1374,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a 'failed' status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "failed",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "failed",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 0) {
@@ -1367,14 +1435,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a 'failed' status update
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "failed",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "failed",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus WAS called (legitimate failure)
             coVerify(exactly = 1) {
@@ -1422,14 +1496,20 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Emit a 'delivered' status update (upgrading from sent)
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = testMessageHash,
-                    status = "delivered",
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "delivered",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus WAS called (status upgrade allowed)
             coVerify(exactly = 1) {
@@ -1473,8 +1553,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Toggle contact (should add)
-            viewModel.toggleContact()
+            val result = runCatching { viewModel.toggleContact() }
             advanceUntilIdle()
+
+            // Assert: toggleContact completed successfully
+            assertTrue("toggleContact should complete without error", result.isSuccess)
 
             // Assert: addContactFromConversation was called
             coVerify {
@@ -1498,8 +1581,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Toggle contact (should remove)
-            viewModel.toggleContact()
+            val result = runCatching { viewModel.toggleContact() }
             advanceUntilIdle()
+
+            // Assert: toggleContact completed successfully
+            assertTrue("toggleContact should complete without error", result.isSuccess)
 
             // Assert: deleteContact was called
             coVerify {
@@ -1548,8 +1634,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Toggle contact (should fail gracefully)
-            viewModel.toggleContact()
+            val result = runCatching { viewModel.toggleContact() }
             advanceUntilIdle()
+
+            // Assert: toggleContact completed without error
+            assertTrue("toggleContact should complete without error", result.isSuccess)
 
             // Assert: addContactFromConversation was NOT called (no public key)
             coVerify(exactly = 0) {
@@ -2382,8 +2471,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Send message with empty content but file attached
-            viewModel.sendMessage(testPeerHash, "")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Protocol should be called with file attachments
             // Note: Empty content is replaced with single space for Sideband compatibility
@@ -2985,8 +3077,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Load once
-            viewModel.loadReplyPreviewAsync("msg-1", "original-msg")
+            val result1 = runCatching { viewModel.loadReplyPreviewAsync("msg-1", "original-msg") }
             advanceUntilIdle()
+
+            // Assert: First load completed successfully
+            assertTrue("First loadReplyPreviewAsync should complete without error", result1.isSuccess)
 
             // Verify it was loaded
             coVerify(exactly = 1) { conversationRepository.getReplyPreview("original-msg", any()) }
@@ -3155,8 +3250,11 @@ class MessagingViewModelTest {
             // No pending reply set
 
             // Act: Send message
-            viewModel.sendMessage(testPeerHash, "Regular message")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Regular message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed successfully
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Message saved without replyToMessageId
             coVerify {
@@ -3450,8 +3548,11 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.getMessageById("nonexistent-msg") } returns null
 
             // Act
-            viewModel.sendReaction("nonexistent-msg", "👍")
+            val result = runCatching { viewModel.sendReaction("nonexistent-msg", "👍") }
             advanceUntilIdle()
+
+            // Assert: sendReaction completed without error
+            assertTrue("sendReaction should complete without error", result.isSuccess)
 
             // Assert: Protocol send was never called
             coVerify(exactly = 0) { reticulumProtocol.sendReaction(any(), any(), any(), any()) }
@@ -3817,8 +3918,11 @@ class MessagingViewModelTest {
 
             // Act: Emit incoming reaction for unknown message
             val reactionJson = """{"reaction_to": "nonexistent-msg", "emoji": "👍", "sender": "remote-sender"}"""
-            reactionFlow.emit(reactionJson)
+            val emitResult = runCatching { reactionFlow.emit(reactionJson) }
             advanceUntilIdle()
+
+            // Assert: Emission completed successfully
+            assertTrue("Reaction emission should complete without error", emitResult.isSuccess)
 
             // Assert: No database update was attempted
             coVerify(exactly = 0) { conversationRepository.updateMessageReactions(any(), any()) }
@@ -3837,12 +3941,18 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Emit malformed JSON - should not crash
-            reactionFlow.emit("not valid json {{{")
+            val result1 = runCatching { reactionFlow.emit("not valid json {{{") }
             advanceUntilIdle()
 
+            // Assert: First emission completed successfully
+            assertTrue("Malformed JSON emission should complete without error", result1.isSuccess)
+
             // Act: Emit JSON missing required fields - should not crash
-            reactionFlow.emit("""{"reaction_to": "msg-id"}""") // Missing emoji and sender
+            val result2 = runCatching { reactionFlow.emit("""{"reaction_to": "msg-id"}""") } // Missing emoji and sender
             advanceUntilIdle()
+
+            // Assert: Second emission completed successfully
+            assertTrue("Incomplete JSON emission should complete without error", result2.isSuccess)
 
             // Assert: No database update was attempted for invalid reactions
             coVerify(exactly = 0) { conversationRepository.updateMessageReactions(any(), any()) }
@@ -4115,8 +4225,11 @@ class MessagingViewModelTest {
 
             coEvery { conversationRepository.getMessageById("nonexistent") } returns null
 
-            viewModel.retryFailedMessage("nonexistent")
+            val result = runCatching { viewModel.retryFailedMessage("nonexistent") }
             advanceUntilIdle()
+
+            // Assert: retryFailedMessage completed without error
+            assertTrue("retryFailedMessage should complete without error", result.isSuccess)
 
             // Protocol should not be called
             coVerify(exactly = 0) {
@@ -4142,8 +4255,11 @@ class MessagingViewModelTest {
                 )
             coEvery { conversationRepository.getMessageById("msg-123") } returns pendingMessage
 
-            viewModel.retryFailedMessage("msg-123")
+            val result = runCatching { viewModel.retryFailedMessage("msg-123") }
             advanceUntilIdle()
+
+            // Assert: retryFailedMessage completed without error
+            assertTrue("retryFailedMessage should complete without error", result.isSuccess)
 
             // Protocol should not be called for non-failed messages
             coVerify(exactly = 0) {
@@ -4183,8 +4299,11 @@ class MessagingViewModelTest {
 
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
 
-            viewModel.retryFailedMessage("msg-123")
+            val result = runCatching { viewModel.retryFailedMessage("msg-123") }
             advanceUntilIdle()
+
+            // Assert: retryFailedMessage completed without error
+            assertTrue("retryFailedMessage should complete without error", result.isSuccess)
 
             // Should mark as pending before sending
             coVerify { conversationRepository.updateMessageStatus("msg-123", "pending") }
@@ -4262,8 +4381,11 @@ class MessagingViewModelTest {
                 )
             coEvery { conversationRepository.getMessageById("msg-123") } returns failedMessage
 
-            viewModel.retryFailedMessage("msg-123")
+            val result = runCatching { viewModel.retryFailedMessage("msg-123") }
             advanceUntilIdle()
+
+            // Assert: retryFailedMessage completed without error
+            assertTrue("retryFailedMessage should complete without error", result.isSuccess)
 
             // Protocol should not be called due to invalid hash
             coVerify(exactly = 0) {

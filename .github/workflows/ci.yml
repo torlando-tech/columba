@@ -363,14 +363,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   instrumented-tests:
-    name: Instrumented Tests (Non-blocking)
-    # Run in parallel with other jobs, not blocking CI
+    name: Instrumented Tests
+    # Run in parallel with other jobs
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Mark as non-blocking during stabilization phase
-    # Remove continue-on-error once tests are stable
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -505,7 +502,7 @@ jobs:
   ci-passed:
     name: ✅ CI Passed — APK Ready
     if: always()
-    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests]
+    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, instrumented-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
 

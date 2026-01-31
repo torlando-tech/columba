@@ -7,6 +7,7 @@ import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.Severity
+import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtValueArgument
@@ -24,13 +25,44 @@ import org.jetbrains.kotlin.psi.KtValueArgument
  * - Mock only external dependencies with explicit `every { }` stubs
  * - Test actual behavior with assertions, not `verify { }` calls
  *
- * Exceptions:
- * - Android Context and system services (genuinely need mocking)
- * - Use @Suppress("NoRelaxedMocks") with a comment explaining why
+ * This rule is NON-SUPPRESSABLE for non-Android types. The only exception is Android
+ * system types (Context, BluetoothManager, etc.) which are automatically allowed.
+ *
+ * If you need a relaxed mock for an Android type not in the allowed list, add it
+ * to the allowedTypes set in this rule rather than suppressing.
  */
 class NoRelaxedMocksRule(
     config: Config = Config.empty,
 ) : Rule(config) {
+    // Make this rule non-suppressable
+    override val defaultRuleIdAliases: Set<String> = emptySet()
+
+    // Override to prevent suppression via annotations
+    override fun visitAnnotationEntry(annotationEntry: KtAnnotationEntry) {
+        super.visitAnnotationEntry(annotationEntry)
+        // Check if this is a @Suppress or @file:Suppress trying to suppress this rule
+        val annotationText = annotationEntry.text
+        if (annotationText.contains("Suppress") && annotationText.contains("NoRelaxedMocks")) {
+            report(
+                CodeSmell(
+                    issue = suppressionAttemptIssue,
+                    entity = Entity.from(annotationEntry),
+                    message =
+                        "Cannot suppress NoRelaxedMocks rule. This rule exists to prevent " +
+                            "useless tests. Use explicit stubs instead of relaxed mocks, or add " +
+                            "the Android type to the allowed list in NoRelaxedMocksRule.kt.",
+                ),
+            )
+        }
+    }
+
+    private val suppressionAttemptIssue =
+        Issue(
+            id = "NoRelaxedMocksSuppression",
+            severity = Severity.CodeSmell,
+            description = "Attempting to suppress the NoRelaxedMocks rule is not allowed.",
+            debt = Debt.TEN_MINS,
+        )
     override val issue =
         Issue(
             id = "NoRelaxedMocks",

@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
@@ -59,7 +61,8 @@ class BleConnectionStatusScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("Loading connections...").assertIsDisplayed()
-        composeTestRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
+        composeTestRule
+            .onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
             .assertIsDisplayed()
     }
 
@@ -109,7 +112,8 @@ class BleConnectionStatusScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("No Active Connections").assertIsDisplayed()
-        composeTestRule.onNodeWithText("BLE peers will appear here when connected")
+        composeTestRule
+            .onNodeWithText("BLE peers will appear here when connected")
             .assertIsDisplayed()
     }
 
@@ -508,7 +512,8 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // When - scroll to button and click (required for LazyColumn items)
-        composeTestRule.onNodeWithTag("disconnect_button_$testMac")
+        composeTestRule
+            .onNodeWithTag("disconnect_button_$testMac")
             .performScrollTo()
             .performClick()
 

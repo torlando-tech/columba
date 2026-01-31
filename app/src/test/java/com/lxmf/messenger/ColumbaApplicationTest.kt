@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger
 
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -272,7 +274,8 @@ class ColumbaApplicationTest {
         val expected = byteArrayOf(0x12, 0x34, 0xAB.toByte(), 0xCD.toByte())
 
         val result =
-            hex.chunked(2)
+            hex
+                .chunked(2)
                 .map { it.toInt(16).toByte() }
                 .toByteArray()
 
@@ -285,7 +288,8 @@ class ColumbaApplicationTest {
         val expected = byteArrayOf()
 
         val result =
-            hex.chunked(2)
+            hex
+                .chunked(2)
                 .filter { it.isNotEmpty() }
                 .map { it.toInt(16).toByte() }
                 .toByteArray()

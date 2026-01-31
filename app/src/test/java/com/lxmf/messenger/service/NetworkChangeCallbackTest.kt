@@ -34,6 +34,7 @@ import org.junit.Test
  * Note: The actual ReticulumService requires Python runtime (Chaquopy),
  * so we test the callback patterns and guards in isolation.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetworkChangeCallbackTest {
     private lateinit var mockBinder: ReticulumServiceBinder

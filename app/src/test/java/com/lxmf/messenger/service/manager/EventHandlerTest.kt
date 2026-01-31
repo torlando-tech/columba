@@ -24,6 +24,7 @@ import org.junit.Test
  *
  * Tests the event-driven message delivery and startup drain functionality.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventHandlerTest {
     private lateinit var state: ServiceState

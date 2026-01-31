@@ -38,6 +38,7 @@ import org.junit.Test
  * The core logic is tested in ErrorHandlingUnitTest.kt.
  * These tests should be converted to instrumented tests (androidTest/).
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @Ignore("Requires instrumented testing with Chaquopy Python runtime - see class documentation")
 class ReticulumServiceErrorHandlingTest {
     private lateinit var mockContext: Context
@@ -399,7 +400,8 @@ class ReticulumServiceErrorHandlingTest {
             val startTime = System.currentTimeMillis()
 
             try {
-                withTimeout(1000) { // 1 second timeout
+                withTimeout(1000) {
+                    // 1 second timeout
                     shutdownHangs()
                 }
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -430,7 +432,8 @@ class ReticulumServiceErrorHandlingTest {
             var completed = false
 
             try {
-                withTimeout(10000) { // 10 second timeout
+                withTimeout(10000) {
+                    // 10 second timeout
                     shutdownSucceeds()
                     completed = true
                 }
@@ -448,8 +451,8 @@ class ReticulumServiceErrorHandlingTest {
     /**
      * Helper function to sanitize error messages (matches implementation).
      */
-    private fun sanitizeErrorMessage(error: String): String {
-        return when {
+    private fun sanitizeErrorMessage(error: String): String =
+        when {
             error.contains("NoneType") -> "Network initialization failed"
             error.contains("AttributeError") -> "Configuration error"
             error.contains("ImportError") || error.contains("ModuleNotFoundError") -> "Missing network components"
@@ -460,7 +463,6 @@ class ReticulumServiceErrorHandlingTest {
             error.length > 100 -> "Network initialization error"
             else -> error
         }
-    }
 
     // ========== Edge Cases ==========
 

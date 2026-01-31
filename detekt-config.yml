@@ -126,12 +126,7 @@ columba:
   BleLoggingTag:
     active: true
   NoRelaxedMocks:
-    # DISABLED until existing violations are fixed (~560 instances).
-    # Enable with: active: true
-    # To fix: replace relaxed mocks with real implementations
-    # (in-memory databases, fakes) or explicit every { } stubs.
-    # Suppress individual cases with @Suppress("NoRelaxedMocks")
-    active: false
+    active: true
 
 style:
   active: true

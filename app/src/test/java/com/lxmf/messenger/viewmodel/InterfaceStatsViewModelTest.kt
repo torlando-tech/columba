@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.viewmodel
 
 import android.content.Context
@@ -370,7 +372,10 @@ class InterfaceStatsViewModelTest {
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
             // Verify initial state
-            assertTrue(viewModel.state.value.interfaceEntity?.enabled == true)
+            assertTrue(
+                viewModel.state.value.interfaceEntity
+                    ?.enabled == true,
+            )
 
             // Toggle to disabled
             viewModel.toggleEnabled()

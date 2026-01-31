@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.ui.screens.tcpclient
 
 import android.app.Application
@@ -72,7 +74,8 @@ class ServerSelectionStepTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("Select a community server or enter custom connection details.")
+        composeTestRule
+            .onNodeWithText("Select a community server or enter custom connection details.")
             .assertIsDisplayed()
     }
 

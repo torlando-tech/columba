@@ -45,6 +45,7 @@ import java.util.Base64
  *
  * Full service binding tests should be done as instrumented tests.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceReticulumProtocolTest {
     private val testDispatcher = StandardTestDispatcher()

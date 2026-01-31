@@ -27,6 +27,7 @@ import org.robolectric.shadows.ShadowApplication
  * Tests handling of call notification actions using Robolectric to actually
  * invoke onReceive and verify behavior.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class CallActionReceiverTest {
@@ -159,7 +160,8 @@ class CallActionReceiverTest {
         // No activity should be started for decline action
         assertTrue(
             "Decline action should not start MainActivity",
-            startedIntent == null || startedIntent.component?.className != MainActivity::class.java.name ||
+            startedIntent == null ||
+                startedIntent.component?.className != MainActivity::class.java.name ||
                 startedIntent.action != CallNotificationHelper.ACTION_ANSWER_CALL,
         )
     }

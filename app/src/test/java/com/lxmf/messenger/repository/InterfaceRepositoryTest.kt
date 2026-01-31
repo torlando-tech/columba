@@ -25,6 +25,7 @@ import org.junit.Test
  * Unit tests for InterfaceRepository.
  * Tests corruption handling and interface conversion logic.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class InterfaceRepositoryTest {
     private lateinit var mockDao: InterfaceDao

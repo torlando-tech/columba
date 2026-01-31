@@ -74,8 +74,16 @@ class NoRelaxedMocksRule(
 
         if (relaxedArg != null) {
             // Check if it's for an allowed type (Context, system services)
+            // First check type arguments: mockk<Context>(relaxed = true)
             val typeArg = expression.typeArguments.firstOrNull()?.text
             if (isAllowedRelaxedType(typeArg)) {
+                return
+            }
+
+            // Also check variable name patterns that suggest Android types
+            // e.g., mockContext, mockWifiManager, context, etc.
+            val variableName = getAssignedVariableName(expression)
+            if (isAllowedVariableName(variableName)) {
                 return
             }
 
@@ -87,6 +95,50 @@ class NoRelaxedMocksRule(
                 ),
             )
         }
+    }
+
+    private fun getAssignedVariableName(expression: KtCallExpression): String? {
+        // Try to get the variable name this mock is assigned to
+        // Handles: val mockContext = mockk(...) and mockContext = mockk(...)
+        val parent = expression.parent
+        return when {
+            parent is org.jetbrains.kotlin.psi.KtProperty -> parent.name
+            parent is org.jetbrains.kotlin.psi.KtBinaryExpression -> {
+                parent.left?.text
+            }
+            else -> null
+        }
+    }
+
+    private fun isAllowedVariableName(name: String?): Boolean {
+        if (name == null) return false
+        val lowerName = name.lowercase()
+
+        // Variable names that suggest Android system types
+        val allowedPatterns =
+            listOf(
+                "context",
+                "application",
+                "activity",
+                "service",
+                "contentresolver",
+                "sharedpreferences",
+                "resources",
+                "packagemanager",
+                "wifimanager",
+                "bluetoothmanager",
+                "bluetoothadapter",
+                "notificationmanager",
+                "alarmmanager",
+                "connectivitymanager",
+                "locationmanager",
+                "powermanager",
+                "wifilock",
+                "multicastlock",
+                "wakelock",
+            )
+
+        return allowedPatterns.any { lowerName.contains(it) }
     }
 
     private fun isRelaxedTrueArgument(arg: KtValueArgument): Boolean {

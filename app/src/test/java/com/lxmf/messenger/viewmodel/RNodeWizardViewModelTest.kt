@@ -45,6 +45,7 @@ import org.junit.Test
  * Unit tests for RNodeWizardViewModel.
  * Tests wizard navigation, validation, and state management.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class RNodeWizardViewModelTest {
     @get:Rule

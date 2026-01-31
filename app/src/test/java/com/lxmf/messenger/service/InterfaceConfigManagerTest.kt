@@ -41,6 +41,7 @@ import org.junit.Test
  * - Manager lifecycle during service restart (stop before, start after)
  * - Correct order of manager stop/start calls
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class InterfaceConfigManagerTest {
     private val testDispatcher = StandardTestDispatcher()

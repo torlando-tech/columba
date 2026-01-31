@@ -18,6 +18,7 @@ import org.junit.Test
  * Tests that the dependency injection module correctly creates and wires
  * service managers, particularly the MaintenanceManager integration.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceModuleTest {
     private val testDispatcher = StandardTestDispatcher()

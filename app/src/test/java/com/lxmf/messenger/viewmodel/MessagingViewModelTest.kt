@@ -50,6 +50,7 @@ import com.lxmf.messenger.data.repository.Message as DataMessage
  * Unit tests for MessagingViewModel.
  * Tests message loading, sending, state management, and repository interactions.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagingViewModelTest {
     @get:Rule
@@ -339,8 +340,22 @@ class MessagingViewModelTest {
                             // "abcdef0123456789abcdef0123456789" -> 16 bytes
                             val expected =
                                 byteArrayOf(
-                                    0xab.toByte(), 0xcd.toByte(), 0xef.toByte(), 0x01, 0x23, 0x45, 0x67, 0x89.toByte(),
-                                    0xab.toByte(), 0xcd.toByte(), 0xef.toByte(), 0x01, 0x23, 0x45, 0x67, 0x89.toByte(),
+                                    0xab.toByte(),
+                                    0xcd.toByte(),
+                                    0xef.toByte(),
+                                    0x01,
+                                    0x23,
+                                    0x45,
+                                    0x67,
+                                    0x89.toByte(),
+                                    0xab.toByte(),
+                                    0xcd.toByte(),
+                                    0xef.toByte(),
+                                    0x01,
+                                    0x23,
+                                    0x45,
+                                    0x67,
+                                    0x89.toByte(),
                                 )
                             it.contentEquals(expected)
                         },
@@ -1952,7 +1967,10 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
             val context = mockk<android.content.Context>()
-            val cacheDir = kotlin.io.path.createTempDirectory("test-share").toFile()
+            val cacheDir =
+                kotlin.io.path
+                    .createTempDirectory("test-share")
+                    .toFile()
             val mockUri = mockk<android.net.Uri>()
 
             every { context.cacheDir } returns cacheDir
@@ -1960,7 +1978,8 @@ class MessagingViewModelTest {
 
             mockkStatic(androidx.core.content.FileProvider::class)
             every {
-                androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
+                androidx.core.content.FileProvider
+                    .getUriForFile(any(), any(), any())
             } returns mockUri
 
             // Act
@@ -1991,7 +2010,10 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
             val context = mockk<android.content.Context>()
-            val cacheDir = kotlin.io.path.createTempDirectory("test-share-gif").toFile()
+            val cacheDir =
+                kotlin.io.path
+                    .createTempDirectory("test-share-gif")
+                    .toFile()
             val mockUri = mockk<android.net.Uri>()
 
             every { context.cacheDir } returns cacheDir
@@ -1999,7 +2021,8 @@ class MessagingViewModelTest {
 
             mockkStatic(androidx.core.content.FileProvider::class)
             every {
-                androidx.core.content.FileProvider.getUriForFile(any(), any(), any())
+                androidx.core.content.FileProvider
+                    .getUriForFile(any(), any(), any())
             } returns mockUri
 
             // Act

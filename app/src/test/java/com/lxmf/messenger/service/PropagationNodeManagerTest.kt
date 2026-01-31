@@ -48,6 +48,7 @@ import kotlin.time.Duration.Companion.seconds
  * - clearRelay - Clear selection
  * - onRelayDeleted - Handle deleted relay
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class PropagationNodeManagerTest {
     private val testDispatcher = StandardTestDispatcher()

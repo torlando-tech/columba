@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.viewmodel
 
 import android.util.Log
@@ -95,14 +97,13 @@ class DiscoveredInterfacesViewModelTest {
         DiscoveredInterfacesViewModel.ioDispatcher = Dispatchers.IO
     }
 
-    private fun createViewModel(): DiscoveredInterfacesViewModel {
-        return DiscoveredInterfacesViewModel(
+    private fun createViewModel(): DiscoveredInterfacesViewModel =
+        DiscoveredInterfacesViewModel(
             reticulumProtocol,
             settingsRepository,
             interfaceRepository,
             interfaceConfigManager,
         )
-    }
 
     // ========== Initial State Tests ==========
 
@@ -542,8 +543,8 @@ class DiscoveredInterfacesViewModelTest {
         port: Int? = 4242,
         latitude: Double? = null,
         longitude: Double? = null,
-    ): DiscoveredInterface {
-        return DiscoveredInterface(
+    ): DiscoveredInterface =
+        DiscoveredInterface(
             name = name,
             type = type,
             transportId = "test_transport_id",
@@ -571,5 +572,4 @@ class DiscoveredInterfacesViewModelTest {
             longitude = longitude,
             height = null,
         )
-    }
 }

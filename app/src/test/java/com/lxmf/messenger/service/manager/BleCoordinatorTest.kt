@@ -22,6 +22,7 @@ import org.junit.Test
  * Tests the event-driven callback integration between KotlinBLEBridge
  * and CallbackBroadcaster.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class BleCoordinatorTest {
     private lateinit var mockContext: Context
     private lateinit var mockBridge: KotlinBLEBridge

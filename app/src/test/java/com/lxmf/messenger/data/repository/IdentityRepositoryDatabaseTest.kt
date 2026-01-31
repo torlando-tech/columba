@@ -39,6 +39,7 @@ import kotlin.io.path.createTempDirectory
  * - Identity existence checks
  * - Flow emissions on data changes
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class IdentityRepositoryDatabaseTest : DatabaseTest() {
     private lateinit var repository: IdentityRepository

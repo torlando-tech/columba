@@ -34,6 +34,7 @@ import org.junit.Test
  * - Validation logic for collector address
  * - Send operation result scenarios
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class TelemetryCollectorManagerTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -85,14 +86,13 @@ class TelemetryCollectorManagerTest {
         }
     }
 
-    private fun createManager(): TelemetryCollectorManager {
-        return TelemetryCollectorManager(
+    private fun createManager(): TelemetryCollectorManager =
+        TelemetryCollectorManager(
             context = mockContext,
             settingsRepository = mockSettingsRepository,
             reticulumProtocol = mockReticulumProtocol,
             scope = testScope,
         )
-    }
 
     // ========== State Flow Tests ==========
 

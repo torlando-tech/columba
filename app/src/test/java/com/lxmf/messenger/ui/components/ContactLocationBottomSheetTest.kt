@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.ui.components
 
 import android.app.Application
@@ -152,8 +154,10 @@ class ContactLocationBottomSheetTest {
         // Should contain a direction
         assertTrue(
             "Result should contain a direction: $result",
-            result.contains("north") || result.contains("south") ||
-                result.contains("east") || result.contains("west"),
+            result.contains("north") ||
+                result.contains("south") ||
+                result.contains("east") ||
+                result.contains("west"),
         )
     }
 
@@ -391,8 +395,8 @@ class ContactLocationBottomSheetTest {
         name: String,
         state: MarkerState,
         timestamp: Long = System.currentTimeMillis(),
-    ): ContactMarker {
-        return ContactMarker(
+    ): ContactMarker =
+        ContactMarker(
             destinationHash = "hash_$name",
             displayName = name,
             latitude = 37.7749,
@@ -401,5 +405,4 @@ class ContactLocationBottomSheetTest {
             state = state,
             approximateRadius = 0,
         )
-    }
 }

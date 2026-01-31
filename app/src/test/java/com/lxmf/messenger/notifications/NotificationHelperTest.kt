@@ -27,6 +27,7 @@ import org.robolectric.annotation.Config
  *
  * Uses Robolectric's shadow system for Android component testing.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class NotificationHelperTest {

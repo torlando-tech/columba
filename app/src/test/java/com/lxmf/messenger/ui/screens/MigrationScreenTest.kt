@@ -24,6 +24,7 @@ import org.robolectric.annotation.Config
  * UI tests for MigrationScreen export section.
  * Tests the include attachments checkbox behavior and helper text display.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MigrationScreenTest {
@@ -78,7 +79,8 @@ class MigrationScreenTest {
         }
 
         // Helper text should NOT be displayed when checked
-        composeTestRule.onNodeWithText("Images and files won't be included in export")
+        composeTestRule
+            .onNodeWithText("Images and files won't be included in export")
             .assertDoesNotExist()
     }
 
@@ -93,7 +95,8 @@ class MigrationScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Images and files won't be included in export")
+        composeTestRule
+            .onNodeWithText("Images and files won't be included in export")
             .assertIsDisplayed()
     }
 

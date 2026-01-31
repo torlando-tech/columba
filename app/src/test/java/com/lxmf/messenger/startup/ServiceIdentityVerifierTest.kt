@@ -23,6 +23,7 @@ import org.junit.Test
 /**
  * Unit tests for ServiceIdentityVerifier.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceIdentityVerifierTest {
     private val testDispatcher = StandardTestDispatcher()

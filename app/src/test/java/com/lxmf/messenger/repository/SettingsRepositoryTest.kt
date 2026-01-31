@@ -35,6 +35,7 @@ import kotlin.time.Duration.Companion.seconds
  * Note: DataStore singleton persists across tests in Robolectric.
  * Tests are designed to be state-agnostic where possible.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)

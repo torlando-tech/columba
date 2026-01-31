@@ -38,6 +38,7 @@ import org.junit.Test
  * - onDebugInfoChanged -> debugInfoFlow
  * - onInterfaceStatusChanged -> interfaceStatusFlow
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceReticulumProtocolCallbackTest {
     private val testDispatcher = StandardTestDispatcher()

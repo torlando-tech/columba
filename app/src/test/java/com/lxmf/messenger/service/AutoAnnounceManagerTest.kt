@@ -32,6 +32,7 @@ import kotlin.time.Duration.Companion.seconds
  * Unit tests for AutoAnnounceManager.
  * Tests the randomization logic and timer reset functionality.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)

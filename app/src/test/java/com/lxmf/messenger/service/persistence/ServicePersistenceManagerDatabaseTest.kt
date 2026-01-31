@@ -39,6 +39,7 @@ import org.junit.Test
  *
  * The ServiceSettingsAccessor is still mocked since it's just SharedPreferences access.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     private lateinit var testScope: TestScope

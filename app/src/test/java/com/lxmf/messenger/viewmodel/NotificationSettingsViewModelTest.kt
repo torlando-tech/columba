@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
@@ -72,9 +74,7 @@ class NotificationSettingsViewModelTest {
         clearAllMocks()
     }
 
-    private fun createViewModel(): NotificationSettingsViewModel {
-        return NotificationSettingsViewModel(settingsRepository)
-    }
+    private fun createViewModel(): NotificationSettingsViewModel = NotificationSettingsViewModel(settingsRepository)
 
     // ========== Initial State Tests ==========
 

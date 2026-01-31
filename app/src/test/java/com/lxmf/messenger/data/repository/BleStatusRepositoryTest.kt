@@ -38,6 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  * Instrumented tests for BleStatusRepository.
  * Tests IPC calls, JSON parsing, Flow emissions, and error handling.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)

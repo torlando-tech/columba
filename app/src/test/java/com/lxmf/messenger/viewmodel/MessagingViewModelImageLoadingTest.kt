@@ -51,6 +51,7 @@ import org.robolectric.annotation.Config
  * These tests require Robolectric because they use ImageCache which depends on
  * Android's LruCache for bitmap storage.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)

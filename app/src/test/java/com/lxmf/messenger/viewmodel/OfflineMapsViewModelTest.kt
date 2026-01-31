@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.viewmodel
 
 import android.app.Application
@@ -83,13 +85,12 @@ class OfflineMapsViewModelTest {
         clearAllMocks()
     }
 
-    private fun createViewModel(): OfflineMapsViewModel {
-        return OfflineMapsViewModel(
+    private fun createViewModel(): OfflineMapsViewModel =
+        OfflineMapsViewModel(
             context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
             mapLibreOfflineManager = mockMapLibreOfflineManager,
         )
-    }
 
     /**
      * Configuration for test region creation.

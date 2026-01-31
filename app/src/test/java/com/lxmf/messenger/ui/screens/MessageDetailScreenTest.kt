@@ -1,3 +1,5 @@
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
@@ -159,7 +161,8 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Status").assertIsDisplayed()
         composeTestRule.onNodeWithText("Delivered").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message was successfully delivered to recipient")
+        composeTestRule
+            .onNodeWithText("Message was successfully delivered to recipient")
             .assertIsDisplayed()
     }
 
@@ -303,7 +306,8 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Delivery Method").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Direct").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Link-based delivery with retries, supports large messages")
+        composeTestRule
+            .onNodeWithText("Link-based delivery with retries, supports large messages")
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -330,7 +334,8 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Delivery Method").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Propagated").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Delivered via relay node for offline recipients")
+        composeTestRule
+            .onNodeWithText("Delivered via relay node for offline recipients")
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -829,11 +834,13 @@ class MessageDetailScreenTest {
 
         composeTestRule.onNodeWithText("Received Via").performScrollTo().assertIsDisplayed()
         // Should truncate to first 30 characters for content text
-        composeTestRule.onNodeWithText("CustomUnknownInterfaceWithVery")
+        composeTestRule
+            .onNodeWithText("CustomUnknownInterfaceWithVery")
             .performScrollTo()
             .assertIsDisplayed()
         // Subtitle shows the full interface name (interface type)
-        composeTestRule.onNodeWithText("CustomUnknownInterfaceWithVeryLongName")
+        composeTestRule
+            .onNodeWithText("CustomUnknownInterfaceWithVeryLongName")
             .performScrollTo()
             .assertIsDisplayed()
     }

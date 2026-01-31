@@ -15,6 +15,7 @@ import org.junit.Test
 /**
  * Unit tests for ConfigApplyFlagManager.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class ConfigApplyFlagManagerTest {
     private lateinit var context: Context
     private lateinit var prefs: SharedPreferences

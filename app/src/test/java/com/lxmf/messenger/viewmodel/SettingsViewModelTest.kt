@@ -47,6 +47,7 @@ import org.junit.Test
  * - Banner expansion state
  * - Service restart triggers
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
     @get:Rule
@@ -148,8 +149,8 @@ class SettingsViewModelTest {
         SettingsViewModel.enableMonitors = true
     }
 
-    private fun createViewModel(): SettingsViewModel {
-        return SettingsViewModel(
+    private fun createViewModel(): SettingsViewModel =
+        SettingsViewModel(
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
@@ -161,7 +162,6 @@ class SettingsViewModelTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
         )
-    }
 
     // region parseRpcKey Tests
 

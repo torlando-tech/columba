@@ -46,6 +46,7 @@ import org.junit.Test
  * - State updates when limit changes
  * - Runtime update to protocol
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelIncomingMessageLimitTest {
     @get:Rule
@@ -160,8 +161,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         SettingsViewModel.enableMonitors = true
     }
 
-    private fun createViewModel(): SettingsViewModel {
-        return SettingsViewModel(
+    private fun createViewModel(): SettingsViewModel =
+        SettingsViewModel(
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
@@ -173,7 +174,6 @@ class SettingsViewModelIncomingMessageLimitTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
         )
-    }
 
     // ========== Initial State Tests ==========
 

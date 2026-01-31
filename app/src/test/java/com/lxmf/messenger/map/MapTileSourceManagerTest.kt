@@ -21,6 +21,7 @@ import org.junit.Test
  *
  * Tests the map style resolution logic and source priority.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class MapTileSourceManagerTest {
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
     private lateinit var rmspServerRepository: RmspServerRepository
@@ -342,8 +343,8 @@ class MapTileSourceManagerTest {
 
     // ========== Helper Functions ==========
 
-    private fun createMockRmspServer(name: String): RmspServer {
-        return RmspServer(
+    private fun createMockRmspServer(name: String): RmspServer =
+        RmspServer(
             destinationHash = "abc123",
             serverName = name,
             publicKey = byteArrayOf(1, 2, 3),
@@ -358,5 +359,4 @@ class MapTileSourceManagerTest {
             lastSeenTimestamp = System.currentTimeMillis(),
             hops = 1,
         )
-    }
 }

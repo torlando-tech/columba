@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream
  * Unit tests for FileUtils Android-specific functions using MockK.
  * Tests readFileFromUri and getFilename which require Android Context.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class FileUtilsRobolectricTest {
     private lateinit var mockContext: Context
     private lateinit var mockContentResolver: ContentResolver

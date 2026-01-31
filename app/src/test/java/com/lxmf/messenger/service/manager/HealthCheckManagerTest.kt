@@ -21,6 +21,7 @@ import org.junit.Test
  * Tests the Python heartbeat monitoring mechanism that detects when the
  * Python process is hung and triggers a service restart.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class HealthCheckManagerTest {
     private val testDispatcher = StandardTestDispatcher()

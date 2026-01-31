@@ -36,6 +36,7 @@ import java.util.Base64
  * Full service binding lifecycle tests are done as instrumented tests
  * due to the complex IPC and coroutine interactions.
  */
+@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceReticulumProtocolRebindTest {
     private val testDispatcher = StandardTestDispatcher()

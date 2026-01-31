@@ -4,23 +4,41 @@ package com.lxmf.messenger.data.model
 import android.bluetooth.BluetoothDevice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
-import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
+/**
+ * Fake implementation of DeviceTypeCache for testing.
+ * Uses a simple HashMap to store cached types.
+ */
+private class FakeDeviceTypeCache : DeviceTypeCache {
+    private val cache = mutableMapOf<String, BluetoothType>()
+
+    override fun getCachedType(address: String): BluetoothType? = cache[address]
+
+    override fun cacheType(
+        address: String,
+        type: BluetoothType,
+    ) {
+        cache[address] = type
+    }
+
+    fun clear() = cache.clear()
+}
+
 class DeviceClassifierTest {
-    private lateinit var mockCache: DeviceTypeCache
+    private lateinit var fakeCache: FakeDeviceTypeCache
     private lateinit var classifier: DeviceClassifier
     private lateinit var mockDevice: BluetoothDevice
 
     @Before
     fun setup() {
-        mockCache = mock(DeviceTypeCache::class.java)
-        classifier = DeviceClassifier(mockCache)
+        fakeCache = FakeDeviceTypeCache()
+        classifier = DeviceClassifier(fakeCache)
         mockDevice = mock(BluetoothDevice::class.java)
     }
 
@@ -35,42 +53,40 @@ class DeviceClassifierTest {
         val result = classifier.classifyDevice(mockDevice, bleDeviceAddresses)
 
         assertTrue(result is DeviceClassifier.ClassificationResult.ConfirmedBle)
-        // Should not check cache when found in BLE scan
-        verify(mockCache, never()).getCachedType(address)
     }
 
     @Test
     fun `classifyDevice returns Cached when device not in BLE scan but in cache`() {
         val address = "AA:BB:CC:DD:EE:FF"
         `when`(mockDevice.address).thenReturn(address)
-        `when`(mockCache.getCachedType(address)).thenReturn(BluetoothType.CLASSIC)
+        // Pre-populate the cache
+        fakeCache.cacheType(address, BluetoothType.CLASSIC)
 
         val bleDeviceAddresses = emptySet<String>()
         val result = classifier.classifyDevice(mockDevice, bleDeviceAddresses)
 
         assertTrue(result is DeviceClassifier.ClassificationResult.Cached)
         assertEquals(BluetoothType.CLASSIC, (result as DeviceClassifier.ClassificationResult.Cached).type)
-        verify(mockCache).getCachedType(address)
     }
 
     @Test
     fun `classifyDevice returns Unknown when device not in BLE scan and not in cache`() {
         val address = "AA:BB:CC:DD:EE:FF"
         `when`(mockDevice.address).thenReturn(address)
-        `when`(mockCache.getCachedType(address)).thenReturn(null)
+        // Cache is empty by default
 
         val bleDeviceAddresses = emptySet<String>()
         val result = classifier.classifyDevice(mockDevice, bleDeviceAddresses)
 
         assertTrue(result is DeviceClassifier.ClassificationResult.Unknown)
-        verify(mockCache).getCachedType(address)
     }
 
     @Test
     fun `classifyDevice handles BLE cache entry correctly`() {
         val address = "AA:BB:CC:DD:EE:FF"
         `when`(mockDevice.address).thenReturn(address)
-        `when`(mockCache.getCachedType(address)).thenReturn(BluetoothType.BLE)
+        // Pre-populate the cache with BLE type
+        fakeCache.cacheType(address, BluetoothType.BLE)
 
         val bleDeviceAddresses = emptySet<String>()
         val result = classifier.classifyDevice(mockDevice, bleDeviceAddresses)
@@ -84,14 +100,13 @@ class DeviceClassifierTest {
         val address = "AA:BB:CC:DD:EE:FF"
         `when`(mockDevice.address).thenReturn(address)
         // Device has CLASSIC cached, but found in BLE scan
-        `when`(mockCache.getCachedType(address)).thenReturn(BluetoothType.CLASSIC)
+        fakeCache.cacheType(address, BluetoothType.CLASSIC)
 
         val bleDeviceAddresses = setOf(address)
         val result = classifier.classifyDevice(mockDevice, bleDeviceAddresses)
 
         // Should return ConfirmedBle, not Cached
         assertTrue(result is DeviceClassifier.ClassificationResult.ConfirmedBle)
-        verify(mockCache, never()).getCachedType(address)
     }
 
     @Test
@@ -178,22 +193,28 @@ class DeviceClassifierTest {
     @Test
     fun `cacheDeviceType caches BLE type`() {
         val address = "AA:BB:CC:DD:EE:FF"
+
         classifier.cacheDeviceType(address, BluetoothType.BLE)
-        verify(mockCache).cacheType(address, BluetoothType.BLE)
+
+        assertEquals(BluetoothType.BLE, fakeCache.getCachedType(address))
     }
 
     @Test
     fun `cacheDeviceType caches CLASSIC type`() {
         val address = "AA:BB:CC:DD:EE:FF"
+
         classifier.cacheDeviceType(address, BluetoothType.CLASSIC)
-        verify(mockCache).cacheType(address, BluetoothType.CLASSIC)
+
+        assertEquals(BluetoothType.CLASSIC, fakeCache.getCachedType(address))
     }
 
     @Test
     fun `cacheDeviceType does not cache UNKNOWN type`() {
         val address = "AA:BB:CC:DD:EE:FF"
+
         classifier.cacheDeviceType(address, BluetoothType.UNKNOWN)
-        verify(mockCache, never()).cacheType(address, BluetoothType.UNKNOWN)
+
+        assertNull(fakeCache.getCachedType(address))
     }
 
     @Test
@@ -204,7 +225,7 @@ class DeviceClassifierTest {
         classifier.cacheDeviceType(address1, BluetoothType.BLE)
         classifier.cacheDeviceType(address2, BluetoothType.CLASSIC)
 
-        verify(mockCache).cacheType(address1, BluetoothType.BLE)
-        verify(mockCache).cacheType(address2, BluetoothType.CLASSIC)
+        assertEquals(BluetoothType.BLE, fakeCache.getCachedType(address1))
+        assertEquals(BluetoothType.CLASSIC, fakeCache.getCachedType(address2))
     }
 }

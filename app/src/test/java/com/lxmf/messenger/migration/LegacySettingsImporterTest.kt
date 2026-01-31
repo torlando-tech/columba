@@ -9,6 +9,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -157,10 +158,11 @@ class LegacySettingsImporterTest {
             val settings = createSettingsExport(themePreference = "custom:999")
             val themeIdMap = mapOf(100L to 200L) // 999 not in map
 
-            // When
-            importer.importAll(settings, themeIdMap)
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, themeIdMap) }
 
-            // Then: Should NOT call saveThemePreferenceByIdentifier
+            // Then: Function completed successfully and did NOT call saveThemePreferenceByIdentifier
+            assertTrue("importAll should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { settingsRepository.saveThemePreferenceByIdentifier(any()) }
         }
 
@@ -171,10 +173,11 @@ class LegacySettingsImporterTest {
             val settings = createSettingsExport(themePreference = "custom:not_a_number")
             val themeIdMap = mapOf(100L to 200L)
 
-            // When
-            importer.importAll(settings, themeIdMap)
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, themeIdMap) }
 
-            // Then: Should NOT crash, and should NOT call save
+            // Then: Function completed successfully and did NOT call save
+            assertTrue("importAll should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { settingsRepository.saveThemePreferenceByIdentifier(any()) }
         }
 
@@ -187,10 +190,11 @@ class LegacySettingsImporterTest {
             @Suppress("DEPRECATION")
             val settings = SettingsExport()
 
-            // When/Then: Should not throw
-            importer.importAll(settings, emptyMap())
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, emptyMap()) }
 
-            // Verify no save methods were called
+            // Then: Function completed successfully and no save methods were called
+            assertTrue("importAll should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(any()) }
             coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceEnabled(any()) }
             coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceIntervalHours(any()) }
@@ -207,15 +211,18 @@ class LegacySettingsImporterTest {
                     transportNodeEnabled = false,
                     // All other fields null
                 )
-            coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
-            coEvery { settingsRepository.saveTransportNodeEnabled(any()) } just Runs
+            val notificationsSlot = slot<Boolean>()
+            val transportSlot = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(notificationsSlot)) } just Runs
+            coEvery { settingsRepository.saveTransportNodeEnabled(capture(transportSlot)) } just Runs
 
             // When
             importer.importAll(settings, emptyMap())
 
-            // Then: Only present fields should be saved
-            coVerify(exactly = 1) { settingsRepository.saveNotificationsEnabled(true) }
-            coVerify(exactly = 1) { settingsRepository.saveTransportNodeEnabled(false) }
+            // Then: Only present fields should be saved with correct values
+            assertEquals(true, notificationsSlot.captured)
+            assertEquals(false, transportSlot.captured)
+            // autoAnnounce was null in settings, so should not be called
             coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceEnabled(any()) }
         }
 

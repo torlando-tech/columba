@@ -175,8 +175,10 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
 
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
         // Verify goAsync was called for async hangup
         verify { receiver.goAsync() }
     }
@@ -188,7 +190,9 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
 
         // In test env without ColumbaApplication, it should still finish the pending result
         // Give coroutine a moment to run
@@ -221,8 +225,10 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
 
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
         // Verify goAsync was called for async hangup
         verify { receiver.goAsync() }
     }
@@ -234,7 +240,9 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
 
         // In test env without ColumbaApplication, it should still finish the pending result
         // Give coroutine a moment to run

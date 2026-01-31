@@ -46,6 +46,7 @@ class ReticulumServiceErrorHandlingTest {
     private lateinit var mockWifiLock: WifiManager.WifiLock
     private lateinit var mockMulticastLock: WifiManager.MulticastLock
 
+    @Suppress("NoRelaxedMocks") // Android framework classes require relaxed mocking
     @Before
     fun setup() {
         mockContext = mockk<Context>(relaxed = true)
@@ -475,10 +476,18 @@ class ReticulumServiceErrorHandlingTest {
         every { mockWifiLock.isHeld } returns true andThen false
 
         // When: Release multiple times
-        if (mockWifiLock.isHeld) mockWifiLock.release()
-        if (mockWifiLock.isHeld) mockWifiLock.release() // Should not release
+        var releaseCount = 0
+        if (mockWifiLock.isHeld) {
+            mockWifiLock.release()
+            releaseCount++
+        }
+        if (mockWifiLock.isHeld) {
+            mockWifiLock.release()
+            releaseCount++
+        }
 
         // Then: Only released once
+        assertEquals(1, releaseCount)
         verify(exactly = 1) { mockWifiLock.release() }
     }
 

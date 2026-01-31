@@ -11,10 +11,12 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingInterfaceType
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,14 +54,26 @@ class OnboardingViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        mockSettingsRepository = mockk(relaxed = true)
-        mockIdentityRepository = mockk(relaxed = true)
-        mockInterfaceRepository = mockk(relaxed = true)
-        mockInterfaceConfigManager = mockk(relaxed = true)
+        mockSettingsRepository = mockk()
+        mockIdentityRepository = mockk()
+        mockInterfaceRepository = mockk()
+        mockInterfaceConfigManager = mockk()
 
-        // Default mocks
+        // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+        coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
+
+        // Default stubs for IdentityRepository
+        coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
+        coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
+
+        // Default stubs for InterfaceRepository
         every { mockInterfaceRepository.allInterfaceEntities } returns MutableStateFlow(emptyList())
+        every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
+        coEvery { mockInterfaceRepository.toggleInterfaceEnabled(any(), any()) } just Runs
+        coEvery { mockInterfaceRepository.insertInterface(any()) } returns 1L
+
+        // Default stubs for InterfaceConfigManager
         coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
     }
 
@@ -378,9 +392,11 @@ class OnboardingViewModelTest {
             coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockSettingsRepository.markOnboardingCompleted() }
         }
 
@@ -391,9 +407,11 @@ class OnboardingViewModelTest {
             coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockInterfaceConfigManager.applyInterfaceChanges() }
         }
 
@@ -431,10 +449,12 @@ class OnboardingViewModelTest {
             viewModel.toggleInterface(OnboardingInterfaceType.BLE)
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then: BLE should be enabled
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockInterfaceRepository.toggleInterfaceEnabled(1, true) }
         }
 
@@ -451,10 +471,12 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             // When: User only has AUTO selected (default), BLE is not selected
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then: BLE should be disabled, AUTO should be enabled
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockInterfaceRepository.toggleInterfaceEnabled(1, false) }
             coVerify { mockInterfaceRepository.toggleInterfaceEnabled(2, true) }
         }
@@ -471,10 +493,12 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             // When: User has AUTO selected (default)
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then: AutoInterface should be created
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify { mockInterfaceRepository.insertInterface(match { it is InterfaceConfig.AutoInterface }) }
         }
 
@@ -493,10 +517,12 @@ class OnboardingViewModelTest {
             viewModel.toggleInterface(OnboardingInterfaceType.TCP)
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then: TCPClient should be created with default server
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify {
                 mockInterfaceRepository.insertInterface(
                     match {
@@ -521,10 +547,12 @@ class OnboardingViewModelTest {
             viewModel.toggleInterface(OnboardingInterfaceType.RNODE)
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then: RNode should NOT be auto-created (requires wizard)
+            assertTrue("Callback should be called on completion", callbackCalled)
             coVerify(exactly = 0) { mockInterfaceRepository.insertInterface(match { it is InterfaceConfig.RNode }) }
         }
 
@@ -545,10 +573,12 @@ class OnboardingViewModelTest {
             viewModel.toggleInterface(OnboardingInterfaceType.TCP)
             advanceUntilIdle()
 
-            viewModel.completeOnboarding { }
+            var callbackCalled = false
+            viewModel.completeOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Then:
+            assertTrue("Callback should be called on completion", callbackCalled)
             // - AUTO exists -> enable
             coVerify { mockInterfaceRepository.toggleInterfaceEnabled(1, true) }
             // - BLE doesn't exist -> create
@@ -586,10 +616,12 @@ class OnboardingViewModelTest {
             coEvery { mockInterfaceRepository.insertInterface(any()) } returns 1L
             advanceUntilIdle()
 
-            viewModel.skipOnboarding { }
+            var callbackCalled = false
+            viewModel.skipOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Only AutoInterface should be created
+            assertTrue("Callback should be called on skip", callbackCalled)
             coVerify(exactly = 1) { mockInterfaceRepository.insertInterface(match { it is InterfaceConfig.AutoInterface }) }
             coVerify(exactly = 0) { mockInterfaceRepository.insertInterface(match { it is InterfaceConfig.AndroidBLE }) }
             coVerify(exactly = 0) { mockInterfaceRepository.insertInterface(match { it is InterfaceConfig.TCPClient }) }
@@ -604,10 +636,12 @@ class OnboardingViewModelTest {
             every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(listOf(existingAuto))
             advanceUntilIdle()
 
-            viewModel.skipOnboarding { }
+            var callbackCalled = false
+            viewModel.skipOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
             // Should not insert new interface since AutoInterface already exists
+            assertTrue("Callback should be called on skip", callbackCalled)
             coVerify(exactly = 0) { mockInterfaceRepository.insertInterface(any()) }
         }
 
@@ -619,9 +653,11 @@ class OnboardingViewModelTest {
             every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
             advanceUntilIdle()
 
-            viewModel.skipOnboarding { }
+            var callbackCalled = false
+            viewModel.skipOnboarding { callbackCalled = true }
             advanceUntilIdle()
 
+            assertTrue("Callback should be called on skip", callbackCalled)
             coVerify { mockSettingsRepository.markOnboardingCompleted() }
         }
 

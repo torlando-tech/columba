@@ -135,8 +135,9 @@ class InterfaceManagementViewModelStatusEventTest {
 
             advanceUntilIdle()
 
-            // Verify interfaceStatusFlow was accessed
+            // Verify interfaceStatusFlow was accessed and ViewModel initialized
             verify { serviceProtocol.interfaceStatusFlow }
+            assertTrue("ViewModel should be initialized", viewModel.state.value != null)
         }
 
     @Test

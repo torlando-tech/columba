@@ -13,10 +13,13 @@ import com.lxmf.messenger.test.MessageDetailTestFixtures
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.viewmodel.MessageDetailViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,11 +44,20 @@ class MessageDetailScreenTest {
 
     val composeTestRule get() = composeRule
 
+    /**
+     * Creates a mock ViewModel with the required stubs.
+     * The message property must be stubbed by the caller.
+     */
+    private fun createMockViewModel(): MessageDetailViewModel =
+        mockk<MessageDetailViewModel>().apply {
+            every { loadMessage(any()) } just Runs
+        }
+
     // ========== Loading State Tests ==========
 
     @Test
     fun `loading state displays loading text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns MutableStateFlow(null)
 
         composeTestRule.setContent {
@@ -61,7 +73,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `loading state displays top app bar`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns MutableStateFlow(null)
 
         composeTestRule.setContent {
@@ -79,7 +91,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `top app bar displays correct title`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.deliveredMessage(),
@@ -99,7 +111,7 @@ class MessageDetailScreenTest {
     @Test
     fun `back button invokes callback`() {
         var backClicked = false
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.deliveredMessage(),
@@ -122,7 +134,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `timestamp card displays sent label`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.deliveredMessage(),
@@ -144,7 +156,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `status card delivered displays correct text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.deliveredMessage(),
@@ -169,7 +181,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `status card failed displays correct text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.failedMessage(),
@@ -192,7 +204,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `status card pending displays correct text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.pendingMessage(),
@@ -214,7 +226,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `status card sent displays correct text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.sentMessage(),
@@ -233,7 +245,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `status card unknown status displays default sent text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
@@ -256,7 +268,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `delivery method card opportunistic displays correct content`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.opportunisticMessage(),
@@ -287,7 +299,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `delivery method card direct displays correct content`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.directMessage(),
@@ -315,7 +327,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `delivery method card propagated displays correct content`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.propagatedMessage(),
@@ -343,7 +355,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `delivery method card unknown method displays capitalized text`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
@@ -373,7 +385,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `delivery method card not displayed when delivery method is null`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.messageWithNoDeliveryMethod(),
@@ -395,7 +407,7 @@ class MessageDetailScreenTest {
     @Test
     fun `error details card displayed when status failed and error message exists`() {
         val errorMessage = "Connection timeout after 30 seconds"
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.failedMessage(errorMessage = errorMessage),
@@ -417,7 +429,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `error details card not displayed when status failed but error message is null`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.failedWithoutErrorMessage(),
@@ -436,7 +448,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `error details card not displayed when status failed but error message is blank`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
@@ -460,7 +472,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `error details card not displayed when status is not failed`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.createMessageUi(
@@ -487,8 +499,12 @@ class MessageDetailScreenTest {
     @Test
     fun `screen calls loadMessage on launch`() {
         val testMessageId = "test-message-id"
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
-        every { mockViewModel.message } returns MutableStateFlow(null)
+        val capturedMessageId = slot<String>()
+        val mockViewModel =
+            mockk<MessageDetailViewModel>().apply {
+                every { loadMessage(capture(capturedMessageId)) } just Runs
+                every { message } returns MutableStateFlow(null)
+            }
 
         composeTestRule.setContent {
             MessageDetailScreen(
@@ -500,7 +516,8 @@ class MessageDetailScreenTest {
 
         composeTestRule.waitForIdle()
 
-        verify { mockViewModel.loadMessage(testMessageId) }
+        assertTrue("loadMessage should have been called", capturedMessageId.isCaptured)
+        assertEquals(testMessageId, capturedMessageId.captured)
     }
 
     // ========== State Transition Tests ==========
@@ -511,7 +528,7 @@ class MessageDetailScreenTest {
             MutableStateFlow<MessageUi?>(
                 MessageDetailTestFixtures.pendingMessage(),
             )
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns messageFlow
 
         composeTestRule.setContent {
@@ -534,7 +551,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `screen displays correct number of cards for delivered message`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.deliveredMessage(),
@@ -557,7 +574,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `screen displays correct number of cards for failed message with error`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.failedMessage("Network error"),
@@ -582,7 +599,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `screen displays correct number of cards for message without delivery method`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.messageWithNoDeliveryMethod(),
@@ -607,7 +624,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `hop count card displays Direct for zero hops`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0),
@@ -630,7 +647,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `hop count card displays singular hop for one hop`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 1),
@@ -653,7 +670,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `hop count card displays plural hops for multiple hops`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 3),
@@ -676,7 +693,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `hop count card not displayed when hop count is null`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = null),
@@ -697,7 +714,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays Local Network for AutoInterface`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "AutoInterface"),
@@ -720,7 +737,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays TCP for TCPClient`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "TCPClientInterface"),
@@ -743,7 +760,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays Bluetooth for BLE interface`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "AndroidBleInterface"),
@@ -766,7 +783,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays LoRa Radio for RNode`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "RNodeInterface"),
@@ -789,7 +806,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays Serial for serial interface`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = "SerialInterface"),
@@ -812,7 +829,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card displays truncated name for unknown interface`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(
@@ -846,7 +863,7 @@ class MessageDetailScreenTest {
 
     @Test
     fun `receiving interface card not displayed when interface is null`() {
-        val mockViewModel = mockk<MessageDetailViewModel>(relaxed = true)
+        val mockViewModel = createMockViewModel()
         every { mockViewModel.message } returns
             MutableStateFlow(
                 MessageDetailTestFixtures.receivedMessage(hopCount = 0, interfaceName = null),

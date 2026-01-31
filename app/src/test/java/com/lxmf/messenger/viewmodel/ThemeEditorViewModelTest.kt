@@ -81,9 +81,18 @@ class ThemeEditorViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        customThemeRepository = mockk<CustomThemeRepository>(relaxed = true)
-        settingsRepository = mockk<com.lxmf.messenger.repository.SettingsRepository>(relaxed = true)
+        customThemeRepository = mockk<CustomThemeRepository>()
+        settingsRepository = mockk<com.lxmf.messenger.repository.SettingsRepository>()
         savedStateHandle = SavedStateHandle()
+
+        // Default stubs for repository methods
+        coEvery { customThemeRepository.getThemeById(any()) } returns null
+        coEvery {
+            customThemeRepository.saveTheme(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns 1L
+        coEvery {
+            customThemeRepository.updateTheme(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } just Runs
     }
 
     @After
@@ -875,7 +884,9 @@ class ThemeEditorViewModelTest {
 
             coEvery { customThemeRepository.getThemeById(savedThemeId) } returns savedTheme
 
-            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>()
+            // Data class with complex ColorScheme fields - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
+            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>(relaxed = true)
             every { settingsRepository.customThemeDataToAppTheme(savedTheme) } returns mockCustomTheme
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 
@@ -935,7 +946,9 @@ class ThemeEditorViewModelTest {
             } just Runs
             coEvery { customThemeRepository.getThemeById(themeId) } returns updatedTheme
 
-            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>()
+            // Data class with complex ColorScheme fields - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
+            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>(relaxed = true)
             every { settingsRepository.customThemeDataToAppTheme(updatedTheme) } returns mockCustomTheme
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 

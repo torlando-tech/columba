@@ -45,7 +45,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
         Dispatchers.setMain(testDispatcher)
 
         // Mock attachment storage since we're not testing large attachment extraction
-        mockAttachmentStorage = mockk(relaxed = true)
+        mockAttachmentStorage = mockk()
         every { mockAttachmentStorage.saveAttachment(any(), any(), any()) } returns null
 
         runTest {

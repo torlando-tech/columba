@@ -103,7 +103,7 @@ class AnnounceStreamViewModelTest {
         serviceReticulumProtocol = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
-        propagationNodeManager = mockk(relaxed = true)
+        propagationNodeManager = mockk()
         identityRepository = mockk()
 
         // Setup network status flow
@@ -228,10 +228,11 @@ class AnnounceStreamViewModelTest {
             announceFlow.emit(testAnnounce)
             advanceUntilIdle()
 
-            // Verify: Announce was saved to database
+            // Verify: Announce was saved to database with correct parameters
+            val savedAnnounce = slot<String>()
             coVerify {
                 announceRepository.saveAnnounce(
-                    destinationHash = match { it.startsWith("abab") }, // hex of 0xAB repeated
+                    destinationHash = capture(savedAnnounce),
                     peerName = any(),
                     publicKey = testIdentity.publicKey,
                     appData = testAnnounce.appData,
@@ -246,6 +247,7 @@ class AnnounceStreamViewModelTest {
                     peeringCost = any(),
                 )
             }
+            assertTrue("Destination hash should start with 'abab'", savedAnnounce.captured.startsWith("abab"))
         }
 
     @Test
@@ -277,7 +279,8 @@ class AnnounceStreamViewModelTest {
             announceFlow.emit(announce3)
             advanceUntilIdle()
 
-            // Verify: All announces were saved
+            // Verify all announces were saved and count is correct
+            assertEquals("Count should reflect 3 saved announces", 3, count)
             coVerify(exactly = 3) {
                 announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
@@ -314,6 +317,11 @@ class AnnounceStreamViewModelTest {
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
+
+            // Verify default selected node types before collecting
+            val selectedTypes = viewModel.selectedNodeTypes.value
+            assertEquals("Default filter should only include PEER", 1, selectedTypes.size)
+            assertTrue("Default filter should contain PEER", selectedTypes.contains(NodeType.PEER))
 
             // Trigger the flow by collecting the first emission
             viewModel.announces.first()
@@ -361,13 +369,14 @@ class AnnounceStreamViewModelTest {
             announceFlow.emit(announceWithName)
             advanceUntilIdle()
 
-            // Verify peer name was extracted and passed to repository
+            // Capture the appData passed to verify it matches what we emitted
+            val capturedAppData = slot<ByteArray?>()
             coVerify {
                 announceRepository.saveAnnounce(
                     destinationHash = any(),
                     peerName = any(), // AppDataParser will extract this
                     publicKey = any(),
-                    appData = announceWithName.appData,
+                    appData = captureNullable(capturedAppData),
                     hops = any(),
                     timestamp = any(),
                     nodeType = any(),
@@ -379,6 +388,7 @@ class AnnounceStreamViewModelTest {
                     peeringCost = any(),
                 )
             }
+            assertEquals("AppData should be passed through", "MyCustomNode", capturedAppData.captured?.let { String(it) })
         }
 
     @Test
@@ -466,6 +476,9 @@ class AnnounceStreamViewModelTest {
             // Set search query
             viewModel.searchQuery.value = "Alice"
             advanceUntilIdle()
+
+            // Verify the search query was stored in the ViewModel
+            assertEquals("Search query should be set", "Alice", viewModel.searchQuery.value)
 
             // Trigger the flow by collecting
             viewModel.announces.first()
@@ -564,6 +577,9 @@ class AnnounceStreamViewModelTest {
             runCurrent()
             advanceTimeBy(100)
             runCurrent()
+
+            // Verify announce completed successfully despite no identity
+            assertTrue("Announce should succeed", viewModel.announceSuccess.value)
 
             // Verify triggerAutoAnnounce was called with "Unknown"
             coVerify { serviceReticulumProtocol.triggerAutoAnnounce("Unknown") }
@@ -753,6 +769,9 @@ class AnnounceStreamViewModelTest {
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
 
+            // Verify announceCount has an initial value (from the repository flow)
+            assertEquals("Initial announce count should be 0", 0, viewModel.announceCount.value)
+
             // Verify repository method was called to set up the flow
             verify { announceRepository.getAnnounceCountFlow() }
         }
@@ -800,6 +819,9 @@ class AnnounceStreamViewModelTest {
             advanceTimeBy(1000)
             advanceUntilIdle()
 
+            // Verify reachable count remains at default (0) since network is not ready
+            assertEquals("Reachable count should remain 0 when network is SHUTDOWN", 0, viewModel.reachableAnnounceCount.value)
+
             // Then: getPathTableHashes should NOT be called because network is not READY
             coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
         }
@@ -823,6 +845,9 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.SHUTDOWN
             advanceUntilIdle()
 
+            // Verify reachable count remains at 0 after shutdown
+            assertEquals("Reachable count should remain 0 after shutdown", 0, viewModel.reachableAnnounceCount.value)
+
             // Then: getPathTableHashes should NOT be called after shutdown
             coVerify(exactly = 0) { reticulumProtocol.getPathTableHashes() }
         }
@@ -833,7 +858,10 @@ class AnnounceStreamViewModelTest {
     fun `deleteAnnounce calls repository with correct hash`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
-            coEvery { announceRepository.deleteAnnounce(any()) } just Runs
+            val deletedHashes = mutableListOf<String>()
+            coEvery { announceRepository.deleteAnnounce(any()) } answers {
+                deletedHashes.add(firstArg())
+            }
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
@@ -843,8 +871,9 @@ class AnnounceStreamViewModelTest {
             viewModel.deleteAnnounce(testHash)
             advanceUntilIdle()
 
-            // Verify repository was called with correct hash
-            coVerify { announceRepository.deleteAnnounce(testHash) }
+            // Verify correct hash was passed to repository
+            assertEquals("Should have deleted exactly one announce", 1, deletedHashes.size)
+            assertEquals("Deleted hash should match", testHash, deletedHashes.first())
         }
 
     @Test
@@ -871,7 +900,10 @@ class AnnounceStreamViewModelTest {
     fun `deleteAllAnnounces preserves contact announces via identity-aware delete`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
-            coEvery { announceRepository.deleteAllAnnounces() } just Runs
+            var calledWithIdentityHash: String? = null
+            coEvery { announceRepository.deleteAllAnnouncesExceptContacts(any()) } answers {
+                calledWithIdentityHash = firstArg()
+            }
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
@@ -880,8 +912,8 @@ class AnnounceStreamViewModelTest {
             viewModel.deleteAllAnnounces()
             advanceUntilIdle()
 
-            // Verify new identity-aware method was called (testLocalIdentity is returned by default)
-            coVerify { announceRepository.deleteAllAnnouncesExceptContacts(testLocalIdentity.identityHash) }
+            // Verify identity-aware delete was called with correct identity hash
+            assertEquals("Should delete with active identity hash", testLocalIdentity.identityHash, calledWithIdentityHash)
             coVerify(exactly = 0) { announceRepository.deleteAllAnnounces() }
         }
 
@@ -910,7 +942,10 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { identityRepository.getActiveIdentitySync() } returns null
-            coEvery { announceRepository.deleteAllAnnounces() } just Runs
+            var deleteAllCalled = false
+            coEvery { announceRepository.deleteAllAnnounces() } answers {
+                deleteAllCalled = true
+            }
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
@@ -919,9 +954,8 @@ class AnnounceStreamViewModelTest {
             viewModel.deleteAllAnnounces()
             advanceUntilIdle()
 
-            // Verify old method was called (fallback behavior)
-            coVerify { announceRepository.deleteAllAnnounces() }
-            // Verify new method was NOT called
+            // Verify fallback behavior was used (deleteAllAnnounces, not identity-aware version)
+            assertTrue("Should have called deleteAllAnnounces as fallback", deleteAllCalled)
             coVerify(exactly = 0) { announceRepository.deleteAllAnnouncesExceptContacts(any()) }
         }
 }

@@ -91,14 +91,18 @@ class RNodeWizardViewModelTest {
         // Disable RSSI polling during tests
         RNodeWizardViewModel.enableRssiPolling = false
 
+        // Android framework classes require relaxed mocks
+        @Suppress("NoRelaxedMocks")
         context = mockk(relaxed = true)
-        interfaceRepository = mockk(relaxed = true)
-        configManager = mockk(relaxed = true)
+        interfaceRepository = mockk()
+        configManager = mockk()
+        @Suppress("NoRelaxedMocks")
         sharedPreferences = mockk(relaxed = true)
 
         // Mock SharedPreferences
         every { context.getSharedPreferences(any(), any()) } returns sharedPreferences
         every { sharedPreferences.getString(any(), any()) } returns "{}"
+        @Suppress("NoRelaxedMocks")
         every { sharedPreferences.edit() } returns mockk(relaxed = true)
 
         // Mock BluetoothManager as null to avoid Bluetooth calls
@@ -2187,8 +2191,12 @@ class RNodeWizardViewModelTest {
                     codingRate = 5,
                 )
 
+            var updateCalled = false
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns existingConfig
+            coEvery { interfaceRepository.updateInterface(interfaceId, any()) } coAnswers {
+                updateCalled = true
+            }
 
             viewModel.loadExistingConfig(interfaceId)
             advanceUntilIdle()
@@ -2198,8 +2206,11 @@ class RNodeWizardViewModelTest {
             viewModel.saveConfiguration()
             advanceUntilIdle()
 
-            coVerify { interfaceRepository.updateInterface(interfaceId, any()) }
-            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+            assertTrue("updateInterface should be called in edit mode", updateCalled)
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue("save should succeed", state.saveSuccess)
+            }
         }
 
     @Test
@@ -2350,7 +2361,12 @@ class RNodeWizardViewModelTest {
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
+            var insertCalled = false
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingInterface))
+            coEvery { interfaceRepository.insertInterface(any()) } coAnswers {
+                insertCalled = true
+                1L
+            }
 
             viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI)
             viewModel.updateTcpHost("10.0.0.1")
@@ -2362,7 +2378,11 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             // Should NOT call insertInterface because duplicate was detected
-            coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+            assertFalse("insertInterface should NOT be called for duplicate name", insertCalled)
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse("save should not succeed", state.saveSuccess)
+            }
         }
 
     @Test

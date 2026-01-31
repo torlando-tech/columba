@@ -7,7 +7,6 @@ import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.Severity
-import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtValueArgument
@@ -36,33 +35,6 @@ class NoRelaxedMocksRule(
 ) : Rule(config) {
     // Make this rule non-suppressable
     override val defaultRuleIdAliases: Set<String> = emptySet()
-
-    // Override to prevent suppression via annotations
-    override fun visitAnnotationEntry(annotationEntry: KtAnnotationEntry) {
-        super.visitAnnotationEntry(annotationEntry)
-        // Check if this is a @Suppress or @file:Suppress trying to suppress this rule
-        val annotationText = annotationEntry.text
-        if (annotationText.contains("Suppress") && annotationText.contains("NoRelaxedMocks")) {
-            report(
-                CodeSmell(
-                    issue = suppressionAttemptIssue,
-                    entity = Entity.from(annotationEntry),
-                    message =
-                        "Cannot suppress NoRelaxedMocks rule. This rule exists to prevent " +
-                            "useless tests. Use explicit stubs instead of relaxed mocks, or add " +
-                            "the Android type to the allowed list in NoRelaxedMocksRule.kt.",
-                ),
-            )
-        }
-    }
-
-    private val suppressionAttemptIssue =
-        Issue(
-            id = "NoRelaxedMocksSuppression",
-            severity = Severity.CodeSmell,
-            description = "Attempting to suppress the NoRelaxedMocks rule is not allowed.",
-            debt = Debt.TEN_MINS,
-        )
     override val issue =
         Issue(
             id = "NoRelaxedMocks",

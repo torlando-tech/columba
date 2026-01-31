@@ -8,10 +8,12 @@ import com.lxmf.messenger.data.model.TcpCommunityServer
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
@@ -65,11 +67,14 @@ class TcpClientWizardViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        interfaceRepository = mockk(relaxed = true)
-        configManager = mockk(relaxed = true)
+        interfaceRepository = mockk()
+        configManager = mockk()
 
-        // Mock allInterfaceEntities to return empty list (no duplicates)
+        // Stubs for InterfaceRepository
         every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
+
+        // Default stubs for InterfaceConfigManager
+        every { configManager.setPendingChanges(any()) } just Runs
 
         viewModel = TcpClientWizardViewModel(interfaceRepository, configManager)
     }
@@ -553,7 +558,12 @@ class TcpClientWizardViewModelTest {
             viewModel.saveConfiguration()
             advanceUntilIdle()
 
+            // Verify and assert final state
             coVerify(exactly = 1) { configManager.setPendingChanges(true) }
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue("Expected saveSuccess to be true", state.saveSuccess)
+            }
         }
 
     @Test
@@ -914,6 +924,14 @@ class TcpClientWizardViewModelTest {
 
             // Should NOT call insertInterface because duplicate was detected
             coVerify(exactly = 0) { interfaceRepository.insertInterface(any()) }
+
+            // Assert that save failed with duplicate error
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse("Expected saveSuccess to be false", state.saveSuccess)
+                assertNotNull("Expected saveError to be set", state.saveError)
+                assertTrue("Expected error message about duplicate", state.saveError!!.contains("already exists"))
+            }
         }
 
     // ========== Community Servers Tests ==========

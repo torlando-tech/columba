@@ -48,11 +48,11 @@ class AutoAnnounceManagerTest {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher)
 
-        mockSettingsRepository = mockk(relaxed = true)
-        mockIdentityRepository = mockk(relaxed = true)
-        mockReticulumProtocol = mockk(relaxed = true)
+        mockSettingsRepository = mockk()
+        mockIdentityRepository = mockk()
+        mockReticulumProtocol = mockk()
 
-        // Default mock behaviors
+        // Default mock behaviors - stub all flows used by AutoAnnounceManager
         every { mockSettingsRepository.autoAnnounceEnabledFlow } returns flowOf(false)
         every { mockSettingsRepository.autoAnnounceIntervalHoursFlow } returns flowOf(3)
         every { mockSettingsRepository.networkChangeAnnounceTimeFlow } returns flowOf(null)

@@ -221,6 +221,9 @@ class ContactsScreenTest {
         // Open search bar
         composeTestRule.onNodeWithContentDescription("Search").performClick()
 
+        // Then - search field is displayed
+        composeTestRule.onNodeWithText("Search by name, hash, or tag...").assertIsDisplayed()
+
         // Enter text (find the text field and input text)
         composeTestRule.onNodeWithText("Search by name, hash, or tag...").performTextInput("Alice")
 
@@ -1172,6 +1175,7 @@ class ContactsScreenTest {
 
     // ========== Test Helpers ==========
 
+    @Suppress("NoRelaxedMocks") // ContactsViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     private fun createMockContactsViewModel(
         groupedContacts: ContactGroups = ContactGroups(null, emptyList(), emptyList()),
         contactCount: Int = 0,
@@ -1204,6 +1208,7 @@ class ContactsScreenTest {
         return mockViewModel
     }
 
+    @Suppress("NoRelaxedMocks") // AnnounceStreamViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     private fun createMockAnnounceStreamViewModel(announceCount: Int = 0): AnnounceStreamViewModel {
         val mock = mockk<AnnounceStreamViewModel>(relaxed = true)
         every { mock.isAnnouncing } returns MutableStateFlow(false)

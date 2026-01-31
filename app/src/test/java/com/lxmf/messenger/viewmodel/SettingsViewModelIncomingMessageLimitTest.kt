@@ -17,10 +17,12 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -90,16 +93,16 @@ class SettingsViewModelIncomingMessageLimitTest {
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
 
-        settingsRepository = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        reticulumProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
-        interfaceConfigManager = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
-        locationSharingManager = mockk(relaxed = true)
-        interfaceRepository = mockk(relaxed = true)
-        mapTileSourceManager = mockk(relaxed = true)
-        telemetryCollectorManager = mockk(relaxed = true)
-        contactRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
+        identityRepository = mockk()
+        reticulumProtocol = mockk<ServiceReticulumProtocol>()
+        interfaceConfigManager = mockk()
+        propagationNodeManager = mockk()
+        locationSharingManager = mockk()
+        interfaceRepository = mockk()
+        mapTileSourceManager = mockk()
+        telemetryCollectorManager = mockk()
+        contactRepository = mockk()
 
         // Mock ContactRepository flow
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
@@ -151,6 +154,10 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Mock ReticulumProtocol networkStatus flow
         every { reticulumProtocol.networkStatus } returns networkStatusFlow
+
+        // Mock methods called during setIncomingMessageSizeLimit
+        coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
+        every { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(any()) } just Runs
     }
 
     @After
@@ -201,11 +208,12 @@ class SettingsViewModelIncomingMessageLimitTest {
             advanceUntilIdle()
 
             // When
-            viewModel.setIncomingMessageSizeLimit(10240) // 10MB
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(10240) } // 10MB
 
             advanceUntilIdle()
 
             // Then
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(10240) }
         }
 
@@ -217,11 +225,12 @@ class SettingsViewModelIncomingMessageLimitTest {
             advanceUntilIdle()
 
             // When
-            viewModel.setIncomingMessageSizeLimit(25600) // 25MB
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(25600) } // 25MB
 
             advanceUntilIdle()
 
             // Then
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(25600) }
         }
 
@@ -233,11 +242,12 @@ class SettingsViewModelIncomingMessageLimitTest {
             advanceUntilIdle()
 
             // When
-            viewModel.setIncomingMessageSizeLimit(1024)
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(1024) }
 
             advanceUntilIdle()
 
             // Then
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(1024) }
             verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(1024) }
         }
@@ -250,11 +260,12 @@ class SettingsViewModelIncomingMessageLimitTest {
             advanceUntilIdle()
 
             // When
-            viewModel.setIncomingMessageSizeLimit(5120)
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(5120) }
 
             advanceUntilIdle()
 
             // Then
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(5120) }
             verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(5120) }
         }
@@ -267,11 +278,12 @@ class SettingsViewModelIncomingMessageLimitTest {
             advanceUntilIdle()
 
             // When
-            viewModel.setIncomingMessageSizeLimit(131072)
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(131072) }
 
             advanceUntilIdle()
 
             // Then
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(131072) }
             verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(131072) }
         }

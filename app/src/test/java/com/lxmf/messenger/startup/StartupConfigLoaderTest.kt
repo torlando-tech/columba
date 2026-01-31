@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,9 +63,9 @@ class StartupConfigLoaderTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        interfaceRepository = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
+        interfaceRepository = mockk()
+        identityRepository = mockk()
+        settingsRepository = mockk()
         loader = StartupConfigLoader(interfaceRepository, identityRepository, settingsRepository)
     }
 
@@ -162,10 +163,11 @@ class StartupConfigLoaderTest {
             coEvery { settingsRepository.getTransportNodeEnabled() } returns false
 
             // Act
-            loader.loadConfig()
+            val config = loader.loadConfig()
             advanceUntilIdle()
 
-            // Assert - verify all repository methods were called
+            // Assert - verify config was returned and all repository methods were called
+            assertNotNull(config)
             coVerify(exactly = 1) { interfaceRepository.enabledInterfaces }
             coVerify(exactly = 1) { identityRepository.getActiveIdentitySync() }
             coVerify(exactly = 1) { settingsRepository.preferOwnInstanceFlow }

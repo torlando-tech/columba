@@ -20,6 +20,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -78,7 +79,7 @@ class ReviewConfigStepTest {
     @Test
     fun tcpMode_showsWifiIcon() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -90,6 +91,7 @@ class ReviewConfigStepTest {
         every { mockViewModel.getEffectiveDeviceName() } returns "10.0.0.1"
         every { mockViewModel.getEffectiveBluetoothType() } returns null
         every { mockViewModel.getConnectionTypeString() } returns "WiFi / TCP"
+        every { mockViewModel.getRegionLimits() } returns null
 
         // When
         composeTestRule.setContent {
@@ -104,7 +106,7 @@ class ReviewConfigStepTest {
     @Test
     fun bluetoothMode_showsBluetoothIcon() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -116,6 +118,7 @@ class ReviewConfigStepTest {
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
         every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
 
         // When
         composeTestRule.setContent {
@@ -130,7 +133,7 @@ class ReviewConfigStepTest {
     @Test
     fun showsCorrectDeviceName_fromViewModel() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -138,8 +141,11 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
 
         // When
         composeTestRule.setContent {
@@ -153,7 +159,7 @@ class ReviewConfigStepTest {
     @Test
     fun showsFrequencyRegionCard_whenNotCustomMode() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -165,8 +171,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
         every { mockViewModel.getFrequencyForSlot(20) } returns 914875000L
         every { mockViewModel.getRegionLimits() } returns null
 
@@ -184,7 +192,7 @@ class ReviewConfigStepTest {
     @Test
     fun hidesRegionCard_inCustomMode() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -194,8 +202,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
         every { mockViewModel.getRegionLimits() } returns null
 
         // When
@@ -210,7 +220,7 @@ class ReviewConfigStepTest {
     @Test
     fun showsDutyCycleWarning_forRestrictedRegions() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -222,8 +232,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
         every { mockViewModel.getFrequencyForSlot(1) } returns 868125000L
         every { mockViewModel.getRegionLimits() } returns null
 
@@ -239,7 +251,8 @@ class ReviewConfigStepTest {
     @Test
     fun advancedSettingsButton_togglesVisibility() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        var toggleCalled = false
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -248,9 +261,12 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
         every { mockViewModel.getRegionLimits() } returns null
+        every { mockViewModel.toggleAdvancedSettings() } answers { toggleCalled = true }
 
         // When
         composeTestRule.setContent {
@@ -261,13 +277,14 @@ class ReviewConfigStepTest {
         composeTestRule.onNode(hasText("Advanced Settings")).performScrollTo().performClick()
 
         // Then - should call toggleAdvancedSettings
+        assertTrue("toggleAdvancedSettings should be called when button is clicked", toggleCalled)
         verify(exactly = 1) { mockViewModel.toggleAdvancedSettings() }
     }
 
     @Test
     fun interfaceModeSelector_showsDropdownOnClick() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -277,8 +294,10 @@ class ReviewConfigStepTest {
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
         every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
         every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
         every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
         every { mockViewModel.getRegionLimits() } returns null
 
         // When

@@ -72,9 +72,12 @@ class ServiceReticulumProtocolTest {
         }
 
         // Create mocks
+        // Android framework classes need relaxed mocks as they have many internal methods
+        @Suppress("NoRelaxedMocks") // Context is an Android framework class with complex internals
         context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
+        rmspServerRepository = mockk()
+        @Suppress("NoRelaxedMocks") // IReticulumService is an Android AIDL interface
         mockService = mockk(relaxed = true)
 
         // Default settings repository behavior

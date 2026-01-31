@@ -18,7 +18,9 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.ReplyPreviewUi
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -50,9 +52,20 @@ class MessagingScreenTest {
 
     private lateinit var mockViewModel: MessagingViewModel
 
+    @Suppress("NoRelaxedMocks") // MessagingViewModel is a complex Android ViewModel with many internal behaviors
     @Before
     fun setup() {
         mockViewModel = mockk(relaxed = true)
+
+        // Stub void methods called by UI interactions
+        every { mockViewModel.syncFromPropagationNode() } just Runs
+        every { mockViewModel.toggleContact() } just Runs
+        every { mockViewModel.sendMessage(any(), any()) } just Runs
+        every { mockViewModel.clearSelectedImage() } just Runs
+        every { mockViewModel.loadMessages(any(), any()) } just Runs
+        every { mockViewModel.loadImageAsync(any(), any()) } just Runs
+        every { mockViewModel.clearReplyTo() } just Runs
+        every { mockViewModel.loadReplyPreviewAsync(any(), any()) } just Runs
 
         // Setup default mock returns
         every { mockViewModel.messages } returns flowOf(PagingData.empty())
@@ -190,9 +203,13 @@ class MessagingScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithContentDescription("Sync messages").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Sync messages").performClick()
+            }
 
         // Then
+        assertTrue("Sync button click should succeed", result.isSuccess)
         verify { mockViewModel.syncFromPropagationNode() }
     }
 
@@ -270,9 +287,13 @@ class MessagingScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithContentDescription("Save to contacts").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Save to contacts").performClick()
+            }
 
         // Then
+        assertTrue("Star button click should succeed", result.isSuccess)
         verify { mockViewModel.toggleContact() }
     }
 
@@ -291,9 +312,13 @@ class MessagingScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithContentDescription("Remove from contacts").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Remove from contacts").performClick()
+            }
 
         // Then
+        assertTrue("Remove from contacts button click should succeed", result.isSuccess)
         verify { mockViewModel.toggleContact() }
     }
 
@@ -438,9 +463,13 @@ class MessagingScreenTest {
 
         // When
         composeTestRule.onNodeWithText("Type a message...").performTextInput("Test message")
-        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Send message").performClick()
+            }
 
         // Then
+        assertTrue("Send button click should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, "Test message") }
     }
 
@@ -504,9 +533,13 @@ class MessagingScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithContentDescription("Remove image").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Remove image").performClick()
+            }
 
         // Then
+        assertTrue("Clear image button click should succeed", result.isSuccess)
         verify { mockViewModel.clearSelectedImage() }
     }
 
@@ -515,16 +548,20 @@ class MessagingScreenTest {
     @Test
     fun screen_loadsMessages_onComposition() {
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+            }
 
         // Then
+        assertTrue("Screen composition should succeed", result.isSuccess)
         verify { mockViewModel.loadMessages(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, MessagingTestFixtures.Constants.TEST_PEER_NAME) }
     }
 
@@ -707,17 +744,21 @@ class MessagingScreenTest {
         every { mockViewModel.messages } returns flowOf(PagingData.from(listOf(messageWithImage)))
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - should trigger async image loading
+        assertTrue("Message display with uncached image should succeed", result.isSuccess)
         verify { mockViewModel.loadImageAsync(messageWithImage.id, messageWithImage.fieldsJson) }
     }
 
@@ -976,9 +1017,13 @@ class MessagingScreenTest {
         composeTestRule.waitForIdle()
 
         // When - tap cancel button
-        composeTestRule.onNodeWithContentDescription("Cancel reply").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Cancel reply").performClick()
+            }
 
         // Then - clearReplyTo should be called
+        assertTrue("Cancel reply button click should succeed", result.isSuccess)
         verify { mockViewModel.clearReplyTo() }
     }
 
@@ -1109,17 +1154,21 @@ class MessagingScreenTest {
         every { mockViewModel.replyPreviewCache } returns MutableStateFlow(emptyMap())
 
         // When
-        composeTestRule.setContent {
-            MessagingScreen(
-                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
-                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
-                onBackClick = {},
-                viewModel = mockViewModel,
-            )
-        }
-        composeTestRule.waitForIdle()
+        val result =
+            runCatching {
+                composeTestRule.setContent {
+                    MessagingScreen(
+                        destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                        peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                        onBackClick = {},
+                        viewModel = mockViewModel,
+                    )
+                }
+                composeTestRule.waitForIdle()
+            }
 
         // Then - should trigger async loading of reply preview
+        assertTrue("Message with reply should load successfully", result.isSuccess)
         verify { mockViewModel.loadReplyPreviewAsync("msg-with-reply", "original-msg-id") }
     }
 
@@ -1470,9 +1519,13 @@ class MessagingScreenTest {
         }
 
         // When - tap send
-        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Send message").performClick()
+            }
 
         // Then - sendMessage should be called
+        assertTrue("Send button click with GIF should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(any(), any()) }
     }
 

@@ -14,11 +14,13 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import io.mockk.Ordering
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
@@ -64,22 +66,23 @@ class InterfaceConfigManagerTest {
     private lateinit var sharedPrefs: SharedPreferences
     private lateinit var sharedPrefsEditor: SharedPreferences.Editor
 
+    @Suppress("NoRelaxedMocks") // Android Context and SharedPreferences require relaxed mocks
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher)
 
         context = mockk(relaxed = true)
-        reticulumProtocol = mockk(relaxed = true)
-        interfaceRepository = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        conversationRepository = mockk(relaxed = true)
-        messageCollector = mockk(relaxed = true)
-        database = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        autoAnnounceManager = mockk(relaxed = true)
-        identityResolutionManager = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
+        reticulumProtocol = mockk()
+        interfaceRepository = mockk()
+        identityRepository = mockk()
+        conversationRepository = mockk()
+        messageCollector = mockk()
+        database = mockk()
+        settingsRepository = mockk()
+        autoAnnounceManager = mockk()
+        identityResolutionManager = mockk()
+        propagationNodeManager = mockk()
         applicationScope = testScope.backgroundScope
 
         // Setup SharedPreferences mock
@@ -124,6 +127,16 @@ class InterfaceConfigManagerTest {
         // Setup protocol mock
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
         coEvery { reticulumProtocol.initialize(any()) } returns Result.success(Unit)
+
+        // Setup manager mocks (start/stop methods)
+        every { messageCollector.stopCollecting() } just Runs
+        every { messageCollector.startCollecting() } just Runs
+        every { autoAnnounceManager.stop() } just Runs
+        every { autoAnnounceManager.start() } just Runs
+        every { identityResolutionManager.stop() } just Runs
+        every { identityResolutionManager.start(any()) } just Runs
+        every { propagationNodeManager.stop() } just Runs
+        every { propagationNodeManager.start() } just Runs
 
         manager =
             InterfaceConfigManager(
@@ -215,9 +228,10 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - stops message collector first`() =
         runTest {
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: Message collector should be stopped before managers
+            // Then: Should succeed and message collector should be stopped before managers
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify(ordering = Ordering.ORDERED) {
                 messageCollector.stopCollecting()
                 autoAnnounceManager.stop()
@@ -228,9 +242,10 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - starts message collector before managers`() =
         runTest {
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: Message collector should be started before managers
+            // Then: Should succeed and message collector should be started before managers
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify(ordering = Ordering.ORDERED) {
                 messageCollector.startCollecting()
                 autoAnnounceManager.start()
@@ -241,9 +256,10 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - propagationNodeManager started with applicationScope`() =
         runTest {
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: identityResolutionManager.start() should be called with scope
+            // Then: Should succeed and identityResolutionManager.start() called with scope
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             verify { identityResolutionManager.start(applicationScope) }
         }
 
@@ -253,9 +269,10 @@ class InterfaceConfigManagerTest {
             // This test ensures we don't accidentally remove one of the manager start calls
 
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: All three managers should be started
+            // Then: Should succeed and all three managers should be started
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             verify(exactly = 1) { autoAnnounceManager.start() }
             verify(exactly = 1) { identityResolutionManager.start(any()) }
             verify(exactly = 1) { propagationNodeManager.start() }
@@ -267,9 +284,10 @@ class InterfaceConfigManagerTest {
             // This test ensures we don't accidentally remove one of the manager stop calls
 
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: All three managers should be stopped
+            // Then: Should succeed and all three managers should be stopped
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             verify(exactly = 1) { autoAnnounceManager.stop() }
             verify(exactly = 1) { identityResolutionManager.stop() }
             verify(exactly = 1) { propagationNodeManager.stop() }
@@ -281,9 +299,10 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - loads transport node enabled setting`() =
         runTest {
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: Should load transport node setting from repository
+            // Then: Should succeed and load transport node setting from repository
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify { settingsRepository.getTransportNodeEnabled() }
         }
 
@@ -294,9 +313,10 @@ class InterfaceConfigManagerTest {
             coEvery { settingsRepository.getTransportNodeEnabled() } returns true
 
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: Config passed to initialize should have enableTransport = true
+            // Then: Should succeed and config should have enableTransport = true
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
                 reticulumProtocol.initialize(
                     match { config ->
@@ -313,9 +333,10 @@ class InterfaceConfigManagerTest {
             coEvery { settingsRepository.getTransportNodeEnabled() } returns false
 
             // When
-            manager.applyInterfaceChanges()
+            val result = manager.applyInterfaceChanges()
 
-            // Then: Config passed to initialize should have enableTransport = false
+            // Then: Should succeed and config should have enableTransport = false
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
                 reticulumProtocol.initialize(
                     match { config ->
@@ -331,10 +352,11 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - calls restorePeerIdentities when peer identities exist`() =
         runTest {
             // Given: ServiceReticulumProtocol with peer identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(5)
+            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
             val peerIdentities =
                 listOf(
@@ -360,9 +382,10 @@ class InterfaceConfigManagerTest {
                 )
 
             // When
-            managerWithServiceProtocol.applyInterfaceChanges()
+            val result = managerWithServiceProtocol.applyInterfaceChanges()
 
-            // Then: restorePeerIdentities should be called with the peer identities
+            // Then: Should succeed and restorePeerIdentities should be called
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify { serviceProtocol.restorePeerIdentities(peerIdentities) }
         }
 
@@ -370,10 +393,11 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - calls restoreAnnounceIdentities when announces exist`() =
         runTest {
             // Given: ServiceReticulumProtocol with announce identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(3)
+            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
 
             val announces =
                 listOf(
@@ -421,9 +445,10 @@ class InterfaceConfigManagerTest {
                 )
 
             // When
-            managerWithServiceProtocol.applyInterfaceChanges()
+            val result = managerWithServiceProtocol.applyInterfaceChanges()
 
-            // Then: restoreAnnounceIdentities should be called with mapped announce data
+            // Then: Should succeed and restoreAnnounceIdentities should be called
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
                 serviceProtocol.restoreAnnounceIdentities(
                     match { list ->
@@ -439,7 +464,7 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - skips restorePeerIdentities when list is empty`() =
         runTest {
             // Given: ServiceReticulumProtocol with no peer identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
 
@@ -462,9 +487,10 @@ class InterfaceConfigManagerTest {
                 )
 
             // When
-            managerWithServiceProtocol.applyInterfaceChanges()
+            val result = managerWithServiceProtocol.applyInterfaceChanges()
 
-            // Then: restorePeerIdentities should NOT be called
+            // Then: Should succeed and restorePeerIdentities should NOT be called
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify(exactly = 0) { serviceProtocol.restorePeerIdentities(any()) }
         }
 
@@ -472,7 +498,7 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - skips restoreAnnounceIdentities when list is empty`() =
         runTest {
             // Given: ServiceReticulumProtocol with no announces
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
 
@@ -497,9 +523,10 @@ class InterfaceConfigManagerTest {
                 )
 
             // When
-            managerWithServiceProtocol.applyInterfaceChanges()
+            val result = managerWithServiceProtocol.applyInterfaceChanges()
 
-            // Then: restoreAnnounceIdentities should NOT be called
+            // Then: Should succeed and restoreAnnounceIdentities should NOT be called
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify(exactly = 0) { serviceProtocol.restoreAnnounceIdentities(any()) }
         }
 
@@ -507,10 +534,11 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - continues when restorePeerIdentities fails`() =
         runTest {
             // Given: ServiceReticulumProtocol where restorePeerIdentities fails
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
+            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
             val peerIdentities = listOf(Pair("hash1", byteArrayOf(1, 2, 3)))
             coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns peerIdentities
@@ -545,10 +573,11 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - continues when restoreAnnounceIdentities fails`() =
         runTest {
             // Given: ServiceReticulumProtocol where restoreAnnounceIdentities fails
-            val serviceProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+            val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.failure(Exception("Test failure"))
+            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
 
             val announces =
                 listOf(

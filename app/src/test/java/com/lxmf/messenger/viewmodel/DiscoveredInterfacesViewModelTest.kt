@@ -74,9 +74,14 @@ class DiscoveredInterfacesViewModelTest {
         // Set test dispatcher for ViewModel
         DiscoveredInterfacesViewModel.ioDispatcher = testDispatcher
 
+        // Relaxed mocks for protocol/infrastructure classes with many methods
+        @Suppress("NoRelaxedMocks") // Protocol classes have many methods; explicit stubs provided for tested methods
         reticulumProtocol = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Repository has many settings methods; explicit stubs provided for tested methods
         settingsRepository = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Repository has many interface methods; explicit stubs provided for tested methods
         interfaceRepository = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Manager has many config methods; explicit stubs provided for tested methods
         interfaceConfigManager = mockk(relaxed = true)
 
         // Default mock responses

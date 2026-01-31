@@ -53,7 +53,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     @Before
     fun setupManager() {
         testScope = TestScope(UnconfinedTestDispatcher())
-        settingsAccessor = mockk(relaxed = true)
+        settingsAccessor = mockk()
 
         // Default: don't block unknown senders
         every { settingsAccessor.getBlockUnknownSenders() } returns false

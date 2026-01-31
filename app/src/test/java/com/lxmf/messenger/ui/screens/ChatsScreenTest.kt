@@ -806,10 +806,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - sync button is displayed
+        composeTestRule.onNodeWithContentDescription("Sync messages").assertIsDisplayed()
+
         // When
         composeTestRule.onNodeWithContentDescription("Sync messages").performClick()
 
-        // Then
+        // Then - verify sync was triggered
         verify { mockViewModel.syncFromPropagationNode() }
     }
 
@@ -831,10 +834,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - save button is displayed for unsaved contact
+        composeTestRule.onNodeWithContentDescription("Save to contacts").assertIsDisplayed()
+
         // When - click the star button
         composeTestRule.onNodeWithContentDescription("Save to contacts").performClick()
 
-        // Then
+        // Then - verify save was triggered
         verify { mockViewModel.saveToContacts(conversation) }
     }
 
@@ -854,10 +860,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - remove button is displayed for saved contact
+        composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
+
         // When - click the star button
         composeTestRule.onNodeWithContentDescription("Remove from contacts").performClick()
 
-        // Then
+        // Then - verify remove was triggered
         verify { mockViewModel.removeFromContacts("test_peer") }
     }
 
@@ -888,6 +897,7 @@ class ChatsScreenTest {
 
     // ========== Test Helpers ==========
 
+    @Suppress("NoRelaxedMocks") // ChatsViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     private fun createMockChatsViewModel(
         conversations: List<com.lxmf.messenger.data.repository.Conversation> = emptyList(),
         searchQuery: String = "",

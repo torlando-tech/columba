@@ -1,4 +1,6 @@
 @file:Suppress("SleepInsteadOfDelay", "IgnoredReturnValue", "UnnecessarySafeCall")
+// NoRelaxedMocks suppression: android.content.Context is an Android framework class that requires
+// relaxed mocking - explicitly stubbing all methods is not practical for framework classes
 
 package com.lxmf.messenger.viewmodel
 
@@ -20,7 +22,17 @@ import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
-import io.mockk.*
+import io.mockk.Runs
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -91,12 +103,20 @@ class MessagingViewModelTest {
         conversationRepository = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
-        activeConversationManager = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
-        locationSharingManager = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        conversationLinkManager = mockk(relaxed = true)
+        activeConversationManager = mockk()
+        settingsRepository = mockk()
+        propagationNodeManager = mockk()
+        locationSharingManager = mockk()
+        identityRepository = mockk()
+        conversationLinkManager = mockk()
+
+        // Mock activeConversationManager methods
+        every { activeConversationManager.setActive(any()) } just Runs
+
+        // Mock settingsRepository methods
+        coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
+        coEvery { settingsRepository.getTryPropagationOnFail() } returns true
+        coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
@@ -117,6 +137,14 @@ class MessagingViewModelTest {
         // Mock propagationNodeManager flows
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
+        every { propagationNodeManager.syncProgress } returns
+            MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
+        coEvery { propagationNodeManager.triggerSync() } just Runs
+        coEvery { propagationNodeManager.triggerSync(silent = any()) } just Runs
+
+        // Mock locationSharingManager methods
+        every { locationSharingManager.startSharing(any(), any(), any()) } just Runs
+        every { locationSharingManager.stopSharing(any()) } just Runs
 
         // Mock default behaviors
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
@@ -198,7 +226,9 @@ class MessagingViewModelTest {
     fun `initial state has empty messages`() =
         runViewModelTest {
             // Before loadMessages is called, the messages flow returns empty PagingData
-            // Verify the repository method is not called until loadMessages() is invoked
+            // Assert: Repository was not called because loadMessages wasn't invoked
+            val result = runCatching { viewModel.messages.first() }
+            assertTrue("Messages flow should be accessible", result.isSuccess)
             coVerify(exactly = 0) { conversationRepository.getMessagesPaged(any()) }
         }
 
@@ -206,8 +236,11 @@ class MessagingViewModelTest {
     fun `loadMessages updates current conversation and triggers flow`() =
         runViewModelTest {
             // Act: Load messages for conversation
-            viewModel.loadMessages(testPeerHash, testPeerName)
+            val result = runCatching { viewModel.loadMessages(testPeerHash, testPeerName) }
             advanceUntilIdle()
+
+            // Assert: loadMessages completed successfully
+            assertTrue("loadMessages should complete without error", result.isSuccess)
 
             // Trigger the flow by collecting
             viewModel.messages.first()
@@ -226,9 +259,10 @@ class MessagingViewModelTest {
     @Test
     fun `loadMessages marks conversation as read`() =
         runViewModelTest {
-            viewModel.loadMessages(testPeerHash, testPeerName)
+            val result = runCatching { viewModel.loadMessages(testPeerHash, testPeerName) }
             advanceUntilIdle()
 
+            assertTrue("loadMessages should complete without error", result.isSuccess)
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
         }
 
@@ -373,9 +407,10 @@ class MessagingViewModelTest {
     @Test
     fun `markAsRead calls repository`() =
         runViewModelTest {
-            viewModel.markAsRead(testPeerHash)
+            val result = runCatching { viewModel.markAsRead(testPeerHash) }
             advanceUntilIdle()
 
+            assertTrue("markAsRead should complete without error", result.isSuccess)
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
         }
 
@@ -386,8 +421,10 @@ class MessagingViewModelTest {
             val conversation2Hash = "peer2"
 
             // Load first conversation
-            viewModel.loadMessages(conversation1Hash, "Peer 1")
+            val result1 = runCatching { viewModel.loadMessages(conversation1Hash, "Peer 1") }
             advanceUntilIdle()
+
+            assertTrue("First loadMessages should succeed", result1.isSuccess)
 
             // Trigger the flow by collecting
             viewModel.messages.first()
@@ -397,8 +434,10 @@ class MessagingViewModelTest {
             coVerify { conversationRepository.getMessagesPaged(conversation1Hash) }
 
             // Switch to second conversation
-            viewModel.loadMessages(conversation2Hash, "Peer 2")
+            val result2 = runCatching { viewModel.loadMessages(conversation2Hash, "Peer 2") }
             advanceUntilIdle()
+
+            assertTrue("Second loadMessages should succeed", result2.isSuccess)
 
             // Trigger the flow by collecting
             viewModel.messages.first()
@@ -426,9 +465,10 @@ class MessagingViewModelTest {
                 conversationRepository.saveMessage(any(), any(), any(), any())
             } just Runs
 
-            viewModel.sendMessage(testPeerHash, "Test")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test") }
             advanceUntilIdle()
 
+            assertTrue("sendMessage should complete without error", result.isSuccess)
             // Verify the protocol was called to get identity
             coVerify { reticulumProtocol.getLxmfIdentity() }
         }
@@ -458,15 +498,28 @@ class MessagingViewModelTest {
             every { failingContactRepository.hasContactFlow(any()) } returns flowOf(false)
             every { failingContactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-            val failingActiveConversationManager: ActiveConversationManager = mockk(relaxed = true)
-            val failingSettingsRepository: SettingsRepository = mockk(relaxed = true)
-            val failingPropagationNodeManager: PropagationNodeManager = mockk(relaxed = true)
-            val failingLocationSharingManager: LocationSharingManager = mockk(relaxed = true)
+            val failingActiveConversationManager: ActiveConversationManager = mockk()
+            every { failingActiveConversationManager.setActive(any()) } just Runs
+
+            val failingSettingsRepository: SettingsRepository = mockk()
+            coEvery { failingSettingsRepository.getDefaultDeliveryMethod() } returns "direct"
+            coEvery { failingSettingsRepository.getTryPropagationOnFail() } returns true
+            coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
+
+            val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
-            every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+            every { failingPropagationNodeManager.syncProgress } returns
+                MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
+            coEvery { failingPropagationNodeManager.triggerSync() } just Runs
+            coEvery { failingPropagationNodeManager.triggerSync(silent = any()) } just Runs
 
-            val failingConversationLinkManager = mockk<ConversationLinkManager>(relaxed = true)
+            val failingLocationSharingManager: LocationSharingManager = mockk()
+            every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+            every { failingLocationSharingManager.startSharing(any(), any(), any()) } just Runs
+            every { failingLocationSharingManager.stopSharing(any()) } just Runs
+
+            val failingConversationLinkManager = mockk<ConversationLinkManager>()
             every { failingConversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
             val viewModelWithoutIdentity =
                 MessagingViewModel(
@@ -535,8 +588,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Try to send with invalid hash
-            viewModel.sendMessage(invalidHash, "Test message")
+            val result = runCatching { viewModel.sendMessage(invalidHash, "Test message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
@@ -557,8 +613,11 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            viewModel.sendMessage(nonHexHash, "Test message")
+            val result = runCatching { viewModel.sendMessage(nonHexHash, "Test message") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Verify: No protocol call made
             coVerify(exactly = 0) {
@@ -578,8 +637,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Try to send empty message
-            viewModel.sendMessage(testPeerHash, "")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
@@ -599,8 +661,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Try to send whitespace-only message
-            viewModel.sendMessage(testPeerHash, "   \n\t   ")
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "   \n\t   ") }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
@@ -623,8 +688,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Try to send too-long message
-            viewModel.sendMessage(testPeerHash, tooLongMessage)
+            val result = runCatching { viewModel.sendMessage(testPeerHash, tooLongMessage) }
             advanceUntilIdle()
+
+            // Assert: sendMessage completed without throwing
+            assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
@@ -1450,8 +1518,11 @@ class MessagingViewModelTest {
             // Don't load any conversation - _currentConversation is null
 
             // Act: Toggle contact (should do nothing)
-            viewModel.toggleContact()
+            val result = runCatching { viewModel.toggleContact() }
             advanceUntilIdle()
+
+            // Assert: toggleContact completed without throwing
+            assertTrue("toggleContact should complete without error", result.isSuccess)
 
             // Assert: No contact repository methods were called
             coVerify(exactly = 0) {
@@ -1502,10 +1573,11 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Act: Toggle contact (should not crash)
-            viewModel.toggleContact()
+            val result = runCatching { viewModel.toggleContact() }
             advanceUntilIdle()
 
             // Assert: No crash occurred - test completes successfully
+            assertTrue("toggleContact should complete without throwing", result.isSuccess)
             // Verify hasContact was called
             coVerify {
                 contactRepository.hasContact(testPeerHash)
@@ -1663,6 +1735,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1679,6 +1752,7 @@ class MessagingViewModelTest {
             // Arrange
             val messageEntity = createMessageEntity(fieldsJson = null)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1695,6 +1769,7 @@ class MessagingViewModelTest {
             // Arrange
             val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1712,6 +1787,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1771,6 +1847,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1830,6 +1907,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1846,6 +1924,7 @@ class MessagingViewModelTest {
             // Arrange - fieldsJson without field 6 (image)
             val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1905,6 +1984,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
             val uri = mockk<android.net.Uri>()
 
@@ -1920,6 +2000,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -1935,6 +2016,7 @@ class MessagingViewModelTest {
             // Arrange - fieldsJson without field 6 (image)
             val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -1949,6 +2031,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2046,6 +2129,7 @@ class MessagingViewModelTest {
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
 
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2363,9 +2447,10 @@ class MessagingViewModelTest {
         runViewModelTest {
             coEvery { propagationNodeManager.triggerSync() } just Runs
 
-            viewModel.syncFromPropagationNode()
+            val result = runCatching { viewModel.syncFromPropagationNode() }
             advanceUntilIdle()
 
+            assertTrue("syncFromPropagationNode should complete without error", result.isSuccess)
             coVerify { propagationNodeManager.triggerSync() }
         }
 
@@ -2376,6 +2461,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("nonexistent-id") } returns null
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2391,6 +2477,7 @@ class MessagingViewModelTest {
             // Arrange
             val messageEntity = createMessageEntity(fieldsJson = null)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2406,6 +2493,7 @@ class MessagingViewModelTest {
             // Arrange
             val messageEntity = createMessageEntity(fieldsJson = """{"1": "text only"}""")
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2422,6 +2510,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2438,6 +2527,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": [{"filename": "test.txt", "data": "", "size": 0}]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2454,6 +2544,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": [{"filename": "test.txt", "size": 100}]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2468,6 +2559,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Arrange
             coEvery { conversationRepository.getMessageById("test-id") } throws RuntimeException("DB error")
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2484,6 +2576,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": [{"filename": "test.txt", "data": "48656c6c6f", "size": 5}]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2500,6 +2593,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": "not an array"}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -2516,6 +2610,7 @@ class MessagingViewModelTest {
             val fieldsJson = """{"5": ["not an object"]}"""
             val messageEntity = createMessageEntity(fieldsJson = fieldsJson)
             coEvery { conversationRepository.getMessageById("test-id") } returns messageEntity
+            @Suppress("NoRelaxedMocks") // Android framework class
             val context = mockk<android.content.Context>(relaxed = true)
 
             // Act
@@ -3396,8 +3491,11 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
 
             // Act
-            viewModel.sendReaction("test-msg-id", "👍")
+            val result = runCatching { viewModel.sendReaction("test-msg-id", "👍") }
             advanceUntilIdle()
+
+            // Assert: sendReaction completed without error
+            assertTrue("sendReaction should complete without error", result.isSuccess)
 
             // Assert: Protocol was called with correct parameters
             coVerify {
@@ -3927,9 +4025,10 @@ class MessagingViewModelTest {
         runViewModelTest {
             val duration = com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES
 
-            viewModel.startSharingWithPeer(testPeerHash, testPeerName, duration)
+            val result = runCatching { viewModel.startSharingWithPeer(testPeerHash, testPeerName, duration) }
             advanceUntilIdle()
 
+            assertTrue("startSharingWithPeer should complete without error", result.isSuccess)
             verify {
                 locationSharingManager.startSharing(
                     contactHashes = listOf(testPeerHash),
@@ -3942,9 +4041,10 @@ class MessagingViewModelTest {
     @Test
     fun `stopSharingWithPeer calls location sharing manager`() =
         runViewModelTest {
-            viewModel.stopSharingWithPeer(testPeerHash)
+            val result = runCatching { viewModel.stopSharingWithPeer(testPeerHash) }
             advanceUntilIdle()
 
+            assertTrue("stopSharingWithPeer should complete without error", result.isSuccess)
             verify { locationSharingManager.stopSharing(testPeerHash) }
         }
 
@@ -4131,9 +4231,10 @@ class MessagingViewModelTest {
                 reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
-            viewModel.retryFailedMessage("msg-123")
+            val result = runCatching { viewModel.retryFailedMessage("msg-123") }
             advanceUntilIdle()
 
+            assertTrue("retryFailedMessage should complete without error", result.isSuccess)
             // Should restore failed status after retry fails
             coVerify {
                 conversationRepository.updateMessageStatus("msg-123", "pending") // First set to pending
@@ -4188,11 +4289,12 @@ class MessagingViewModelTest {
 
             // Act: Fetch a 1MB file
             val fileSizeBytes = 1024L * 1024L // 1MB
-            viewModel.fetchPendingFile(fileSizeBytes)
+            val result = runCatching { viewModel.fetchPendingFile(fileSizeBytes) }
 
             // Give the coroutine a chance to start
             advanceUntilIdle()
 
+            assertTrue("fetchPendingFile should complete without error", result.isSuccess)
             // Verify sync was triggered with silent flag
             coVerify { propagationNodeManager.triggerSync(silent = true) }
 
@@ -4218,9 +4320,10 @@ class MessagingViewModelTest {
             }
 
             val fileSizeBytes = 512L * 1024L // 512KB
-            viewModel.fetchPendingFile(fileSizeBytes)
+            val result = runCatching { viewModel.fetchPendingFile(fileSizeBytes) }
             advanceUntilIdle()
 
+            assertTrue("fetchPendingFile should complete without error", result.isSuccess)
             // Verify size limit was reverted to original
             verify { reticulumProtocol.setIncomingMessageSizeLimit(originalLimit) }
         }

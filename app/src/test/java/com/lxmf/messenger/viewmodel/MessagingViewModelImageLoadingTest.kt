@@ -1,4 +1,5 @@
 @file:Suppress("SleepInsteadOfDelay")
+
 package com.lxmf.messenger.viewmodel
 
 import android.app.Application
@@ -110,22 +111,28 @@ class MessagingViewModelImageLoadingTest {
         // Clear ImageCache before each test
         ImageCache.clear()
 
-        reticulumProtocol = mockk(relaxed = true)
-        conversationRepository = mockk(relaxed = true)
-        announceRepository = mockk(relaxed = true)
-        contactRepository = mockk(relaxed = true)
-        activeConversationManager = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
-        locationSharingManager = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        conversationLinkManager = mockk(relaxed = true)
+        reticulumProtocol = mockk()
+        conversationRepository = mockk()
+        announceRepository = mockk()
+        contactRepository = mockk()
+        activeConversationManager = mockk()
+        settingsRepository = mockk()
+        propagationNodeManager = mockk()
+        locationSharingManager = mockk()
+        identityRepository = mockk()
+        conversationLinkManager = mockk()
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+
+        // Mock activeConversationManager
+        every { activeConversationManager.setActive(any()) } just Runs
+
+        // Mock identityRepository
+        coEvery { identityRepository.getActiveIdentitySync() } returns null
 
         // Setup default mock behaviors
         every { conversationRepository.getMessages(any()) } returns flowOf(emptyList())
@@ -283,15 +290,20 @@ class MessagingViewModelImageLoadingTest {
             val messageId = "concurrent-test"
 
             // Fire multiple calls without waiting
-            repeat(5) {
-                viewModel.loadImageAsync(messageId, """{"6": "invalid"}""")
-            }
-
-            advanceUntilIdle()
+            val result =
+                runCatching {
+                    repeat(5) {
+                        viewModel.loadImageAsync(messageId, """{"6": "invalid"}""")
+                    }
+                    advanceUntilIdle()
+                    Thread.sleep(200)
+                    advanceUntilIdle()
+                }
 
             // Should complete without errors - the first call processes,
             // subsequent calls either skip (if already in progress) or
             // find it in cache/loadedImageIds
+            assertTrue(result.isSuccess)
         }
 
     @Test
@@ -316,12 +328,18 @@ class MessagingViewModelImageLoadingTest {
 
             // Call loadImageAsync with valid-looking JSON
             // Note: Even if decode fails, we're testing the flow
-            viewModel.loadImageAsync(messageId, """{"6": "$minimalPngHex"}""")
-            advanceUntilIdle()
+            val result =
+                runCatching {
+                    viewModel.loadImageAsync(messageId, """{"6": "$minimalPngHex"}""")
+                    advanceUntilIdle()
+                    Thread.sleep(200)
+                    advanceUntilIdle()
+                }
 
             // If decode succeeds, loadedImageIds should contain the messageId
             // If decode fails (depending on Robolectric version), it won't
-            // This test ensures the success path code is exercised
+            // This test ensures the success path code is exercised without errors
+            assertTrue(result.isSuccess)
         }
 
     @Test
@@ -379,12 +397,18 @@ class MessagingViewModelImageLoadingTest {
             val messageId2 = "msg-2"
 
             // Call for two different messages
-            viewModel.loadImageAsync(messageId1, """{"6": "invalid1"}""")
-            viewModel.loadImageAsync(messageId2, """{"6": "invalid2"}""")
-            advanceUntilIdle()
+            val result =
+                runCatching {
+                    viewModel.loadImageAsync(messageId1, """{"6": "invalid1"}""")
+                    viewModel.loadImageAsync(messageId2, """{"6": "invalid2"}""")
+                    advanceUntilIdle()
+                    Thread.sleep(200)
+                    advanceUntilIdle()
+                }
 
             // Both should have been processed (even if decode fails)
             // No crash means independent processing works
+            assertTrue(result.isSuccess)
         }
 
     @Test
@@ -471,11 +495,17 @@ class MessagingViewModelImageLoadingTest {
 
             assertFalse(ImageCache.contains(messageId))
 
-            viewModel.loadImageAsync(messageId, """{"6": "$jpegHeaderHex"}""")
-            advanceUntilIdle()
+            val result =
+                runCatching {
+                    viewModel.loadImageAsync(messageId, """{"6": "$jpegHeaderHex"}""")
+                    advanceUntilIdle()
+                    Thread.sleep(200)
+                    advanceUntilIdle()
+                }
 
             // Whether this succeeds depends on Robolectric's BitmapFactory
             // But the important thing is that the withContext(Dispatchers.IO) block was executed
+            assertTrue(result.isSuccess)
         }
 
     @Test
@@ -488,9 +518,15 @@ class MessagingViewModelImageLoadingTest {
             assertFalse(viewModel.loadedImageIds.value.contains(messageId))
 
             // This should launch the coroutine (not early return)
-            viewModel.loadImageAsync(messageId, """{"6": "aabbccdd"}""")
-            advanceUntilIdle()
+            val result =
+                runCatching {
+                    viewModel.loadImageAsync(messageId, """{"6": "aabbccdd"}""")
+                    advanceUntilIdle()
+                    Thread.sleep(200)
+                    advanceUntilIdle()
+                }
 
             // The coroutine was launched - decode may fail but path was exercised
+            assertTrue(result.isSuccess)
         }
 }

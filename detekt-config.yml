@@ -127,6 +127,8 @@ columba:
     active: true
   NoRelaxedMocks:
     active: true
+  NoVerifyOnlyTests:
+    active: true
 
 style:
   active: true

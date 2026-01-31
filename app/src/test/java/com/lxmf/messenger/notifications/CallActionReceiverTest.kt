@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests")
+
 package com.lxmf.messenger.notifications
 
 import android.app.Application

@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests")
+
 package com.lxmf.messenger.service
 
 import com.lxmf.messenger.data.db.dao.PeerIconDao

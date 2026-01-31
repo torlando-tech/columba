@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests")
+
 package com.lxmf.messenger.service.manager
 
 import io.mockk.clearAllMocks

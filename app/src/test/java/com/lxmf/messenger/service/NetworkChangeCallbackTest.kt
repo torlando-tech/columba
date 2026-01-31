@@ -1,4 +1,4 @@
-@file:Suppress("SwallowedException") // Test file intentionally catches exceptions to verify handling
+@file:Suppress("NoVerifyOnlyTests", "SwallowedException") // Test file intentionally catches exceptions to verify handling
 
 package com.lxmf.messenger.service
 

@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "SleepInsteadOfDelay", "IgnoredReturnValue", "UnnecessarySafeCall")
+
 package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule

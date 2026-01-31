@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+
 package com.lxmf.messenger.reticulum.audio.bridge
 
 import android.app.Application

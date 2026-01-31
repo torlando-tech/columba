@@ -1,5 +1,4 @@
-@file:Suppress("NoRelaxedMocks")
-
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 package com.lxmf.messenger.ui.screens.rnode
 
 import android.app.Application

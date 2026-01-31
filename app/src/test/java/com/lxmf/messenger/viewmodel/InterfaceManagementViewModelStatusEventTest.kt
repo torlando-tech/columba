@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "InjectDispatcher")
+
 package com.lxmf.messenger.viewmodel
 
 import android.bluetooth.BluetoothAdapter

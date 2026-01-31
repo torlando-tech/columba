@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+
 package com.lxmf.messenger.reticulum.call.bridge
 
 import app.cash.turbine.test

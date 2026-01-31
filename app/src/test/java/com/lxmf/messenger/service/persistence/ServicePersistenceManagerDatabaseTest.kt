@@ -1,3 +1,4 @@
+@file:Suppress("SleepInsteadOfDelay")
 package com.lxmf.messenger.service.persistence
 
 import com.lxmf.messenger.data.db.entity.AnnounceEntity

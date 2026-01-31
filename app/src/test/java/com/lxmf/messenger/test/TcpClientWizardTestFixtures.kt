@@ -1,3 +1,5 @@
+@file:Suppress("UseOrEmpty")
+
 package com.lxmf.messenger.test
 
 import com.lxmf.messenger.data.model.TcpCommunityServer

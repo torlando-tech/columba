@@ -1,3 +1,5 @@
+@file:Suppress("IgnoredReturnValue")
+
 package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule

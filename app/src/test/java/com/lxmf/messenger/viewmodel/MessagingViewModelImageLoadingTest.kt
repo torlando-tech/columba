@@ -1,3 +1,4 @@
+@file:Suppress("SleepInsteadOfDelay")
 package com.lxmf.messenger.viewmodel
 
 import android.app.Application

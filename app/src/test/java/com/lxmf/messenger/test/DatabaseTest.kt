@@ -1,3 +1,5 @@
+@file:Suppress("UnnecessaryAbstractClass")
+
 package com.lxmf.messenger.test
 
 import android.app.Application

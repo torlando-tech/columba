@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+
 package com.lxmf.messenger.reticulum.ble.bridge
 
 import android.bluetooth.BluetoothAdapter

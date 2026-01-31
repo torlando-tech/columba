@@ -1,4 +1,4 @@
-@file:Suppress("NoRelaxedMocks")
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks", "UnnecessaryApply", "IgnoredReturnValue")
 
 package com.lxmf.messenger.viewmodel
 

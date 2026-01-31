@@ -1,3 +1,5 @@
+@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+
 package com.lxmf.messenger.data.repository
 
 import android.util.Log

@@ -9,6 +9,7 @@ plugins {
     id("com.chaquo.python") version "16.0.0" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.21" apply false
     id("io.sentry.android.gradle") version "5.3.0" apply false
+    id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"

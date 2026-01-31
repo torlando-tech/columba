@@ -3,14 +3,10 @@ package com.lxmf.messenger.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.data.repository.ConversationRepository
-import com.lxmf.messenger.ui.model.loadFileAttachmentData
-import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
-import com.lxmf.messenger.ui.model.loadImageData
+import com.lxmf.messenger.service.AttachmentStorageService
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.ImageUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,47 +18,35 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.UUID
 import javax.inject.Inject
 
 /**
- * ViewModel for managing message attachments (images and files).
+ * ViewModel for managing message attachment selection and compression.
  *
  * Extracted from MessagingViewModel to follow single responsibility principle.
- * Handles:
+ * Handles UI state for:
  * - Image selection, compression, and quality options
  * - File attachment management (add, remove, clear)
- * - Saving received attachments to user storage
- * - Creating shareable URIs for attachments
  *
- * This ViewModel can be used alongside MessagingViewModel in screens
- * that need attachment functionality.
+ * For saving/sharing received attachments, use [AttachmentStorageService] directly.
+ * This separation keeps the ViewModel focused on UI state management while
+ * storage operations are handled by a dedicated service.
+ *
+ * @see AttachmentStorageService for save/share operations
  */
-@Suppress("TooManyFunctions") // Cohesive attachment functionality - all methods relate to attachment handling
 @HiltViewModel
 class AttachmentViewModel
     @Inject
     constructor(
-        private val conversationRepository: ConversationRepository,
+        val storageService: AttachmentStorageService,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AttachmentViewModel"
-
-            /**
-             * Sanitize a filename to prevent path traversal attacks.
-             * Removes path separators and invalid characters, limits length.
-             */
-            private fun sanitizeFilename(filename: String): String =
-                filename
-                    .replace(Regex("[/\\\\]"), "_")
-                    .replace(Regex("[<>:\"|?*]"), "_")
-                    .take(255)
-                    .ifEmpty { "attachment" }
         }
 
         // ========== Image Attachment State ==========
@@ -105,17 +89,16 @@ class AttachmentViewModel
          * Check if any attachments are selected (image or files).
          */
         val hasAttachments: StateFlow<Boolean> =
-            kotlinx.coroutines.flow
-                .combine(
-                    _selectedImageData,
-                    _selectedFileAttachments,
-                ) { imageData, files ->
-                    imageData != null || files.isNotEmpty()
-                }.stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000L),
-                    initialValue = false,
-                )
+            combine(
+                _selectedImageData,
+                _selectedFileAttachments,
+            ) { imageData, files ->
+                imageData != null || files.isNotEmpty()
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = false,
+            )
 
         // ========== Quality Selection State ==========
 
@@ -213,219 +196,6 @@ class AttachmentViewModel
             clearSelectedImage()
             clearFileAttachments()
         }
-
-        // ========== Save/Share Received Attachments ==========
-
-        /**
-         * Save a received file attachment to the user's chosen location.
-         *
-         * @param context Android context for content resolver
-         * @param messageId The message ID containing the file attachment
-         * @param fileIndex The index of the file attachment in the message's field 5
-         * @param destinationUri The Uri where the user wants to save the file
-         * @return true if save was successful, false otherwise
-         */
-        suspend fun saveReceivedFileAttachment(
-            context: Context,
-            messageId: String,
-            fileIndex: Int,
-            destinationUri: Uri,
-        ): Boolean {
-            return try {
-                val messageEntity = conversationRepository.getMessageById(messageId)
-                if (messageEntity == null) {
-                    Log.e(TAG, "Message not found: $messageId")
-                    return false
-                }
-
-                val fileData = loadFileAttachmentData(messageEntity.fieldsJson, fileIndex)
-                if (fileData == null) {
-                    Log.e(TAG, "Could not load file attachment data for message $messageId index $fileIndex")
-                    return false
-                }
-
-                context.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
-                    outputStream.write(fileData)
-                    Log.d(TAG, "Saved file attachment (${fileData.size} bytes) to $destinationUri")
-                    true
-                } ?: run {
-                    Log.e(TAG, "Could not open output stream for $destinationUri")
-                    false
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save file attachment", e)
-                false
-            }
-        }
-
-        /**
-         * Get a FileProvider URI for a received file attachment.
-         *
-         * Creates a temporary file in the attachments directory and returns a content URI
-         * that can be shared with external apps via Intent.ACTION_VIEW.
-         *
-         * @param context Android context for file operations
-         * @param messageId The message ID containing the file attachment
-         * @param fileIndex The index of the file attachment in the message's field 5
-         * @return Pair of (Uri, mimeType) or null if the file cannot be accessed
-         */
-        suspend fun getFileAttachmentUri(
-            context: Context,
-            messageId: String,
-            fileIndex: Int,
-        ): Pair<Uri, String>? {
-            return withContext(Dispatchers.IO) {
-                try {
-                    val messageEntity = conversationRepository.getMessageById(messageId)
-                    if (messageEntity == null) {
-                        Log.e(TAG, "Message not found: $messageId")
-                        return@withContext null
-                    }
-
-                    val metadata = loadFileAttachmentMetadata(messageEntity.fieldsJson, fileIndex)
-                    if (metadata == null) {
-                        Log.e(TAG, "Could not load file metadata for message $messageId index $fileIndex")
-                        return@withContext null
-                    }
-
-                    val (filename, mimeType) = metadata
-                    val safeFilename = sanitizeFilename(filename)
-
-                    val fileData = loadFileAttachmentData(messageEntity.fieldsJson, fileIndex)
-                    if (fileData == null) {
-                        Log.e(TAG, "Could not load file data for message $messageId index $fileIndex")
-                        return@withContext null
-                    }
-
-                    val attachmentsDir = File(context.cacheDir, "attachments")
-                    attachmentsDir.mkdirs()
-
-                    val tempFile = File(attachmentsDir, "${UUID.randomUUID()}_$safeFilename")
-                    tempFile.writeBytes(fileData)
-
-                    val uri =
-                        FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            tempFile,
-                        )
-
-                    Log.d(TAG, "Created file URI for attachment: $uri (type: $mimeType)")
-                    Pair(uri, mimeType)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to get file attachment URI", e)
-                    null
-                }
-            }
-        }
-
-        /**
-         * Save a received image to the user's chosen location.
-         *
-         * @param context Android context for content resolver
-         * @param messageId The message ID containing the image
-         * @param destinationUri The Uri where the user wants to save the image
-         * @return true if save was successful, false otherwise
-         */
-        suspend fun saveImage(
-            context: Context,
-            messageId: String,
-            destinationUri: Uri,
-        ): Boolean {
-            return try {
-                val messageEntity = conversationRepository.getMessageById(messageId)
-                if (messageEntity == null) {
-                    Log.e(TAG, "Message not found: $messageId")
-                    return false
-                }
-
-                val imageData = loadImageData(messageEntity.fieldsJson)
-                if (imageData == null) {
-                    Log.e(TAG, "Could not load image data for message $messageId")
-                    return false
-                }
-
-                context.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
-                    outputStream.write(imageData)
-                    Log.d(TAG, "Saved image (${imageData.size} bytes) to $destinationUri")
-                    true
-                } ?: run {
-                    Log.e(TAG, "Could not open output stream for $destinationUri")
-                    false
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save image", e)
-                false
-            }
-        }
-
-        /**
-         * Get a shareable URI for a received image.
-         *
-         * @param context Android context for FileProvider
-         * @param messageId The message ID containing the image
-         * @return The URI for sharing, or null if creation failed
-         */
-        suspend fun getImageShareUri(
-            context: Context,
-            messageId: String,
-        ): Uri? {
-            return withContext(Dispatchers.IO) {
-                try {
-                    val messageEntity = conversationRepository.getMessageById(messageId)
-                    if (messageEntity == null) {
-                        Log.e(TAG, "Message not found: $messageId")
-                        return@withContext null
-                    }
-
-                    val imageBytes = loadImageData(messageEntity.fieldsJson)
-                    if (imageBytes == null) {
-                        Log.e(TAG, "No image data found in message $messageId")
-                        return@withContext null
-                    }
-
-                    val extension = getImageExtension(messageId)
-                    val filename = "share_${messageId.take(8)}.$extension"
-
-                    val cacheDir = File(context.cacheDir, "share_images")
-                    cacheDir.mkdirs()
-
-                    val tempFile = File(cacheDir, filename)
-                    tempFile.writeBytes(imageBytes)
-
-                    FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        tempFile,
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to create share URI", e)
-                    null
-                }
-            }
-        }
-
-        /**
-         * Get the image extension from message metadata.
-         *
-         * Returns the extension (e.g., "jpg", "png", "gif", "webp").
-         * Falls back to "jpg" if format cannot be detected.
-         */
-        suspend fun getImageExtension(messageId: String): String =
-            withContext(Dispatchers.IO) {
-                try {
-                    val messageEntity = conversationRepository.getMessageById(messageId) ?: return@withContext "jpg"
-                    val metadata =
-                        com.lxmf.messenger.ui.model
-                            .getImageMetadata(messageEntity.fieldsJson)
-                            ?: return@withContext "jpg"
-                    // getImageMetadata returns Pair<mimeType, extension>
-                    metadata.second.lowercase()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error getting image extension", e)
-                    "jpg"
-                }
-            }
 
         // ========== Image Compression ==========
 

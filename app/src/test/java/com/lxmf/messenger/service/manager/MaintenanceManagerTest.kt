@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service.manager
 
@@ -24,7 +23,6 @@ import org.junit.Test
  * Tests the periodic wake lock refresh mechanism that ensures locks are
  * maintained aggressively (every 5 minutes) following Sideband's pattern.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class MaintenanceManagerTest {
     private val testDispatcher = StandardTestDispatcher()

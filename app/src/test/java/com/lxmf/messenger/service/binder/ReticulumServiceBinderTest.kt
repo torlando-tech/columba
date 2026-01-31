@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service.binder
 
@@ -40,7 +39,6 @@ import java.util.concurrent.atomic.AtomicReference
  * Tests lifecycle methods and their interaction with MaintenanceManager
  * to ensure wake lock refresh mechanism is properly started and stopped.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReticulumServiceBinderTest {
     private val testDispatcher = StandardTestDispatcher()

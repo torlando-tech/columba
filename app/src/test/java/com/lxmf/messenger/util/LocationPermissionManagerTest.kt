@@ -25,7 +25,6 @@ import org.junit.Test
  * Note: getRequiredPermissions() tests are limited because Build.VERSION.SDK_INT
  * cannot be easily mocked in plain JUnit tests.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class LocationPermissionManagerTest {
     private lateinit var context: Context
 

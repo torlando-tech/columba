@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service
 
@@ -36,7 +35,6 @@ import org.junit.Test
  * - Validation logic for collector address
  * - Send operation result scenarios
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class TelemetryCollectorManagerTest {
     private val testDispatcher = StandardTestDispatcher()

@@ -1,5 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
-
 package com.lxmf.messenger.migration
 
 import com.lxmf.messenger.repository.SettingsRepository

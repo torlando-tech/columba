@@ -1,4 +1,4 @@
-@file:Suppress("NoVerifyOnlyTests", "SleepInsteadOfDelay", "IgnoredReturnValue", "UnnecessarySafeCall")
+@file:Suppress("SleepInsteadOfDelay", "IgnoredReturnValue", "UnnecessarySafeCall")
 
 package com.lxmf.messenger.viewmodel
 
@@ -52,7 +52,6 @@ import com.lxmf.messenger.data.repository.Message as DataMessage
  * Unit tests for MessagingViewModel.
  * Tests message loading, sending, state management, and repository interactions.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagingViewModelTest {
     @get:Rule

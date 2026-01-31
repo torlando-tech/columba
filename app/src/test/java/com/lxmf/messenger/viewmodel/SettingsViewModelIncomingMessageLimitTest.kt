@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.viewmodel
 
@@ -48,7 +47,6 @@ import org.junit.Test
  * - State updates when limit changes
  * - Runtime update to protocol
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelIncomingMessageLimitTest {
     @get:Rule

@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service
 
@@ -32,7 +31,6 @@ import org.junit.Test
  * ServicePersistenceManager which enforces privacy settings like "block unknown senders".
  * MessageCollector only shows notifications for messages that exist in the database.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class MessageCollectorTest {
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository

@@ -34,7 +34,6 @@ import org.junit.Test
  * The AttachmentStorageManager is still mocked since it only handles large attachments
  * and doesn't affect the core message storage logic being tested.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConversationRepositoryDatabaseTest : DatabaseTest() {
     private lateinit var repository: ConversationRepository

@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 
 package com.lxmf.messenger.ui.screens.tcpclient
 

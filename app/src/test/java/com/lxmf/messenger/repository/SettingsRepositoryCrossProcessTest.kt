@@ -38,7 +38,6 @@ import kotlin.time.Duration.Companion.seconds
  * 2. Save methods write to SharedPreferences (not DataStore)
  * 3. Flows react to SharedPreferences changes
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,7 +53,8 @@ class SettingsRepositoryCrossProcessTest {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
 
-        mockCustomThemeRepository = mockk(relaxed = true)
+        // All methods explicitly stubbed below (no relaxed mock needed)
+        mockCustomThemeRepository = mockk()
         every { mockCustomThemeRepository.getAllThemes() } returns flowOf(emptyList())
         every { mockCustomThemeRepository.getThemeByIdFlow(any()) } returns flowOf(null)
 

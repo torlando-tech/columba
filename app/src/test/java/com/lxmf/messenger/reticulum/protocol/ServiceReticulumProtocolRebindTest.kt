@@ -36,7 +36,6 @@ import java.util.Base64
  * Full service binding lifecycle tests are done as instrumented tests
  * due to the complex IPC and coroutine interactions.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceReticulumProtocolRebindTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -64,11 +63,11 @@ class ServiceReticulumProtocolRebindTest {
             Base64.getEncoder().encodeToString(firstArg<ByteArray>())
         }
 
-        // Create mocks
+        // Create mocks (Context and NotificationManager are Android types, others have explicit stubs)
         context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        mockService = mockk(relaxed = true)
+        settingsRepository = mockk()
+        rmspServerRepository = mockk()
+        mockService = mockk()
         notificationManager = mockk(relaxed = true)
 
         // Default settings repository behavior

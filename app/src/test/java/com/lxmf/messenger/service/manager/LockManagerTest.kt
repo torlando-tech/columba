@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service.manager
 
@@ -19,7 +18,6 @@ import org.junit.Test
  *
  * Tests WiFi, Multicast, and Wake lock acquisition/release.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class LockManagerTest {
     private lateinit var context: Context
     private lateinit var wifiManager: WifiManager

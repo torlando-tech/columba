@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.startup
 
@@ -31,7 +30,6 @@ import org.junit.Test
  * Unit tests for StartupConfigLoader.
  * Tests parallel configuration loading from repositories.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class StartupConfigLoaderTest {
     private val testDispatcher = StandardTestDispatcher()

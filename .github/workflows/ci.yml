@@ -65,11 +65,9 @@ jobs:
           # These rules exist to prevent useless tests that don't test production code.
           # Suppressing them defeats the purpose. Fix the tests instead.
           #
-          # BASELINE: Track current count to prevent new suppressions.
-          # Goal: Reduce to 0 over time by fixing tests and lowering these numbers.
-          # As you fix tests, decrease these baselines to ratchet down.
-          RELAXED_BASELINE=89
-          VERIFY_BASELINE=65
+          # BASELINE: Zero tolerance - no suppressions allowed.
+          RELAXED_BASELINE=0
+          VERIFY_BASELINE=0
 
           FAIL=false
 

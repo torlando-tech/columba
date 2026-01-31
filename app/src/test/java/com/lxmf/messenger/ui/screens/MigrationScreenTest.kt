@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.ui.screens
 
@@ -26,7 +25,6 @@ import org.robolectric.annotation.Config
  * UI tests for MigrationScreen export section.
  * Tests the include attachments checkbox behavior and helper text display.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MigrationScreenTest {

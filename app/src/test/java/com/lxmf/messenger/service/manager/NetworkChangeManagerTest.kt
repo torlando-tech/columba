@@ -24,7 +24,6 @@ import org.junit.Test
  * Tests the network connectivity monitoring that reacquires locks and
  * triggers LXMF announce when network changes.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class NetworkChangeManagerTest {
     private lateinit var context: Context
     private lateinit var connectivityManager: ConnectivityManager

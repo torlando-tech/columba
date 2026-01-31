@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.viewmodel
 
@@ -49,7 +48,6 @@ import org.junit.Test
  * - Banner expansion state
  * - Service restart triggers
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
     @get:Rule

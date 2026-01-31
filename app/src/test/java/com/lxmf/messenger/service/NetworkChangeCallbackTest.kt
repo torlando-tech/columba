@@ -1,4 +1,4 @@
-@file:Suppress("NoVerifyOnlyTests", "SwallowedException") // Test file intentionally catches exceptions to verify handling
+@file:Suppress("SwallowedException") // Test file intentionally catches exceptions to verify handling
 
 package com.lxmf.messenger.service
 
@@ -34,7 +34,6 @@ import org.junit.Test
  * Note: The actual ReticulumService requires Python runtime (Chaquopy),
  * so we test the callback patterns and guards in isolation.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetworkChangeCallbackTest {
     private lateinit var mockBinder: ReticulumServiceBinder

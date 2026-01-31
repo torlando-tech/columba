@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.ui.screens
 
@@ -38,7 +37,6 @@ import org.robolectric.annotation.Config
  * UI tests for MessagingScreen.kt.
  * Tests the main messaging screen including message display, input, and navigation.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {

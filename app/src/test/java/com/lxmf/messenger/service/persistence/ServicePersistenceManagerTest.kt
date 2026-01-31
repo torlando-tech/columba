@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service.persistence
 
@@ -42,7 +41,6 @@ import org.junit.Test
  * Tests persistence of announces and messages from the service process,
  * including de-duplication, identity scoping, unknown sender filtering, and error handling.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServicePersistenceManagerTest {
     private lateinit var context: Context

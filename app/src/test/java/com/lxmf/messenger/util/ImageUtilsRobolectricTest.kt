@@ -24,7 +24,6 @@ import org.robolectric.annotation.Config
  * Robolectric tests for ImageUtils Android-specific functions.
  * Tests functions that require Android Context and Bitmap APIs.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ImageUtilsRobolectricTest {

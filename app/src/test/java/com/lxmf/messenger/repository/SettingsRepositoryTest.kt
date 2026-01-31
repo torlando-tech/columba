@@ -35,7 +35,6 @@ import kotlin.time.Duration.Companion.seconds
  * Note: DataStore singleton persists across tests in Robolectric.
  * Tests are designed to be state-agnostic where possible.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -50,7 +49,8 @@ class SettingsRepositoryTest {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
 
-        mockCustomThemeRepository = mockk(relaxed = true)
+        // All methods explicitly stubbed below (no relaxed mock needed)
+        mockCustomThemeRepository = mockk()
 
         // Mock theme repository flows to prevent null pointer exceptions
         every { mockCustomThemeRepository.getAllThemes() } returns flowOf(emptyList())

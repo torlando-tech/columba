@@ -1,4 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
 
 package com.lxmf.messenger.service
 
@@ -40,7 +39,6 @@ import org.junit.Test
  * The core logic is tested in ErrorHandlingUnitTest.kt.
  * These tests should be converted to instrumented tests (androidTest/).
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @Ignore("Requires instrumented testing with Chaquopy Python runtime - see class documentation")
 class ReticulumServiceErrorHandlingTest {
     private lateinit var mockContext: Context

@@ -1,4 +1,4 @@
-@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks", "InjectDispatcher")
+@file:Suppress("InjectDispatcher")
 
 package com.lxmf.messenger.viewmodel
 

@@ -21,7 +21,6 @@ import org.junit.Test
  *
  * Tests the map style resolution logic and source priority.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 class MapTileSourceManagerTest {
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
     private lateinit var rmspServerRepository: RmspServerRepository
@@ -30,9 +29,10 @@ class MapTileSourceManagerTest {
 
     @Before
     fun setup() {
-        offlineMapRegionRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
+        // All methods are explicitly stubbed below, no need for relaxed mocks
+        offlineMapRegionRepository = mockk()
+        rmspServerRepository = mockk()
+        settingsRepository = mockk()
 
         // Default: no offline regions, no RMSP servers
         every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())

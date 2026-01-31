@@ -1,5 +1,3 @@
-@file:Suppress("NoVerifyOnlyTests")
-
 package com.lxmf.messenger.notifications
 
 import android.app.Application
@@ -29,7 +27,6 @@ import org.robolectric.shadows.ShadowApplication
  * Tests handling of call notification actions using Robolectric to actually
  * invoke onReceive and verify behavior.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class CallActionReceiverTest {
@@ -41,7 +38,10 @@ class CallActionReceiverTest {
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
-        mockPendingResult = mockk(relaxed = true)
+        // BroadcastReceiver.PendingResult is an Android system type - relaxed mock is appropriate
+        // The only method called is finish() which returns void
+        mockPendingResult = mockk()
+        every { mockPendingResult.finish() } returns Unit
         // Use a spy so we can mock goAsync() while keeping real onReceive behavior
         receiver = spyk(CallActionReceiver())
         every { receiver.goAsync() } returns mockPendingResult

@@ -25,7 +25,6 @@ import org.junit.Test
  * Test coverage:
  * - provideReticulumProtocol returns the same ServiceReticulumProtocol instance
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReticulumModuleTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -36,8 +35,8 @@ class ReticulumModuleTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        // Create mock ServiceReticulumProtocol
-        mockServiceProtocol = mockk(relaxed = true)
+        // Create mock ServiceReticulumProtocol (no methods called, just checking same instance returned)
+        mockServiceProtocol = mockk()
     }
 
     @After
@@ -68,8 +67,8 @@ class ReticulumModuleTest {
 
     @Test
     fun `provideReticulumProtocol - passes through ServiceReticulumProtocol`() {
-        // Given
-        val serviceProtocol: ServiceReticulumProtocol = mockk(relaxed = true)
+        // Given (no methods called, just checking same instance returned)
+        val serviceProtocol: ServiceReticulumProtocol = mockk()
 
         // When
         val result = ReticulumModule.provideReticulumProtocol(serviceProtocol)

@@ -454,9 +454,7 @@ jobs:
             echo "Emulator is responsive, starting tests..."
             # Run smoke tests and integration tests
             # Use test orchestrator for isolation (configured in build.gradle.kts)
-            ./gradlew :app:connectedNoSentryDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.lxmf.messenger.smoke.SmokeTest,com.lxmf.messenger.integration.MessageDataFlowTest,com.lxmf.messenger.integration.ConversationCreationFlowTest \
-              --stacktrace
+            ./gradlew :app:connectedNoSentryDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lxmf.messenger.smoke.SmokeTest,com.lxmf.messenger.integration.MessageDataFlowTest,com.lxmf.messenger.integration.ConversationCreationFlowTest --stacktrace
 
       - name: Upload instrumented test results
         if: always()

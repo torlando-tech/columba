@@ -343,7 +343,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
 
                 // Should eventually emit the active identity
                 // Skip intermediate nulls until we get the active identity
-                var active: com.lxmf.messenger.data.model.Identity? = null
+                var active: com.lxmf.messenger.data.db.entity.LocalIdentityEntity? = null
                 while (active == null) {
                     active = awaitItem()
                 }

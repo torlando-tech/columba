@@ -1,4 +1,5 @@
 @file:Suppress("SleepInsteadOfDelay")
+
 package com.lxmf.messenger.service.persistence
 
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
@@ -546,6 +547,8 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
 
             persistenceManager.persistPeerIdentity(peerHash, testPublicKey)
             advanceUntilIdle()
+            // Fire-and-forget coroutine dispatches to IO, so wait for it
+            Thread.sleep(100)
 
             // Verify peer identity was saved
             val saved = peerIdentityDao.getPeerIdentity(peerHash)

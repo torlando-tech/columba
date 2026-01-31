@@ -334,17 +334,20 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
                 localIdentityDao.insert(createTestIdentity(identityHash = "to_activate", isActive = false))
                 testDispatcher.scheduler.advanceUntilIdle()
 
-                // Still no active identity (inserted as inactive)
-                // May or may not emit depending on Room's change detection
+                // Room may or may not emit here depending on change detection
+                // Skip any intermediate null emissions
 
                 // Activate the identity
                 localIdentityDao.setActive("to_activate")
                 testDispatcher.scheduler.advanceUntilIdle()
 
                 // Should eventually emit the active identity
-                val active = awaitItem()
-                assertNotNull(active)
-                assertEquals("to_activate", active?.identityHash)
+                // Skip intermediate nulls until we get the active identity
+                var active: com.lxmf.messenger.data.model.Identity? = null
+                while (active == null) {
+                    active = awaitItem()
+                }
+                assertEquals("to_activate", active.identityHash)
 
                 cancelAndIgnoreRemainingEvents()
             }

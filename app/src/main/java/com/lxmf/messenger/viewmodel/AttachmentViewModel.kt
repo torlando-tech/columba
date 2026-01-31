@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.ConversationRepository
-import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
 import com.lxmf.messenger.ui.model.loadImageData
@@ -44,12 +43,12 @@ import javax.inject.Inject
  * This ViewModel can be used alongside MessagingViewModel in screens
  * that need attachment functionality.
  */
+@Suppress("TooManyFunctions") // Cohesive attachment functionality - all methods relate to attachment handling
 @HiltViewModel
 class AttachmentViewModel
     @Inject
     constructor(
         private val conversationRepository: ConversationRepository,
-        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AttachmentViewModel"

@@ -38,7 +38,6 @@ import kotlin.time.Duration.Companion.seconds
  * Instrumented tests for BleStatusRepository.
  * Tests IPC calls, JSON parsing, Flow emissions, and error handling.
  */
-@Suppress("NoRelaxedMocks") // TODO: Replace relaxed mocks with fakes/explicit stubs
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -49,19 +48,31 @@ class BleStatusRepositoryTest {
     private lateinit var mockBridge: KotlinBLEBridge
     private lateinit var repository: BleStatusRepository
     private lateinit var adapterStateFlow: MutableStateFlow<Int>
+    private lateinit var defaultBleConnectionsFlow: MutableSharedFlow<String>
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockProtocol = mockk<ServiceReticulumProtocol>(relaxed = true)
+
+        // Create default flows for protocol mock
+        defaultBleConnectionsFlow = MutableSharedFlow(replay = 1)
+
+        // Mock protocol with explicit stubs (no relaxed)
+        mockProtocol = mockk<ServiceReticulumProtocol>()
+        every { mockProtocol.getBleConnectionDetails() } returns "[]"
+        every { mockProtocol.bleConnectionsFlow } returns defaultBleConnectionsFlow
+
         mockContext = ApplicationProvider.getApplicationContext()
 
-        // Mock the KotlinBLEBridge singleton
-        mockBridge = mockk(relaxed = true)
+        // Mock the KotlinBLEBridge singleton with explicit stubs (no relaxed)
+        mockBridge = mockk()
         adapterStateFlow = MutableStateFlow(BluetoothAdapter.STATE_ON)
         mockkObject(KotlinBLEBridge.Companion)
         every { KotlinBLEBridge.getInstance(any()) } returns mockBridge
         every { mockBridge.adapterState } returns adapterStateFlow
+        every { mockBridge.isBluetoothAvailable } returns true
+        every { mockBridge.startPeriodicConnectionRefresh() } returns Unit
+        every { mockBridge.stopPeriodicConnectionRefresh() } returns Unit
     }
 
     @After

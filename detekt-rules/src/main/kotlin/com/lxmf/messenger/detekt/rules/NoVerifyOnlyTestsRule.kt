@@ -7,6 +7,7 @@ import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.Severity
+import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 
@@ -18,14 +19,43 @@ import org.jetbrains.kotlin.psi.KtNamedFunction
  * 2. Brittle to refactoring (fail when implementation changes but behavior is preserved)
  * 3. Unable to catch real regressions
  *
- * Exceptions (suppress with @Suppress("NoVerifyOnlyTests")):
- * - UI tests that verify click handlers dispatch correct events (legitimate)
- * - Integration tests that verify side effects (notifications, database writes)
- * - Tests where the interaction IS the behavior being tested
+ * This rule is NON-SUPPRESSABLE. The whole point of this rule is to prevent AI agents
+ * and developers from writing useless tests that don't test production code.
+ *
+ * If you have a legitimate use case (UI event dispatch, side effect verification),
+ * add an assertion that verifies the outcome, not just that the method was called.
  */
 class NoVerifyOnlyTestsRule(
     config: Config = Config.empty,
 ) : Rule(config) {
+    // Make this rule non-suppressable
+    override val defaultRuleIdAliases: Set<String> = emptySet()
+
+    // Override to prevent suppression via annotations
+    override fun visitAnnotationEntry(annotationEntry: KtAnnotationEntry) {
+        super.visitAnnotationEntry(annotationEntry)
+        // Check if this is a @Suppress or @file:Suppress trying to suppress this rule
+        val annotationText = annotationEntry.text
+        if (annotationText.contains("Suppress") && annotationText.contains("NoVerifyOnlyTests")) {
+            report(
+                CodeSmell(
+                    issue = suppressionAttemptIssue,
+                    entity = Entity.from(annotationEntry),
+                    message =
+                        "Cannot suppress NoVerifyOnlyTests rule. This rule exists to prevent " +
+                            "useless tests that only verify mock calls. Add real assertions instead.",
+                ),
+            )
+        }
+    }
+
+    private val suppressionAttemptIssue =
+        Issue(
+            id = "NoVerifyOnlyTestsSuppression",
+            severity = Severity.CodeSmell,
+            description = "Attempting to suppress the NoVerifyOnlyTests rule is not allowed.",
+            debt = Debt.TEN_MINS,
+        )
     override val issue =
         Issue(
             id = "NoVerifyOnlyTests",

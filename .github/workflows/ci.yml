@@ -49,6 +49,48 @@ jobs:
       - name: Run all lint checks
         run: ./gradlew ktlintCheck detekt cpdCheck --continue
 
+      - name: Check for forbidden test suppressions
+        run: |
+          echo "Checking for forbidden @Suppress annotations in test files..."
+
+          # Count files with NoRelaxedMocks suppression
+          RELAXED_COUNT=$(grep -r "Suppress.*NoRelaxedMocks" app/src/test reticulum/src/test --include="*.kt" -l 2>/dev/null | wc -l || echo "0")
+
+          # Count files with NoVerifyOnlyTests suppression
+          VERIFY_COUNT=$(grep -r "Suppress.*NoVerifyOnlyTests" app/src/test reticulum/src/test --include="*.kt" -l 2>/dev/null | wc -l || echo "0")
+
+          echo "Files with @Suppress(\"NoRelaxedMocks\"): $RELAXED_COUNT"
+          echo "Files with @Suppress(\"NoVerifyOnlyTests\"): $VERIFY_COUNT"
+
+          # These rules exist to prevent useless tests that don't test production code.
+          # Suppressing them defeats the purpose. Fix the tests instead.
+          #
+          # BASELINE: Track current count to prevent new suppressions.
+          # Goal: Reduce to 0 over time by fixing tests and lowering these numbers.
+          # As you fix tests, decrease these baselines to ratchet down.
+          RELAXED_BASELINE=89
+          VERIFY_BASELINE=65
+
+          FAIL=false
+
+          if [ "$RELAXED_COUNT" -gt "$RELAXED_BASELINE" ]; then
+            echo "::error::NoRelaxedMocks suppressions increased from $RELAXED_BASELINE to $RELAXED_COUNT"
+            echo "Do not add @Suppress(\"NoRelaxedMocks\"). Use explicit stubs instead of relaxed mocks."
+            FAIL=true
+          fi
+
+          if [ "$VERIFY_COUNT" -gt "$VERIFY_BASELINE" ]; then
+            echo "::error::NoVerifyOnlyTests suppressions increased from $VERIFY_BASELINE to $VERIFY_COUNT"
+            echo "Do not add @Suppress(\"NoVerifyOnlyTests\"). Add assertions to your tests."
+            FAIL=true
+          fi
+
+          if [ "$FAIL" = true ]; then
+            exit 1
+          fi
+
+          echo "✓ No new forbidden suppressions found"
+
       - name: Upload lint reports
         if: always()
         uses: actions/upload-artifact@v6

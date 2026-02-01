@@ -1169,6 +1169,44 @@ class ContactsScreenTest {
         assertTrue(clickedName == "Test Contact")
     }
 
+    // ========== Tab Selection Tests ==========
+    // Note: Full tab switching tests require integration tests due to Hilt dependencies
+    // in AnnounceStreamContent. The rememberSaveable fix for tab persistence is verified
+    // by manual testing - tab selection now persists across navigation.
+
+    @Test
+    fun contactsScreen_displaysBothTabButtons() {
+        val mockViewModel = createMockContactsViewModel(contactCount = 5)
+        val mockAnnounceViewModel = createMockAnnounceStreamViewModel(announceCount = 3)
+
+        composeTestRule.setContent {
+            ContactsScreen(
+                viewModel = mockViewModel,
+                announceViewModel = mockAnnounceViewModel,
+            )
+        }
+
+        // Both tab buttons should be visible
+        composeTestRule.onNodeWithText("My Contacts (5)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Network (3)").assertIsDisplayed()
+    }
+
+    @Test
+    fun contactsScreen_myContactsTabSelected_showsEmptyStateOrContacts() {
+        val mockViewModel = createMockContactsViewModel()
+        val mockAnnounceViewModel = createMockAnnounceStreamViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(
+                viewModel = mockViewModel,
+                announceViewModel = mockAnnounceViewModel,
+            )
+        }
+
+        // My Contacts is selected by default - shows empty state when no contacts
+        composeTestRule.onNodeWithText("No contacts yet").assertIsDisplayed()
+    }
+
     // ========== Test Helpers ==========
 
     private fun createMockContactsViewModel(
@@ -1209,6 +1247,9 @@ class ContactsScreenTest {
         every { mock.announceSuccess } returns MutableStateFlow(false)
         every { mock.announceError } returns MutableStateFlow(null)
         every { mock.announceCount } returns MutableStateFlow(announceCount)
+        every { mock.selectedNodeTypes } returns MutableStateFlow(emptySet())
+        every { mock.showAudioAnnounces } returns MutableStateFlow(true)
+        every { mock.searchQuery } returns MutableStateFlow("")
         return mock
     }
 }

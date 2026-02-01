@@ -89,7 +89,8 @@ class CallViewModelTest {
 
         // Stub void methods on CallBridge
         every { mockCallBridge.setConnecting(capture(connectingHashSlot)) } just Runs
-        every { mockCallBridge.setEnded() } just Runs
+        // setEnded() must update the state flow to stop the duration timer loop
+        every { mockCallBridge.setEnded() } answers { callStateFlow.value = CallState.Ended }
         every { mockCallBridge.setMutedLocally(capture(mutedSlot)) } just Runs
         every { mockCallBridge.setSpeakerLocally(capture(speakerSlot)) } just Runs
 
@@ -193,7 +194,9 @@ class CallViewModelTest {
             callStateFlow.value = CallState.Active("abc123")
 
             viewModel.endCall()
-            testDispatcher.scheduler.advanceUntilIdle()
+            // Note: Don't use advanceUntilIdle() when callState is Active - the duration timer
+            // loop (while callState is Active { delay(1000) }) will cause infinite scheduling.
+            // With UnconfinedTestDispatcher, endCall() executes immediately anyway.
 
             // The setEnded() stub was called - we can verify this was invoked
             // by checking that our stub was triggered (no exception means success)
@@ -206,7 +209,7 @@ class CallViewModelTest {
             callStateFlow.value = CallState.Incoming("abc123")
 
             viewModel.declineCall()
-            testDispatcher.scheduler.advanceUntilIdle()
+            // Note: advanceUntilIdle() not needed - UnconfinedTestDispatcher runs immediately
 
             // The setEnded() stub was called - we can verify this was invoked
             // by checking that our stub was triggered (no exception means success)

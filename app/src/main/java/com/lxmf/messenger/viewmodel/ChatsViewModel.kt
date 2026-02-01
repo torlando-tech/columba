@@ -76,11 +76,7 @@ class ChatsViewModel
                     emit(ChatsState(isLoading = true))
                 }.stateIn(
                     scope = viewModelScope,
-                    started =
-                        SharingStarted.WhileSubscribed(
-                            stopTimeoutMillis = 0,
-                            replayExpirationMillis = 0,
-                        ),
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = ChatsState(isLoading = true),
                 )
 

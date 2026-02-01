@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.service
 
 import android.app.ActivityManager

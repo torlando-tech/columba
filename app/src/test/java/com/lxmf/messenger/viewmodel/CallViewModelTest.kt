@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.data.db.entity.ContactEntity

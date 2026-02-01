@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
@@ -88,6 +87,7 @@ class SettingsViewModelTest {
         MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
 
     @Before
+    @Suppress("LongMethod") // Setup configures many mock stubs for ViewModel's 10+ dependencies
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 

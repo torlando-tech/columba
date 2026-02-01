@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.ui.screens.rnode
 
 import android.app.Application

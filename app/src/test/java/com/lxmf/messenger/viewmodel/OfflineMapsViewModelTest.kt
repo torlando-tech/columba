@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.viewmodel
 
 import android.app.Application

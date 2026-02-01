@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.ui.screens.onboarding
 
 import android.app.Application

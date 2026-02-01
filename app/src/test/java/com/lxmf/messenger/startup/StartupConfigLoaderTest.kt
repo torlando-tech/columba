@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.startup
 
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity

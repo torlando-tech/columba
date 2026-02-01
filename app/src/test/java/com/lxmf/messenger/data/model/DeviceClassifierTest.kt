@@ -1,4 +1,3 @@
-
 package com.lxmf.messenger.data.model
 
 import android.bluetooth.BluetoothDevice

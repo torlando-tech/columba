@@ -299,7 +299,7 @@ jobs:
     name: Kotlin Tests
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Temporarily increased to debug what's taking so long
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code

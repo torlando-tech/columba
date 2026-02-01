@@ -156,8 +156,10 @@ fun ChatsScreen(
             )
         },
     ) { paddingValues ->
+        // Only show loading spinner when loading AND list is empty
+        // This prevents flickering when data updates while content is displayed
         when {
-            chatsState.isLoading -> {
+            chatsState.isLoading && chatsState.conversations.isEmpty() -> {
                 LoadingConversationsState(
                     modifier =
                         Modifier
@@ -165,7 +167,7 @@ fun ChatsScreen(
                             .padding(paddingValues),
                 )
             }
-            chatsState.conversations.isEmpty() -> {
+            !chatsState.isLoading && chatsState.conversations.isEmpty() -> {
                 EmptyChatsState(
                     modifier =
                         Modifier

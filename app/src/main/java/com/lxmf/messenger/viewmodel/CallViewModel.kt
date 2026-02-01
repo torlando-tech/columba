@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -91,10 +92,16 @@ class CallViewModel
 
         private fun startDurationTimer() {
             viewModelScope.launch {
-                _callDuration.value = 0L
-                while (callState.value is CallState.Active) {
-                    delay(1000)
-                    _callDuration.value += 1
+                // Use collectLatest - when state changes from Active, the inner block is cancelled
+                callState.collectLatest { state ->
+                    if (state is CallState.Active) {
+                        _callDuration.value = 0L
+                        // This loop runs while Active; collectLatest cancels it when state changes
+                        while (true) {
+                            delay(1000)
+                            _callDuration.value += 1
+                        }
+                    }
                 }
             }
         }
@@ -139,13 +146,12 @@ class CallViewModel
             }
         }
 
-        private fun formatIdentityHash(hash: String): String {
-            return if (hash.length > 12) {
+        private fun formatIdentityHash(hash: String): String =
+            if (hash.length > 12) {
                 "${hash.take(6)}...${hash.takeLast(6)}"
             } else {
                 hash
             }
-        }
 
         /**
          * Initiate an outgoing call.
@@ -283,8 +289,8 @@ class CallViewModel
         /**
          * Get call status text for UI display.
          */
-        fun getStatusText(state: CallState): String {
-            return when (state) {
+        fun getStatusText(state: CallState): String =
+            when (state) {
                 is CallState.Idle -> ""
                 is CallState.Connecting -> "Connecting..."
                 is CallState.Ringing -> "Ringing..."
@@ -294,5 +300,4 @@ class CallViewModel
                 is CallState.Rejected -> "Call Rejected"
                 is CallState.Ended -> "Call Ended"
             }
-        }
     }

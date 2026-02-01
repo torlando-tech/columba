@@ -13,7 +13,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -60,6 +59,9 @@ class CallViewModel
         private val _isConnecting = MutableStateFlow(false)
         val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
+        // Track duration timer job to prevent multiple concurrent timers
+        private var durationTimerJob: kotlinx.coroutines.Job? = null
+
         init {
             // Track call duration when active
             viewModelScope.launch {
@@ -69,6 +71,8 @@ class CallViewModel
                             startDurationTimer()
                         }
                         is CallState.Ended, CallState.Idle -> {
+                            durationTimerJob?.cancel()
+                            durationTimerJob = null
                             _callDuration.value = 0L
                             _isConnecting.value = false
                         }
@@ -91,19 +95,20 @@ class CallViewModel
         }
 
         private fun startDurationTimer() {
-            viewModelScope.launch {
-                // Use collectLatest - when state changes from Active, the inner block is cancelled
-                callState.collectLatest { state ->
-                    if (state is CallState.Active) {
-                        _callDuration.value = 0L
-                        // This loop runs while Active; collectLatest cancels it when state changes
-                        while (true) {
-                            delay(1000)
-                            _callDuration.value += 1
-                        }
+            // Cancel any existing timer to prevent multiple concurrent timers
+            // This handles ViewModel recreation, multiple collectors, etc.
+            durationTimerJob?.cancel()
+
+            durationTimerJob =
+                viewModelScope.launch {
+                    // Reset duration at start of call
+                    _callDuration.value = 0L
+                    // Increment every second while this job is active
+                    while (true) {
+                        delay(1000)
+                        _callDuration.value += 1
                     }
                 }
-            }
         }
 
         /**

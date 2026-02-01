@@ -147,6 +147,13 @@ class ColumbaApplication : Application() {
             }
         }
 
+        // Clean up old temp files from previous sessions (attachments, share_images)
+        // Run on IO dispatcher to avoid blocking main thread with file operations
+        applicationScope.launch(Dispatchers.IO) {
+            com.lxmf.messenger.util.FileUtils
+                .cleanupAllTempFiles(this@ColumbaApplication)
+        }
+
         // Register existing companion device associations (Android 12+)
         // This ensures RNodeCompanionService is bound when associated devices connect,
         // even for associations created before this code was added

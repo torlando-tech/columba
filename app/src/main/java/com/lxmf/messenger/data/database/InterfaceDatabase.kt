@@ -20,7 +20,7 @@ import javax.inject.Provider
  */
 @Database(
     entities = [InterfaceEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class InterfaceDatabase : RoomDatabase() {
@@ -129,6 +129,27 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     )
                 }
             }
+
+        /**
+         * Migration from version 4 to version 5.
+         * Replaces decommissioned Sideband server with Beleth RNS Hub bootstrap server.
+         * The Sideband server at sideband.connect.reticulum.network:4965 is no longer operational.
+         */
+        val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    // Update Sideband server to Beleth RNS Hub with bootstrap mode enabled
+                    db.execSQL(
+                        """
+                        UPDATE interfaces
+                        SET name = 'Beleth RNS Hub',
+                            configJson = '{"target_host":"rns.beleth.net","target_port":4242,"kiss_framing":false,"mode":"full","bootstrap_only":true}'
+                        WHERE type = 'TCPClient'
+                          AND (name = 'Sideband Server' OR configJson LIKE '%sideband.connect.reticulum.network%')
+                    """,
+                    )
+                }
+            }
     }
 
     /**
@@ -218,18 +239,18 @@ abstract class InterfaceDatabase : RoomDatabase() {
                 ),
             )
 
-            // Insert Sideband Server
+            // Insert Beleth RNS Hub as bootstrap server
             db.execSQL(
                 """
                 INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
                 VALUES (?, ?, ?, ?, ?)
             """,
                 arrayOf<Any>(
-                    "Sideband Server",
+                    "Beleth RNS Hub",
                     "TCPClient",
                     // enabled=true
                     1,
-                    """{"target_host":"sideband.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}""",
+                    """{"target_host":"rns.beleth.net","target_port":4242,"kiss_framing":false,"mode":"full","bootstrap_only":true}""",
                     2,
                 ),
             )
@@ -331,18 +352,19 @@ abstract class InterfaceDatabase : RoomDatabase() {
                     displayOrder = 1,
                 )
 
-            val sidebandServerInterface =
+            val belethServerInterface =
                 InterfaceEntity(
-                    name = "Sideband Server",
+                    name = "Beleth RNS Hub",
                     type = "TCPClient",
                     enabled = true,
                     configJson =
                         """
                         {
-                            "target_host": "sideband.connect.reticulum.network",
-                            "target_port": 4965,
+                            "target_host": "rns.beleth.net",
+                            "target_port": 4242,
                             "kiss_framing": false,
-                            "mode": "boundary"
+                            "mode": "full",
+                            "bootstrap_only": true
                         }
                         """.trimIndent(),
                     displayOrder = 2,
@@ -350,7 +372,7 @@ abstract class InterfaceDatabase : RoomDatabase() {
 
             interfaceDao.insertInterface(defaultAutoInterface)
             interfaceDao.insertInterface(defaultBleInterface)
-            interfaceDao.insertInterface(sidebandServerInterface)
+            interfaceDao.insertInterface(belethServerInterface)
         }
 
         /**

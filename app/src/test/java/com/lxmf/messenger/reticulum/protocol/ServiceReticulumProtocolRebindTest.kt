@@ -63,11 +63,11 @@ class ServiceReticulumProtocolRebindTest {
             Base64.getEncoder().encodeToString(firstArg<ByteArray>())
         }
 
-        // Create mocks
+        // Create mocks (Context and NotificationManager are Android types, others have explicit stubs)
         context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        mockService = mockk(relaxed = true)
+        settingsRepository = mockk()
+        rmspServerRepository = mockk()
+        mockService = mockk()
         notificationManager = mockk(relaxed = true)
 
         // Default settings repository behavior

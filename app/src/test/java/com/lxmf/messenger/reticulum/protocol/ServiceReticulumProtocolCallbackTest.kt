@@ -55,11 +55,11 @@ class ServiceReticulumProtocolCallbackTest {
         // Mock static AIDL method
         mockkStatic(IReticulumService.Stub::class)
 
-        // Create mocks
+        // Create mocks (Context is an Android type, others have explicit stubs below)
         context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        mockService = mockk(relaxed = true)
+        settingsRepository = mockk()
+        rmspServerRepository = mockk()
+        mockService = mockk()
 
         // Default settings repository behavior
         coEvery { settingsRepository.lastServiceStatusFlow } returns flowOf("SHUTDOWN")

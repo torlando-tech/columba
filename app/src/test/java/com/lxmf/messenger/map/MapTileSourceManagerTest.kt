@@ -29,12 +29,14 @@ class MapTileSourceManagerTest {
 
     @Before
     fun setup() {
-        offlineMapRegionRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
+        // All methods are explicitly stubbed below, no need for relaxed mocks
+        offlineMapRegionRepository = mockk()
+        rmspServerRepository = mockk()
+        settingsRepository = mockk()
 
         // Default: no offline regions, no RMSP servers
         every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())
+        coEvery { offlineMapRegionRepository.getFirstCompletedRegionWithStyle() } returns null
         every { rmspServerRepository.getAllServers() } returns flowOf(emptyList())
         every { rmspServerRepository.getNearestServers(any()) } returns flowOf(emptyList())
         every { rmspServerRepository.hasServers() } returns flowOf(false)
@@ -342,8 +344,8 @@ class MapTileSourceManagerTest {
 
     // ========== Helper Functions ==========
 
-    private fun createMockRmspServer(name: String): RmspServer {
-        return RmspServer(
+    private fun createMockRmspServer(name: String): RmspServer =
+        RmspServer(
             destinationHash = "abc123",
             serverName = name,
             publicKey = byteArrayOf(1, 2, 3),
@@ -358,5 +360,4 @@ class MapTileSourceManagerTest {
             lastSeenTimestamp = System.currentTimeMillis(),
             hops = 1,
         )
-    }
 }

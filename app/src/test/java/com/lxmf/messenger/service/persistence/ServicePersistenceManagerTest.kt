@@ -60,19 +60,20 @@ class ServicePersistenceManagerTest {
     private val testAppData = "Test App Data".toByteArray()
     private val testIdentityHash = "test_identity_hash"
 
+    @Suppress("NoRelaxedMocks") // Android Context and test fixture DAOs - each test adds specific stubs
     @Before
     fun setup() {
         context = mockk(relaxed = true)
         testScope = TestScope(UnconfinedTestDispatcher())
-        database = mockk(relaxed = true)
-        announceDao = mockk(relaxed = true)
-        contactDao = mockk(relaxed = true)
-        messageDao = mockk(relaxed = true)
-        conversationDao = mockk(relaxed = true)
-        localIdentityDao = mockk(relaxed = true)
-        peerIdentityDao = mockk(relaxed = true)
-        peerIconDao = mockk(relaxed = true)
-        settingsAccessor = mockk(relaxed = true)
+        database = mockk()
+        announceDao = mockk()
+        contactDao = mockk()
+        messageDao = mockk()
+        conversationDao = mockk()
+        localIdentityDao = mockk()
+        peerIdentityDao = mockk()
+        peerIconDao = mockk()
+        settingsAccessor = mockk()
 
         // Mock database DAOs
         every { database.announceDao() } returns announceDao
@@ -107,25 +108,29 @@ class ServicePersistenceManagerTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
             coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = testAppData,
-                hops = 2,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = "BLE",
-                receivingInterfaceType = "BLE",
-                aspect = "lxmf.delivery",
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                propagationTransferLimitKb = null,
-            )
+            val result =
+                runCatching {
+                    persistenceManager.persistAnnounce(
+                        destinationHash = testDestinationHash,
+                        peerName = "Test Peer",
+                        publicKey = testPublicKey,
+                        appData = testAppData,
+                        hops = 2,
+                        timestamp = System.currentTimeMillis(),
+                        nodeType = "LXMF_PEER",
+                        receivingInterface = "BLE",
+                        receivingInterfaceType = "BLE",
+                        aspect = "lxmf.delivery",
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                    )
+                }
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify { announceDao.upsertAnnounce(any()) }
         }
 
@@ -149,25 +154,29 @@ class ServicePersistenceManagerTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
             coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "New Name",
-                publicKey = testPublicKey,
-                appData = testAppData,
-                hops = 3,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                propagationTransferLimitKb = null,
-            )
+            val result =
+                runCatching {
+                    persistenceManager.persistAnnounce(
+                        destinationHash = testDestinationHash,
+                        peerName = "New Name",
+                        publicKey = testPublicKey,
+                        appData = testAppData,
+                        hops = 3,
+                        timestamp = System.currentTimeMillis(),
+                        nodeType = "LXMF_PEER",
+                        receivingInterface = null,
+                        receivingInterfaceType = null,
+                        aspect = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                    )
+                }
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify {
                 announceDao.upsertAnnounce(
                     match { entity ->
@@ -183,26 +192,30 @@ class ServicePersistenceManagerTest {
             coEvery { announceDao.getAnnounce(any()) } throws RuntimeException("Database error")
 
             // Should not throw
-            persistenceManager.persistAnnounce(
-                destinationHash = testDestinationHash,
-                peerName = "Test Peer",
-                publicKey = testPublicKey,
-                appData = null,
-                hops = 1,
-                timestamp = System.currentTimeMillis(),
-                nodeType = "LXMF_PEER",
-                receivingInterface = null,
-                receivingInterfaceType = null,
-                aspect = null,
-                stampCost = null,
-                stampCostFlexibility = null,
-                peeringCost = null,
-                propagationTransferLimitKb = null,
-            )
+            val result =
+                runCatching {
+                    persistenceManager.persistAnnounce(
+                        destinationHash = testDestinationHash,
+                        peerName = "Test Peer",
+                        publicKey = testPublicKey,
+                        appData = null,
+                        hops = 1,
+                        timestamp = System.currentTimeMillis(),
+                        nodeType = "LXMF_PEER",
+                        receivingInterface = null,
+                        receivingInterfaceType = null,
+                        aspect = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                    )
+                }
 
             testScope.advanceUntilIdle()
 
             // Verify exception was handled (no crash)
+            assertTrue("persistAnnounce should handle exception gracefully", result.isSuccess)
         }
 
     // ========== persistPeerIdentity() Tests ==========
@@ -212,10 +225,11 @@ class ServicePersistenceManagerTest {
         runTest {
             coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-            persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
+            val result = runCatching { persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey) }
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistPeerIdentity should complete without throwing", result.isSuccess)
             coVerify { peerIdentityDao.insertPeerIdentity(any()) }
         }
 
@@ -225,9 +239,11 @@ class ServicePersistenceManagerTest {
             coEvery { peerIdentityDao.insertPeerIdentity(any()) } throws RuntimeException("Insert error")
 
             // Should not throw
-            persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey)
+            val result = runCatching { persistenceManager.persistPeerIdentity(testDestinationHash, testPublicKey) }
 
             testScope.advanceUntilIdle()
+
+            assertTrue("persistPeerIdentity should handle exception gracefully", result.isSuccess)
         }
 
     // ========== persistMessage() Tests ==========
@@ -253,19 +269,21 @@ class ServicePersistenceManagerTest {
             coEvery { messageDao.insertMessage(any()) } just Runs
             coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello, world!",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = testPublicKey,
-                replyToMessageId = null,
-                deliveryMethod = "direct",
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello, world!",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = testPublicKey,
+                    replyToMessageId = null,
+                    deliveryMethod = "direct",
+                )
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistMessage should return true on success", result)
             coVerify { messageDao.insertMessage(any()) }
             coVerify { conversationDao.insertConversation(any()) }
         }
@@ -303,19 +321,21 @@ class ServicePersistenceManagerTest {
             coEvery { messageDao.insertMessage(any()) } just Runs
             coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "New message",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = testPublicKey,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "New message",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = testPublicKey,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistMessage should return true on success", result)
             coVerify {
                 conversationDao.updateConversation(
                     match { conv ->
@@ -355,20 +375,22 @@ class ServicePersistenceManagerTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
             coEvery { messageDao.getMessageById("test_message_hash", testIdentityHash) } returns existingMessage
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should NOT insert new message (duplicate)
+            // Should return true (message exists) but NOT insert new message (duplicate)
+            assertTrue("persistMessage should return true for duplicate", result)
             coVerify(exactly = 0) { messageDao.insertMessage(any()) }
         }
 
@@ -377,20 +399,22 @@ class ServicePersistenceManagerTest {
         runTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should NOT attempt to insert message
+            // Should return false and NOT attempt to insert message
+            assertFalse("persistMessage should return false when no active identity", result)
             coVerify(exactly = 0) { messageDao.insertMessage(any()) }
         }
 
@@ -415,19 +439,21 @@ class ServicePersistenceManagerTest {
             coEvery { messageDao.insertMessage(any()) } just Runs
             coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = testPublicKey,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = testPublicKey,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistMessage should return true on success", result)
             coVerify { peerIdentityDao.insertPeerIdentity(any()) }
         }
 
@@ -451,19 +477,21 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistMessage should return true on success", result)
             coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
         }
 
@@ -473,18 +501,21 @@ class ServicePersistenceManagerTest {
             coEvery { localIdentityDao.getActiveIdentitySync() } throws RuntimeException("Database error")
 
             // Should not throw
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "sender_hash",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "sender_hash",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
+
+            assertFalse("persistMessage should return false on exception", result)
         }
 
     @Test
@@ -507,19 +538,21 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "abcdef12345678",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "abcdef12345678",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
+            assertTrue("persistMessage should return true on success", result)
             coVerify {
                 conversationDao.insertConversation(
                     match { conv ->
@@ -645,8 +678,9 @@ class ServicePersistenceManagerTest {
     fun `close calls ServiceDatabaseProvider close`() {
         every { ServiceDatabaseProvider.close() } just Runs
 
-        persistenceManager.close()
+        val result = runCatching { persistenceManager.close() }
 
+        assertTrue("close should complete without throwing", result.isSuccess)
         io.mockk.verify { ServiceDatabaseProvider.close() }
     }
 
@@ -672,20 +706,22 @@ class ServicePersistenceManagerTest {
             coEvery { contactDao.contactExists("unknown_sender", testIdentityHash) } returns false
             coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello from unknown",
-                sourceHash = "unknown_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello from unknown",
+                    sourceHash = "unknown_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should NOT persist message (blocked)
+            // Should return false and NOT persist message (blocked)
+            assertFalse("persistMessage should return false when blocked", result)
             coVerify(exactly = 0) { messageDao.insertMessage(any()) }
             coVerify(exactly = 0) { conversationDao.insertConversation(any()) }
         }
@@ -714,20 +750,22 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello from contact",
-                sourceHash = "known_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello from contact",
+                    sourceHash = "known_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should persist message (contact is known)
+            // Should return true and persist message (contact is known)
+            assertTrue("persistMessage should return true for known contact", result)
             coVerify { messageDao.insertMessage(any()) }
         }
 
@@ -753,20 +791,22 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello from anyone",
-                sourceHash = "random_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello from anyone",
+                    sourceHash = "random_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should persist message (setting is disabled)
+            // Should return true and persist message (setting is disabled)
+            assertTrue("persistMessage should return true when setting disabled", result)
             coVerify { messageDao.insertMessage(any()) }
             // Should NOT check contact existence when setting is disabled
             coVerify(exactly = 0) { contactDao.contactExists(any(), any()) }
@@ -796,20 +836,22 @@ class ServicePersistenceManagerTest {
             coEvery { conversationDao.insertConversation(any()) } just Runs
             coEvery { messageDao.insertMessage(any()) } just Runs
 
-            persistenceManager.persistMessage(
-                messageHash = "test_message_hash",
-                content = "Hello",
-                sourceHash = "any_sender",
-                timestamp = System.currentTimeMillis(),
-                fieldsJson = null,
-                publicKey = null,
-                replyToMessageId = null,
-                deliveryMethod = null,
-            )
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "test_message_hash",
+                    content = "Hello",
+                    sourceHash = "any_sender",
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
 
             testScope.advanceUntilIdle()
 
-            // Should still persist message (fail-open on error)
+            // Should return true and still persist message (fail-open on error)
+            assertTrue("persistMessage should fail-open on contact check error", result)
             coVerify { messageDao.insertMessage(any()) }
         }
 

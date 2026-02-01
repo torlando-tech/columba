@@ -37,9 +37,9 @@ object TcpClientWizardTestFixtures {
     fun reviewConfigureState(
         selectedServer: TcpCommunityServer? = testServer,
         isCustomMode: Boolean = false,
-        interfaceName: String = selectedServer?.name ?: "",
-        targetHost: String = selectedServer?.host ?: "",
-        targetPort: String = selectedServer?.port?.toString() ?: "",
+        interfaceName: String = selectedServer?.name.orEmpty(),
+        targetHost: String = selectedServer?.host.orEmpty(),
+        targetPort: String = selectedServer?.port?.toString().orEmpty(),
     ) = TcpClientWizardState(
         currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
         selectedServer = selectedServer,

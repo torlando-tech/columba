@@ -70,7 +70,7 @@
 - sentry-android 7.3.0 - Crash reporting and observability (GlitchTip compatible)
 
 **Messaging & Networking:**
-- Reticulum (RNS 1.1.3) - Fork at `torlando-tech/Reticulum@rebase-1.1.3` with patches for shared instance RPC error handling
+- Reticulum (RNS 1.1.3) - Fork at `torlando-tech/Reticulum@fix/socket-leak-1.1.3` with socket leak fix and shared instance RPC error handling
 - LXMF - Fork at `torlando-tech/LXMF@feature/receiving-interface-capture` with external stamp generator and receiving interface capture
 - LXST - Fork at `torlando-tech/LXST@chaquopy-compat` with Chaquopy compatibility patches
 - ble-reticulum - Git fork at `torlando-tech/ble-reticulum@main`

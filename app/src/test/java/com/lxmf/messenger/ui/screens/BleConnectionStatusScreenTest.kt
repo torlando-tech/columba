@@ -12,10 +12,9 @@ import com.lxmf.messenger.test.waitForNodeWithText
 import com.lxmf.messenger.test.waitForTextCount
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.BleConnectionsViewModel
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import io.mockk.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertTrue
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
@@ -40,13 +39,25 @@ class BleConnectionStatusScreenTest {
 
     val composeTestRule get() = composeRule
 
+    /**
+     * Create a properly stubbed BleConnectionsViewModel mock.
+     * All methods that may be called during screen rendering are stubbed.
+     */
+    private fun createMockViewModel(uiState: BleConnectionsUiState): BleConnectionsViewModel =
+        mockk<BleConnectionsViewModel>().apply {
+            every { this@apply.uiState } returns MutableStateFlow(uiState)
+            every { refresh() } just Runs
+            every { disconnectPeer(any()) } just Runs
+            every { startPeriodicRefresh() } just Runs
+            every { stopPeriodicRefresh() } just Runs
+        }
+
     // ========== Loading State Tests ==========
 
     @Test
     fun loadingState_displaysLoadingIndicator() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
-        every { mockViewModel.uiState } returns MutableStateFlow(BleConnectionsUiState.Loading)
+        val mockViewModel = createMockViewModel(BleConnectionsUiState.Loading)
 
         // When
         composeTestRule.setContent {
@@ -59,15 +70,15 @@ class BleConnectionStatusScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("Loading connections...").assertIsDisplayed()
-        composeTestRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
+        composeTestRule
+            .onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
             .assertIsDisplayed()
     }
 
     @Test
     fun loadingState_displaysTopAppBar() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
-        every { mockViewModel.uiState } returns MutableStateFlow(BleConnectionsUiState.Loading)
+        val mockViewModel = createMockViewModel(BleConnectionsUiState.Loading)
 
         // When
         composeTestRule.setContent {
@@ -88,7 +99,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_emptyList_displaysNoConnectionsMessage() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val emptyState =
             BleConnectionsUiState.Success(
                 connections = emptyList(),
@@ -96,7 +106,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(emptyState)
+        val mockViewModel = createMockViewModel(emptyState)
 
         // When
         composeTestRule.setContent {
@@ -109,14 +119,14 @@ class BleConnectionStatusScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("No Active Connections").assertIsDisplayed()
-        composeTestRule.onNodeWithText("BLE peers will appear here when connected")
+        composeTestRule
+            .onNodeWithText("BLE peers will appear here when connected")
             .assertIsDisplayed()
     }
 
     @Test
     fun successState_emptyList_displaysBluetoothDisabledIcon() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val emptyState =
             BleConnectionsUiState.Success(
                 connections = emptyList(),
@@ -124,7 +134,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(emptyState)
+        val mockViewModel = createMockViewModel(emptyState)
 
         // When
         composeTestRule.setContent {
@@ -145,7 +155,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_withConnections_displaysSummaryCard() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connections = BleTestFixtures.createMultipleConnections(count = 3)
         val successState =
             BleConnectionsUiState.Success(
@@ -154,7 +163,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 2,
                 peripheralConnections = 1,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -193,7 +202,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_withConnections_displaysConnectionCards() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection =
             BleTestFixtures.createBleConnectionInfo(
                 peerName = "RNS-TestPeer",
@@ -208,7 +216,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 1,
                 peripheralConnections = 1,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -228,7 +236,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_withConnections_displaysSignalStrength() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(rssi = -60)
         val successState =
             BleConnectionsUiState.Success(
@@ -237,7 +244,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -257,7 +264,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_peripheralConnection_displaysUnavailableRssi() {
         // Given - Peripheral connections have -100 as placeholder RSSI
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection =
             BleTestFixtures.createBleConnectionInfo(
                 rssi = -100,
@@ -270,7 +276,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 1,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -293,7 +299,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_withConnections_displaysConnectionDetails() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection =
             BleTestFixtures.createBleConnectionInfo(
                 currentMac = "AA:BB:CC:DD:EE:FF",
@@ -306,7 +311,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -328,7 +333,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_multipleConnections_displaysAllCards() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         // Use helper that generates unique MAC addresses for each connection
         val connections = BleTestFixtures.createMultipleConnections(count = 3)
         val successState =
@@ -338,7 +342,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 3,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -368,9 +372,8 @@ class BleConnectionStatusScreenTest {
     @Test
     fun errorState_displaysErrorMessage() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val errorState = BleConnectionsUiState.Error("Test error message")
-        every { mockViewModel.uiState } returns MutableStateFlow(errorState)
+        val mockViewModel = createMockViewModel(errorState)
 
         // When
         composeTestRule.setContent {
@@ -389,9 +392,8 @@ class BleConnectionStatusScreenTest {
     @Test
     fun errorState_displaysRetryButton() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val errorState = BleConnectionsUiState.Error("Network error")
-        every { mockViewModel.uiState } returns MutableStateFlow(errorState)
+        val mockViewModel = createMockViewModel(errorState)
 
         // When
         composeTestRule.setContent {
@@ -412,8 +414,7 @@ class BleConnectionStatusScreenTest {
     fun backButton_triggersOnBackClick() {
         // Given
         var backClicked = false
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
-        every { mockViewModel.uiState } returns MutableStateFlow(BleConnectionsUiState.Loading)
+        val mockViewModel = createMockViewModel(BleConnectionsUiState.Loading)
 
         composeTestRule.setContent {
             BleConnectionStatusScreen(
@@ -427,13 +428,12 @@ class BleConnectionStatusScreenTest {
         composeTestRule.onNodeWithContentDescription("Back").performClick()
 
         // Then
-        assert(backClicked)
+        assertTrue("Back button should trigger onBackClick", backClicked)
     }
 
     @Test
     fun refreshButton_callsViewModelRefresh() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val successState =
             BleConnectionsUiState.Success(
                 connections = emptyList(),
@@ -441,7 +441,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         composeTestRule.setContent {
             BleConnectionStatusScreen(
@@ -452,18 +452,21 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // When
-        composeTestRule.onNodeWithContentDescription("Refresh").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Refresh").performClick()
+            }
 
         // Then
+        assertTrue("Refresh button click should complete successfully", result.isSuccess)
         verify(exactly = 1) { mockViewModel.refresh() }
     }
 
     @Test
     fun retryButton_callsViewModelRefresh() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val errorState = BleConnectionsUiState.Error("Error")
-        every { mockViewModel.uiState } returns MutableStateFlow(errorState)
+        val mockViewModel = createMockViewModel(errorState)
 
         composeTestRule.setContent {
             BleConnectionStatusScreen(
@@ -474,9 +477,13 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // When
-        composeTestRule.onNodeWithText("Retry").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Retry").performClick()
+            }
 
         // Then
+        assertTrue("Retry button click should complete successfully", result.isSuccess)
         verify(exactly = 1) { mockViewModel.refresh() }
     }
 
@@ -484,7 +491,6 @@ class BleConnectionStatusScreenTest {
     fun disconnectButton_callsViewModelDisconnect() {
         // Given
         val testMac = "AA:BB:CC:DD:EE:FF"
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(currentMac = testMac)
         val successState =
             BleConnectionsUiState.Success(
@@ -493,7 +499,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         composeTestRule.setContent {
             BleConnectionStatusScreen(
@@ -508,11 +514,16 @@ class BleConnectionStatusScreenTest {
         composeTestRule.waitForIdle()
 
         // When - scroll to button and click (required for LazyColumn items)
-        composeTestRule.onNodeWithTag("disconnect_button_$testMac")
-            .performScrollTo()
-            .performClick()
+        val result =
+            runCatching {
+                composeTestRule
+                    .onNodeWithTag("disconnect_button_$testMac")
+                    .performScrollTo()
+                    .performClick()
+            }
 
         // Then
+        assertTrue("Disconnect button click should complete successfully", result.isSuccess)
         verify(exactly = 1) { mockViewModel.disconnectPeer(testMac) }
     }
 
@@ -521,7 +532,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun connectionTypeBadge_displaysCentral() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(connectionType = ConnectionType.CENTRAL)
         val successState =
             BleConnectionsUiState.Success(
@@ -530,7 +540,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 1,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -549,7 +559,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun connectionTypeBadge_displaysPeripheral() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(connectionType = ConnectionType.PERIPHERAL)
         val successState =
             BleConnectionsUiState.Success(
@@ -558,7 +567,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 1,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -577,7 +586,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun connectionTypeBadge_displaysBoth() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(connectionType = ConnectionType.BOTH)
         val successState =
             BleConnectionsUiState.Success(
@@ -586,7 +594,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 1,
                 peripheralConnections = 1,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -606,7 +614,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun signalQuality_displaysExcellent() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(rssi = -40) // Excellent
         val successState =
             BleConnectionsUiState.Success(
@@ -615,7 +622,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -633,7 +640,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun signalQuality_displaysFair() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(rssi = -75) // Fair
         val successState =
             BleConnectionsUiState.Success(
@@ -642,7 +648,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -660,7 +666,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun signalQuality_displaysPoor() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection = BleTestFixtures.createBleConnectionInfo(rssi = -90) // Poor
         val successState =
             BleConnectionsUiState.Success(
@@ -669,7 +674,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -690,7 +695,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun performanceMetrics_displayedWhenDataAvailable() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val testMac = "AA:BB:CC:DD:EE:FF"
         val connection =
             BleTestFixtures.createBleConnectionInfo(
@@ -706,7 +710,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -737,7 +741,6 @@ class BleConnectionStatusScreenTest {
     @Ignore("Flaky on CI: Activity lifecycle timeout on resource-constrained runners")
     fun performanceMetrics_notDisplayedWhenNoData() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connection =
             BleTestFixtures.createBleConnectionInfo(
                 bytesSent = 0,
@@ -750,7 +753,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 0,
                 peripheralConnections = 0,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {
@@ -770,7 +773,6 @@ class BleConnectionStatusScreenTest {
     @Test
     fun successState_largeList_isScrollable() {
         // Given
-        val mockViewModel = mockk<BleConnectionsViewModel>(relaxed = true)
         val connections = BleTestFixtures.createMultipleConnections(count = 20)
         val successState =
             BleConnectionsUiState.Success(
@@ -779,7 +781,7 @@ class BleConnectionStatusScreenTest {
                 centralConnections = 10,
                 peripheralConnections = 10,
             )
-        every { mockViewModel.uiState } returns MutableStateFlow(successState)
+        val mockViewModel = createMockViewModel(successState)
 
         // When
         composeTestRule.setContent {

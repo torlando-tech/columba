@@ -1132,6 +1132,9 @@ object DatabaseModule {
     // Migration from version 25 to 26: Add message reply support
     // Adds replyToMessageId column and index for efficient reply lookups
     // Field 16 in LXMF is used as an extensible app extensions dict: {"reply_to": "message_id"}
+    //
+    // COLUMBA-N fix: Uses json_extract on SQLite 3.38+ (Android 14+) with Kotlin fallback
+    // for older Android versions where json_extract is not available.
     private val MIGRATION_25_26 =
         object : Migration(25, 26) {
             override fun migrate(database: SupportSQLiteDatabase) {
@@ -1144,15 +1147,45 @@ object DatabaseModule {
                 )
 
                 // Backfill existing messages from fieldsJson where field 16.reply_to exists
-                // SQLite json_extract uses $ for root and . for object properties
-                database.execSQL(
-                    """
-                    UPDATE messages
-                    SET replyToMessageId = json_extract(fieldsJson, '$."16".reply_to')
-                    WHERE fieldsJson IS NOT NULL
-                    AND json_extract(fieldsJson, '$."16".reply_to') IS NOT NULL
-                    """.trimIndent(),
-                )
+                try {
+                    // Fast path: Use native json_extract (SQLite 3.38+ / Android 14+)
+                    database.execSQL(
+                        """
+                        UPDATE messages
+                        SET replyToMessageId = json_extract(fieldsJson, '$."16".reply_to')
+                        WHERE fieldsJson IS NOT NULL
+                        AND json_extract(fieldsJson, '$."16".reply_to') IS NOT NULL
+                        """.trimIndent(),
+                    )
+                } catch (e: android.database.sqlite.SQLiteException) {
+                    if (e.message?.contains("no such function") == true) {
+                        // Fallback: Kotlin JSON parsing for older Android (COLUMBA-N fix)
+                        backfillReplyToWithKotlin(database)
+                    } else {
+                        throw e // Re-throw other SQL errors
+                    }
+                }
+            }
+
+            private fun backfillReplyToWithKotlin(database: SupportSQLiteDatabase) {
+                database
+                    .query("SELECT id, fieldsJson FROM messages WHERE fieldsJson IS NOT NULL")
+                    .use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getString(0)
+                            val fieldsJson = cursor.getString(1)
+                            val replyTo =
+                                com.lxmf.messenger.data.db.migration.Migration25To26Helper
+                                    .extractReplyToFromFieldsJson(fieldsJson)
+
+                            if (replyTo != null) {
+                                database.execSQL(
+                                    "UPDATE messages SET replyToMessageId = ? WHERE id = ?",
+                                    arrayOf(replyTo, id),
+                                )
+                            }
+                        }
+                    }
             }
         }
 

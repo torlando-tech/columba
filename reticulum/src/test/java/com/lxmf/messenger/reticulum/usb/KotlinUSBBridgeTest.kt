@@ -1,3 +1,6 @@
+// Context, UsbManager are Android framework classes with many methods
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.reticulum.usb
 
 import android.content.Context

@@ -717,8 +717,8 @@ class ChatsScreenTest {
 
     @Test
     fun chatsScreen_emptyList_displaysEmptyState() {
-        // Given
-        val mockViewModel = createMockChatsViewModel(conversations = emptyList())
+        // Given - not loading and empty list
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = false)
 
         // When
         composeTestRule.setContent {
@@ -731,6 +731,70 @@ class ChatsScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("No conversations yet").assertIsDisplayed()
+    }
+
+    // ========== Loading State Flickering Prevention Tests ==========
+
+    @Test
+    fun chatsScreen_loadingWithEmptyList_showsLoadingSpinner() {
+        // Given - loading AND empty list should show loading state
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = true)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - loading spinner should be visible
+        composeTestRule.onNodeWithText("Loading conversations...").assertIsDisplayed()
+        // Empty state should NOT be visible
+        composeTestRule.onNodeWithText("No conversations yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_loadingWithExistingConversations_showsConversationsNotSpinner() {
+        // Given - loading but list has items should show the list (prevents flickering)
+        val conversations =
+            listOf(
+                TestFactories.createConversation(peerHash = "peer1", peerName = "Alice"),
+            )
+        val mockViewModel = createMockChatsViewModel(conversations = conversations, isLoading = true)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - conversations should be visible, NOT the loading spinner
+        composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Loading conversations...").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_notLoadingWithEmptyList_showsEmptyStateNotSpinner() {
+        // Given - not loading and empty should show empty state, not loading spinner
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = false)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - empty state should be visible, NOT loading spinner
+        composeTestRule.onNodeWithText("No conversations yet").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Loading conversations...").assertDoesNotExist()
     }
 
     @Test
@@ -805,10 +869,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - sync button is displayed
+        composeTestRule.onNodeWithContentDescription("Sync messages").assertIsDisplayed()
+
         // When
         composeTestRule.onNodeWithContentDescription("Sync messages").performClick()
 
-        // Then
+        // Then - verify sync was triggered
         verify { mockViewModel.syncFromPropagationNode() }
     }
 
@@ -830,10 +897,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - save button is displayed for unsaved contact
+        composeTestRule.onNodeWithContentDescription("Save to contacts").assertIsDisplayed()
+
         // When - click the star button
         composeTestRule.onNodeWithContentDescription("Save to contacts").performClick()
 
-        // Then
+        // Then - verify save was triggered
         verify { mockViewModel.saveToContacts(conversation) }
     }
 
@@ -853,10 +923,13 @@ class ChatsScreenTest {
             )
         }
 
+        // Then - remove button is displayed for saved contact
+        composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
+
         // When - click the star button
         composeTestRule.onNodeWithContentDescription("Remove from contacts").performClick()
 
-        // Then
+        // Then - verify remove was triggered
         verify { mockViewModel.removeFromContacts("test_peer") }
     }
 
@@ -887,6 +960,7 @@ class ChatsScreenTest {
 
     // ========== Test Helpers ==========
 
+    @Suppress("NoRelaxedMocks") // ChatsViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     private fun createMockChatsViewModel(
         conversations: List<com.lxmf.messenger.data.repository.Conversation> = emptyList(),
         searchQuery: String = "",

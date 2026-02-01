@@ -51,7 +51,7 @@ class ServiceIdentityVerifierTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        identityRepository = mockk(relaxed = true)
+        identityRepository = mockk()
         verifier = ServiceIdentityVerifier(identityRepository)
     }
 

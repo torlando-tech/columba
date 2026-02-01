@@ -6,11 +6,7 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.test.BleTestFixtures
-import io.mockk.clearAllMocks
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +41,7 @@ class BleConnectionsViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockRepository = mockk<BleStatusRepository>(relaxed = true)
+        mockRepository = mockk()
     }
 
     @After
@@ -395,6 +391,12 @@ class BleConnectionsViewModelTest {
 
             // Then
             coVerify(exactly = 3) { mockRepository.getConnectedPeers() }
+            // Verify final state is still Success after multiple refreshes
+            viewModel.uiState.test(timeout = 5.seconds) {
+                val state = awaitItem()
+                assertTrue(state is BleConnectionsUiState.Success)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     // ========== disconnectPeer() Function Tests ==========
@@ -405,7 +407,7 @@ class BleConnectionsViewModelTest {
             // Given
             val testMac = "AA:BB:CC:DD:EE:FF"
             every { mockRepository.getConnectedPeersFlow() } returns flowOf(BleConnectionsState.Success(emptyList()))
-            coEvery { mockRepository.disconnectPeer(testMac) } returns Unit
+            coEvery { mockRepository.disconnectPeer(testMac) } just Runs
 
             viewModel = BleConnectionsViewModel(mockRepository)
             advanceUntilIdle()
@@ -416,6 +418,8 @@ class BleConnectionsViewModelTest {
 
             // Then
             coVerify(exactly = 1) { mockRepository.disconnectPeer(testMac) }
+            // Verify ViewModel remains in a valid state
+            assertTrue(viewModel.uiState.value is BleConnectionsUiState.Success)
         }
 
     @Test
@@ -449,7 +453,7 @@ class BleConnectionsViewModelTest {
             val mac1 = "AA:BB:CC:DD:EE:01"
             val mac2 = "AA:BB:CC:DD:EE:02"
             every { mockRepository.getConnectedPeersFlow() } returns flowOf(BleConnectionsState.Success(emptyList()))
-            coEvery { mockRepository.disconnectPeer(any()) } returns Unit
+            coEvery { mockRepository.disconnectPeer(any()) } just Runs
 
             viewModel = BleConnectionsViewModel(mockRepository)
             advanceUntilIdle()
@@ -462,6 +466,8 @@ class BleConnectionsViewModelTest {
             // Then
             coVerify(exactly = 1) { mockRepository.disconnectPeer(mac1) }
             coVerify(exactly = 1) { mockRepository.disconnectPeer(mac2) }
+            // Verify both disconnects completed and ViewModel is in valid state
+            assertTrue(viewModel.uiState.value is BleConnectionsUiState.Success)
         }
 
     // ========== Edge Case Tests ==========

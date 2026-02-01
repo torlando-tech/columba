@@ -7373,7 +7373,7 @@ class ReticulumWrapper:
         log_debug("ReticulumWrapper", "_resolve_identity_file_path", f"No file found for hash {identity_hash[:16]}")
         return None
 
-    def create_identity(self, display_name: str) -> Dict:
+    def create_identity(self, display_name: str = None) -> Dict:
         """
         Create a new Reticulum identity and save it to a file.
 
@@ -7890,3 +7890,62 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "get_ble_reticulum_version", f"Error: {e}")
             return "unknown"
+
+    # ============================================================================
+    # Memory Profiling (Debug builds only)
+    # ============================================================================
+
+    def enable_memory_profiling(self, interval_seconds: int = 300) -> None:
+        """
+        Enable Python memory profiling with periodic snapshots.
+
+        Uses tracemalloc to detect memory leaks in Python/Reticulum layer.
+        Designed for debug builds - zero overhead when disabled.
+
+        Args:
+            interval_seconds: Snapshot interval (default 300 = 5 minutes)
+        """
+        try:
+            from memory_profiler import start_profiling, schedule_periodic_snapshots
+            start_profiling(nframes=10)
+            schedule_periodic_snapshots(interval_seconds)
+            log_info("ReticulumWrapper", "enable_memory_profiling",
+                    f"Memory profiling enabled with {interval_seconds}s snapshots")
+        except Exception as e:
+            log_error("ReticulumWrapper", "enable_memory_profiling", f"Error: {e}")
+
+    def disable_memory_profiling(self) -> None:
+        """
+        Disable memory profiling and cleanup resources.
+
+        Safe to call even if profiling was not enabled.
+        """
+        try:
+            from memory_profiler import stop_profiling
+            stop_profiling()
+            log_info("ReticulumWrapper", "disable_memory_profiling", "Memory profiling disabled")
+        except Exception as e:
+            log_error("ReticulumWrapper", "disable_memory_profiling", f"Error: {e}")
+
+    def get_memory_profile(self) -> Dict:
+        """
+        Get current memory profiling statistics.
+
+        Returns:
+            Dict with:
+                - profiling_active: Whether profiling is active
+                - current_mb: Current traced memory in MB
+                - peak_mb: Peak traced memory in MB
+                - overhead_kb: tracemalloc overhead in KB
+        """
+        try:
+            from memory_profiler import get_memory_stats
+            return get_memory_stats()
+        except Exception as e:
+            log_error("ReticulumWrapper", "get_memory_profile", f"Error: {e}")
+            return {
+                "profiling_active": False,
+                "current_mb": 0.0,
+                "peak_mb": 0.0,
+                "overhead_kb": 0.0,
+            }

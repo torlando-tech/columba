@@ -26,6 +26,13 @@ class InterfaceTypeTest {
     }
 
     @Test
+    fun `fromInterfaceName returns TCP_CLIENT for BackboneInterface names`() {
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("BackboneInterface[noDNS2/193.26.158.230:4965]"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("BackboneClientInterface[Beleth RNS Hub]"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("BackboneInterface"))
+    }
+
+    @Test
     fun `fromInterfaceName returns ANDROID_BLE for BLE interface names`() {
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("AndroidBLEInterface[AA:BB:CC:DD:EE:FF]"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLE Device"))
@@ -83,6 +90,8 @@ class InterfaceTypeTest {
         assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("TCPCLIENT"))
         assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("tcpinterface"))
         assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("TCPINTERFACE"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("backboneinterface"))
+        assertEquals(InterfaceType.TCP_CLIENT, InterfaceType.fromInterfaceName("BACKBONE"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("BLE"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("ble"))
         assertEquals(InterfaceType.ANDROID_BLE, InterfaceType.fromInterfaceName("ANDROIDBLE"))

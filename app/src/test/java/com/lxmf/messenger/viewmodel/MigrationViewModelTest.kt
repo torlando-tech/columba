@@ -1,3 +1,5 @@
+@file:Suppress("InjectDispatcher")
+
 package com.lxmf.messenger.viewmodel
 
 import android.net.Uri
@@ -9,12 +11,13 @@ import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
 import com.lxmf.messenger.service.InterfaceConfigManager
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -88,12 +91,15 @@ class MigrationViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        migrationExporter = mockk(relaxed = true)
-        migrationImporter = mockk(relaxed = true)
-        interfaceConfigManager = mockk(relaxed = true)
+        migrationExporter = mockk()
+        migrationImporter = mockk()
+        interfaceConfigManager = mockk()
 
         // Mock getExportPreview called in init
         coEvery { migrationExporter.getExportPreview() } returns testExportPreview
+
+        // Stub cleanupExportFiles - called during cleanup operations
+        every { migrationExporter.cleanupExportFiles() } just Runs
 
         // Mock service restart to succeed
         coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
@@ -370,11 +376,14 @@ class MigrationViewModelTest {
     @Test
     fun `cleanupExportFiles calls exporter cleanup`() =
         runTest {
-            every { migrationExporter.cleanupExportFiles() } returns Unit
+            var cleanupCalled = false
+            every { migrationExporter.cleanupExportFiles() } answers {
+                cleanupCalled = true
+            }
 
             viewModel.cleanupExportFiles()
 
-            verify { migrationExporter.cleanupExportFiles() }
+            assertTrue("cleanupExportFiles should be called", cleanupCalled)
         }
 
     // endregion
@@ -414,9 +423,11 @@ class MigrationViewModelTest {
             advanceUntilIdle()
 
             // Export
-            viewModel.exportData()
+            val result = runCatching { viewModel.exportData() }
             advanceUntilIdle()
 
+            // Assert operation completed successfully
+            assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = false
             coVerify { migrationExporter.exportData(any(), includeAttachments = false) }
         }
@@ -428,9 +439,11 @@ class MigrationViewModelTest {
             coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
 
             // Export without changing default
-            viewModel.exportData()
+            val result = runCatching { viewModel.exportData() }
             advanceUntilIdle()
 
+            // Assert operation completed successfully
+            assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = true
             coVerify { migrationExporter.exportData(any(), includeAttachments = true) }
         }

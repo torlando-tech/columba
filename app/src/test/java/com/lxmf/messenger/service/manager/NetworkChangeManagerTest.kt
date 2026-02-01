@@ -32,19 +32,26 @@ class NetworkChangeManagerTest {
     private var networkChangedCallCount = 0
     private val callbackSlot = slot<ConnectivityManager.NetworkCallback>()
 
+    @Suppress("NoRelaxedMocks") // Android Context and system services require relaxed mocks
     @Before
     fun setup() {
         context = mockk(relaxed = true)
         connectivityManager = mockk(relaxed = true)
-        lockManager = mockk(relaxed = true)
+        lockManager = mockk()
         networkChangedCallCount = 0
+
+        // Explicit stubs for LockManager
+        every { lockManager.acquireAll() } returns Unit
+        every { lockManager.releaseAll() } returns Unit
 
         // Mock Android framework classes
         mockkConstructor(NetworkRequest.Builder::class)
         every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers {
             self as NetworkRequest.Builder
         }
-        every { anyConstructed<NetworkRequest.Builder>().build() } returns mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Android NetworkRequest.Builder
+        val networkRequest = mockk<NetworkRequest>(relaxed = true)
+        every { anyConstructed<NetworkRequest.Builder>().build() } returns networkRequest
 
         every { context.getSystemService(any<String>()) } returns connectivityManager
         every {
@@ -70,10 +77,11 @@ class NetworkChangeManagerTest {
     fun `start registers network callback`() {
         networkChangeManager.start()
 
+        val isMonitoring = networkChangeManager.isMonitoring()
+        assertTrue("Should be monitoring after start", isMonitoring)
         verify(exactly = 1) {
             connectivityManager.registerNetworkCallback(any(), any<ConnectivityManager.NetworkCallback>())
         }
-        assertTrue("Should be monitoring after start", networkChangeManager.isMonitoring())
     }
 
     @Test
@@ -81,10 +89,11 @@ class NetworkChangeManagerTest {
         networkChangeManager.start()
         networkChangeManager.stop()
 
+        val isMonitoring = networkChangeManager.isMonitoring()
+        assertFalse("Should not be monitoring after stop", isMonitoring)
         verify(exactly = 1) {
             connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         }
-        assertFalse("Should not be monitoring after stop", networkChangeManager.isMonitoring())
     }
 
     @Test
@@ -121,13 +130,15 @@ class NetworkChangeManagerTest {
         // Start again should work without error
         networkChangeManager.start()
 
-        assertTrue(networkChangeManager.isMonitoring())
+        val isMonitoring = networkChangeManager.isMonitoring()
+        assertTrue("Should still be monitoring after restart", isMonitoring)
         // Should have unregistered previous callback
         verify(exactly = 1) {
             connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         }
     }
 
+    @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
     fun `first network available does not trigger callback`() {
         networkChangeManager.start()
@@ -142,6 +153,7 @@ class NetworkChangeManagerTest {
         assertTrue("Callback should not trigger on first network", networkChangedCallCount == 0)
     }
 
+    @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
     fun `network change triggers callback and reacquires locks`() {
         networkChangeManager.start()
@@ -161,6 +173,7 @@ class NetworkChangeManagerTest {
         verify(exactly = 1) { lockManager.acquireAll() }
     }
 
+    @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
     fun `same network reconnecting does not trigger callback`() {
         networkChangeManager.start()
@@ -177,6 +190,7 @@ class NetworkChangeManagerTest {
         assertTrue("Callback should not trigger for same network", networkChangedCallCount == 0)
     }
 
+    @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
     fun `exception in lock acquisition does not crash`() {
         every { lockManager.acquireAll() } throws RuntimeException("Test error")
@@ -197,6 +211,7 @@ class NetworkChangeManagerTest {
         assertTrue("Callback should still be invoked after lock error", networkChangedCallCount == 1)
     }
 
+    @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
     fun `exception in callback does not crash`() {
         val crashingManager =
@@ -216,8 +231,9 @@ class NetworkChangeManagerTest {
         every { network2.toString() } returns "network2"
 
         // Should not throw despite callback failure
-        callbackSlot.captured.onAvailable(network2)
+        val result = runCatching { callbackSlot.captured.onAvailable(network2) }
 
+        assertTrue("Exception in callback should not crash", result.isSuccess)
         crashingManager.stop()
     }
 

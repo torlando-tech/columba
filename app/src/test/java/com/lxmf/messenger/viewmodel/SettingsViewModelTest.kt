@@ -16,10 +16,12 @@ import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.PresetTheme
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -85,28 +87,33 @@ class SettingsViewModelTest {
         MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
 
     @Before
+    @Suppress("LongMethod") // Setup configures many mock stubs for ViewModel's 10+ dependencies
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
 
-        settingsRepository = mockk(relaxed = true)
-        identityRepository = mockk(relaxed = true)
-        reticulumProtocol = mockk(relaxed = true)
-        interfaceConfigManager = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
-        locationSharingManager = mockk(relaxed = true)
-        interfaceRepository = mockk(relaxed = true)
-        mapTileSourceManager = mockk(relaxed = true)
-        telemetryCollectorManager = mockk(relaxed = true)
-        contactRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
+        identityRepository = mockk()
+        reticulumProtocol = mockk()
+        interfaceConfigManager = mockk()
+        propagationNodeManager = mockk()
+        locationSharingManager = mockk()
+        interfaceRepository = mockk()
+        mapTileSourceManager = mockk()
+        telemetryCollectorManager = mockk()
+        contactRepository = mockk()
 
-        // Mock locationSharingManager flows
+        // Mock locationSharingManager flows and methods
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+        coEvery { locationSharingManager.stopSharing(any()) } just Runs
 
         // Setup interface repository flow mock
         every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+
+        // Setup contact repository mock
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
@@ -123,6 +130,50 @@ class SettingsViewModelTest {
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
+        every { settingsRepository.locationSharingEnabledFlow } returns flowOf(false)
+        every { settingsRepository.defaultSharingDurationFlow } returns flowOf("ONE_HOUR")
+        every { settingsRepository.locationPrecisionRadiusFlow } returns flowOf(0)
+        every { settingsRepository.tryPropagationOnFailFlow } returns flowOf(false)
+        every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(false)
+        every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
+        every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
+        every { settingsRepository.incomingMessageSizeLimitKbFlow } returns flowOf(500)
+        every { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
+        every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
+        every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
+        every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
+        every { settingsRepository.lastTelemetrySendTimeFlow } returns flowOf(null)
+        every { settingsRepository.telemetryRequestEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryRequestIntervalSecondsFlow } returns flowOf(60)
+        every { settingsRepository.lastTelemetryRequestTimeFlow } returns flowOf(null)
+        every { settingsRepository.telemetryHostModeEnabledFlow } returns flowOf(false)
+        every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
+
+        // Stub settings save methods
+        coEvery { settingsRepository.savePreferOwnInstance(any()) } just Runs
+        coEvery { settingsRepository.saveRpcKey(any()) } just Runs
+        coEvery { settingsRepository.saveAutoAnnounceEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveAutoAnnounceIntervalHours(any()) } just Runs
+        coEvery { settingsRepository.saveLastAutoAnnounceTime(any()) } just Runs
+        coEvery { settingsRepository.saveThemePreference(any()) } just Runs
+        coEvery { settingsRepository.saveDefaultDeliveryMethod(any()) } just Runs
+        coEvery { settingsRepository.saveTryPropagationOnFail(any()) } just Runs
+        coEvery { settingsRepository.saveAutoSelectPropagationNode(any()) } just Runs
+        coEvery { settingsRepository.saveAutoRetrieveEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveRetrievalIntervalSeconds(any()) } just Runs
+        coEvery { settingsRepository.saveTransportNodeEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveLocationSharingEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveDefaultSharingDuration(any()) } just Runs
+        coEvery { settingsRepository.saveLocationPrecisionRadius(any()) } just Runs
+        coEvery { settingsRepository.saveImageCompressionPreset(any()) } just Runs
+        coEvery { settingsRepository.saveMapSourceHttpEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveMapSourceRmspEnabled(any()) } just Runs
+        coEvery { settingsRepository.getCustomThemeById(any()) } returns null
+        coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveBlockUnknownSenders(any()) } just Runs
+        coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
+
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)
@@ -131,13 +182,27 @@ class SettingsViewModelTest {
         every { propagationNodeManager.lastSyncTimestamp } returns MutableStateFlow(null)
         every { propagationNodeManager.availableRelaysState } returns
             MutableStateFlow(AvailableRelaysState.Loaded(emptyList()))
+        coEvery { propagationNodeManager.enableAutoSelect() } just Runs
+        coEvery { propagationNodeManager.triggerSync() } just Runs
+        coEvery { propagationNodeManager.setManualRelayByHash(any(), any()) } just Runs
+        coEvery { propagationNodeManager.setManualRelay(any(), any()) } just Runs
 
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
+        coEvery { identityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
+        coEvery { identityRepository.updateIconAppearance(any(), any(), any(), any()) } returns Result.success(Unit)
+
         coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
 
-        // Mock ReticulumProtocol networkStatus flow
+        // Mock ReticulumProtocol methods
         every { reticulumProtocol.networkStatus } returns networkStatusFlow
+        coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
+
+        // Mock MapTileSourceManager flows
+        every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
+        every { mapTileSourceManager.observeRmspServerCount() } returns flowOf(0)
+        every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
+        every { locationSharingManager.sendImmediateUpdate() } just Runs
     }
 
     @After
@@ -148,8 +213,8 @@ class SettingsViewModelTest {
         SettingsViewModel.enableMonitors = true
     }
 
-    private fun createViewModel(): SettingsViewModel {
-        return SettingsViewModel(
+    private fun createViewModel(): SettingsViewModel =
+        SettingsViewModel(
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
@@ -161,7 +226,6 @@ class SettingsViewModelTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
         )
-    }
 
     // region parseRpcKey Tests
 
@@ -353,8 +417,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.togglePreferOwnInstance(true)
+            val result = runCatching { viewModel.togglePreferOwnInstance(true) }
 
+            assertTrue("togglePreferOwnInstance should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(true) }
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
@@ -384,8 +449,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.switchToOwnInstanceAfterLoss()
+            val result = runCatching { viewModel.switchToOwnInstanceAfterLoss() }
 
+            assertTrue("switchToOwnInstanceAfterLoss should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(true) }
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
@@ -396,8 +462,9 @@ class SettingsViewModelTest {
             preferOwnInstanceFlow.value = true
             viewModel = createViewModel()
 
-            viewModel.switchToSharedInstance()
+            val result = runCatching { viewModel.switchToSharedInstance() }
 
+            assertTrue("switchToSharedInstance should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(false) }
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
@@ -407,8 +474,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.dismissSharedInstanceAvailable()
+            val result = runCatching { viewModel.dismissSharedInstanceAvailable() }
 
+            assertTrue("dismissSharedInstanceAvailable should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(true) }
         }
 
@@ -422,8 +490,9 @@ class SettingsViewModelTest {
             isSharedInstanceFlow.value = true // Must be shared instance to trigger restart
             viewModel = createViewModel()
 
-            viewModel.saveRpcKey("shared_instance_type = tcp\nrpc_key = abc123def")
+            val result = runCatching { viewModel.saveRpcKey("shared_instance_type = tcp\nrpc_key = abc123def") }
 
+            assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRpcKey("abc123def") }
         }
 
@@ -433,8 +502,9 @@ class SettingsViewModelTest {
             isSharedInstanceFlow.value = true
             viewModel = createViewModel()
 
-            viewModel.saveRpcKey("abc123def456")
+            val result = runCatching { viewModel.saveRpcKey("abc123def456") }
 
+            assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRpcKey("abc123def456") }
         }
 
@@ -444,8 +514,9 @@ class SettingsViewModelTest {
             isSharedInstanceFlow.value = true
             viewModel = createViewModel()
 
-            viewModel.saveRpcKey("invalid-key!")
+            val result = runCatching { viewModel.saveRpcKey("invalid-key!") }
 
+            assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRpcKey(null) }
         }
 
@@ -465,8 +536,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.saveRpcKey("abc123")
+            val result = runCatching { viewModel.saveRpcKey("abc123") }
 
+            assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
 
@@ -476,8 +548,9 @@ class SettingsViewModelTest {
             isSharedInstanceFlow.value = false
             viewModel = createViewModel()
 
-            viewModel.saveRpcKey("abc123")
+            val result = runCatching { viewModel.saveRpcKey("abc123") }
 
+            assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             // Should not call applyInterfaceChanges since not using shared instance
             coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges() }
         }
@@ -549,8 +622,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.restartService()
+            val result = runCatching { viewModel.restartService() }
 
+            assertTrue("restartService should complete successfully", result.isSuccess)
             // Verify the restart was triggered via interfaceConfigManager
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
@@ -760,8 +834,9 @@ class SettingsViewModelTest {
             // For now, we verify the toggle behavior preserves the preference
 
             // Simulate the auto-restart scenario by verifying restartService behavior
-            viewModel.restartService()
+            val result = runCatching { viewModel.restartService() }
 
+            assertTrue("restartService should complete successfully", result.isSuccess)
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
 
@@ -840,8 +915,9 @@ class SettingsViewModelTest {
             }
 
             // Switch to own instance (simulates what auto-restart does)
-            viewModel.togglePreferOwnInstance(true)
+            val result = runCatching { viewModel.togglePreferOwnInstance(true) }
 
+            assertTrue("togglePreferOwnInstance should complete successfully", result.isSuccess)
             // Verify preference was saved
             coVerify { settingsRepository.savePreferOwnInstance(true) }
         }
@@ -925,8 +1001,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.switchToOwnInstanceAfterLoss()
+            val result = runCatching { viewModel.switchToOwnInstanceAfterLoss() }
 
+            assertTrue("switchToOwnInstanceAfterLoss should complete successfully", result.isSuccess)
             // Verify both preference save and restart are triggered
             coVerify { settingsRepository.savePreferOwnInstance(true) }
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
@@ -1101,8 +1178,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setDefaultDeliveryMethod("direct")
+            val result = runCatching { viewModel.setDefaultDeliveryMethod("direct") }
 
+            assertTrue("setDefaultDeliveryMethod should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveDefaultDeliveryMethod("direct") }
         }
 
@@ -1111,8 +1189,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setDefaultDeliveryMethod("propagated")
+            val result = runCatching { viewModel.setDefaultDeliveryMethod("propagated") }
 
+            assertTrue("setDefaultDeliveryMethod should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveDefaultDeliveryMethod("propagated") }
         }
 
@@ -1121,8 +1200,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTryPropagationOnFail(true)
+            val result = runCatching { viewModel.setTryPropagationOnFail(true) }
 
+            assertTrue("setTryPropagationOnFail should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveTryPropagationOnFail(true) }
         }
 
@@ -1131,8 +1211,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTryPropagationOnFail(false)
+            val result = runCatching { viewModel.setTryPropagationOnFail(false) }
 
+            assertTrue("setTryPropagationOnFail should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveTryPropagationOnFail(false) }
         }
 
@@ -1141,8 +1222,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAutoSelectPropagationNode(true)
+            val result = runCatching { viewModel.setAutoSelectPropagationNode(true) }
 
+            assertTrue("setAutoSelectPropagationNode should complete successfully", result.isSuccess)
             coVerify { propagationNodeManager.enableAutoSelect() }
             coVerify { settingsRepository.saveAutoSelectPropagationNode(true) }
         }
@@ -1152,8 +1234,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAutoSelectPropagationNode(false)
+            val result = runCatching { viewModel.setAutoSelectPropagationNode(false) }
 
+            assertTrue("setAutoSelectPropagationNode should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { propagationNodeManager.enableAutoSelect() }
             coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
         }
@@ -1184,8 +1267,9 @@ class SettingsViewModelTest {
             coEvery { identityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             viewModel = createViewModel()
 
-            viewModel.updateDisplayName("NewName")
+            val result = runCatching { viewModel.updateDisplayName("NewName") }
 
+            assertTrue("updateDisplayName should complete successfully", result.isSuccess)
             coVerify { identityRepository.updateDisplayName("test123", "NewName") }
         }
 
@@ -1197,8 +1281,9 @@ class SettingsViewModelTest {
             coEvery { identityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             viewModel = createViewModel()
 
-            viewModel.updateDisplayName("")
+            val result = runCatching { viewModel.updateDisplayName("") }
 
+            assertTrue("updateDisplayName should complete successfully", result.isSuccess)
             coVerify { identityRepository.updateDisplayName("test123", "") }
         }
 
@@ -1233,8 +1318,9 @@ class SettingsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.updateDisplayName("NewName")
+            val result = runCatching { viewModel.updateDisplayName("NewName") }
 
+            assertTrue("updateDisplayName should complete successfully even without identity", result.isSuccess)
             coVerify(exactly = 0) { identityRepository.updateDisplayName(any(), any()) }
         }
 
@@ -1308,9 +1394,10 @@ class SettingsViewModelTest {
                 RuntimeException("Unexpected error")
             viewModel = createViewModel()
 
-            // Should not throw
-            viewModel.updateDisplayName("NewName")
+            // Should not throw - the ViewModel should handle exceptions internally
+            val result = runCatching { viewModel.updateDisplayName("NewName") }
 
+            assertTrue("updateDisplayName should not propagate exceptions", result.isSuccess)
             // Verify the update was attempted
             coVerify { identityRepository.updateDisplayName("test123", "NewName") }
         }
@@ -1364,8 +1451,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.toggleAutoAnnounce(true)
+            val result = runCatching { viewModel.toggleAutoAnnounce(true) }
 
+            assertTrue("toggleAutoAnnounce should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoAnnounceEnabled(true) }
         }
 
@@ -1374,8 +1462,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.toggleAutoAnnounce(false)
+            val result = runCatching { viewModel.toggleAutoAnnounce(false) }
 
+            assertTrue("toggleAutoAnnounce should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoAnnounceEnabled(false) }
         }
 
@@ -1384,8 +1473,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAnnounceInterval(10)
+            val result = runCatching { viewModel.setAnnounceInterval(10) }
 
+            assertTrue("setAnnounceInterval should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoAnnounceIntervalHours(10) }
         }
 
@@ -1394,8 +1484,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAnnounceInterval(1)
+            val result = runCatching { viewModel.setAnnounceInterval(1) }
 
+            assertTrue("setAnnounceInterval should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoAnnounceIntervalHours(1) }
         }
 
@@ -1404,8 +1495,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAnnounceInterval(60)
+            val result = runCatching { viewModel.setAnnounceInterval(60) }
 
+            assertTrue("setAnnounceInterval should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoAnnounceIntervalHours(60) }
         }
 
@@ -1608,8 +1700,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTheme(PresetTheme.OCEAN)
+            val result = runCatching { viewModel.setTheme(PresetTheme.OCEAN) }
 
+            assertTrue("setTheme should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveThemePreference(PresetTheme.OCEAN) }
         }
 
@@ -1618,8 +1711,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTheme(PresetTheme.VIBRANT)
+            val result = runCatching { viewModel.setTheme(PresetTheme.VIBRANT) }
 
+            assertTrue("setTheme should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveThemePreference(PresetTheme.VIBRANT) }
         }
 
@@ -1633,8 +1727,9 @@ class SettingsViewModelTest {
 
             viewModel = createViewModel()
 
-            viewModel.applyCustomTheme(123L)
+            val result = runCatching { viewModel.applyCustomTheme(123L) }
 
+            assertTrue("applyCustomTheme should complete successfully", result.isSuccess)
             coVerify { settingsRepository.getCustomThemeById(123L) }
             coVerify { settingsRepository.saveThemePreference(mockCustomTheme) }
         }
@@ -1647,8 +1742,9 @@ class SettingsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.applyCustomTheme(999L)
+            val result = runCatching { viewModel.applyCustomTheme(999L) }
 
+            assertTrue("applyCustomTheme should complete successfully", result.isSuccess)
             coVerify { settingsRepository.getCustomThemeById(999L) }
             coVerify(exactly = 0) { settingsRepository.saveThemePreference(any()) }
         }
@@ -1681,8 +1777,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.shutdownService()
+            val result = runCatching { viewModel.shutdownService() }
 
+            assertTrue("shutdownService should complete successfully", result.isSuccess)
             coVerify { reticulumProtocol.shutdown() }
         }
 
@@ -1695,8 +1792,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAutoRetrieveEnabled(true)
+            val result = runCatching { viewModel.setAutoRetrieveEnabled(true) }
 
+            assertTrue("setAutoRetrieveEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoRetrieveEnabled(true) }
         }
 
@@ -1705,8 +1803,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setAutoRetrieveEnabled(false)
+            val result = runCatching { viewModel.setAutoRetrieveEnabled(false) }
 
+            assertTrue("setAutoRetrieveEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoRetrieveEnabled(false) }
         }
 
@@ -1715,8 +1814,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setRetrievalIntervalSeconds(30)
+            val result = runCatching { viewModel.setRetrievalIntervalSeconds(30) }
 
+            assertTrue("setRetrievalIntervalSeconds should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRetrievalIntervalSeconds(30) }
         }
 
@@ -1725,8 +1825,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setRetrievalIntervalSeconds(60)
+            val result = runCatching { viewModel.setRetrievalIntervalSeconds(60) }
 
+            assertTrue("setRetrievalIntervalSeconds should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRetrievalIntervalSeconds(60) }
         }
 
@@ -1735,8 +1836,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setRetrievalIntervalSeconds(120)
+            val result = runCatching { viewModel.setRetrievalIntervalSeconds(120) }
 
+            assertTrue("setRetrievalIntervalSeconds should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRetrievalIntervalSeconds(120) }
         }
 
@@ -1745,8 +1847,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setRetrievalIntervalSeconds(300)
+            val result = runCatching { viewModel.setRetrievalIntervalSeconds(300) }
 
+            assertTrue("setRetrievalIntervalSeconds should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveRetrievalIntervalSeconds(300) }
         }
 
@@ -1755,8 +1858,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.syncNow()
+            val result = runCatching { viewModel.syncNow() }
 
+            assertTrue("syncNow should complete successfully", result.isSuccess)
             coVerify { propagationNodeManager.triggerSync() }
         }
 
@@ -1869,8 +1973,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTransportNodeEnabled(true)
+            val result = runCatching { viewModel.setTransportNodeEnabled(true) }
 
+            assertTrue("setTransportNodeEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveTransportNodeEnabled(true) }
         }
 
@@ -1879,8 +1984,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTransportNodeEnabled(false)
+            val result = runCatching { viewModel.setTransportNodeEnabled(false) }
 
+            assertTrue("setTransportNodeEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveTransportNodeEnabled(false) }
         }
 
@@ -1889,8 +1995,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setTransportNodeEnabled(false)
+            val result = runCatching { viewModel.setTransportNodeEnabled(false) }
 
+            assertTrue("setTransportNodeEnabled should complete successfully", result.isSuccess)
             coVerify { interfaceConfigManager.applyInterfaceChanges() }
         }
 
@@ -2158,8 +2265,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setLocationSharingEnabled(true)
+            val result = runCatching { viewModel.setLocationSharingEnabled(true) }
 
+            assertTrue("setLocationSharingEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveLocationSharingEnabled(true) }
         }
 
@@ -2168,8 +2276,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setLocationSharingEnabled(false)
+            val result = runCatching { viewModel.setLocationSharingEnabled(false) }
 
+            assertTrue("setLocationSharingEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveLocationSharingEnabled(false) }
             coVerify { locationSharingManager.stopSharing(null) }
         }
@@ -2180,8 +2289,9 @@ class SettingsViewModelTest {
             viewModel = createViewModel()
             val testHash = "testDestinationHash123"
 
-            viewModel.stopSharingWith(testHash)
+            val result = runCatching { viewModel.stopSharingWith(testHash) }
 
+            assertTrue("stopSharingWith should complete successfully", result.isSuccess)
             coVerify { locationSharingManager.stopSharing(testHash) }
         }
 
@@ -2190,8 +2300,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.stopAllSharing()
+            val result = runCatching { viewModel.stopAllSharing() }
 
+            assertTrue("stopAllSharing should complete successfully", result.isSuccess)
             coVerify { locationSharingManager.stopSharing(null) }
         }
 
@@ -2200,8 +2311,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setDefaultSharingDuration("FOUR_HOURS")
+            val result = runCatching { viewModel.setDefaultSharingDuration("FOUR_HOURS") }
 
+            assertTrue("setDefaultSharingDuration should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveDefaultSharingDuration("FOUR_HOURS") }
         }
 
@@ -2210,8 +2322,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setLocationPrecisionRadius(1000)
+            val result = runCatching { viewModel.setLocationPrecisionRadius(1000) }
 
+            assertTrue("setLocationPrecisionRadius should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveLocationPrecisionRadius(1000) }
             coVerify { locationSharingManager.sendImmediateUpdate() }
         }
@@ -2227,8 +2340,9 @@ class SettingsViewModelTest {
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
             val testNickname = "My Test Relay"
 
-            viewModel.addManualPropagationNode(testHash, testNickname)
+            val result = runCatching { viewModel.addManualPropagationNode(testHash, testNickname) }
 
+            assertTrue("addManualPropagationNode should complete successfully", result.isSuccess)
             coVerify { propagationNodeManager.setManualRelayByHash(testHash, testNickname) }
         }
 
@@ -2238,8 +2352,9 @@ class SettingsViewModelTest {
             viewModel = createViewModel()
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
 
-            viewModel.addManualPropagationNode(testHash, null)
+            val result = runCatching { viewModel.addManualPropagationNode(testHash, null) }
 
+            assertTrue("addManualPropagationNode should complete successfully", result.isSuccess)
             coVerify { propagationNodeManager.setManualRelayByHash(testHash, null) }
         }
 
@@ -2250,8 +2365,9 @@ class SettingsViewModelTest {
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
             val testName = "Selected Relay"
 
-            viewModel.selectRelay(testHash, testName)
+            val result = runCatching { viewModel.selectRelay(testHash, testName) }
 
+            assertTrue("selectRelay should complete successfully", result.isSuccess)
             coVerify { propagationNodeManager.setManualRelay(testHash, testName) }
         }
 
@@ -2281,8 +2397,9 @@ class SettingsViewModelTest {
 
             viewModel = createViewModel()
 
-            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+            val result = runCatching { viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5") }
 
+            assertTrue("updateIconAppearance should complete successfully", result.isSuccess)
             coVerify {
                 identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
             }
@@ -2299,8 +2416,9 @@ class SettingsViewModelTest {
 
             viewModel = createViewModel()
 
-            viewModel.updateIconAppearance(null, null, null)
+            val result = runCatching { viewModel.updateIconAppearance(null, null, null) }
 
+            assertTrue("updateIconAppearance should complete successfully", result.isSuccess)
             coVerify {
                 identityRepository.updateIconAppearance("abc123", null, null, null)
             }
@@ -2313,8 +2431,9 @@ class SettingsViewModelTest {
 
             viewModel = createViewModel()
 
-            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+            val result = runCatching { viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5") }
 
+            assertTrue("updateIconAppearance should complete successfully", result.isSuccess)
             coVerify(exactly = 0) {
                 identityRepository.updateIconAppearance(any(), any(), any(), any())
             }
@@ -2354,8 +2473,9 @@ class SettingsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw exception
-            viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5")
+            val result = runCatching { viewModel.updateIconAppearance("account", "FFFFFF", "1E88E5") }
 
+            assertTrue("updateIconAppearance should not propagate exceptions", result.isSuccess)
             // Verify update was attempted
             coVerify {
                 identityRepository.updateIconAppearance("abc123", "account", "FFFFFF", "1E88E5")
@@ -2385,8 +2505,12 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.LOW)
+            val result =
+                runCatching {
+                    viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.LOW)
+                }
 
+            assertTrue("setImageCompressionPreset should complete successfully", result.isSuccess)
             coVerify {
                 settingsRepository.saveImageCompressionPreset(
                     com.lxmf.messenger.data.model.ImageCompressionPreset.LOW,
@@ -2399,8 +2523,12 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH)
+            val result =
+                runCatching {
+                    viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH)
+                }
 
+            assertTrue("setImageCompressionPreset should complete successfully", result.isSuccess)
             coVerify {
                 settingsRepository.saveImageCompressionPreset(
                     com.lxmf.messenger.data.model.ImageCompressionPreset.HIGH,
@@ -2413,8 +2541,12 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM)
+            val result =
+                runCatching {
+                    viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM)
+                }
 
+            assertTrue("setImageCompressionPreset should complete successfully", result.isSuccess)
             coVerify {
                 settingsRepository.saveImageCompressionPreset(
                     com.lxmf.messenger.data.model.ImageCompressionPreset.MEDIUM,
@@ -2427,8 +2559,12 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL)
+            val result =
+                runCatching {
+                    viewModel.setImageCompressionPreset(com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL)
+                }
 
+            assertTrue("setImageCompressionPreset should complete successfully", result.isSuccess)
             coVerify {
                 settingsRepository.saveImageCompressionPreset(
                     com.lxmf.messenger.data.model.ImageCompressionPreset.ORIGINAL,
@@ -2470,8 +2606,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setMapSourceHttpEnabled(true)
+            val result = runCatching { viewModel.setMapSourceHttpEnabled(true) }
 
+            assertTrue("setMapSourceHttpEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveMapSourceHttpEnabled(true) }
         }
 
@@ -2493,8 +2630,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.setMapSourceHttpEnabled(false)
+            val result = runCatching { viewModel.setMapSourceHttpEnabled(false) }
 
+            assertTrue("setMapSourceHttpEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
         }
 
@@ -2516,8 +2654,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.setMapSourceHttpEnabled(false)
+            val result = runCatching { viewModel.setMapSourceHttpEnabled(false) }
 
+            assertTrue("setMapSourceHttpEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
         }
 
@@ -2543,8 +2682,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.setMapSourceHttpEnabled(false)
+            val result = runCatching { viewModel.setMapSourceHttpEnabled(false) }
 
+            assertTrue("setMapSourceHttpEnabled should complete successfully", result.isSuccess)
             // Should save - blocking was removed in Issue #285 fix
             coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
         }
@@ -2554,8 +2694,9 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.setMapSourceRmspEnabled(true)
+            val result = runCatching { viewModel.setMapSourceRmspEnabled(true) }
 
+            assertTrue("setMapSourceRmspEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveMapSourceRmspEnabled(true) }
         }
 
@@ -2577,8 +2718,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.setMapSourceRmspEnabled(false)
+            val result = runCatching { viewModel.setMapSourceRmspEnabled(false) }
 
+            assertTrue("setMapSourceRmspEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveMapSourceRmspEnabled(false) }
         }
 
@@ -2603,8 +2745,9 @@ class SettingsViewModelTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            viewModel.setMapSourceRmspEnabled(false)
+            val result = runCatching { viewModel.setMapSourceRmspEnabled(false) }
 
+            assertTrue("setMapSourceRmspEnabled should complete successfully", result.isSuccess)
             // Should NOT save because RMSP is the only source
             coVerify(exactly = 0) { settingsRepository.saveMapSourceRmspEnabled(false) }
         }
@@ -2775,8 +2918,9 @@ class SettingsViewModelTest {
             }
 
             // Disable HTTP - should work without blocking
-            viewModel.setMapSourceHttpEnabled(false)
+            val result = runCatching { viewModel.setMapSourceHttpEnabled(false) }
 
+            assertTrue("setMapSourceHttpEnabled should complete successfully", result.isSuccess)
             // Verify the repository was called to save the setting
             coVerify { settingsRepository.saveMapSourceHttpEnabled(false) }
         }

@@ -18,7 +18,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -77,6 +79,15 @@ class SavedPeersViewModelTest {
     @Test
     fun `removeFavorite calls repository with correct parameters`() =
         runTest {
+            var setFavoriteCalled = false
+            var capturedHash: String? = null
+            var capturedFavorite: Boolean? = null
+            coEvery { announceRepository.setFavorite(any(), any()) } answers {
+                capturedHash = firstArg()
+                capturedFavorite = secondArg()
+                setFavoriteCalled = true
+            }
+
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -85,6 +96,9 @@ class SavedPeersViewModelTest {
             advanceUntilIdle()
 
             coVerify { announceRepository.setFavorite(testHash, false) }
+            assertTrue("setFavorite should be called", setFavoriteCalled)
+            assertEquals("Hash should match", testHash, capturedHash)
+            assertEquals("Favorite should be set to false", false, capturedFavorite)
         }
 
     @Test
@@ -111,6 +125,13 @@ class SavedPeersViewModelTest {
     @Test
     fun `deleteAnnounce calls repository with correct hash`() =
         runTest {
+            var deleteAnnounceCalled = false
+            var capturedHash: String? = null
+            coEvery { announceRepository.deleteAnnounce(any()) } answers {
+                capturedHash = firstArg()
+                deleteAnnounceCalled = true
+            }
+
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -119,6 +140,8 @@ class SavedPeersViewModelTest {
             advanceUntilIdle()
 
             coVerify { announceRepository.deleteAnnounce(testHash) }
+            assertTrue("deleteAnnounce should be called", deleteAnnounceCalled)
+            assertEquals("Hash should match", testHash, capturedHash)
         }
 
     @Test
@@ -145,6 +168,13 @@ class SavedPeersViewModelTest {
     @Test
     fun `toggleFavorite calls repository with correct hash`() =
         runTest {
+            var toggleFavoriteCalled = false
+            var capturedHash: String? = null
+            coEvery { announceRepository.toggleFavorite(any()) } answers {
+                capturedHash = firstArg()
+                toggleFavoriteCalled = true
+            }
+
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -153,6 +183,8 @@ class SavedPeersViewModelTest {
             advanceUntilIdle()
 
             coVerify { announceRepository.toggleFavorite(testHash) }
+            assertTrue("toggleFavorite should be called", toggleFavoriteCalled)
+            assertEquals("Hash should match", testHash, capturedHash)
         }
 
     @Test

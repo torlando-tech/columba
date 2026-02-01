@@ -53,9 +53,10 @@ class NetworkCardTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -73,10 +74,11 @@ class NetworkCardTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Configure how your device connects to the Reticulum network. " +
-                "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Configure how your device connects to the Reticulum network. " +
+                    "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
+            ).assertIsDisplayed()
     }
 
     // ========== Transport Node Toggle Tests ==========
@@ -114,9 +116,10 @@ class NetworkCardTest {
         composeTestRule.waitForIdle()
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -295,9 +298,10 @@ class NetworkCardTest {
         composeTestRule.waitForIdle()
 
         // Then - Should display disabled message
-        composeTestRule.onNodeWithText(
-            "Interface management is disabled while using a shared system instance.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Interface management is disabled while using a shared system instance.",
+            ).assertIsDisplayed()
     }
 
     @Test

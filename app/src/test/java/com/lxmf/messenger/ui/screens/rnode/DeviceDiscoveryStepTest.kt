@@ -9,10 +9,13 @@ import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.RNodeConnectionType
 import com.lxmf.messenger.viewmodel.RNodeWizardState
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -65,7 +68,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun unpairedDevice_cardClick_initiatesPairing() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(unpairedBleDevice),
@@ -74,6 +77,7 @@ class DeviceDiscoveryStepTest {
                 isAssociating = false,
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.initiateBluetoothPairing(any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -81,9 +85,13 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the device card (using device name as identifier)
-        composeTestRule.onNodeWithText("RNode 1234").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("RNode 1234").performClick()
+            }
 
         // Then - pairing should be initiated, not selection
+        assertTrue("Click on unpaired device card should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.initiateBluetoothPairing(unpairedBleDevice) }
         verify(exactly = 0) { mockViewModel.requestDeviceAssociation(any(), any()) }
         verify(exactly = 0) { mockViewModel.selectDevice(any()) }
@@ -92,7 +100,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun pairedDevice_cardClick_selectsDevice() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(pairedBleDevice),
@@ -101,6 +109,7 @@ class DeviceDiscoveryStepTest {
                 isAssociating = false,
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.requestDeviceAssociation(any(), any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -108,9 +117,13 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the device card
-        composeTestRule.onNodeWithText("RNode 5678").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("RNode 5678").performClick()
+            }
 
         // Then - selection should occur, not pairing
+        assertTrue("Click on paired device card should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.requestDeviceAssociation(pairedBleDevice, any()) }
         verify(exactly = 0) { mockViewModel.initiateBluetoothPairing(any()) }
     }
@@ -118,7 +131,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun unknownTypeDevice_cardClick_showsTypeSelector() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(unknownTypeDevice),
@@ -150,7 +163,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun unpairedDevice_pairTextButton_initiatesPairing() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(unpairedBleDevice),
@@ -159,6 +172,7 @@ class DeviceDiscoveryStepTest {
                 isAssociating = false,
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.initiateBluetoothPairing(any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -166,9 +180,13 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the "Pair" text button specifically
-        composeTestRule.onNodeWithText("Pair").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Pair").performClick()
+            }
 
         // Then - pairing should be initiated
+        assertTrue("Click on Pair button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.initiateBluetoothPairing(unpairedBleDevice) }
     }
 
@@ -177,7 +195,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun reconnectWaitingState_showsWaitingCard() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(unpairedBleDevice),
@@ -198,7 +216,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun reconnectWaitingState_showsDeviceName() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = emptyList(),
@@ -219,7 +237,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun reconnectWaitingState_cancelButton_callsCancelReconnectScan() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = emptyList(),
@@ -227,6 +245,7 @@ class DeviceDiscoveryStepTest {
                 reconnectDeviceName = "RNode 1234",
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.cancelReconnectScan() } just Runs
 
         // When
         composeTestRule.setContent {
@@ -234,16 +253,20 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the Cancel button
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Cancel").performClick()
+            }
 
         // Then - cancelReconnectScan should be called
+        assertTrue("Click on Cancel button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.cancelReconnectScan() }
     }
 
     @Test
     fun reconnectWaitingState_notShownWhenFalse() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 discoveredDevices = listOf(unpairedBleDevice),
@@ -266,7 +289,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpMode_showsConnectionForm() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -288,7 +311,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpMode_hidesBluetoothDeviceList() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -309,7 +332,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpValidation_inProgress_showsSpinner() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -330,7 +353,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpValidation_success_showsCheckmark() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -353,7 +376,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpValidation_failure_showsErrorIcon() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -376,7 +399,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun tcpErrorMessage_displaysCorrectly() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.TCP_WIFI,
@@ -399,7 +422,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun manualEntryForm_showsOnButtonClick() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -407,6 +430,7 @@ class DeviceDiscoveryStepTest {
                 showManualEntry = false,
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.showManualEntry() } just Runs
 
         // When
         composeTestRule.setContent {
@@ -414,16 +438,20 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the manual entry button
-        composeTestRule.onNodeWithText("Enter device manually").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Enter device manually").performClick()
+            }
 
         // Then - should call showManualEntry
+        assertTrue("Click on 'Enter device manually' button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.showManualEntry() }
     }
 
     @Test
     fun manualEntryForm_showsValidationError() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -445,7 +473,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun manualEntryForm_showsWarningForNonRNodeName() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -467,7 +495,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun bluetoothTypeChips_updateOnSelection() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -475,6 +503,7 @@ class DeviceDiscoveryStepTest {
                 manualBluetoothType = BluetoothType.CLASSIC,
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.updateManualBluetoothType(any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -482,16 +511,20 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the BLE chip
-        composeTestRule.onNodeWithText("Bluetooth LE").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Bluetooth LE").performClick()
+            }
 
         // Then - should update manual bluetooth type
+        assertTrue("Click on 'Bluetooth LE' chip should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.updateManualBluetoothType(BluetoothType.BLE) }
     }
 
     @Test
     fun cancelManualEntry_hidesForm() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -499,6 +532,7 @@ class DeviceDiscoveryStepTest {
                 manualDeviceName = "RNode 1234",
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.hideManualEntry() } just Runs
 
         // When
         composeTestRule.setContent {
@@ -506,9 +540,13 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the cancel button
-        composeTestRule.onNodeWithText("Cancel manual entry").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Cancel manual entry").performClick()
+            }
 
         // Then - should hide manual entry
+        assertTrue("Click on 'Cancel manual entry' button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.hideManualEntry() }
     }
 
@@ -517,7 +555,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun unknownTypeDeviceCard_showsTypeSelectorOnClick() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -540,13 +578,14 @@ class DeviceDiscoveryStepTest {
     @Test
     fun typeSelector_bleChip_setsDeviceType() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 discoveredDevices = listOf(unknownTypeDevice),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.setDeviceType(any(), any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -557,22 +596,27 @@ class DeviceDiscoveryStepTest {
         composeTestRule.onNodeWithText("RNode ABCD").performClick()
 
         // Then click the BLE chip
-        composeTestRule.onNodeWithText("Bluetooth LE").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Bluetooth LE").performClick()
+            }
 
         // Then - should set device type
+        assertTrue("Click on 'Bluetooth LE' chip should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.setDeviceType(unknownTypeDevice, BluetoothType.BLE) }
     }
 
     @Test
     fun typeSelector_classicChip_setsDeviceType() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 discoveredDevices = listOf(unknownTypeDevice),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.setDeviceType(any(), any()) } just Runs
 
         // When
         composeTestRule.setContent {
@@ -583,16 +627,20 @@ class DeviceDiscoveryStepTest {
         composeTestRule.onNodeWithText("RNode ABCD").performClick()
 
         // Then click the Classic chip
-        composeTestRule.onNodeWithText("Bluetooth Classic").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Bluetooth Classic").performClick()
+            }
 
         // Then - should set device type
+        assertTrue("Click on 'Bluetooth Classic' chip should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.setDeviceType(unknownTypeDevice, BluetoothType.CLASSIC) }
     }
 
     @Test
     fun associatingState_showsProgressIndicator() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -615,7 +663,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun pairingInProgress_showsSpinnerOnPairButton() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -639,7 +687,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun editMode_showsCurrentDeviceSection() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -663,7 +711,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun editMode_allowsSelectingDifferentDevice() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -688,7 +736,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun usbPairingMode_showsPairingCard_withPinDisplay() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.USB_SERIAL,
@@ -711,7 +759,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun usbPairingMode_exitButton_callsExitPairingMode() {
         // Given - test in Bluetooth tab where the same card is also used
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
@@ -719,6 +767,7 @@ class DeviceDiscoveryStepTest {
                 usbBluetoothPin = "5678",
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.exitUsbBluetoothPairingMode() } just Runs
 
         // When
         composeTestRule.setContent {
@@ -730,19 +779,23 @@ class DeviceDiscoveryStepTest {
         exitButton.assertExists()
 
         // Check if button is enabled and perform click
-        exitButton.performClick()
+        val result =
+            runCatching {
+                exitButton.performClick()
+            }
 
         // Wait for idle after click
         composeTestRule.waitForIdle()
 
         // Then
+        assertTrue("Click on 'Exit Pairing Mode' button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.exitUsbBluetoothPairingMode() }
     }
 
     @Test
     fun usbPairingMode_showsManualPinEntry_whenNoPin() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.USB_SERIAL,
@@ -765,7 +818,7 @@ class DeviceDiscoveryStepTest {
     @Test
     fun usbPairingMode_showsStatusMessage() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.USB_SERIAL,
@@ -786,13 +839,14 @@ class DeviceDiscoveryStepTest {
     @Test
     fun bluetoothTab_pairViaUsb_button_startsUsbAssistedPairing() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 discoveredDevices = emptyList(),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.startUsbAssistedPairing() } just Runs
 
         // When
         composeTestRule.setContent {
@@ -800,16 +854,20 @@ class DeviceDiscoveryStepTest {
         }
 
         // Click the "Pair via USB" button
-        composeTestRule.onNodeWithText("Pair via USB").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Pair via USB").performClick()
+            }
 
         // Then
+        assertTrue("Click on 'Pair via USB' button should succeed", result.isSuccess)
         verify(exactly = 1) { mockViewModel.startUsbAssistedPairing() }
     }
 
     @Test
     fun bluetoothTab_showsUsbPairingCard_whenPairingModeActive() {
         // Given
-        val mockViewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<RNodeWizardViewModel>()
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,

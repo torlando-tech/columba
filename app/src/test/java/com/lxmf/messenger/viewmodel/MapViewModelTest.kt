@@ -14,10 +14,12 @@ import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.test.TestFactories
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -71,21 +73,25 @@ class MapViewModelTest {
         MapViewModel.enablePeriodicRefresh = false
 
         savedStateHandle = SavedStateHandle()
-        contactRepository = mockk(relaxed = true)
-        receivedLocationDao = mockk(relaxed = true)
-        locationSharingManager = mockk(relaxed = true)
-        announceDao = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        mapTileSourceManager = mockk(relaxed = true)
+        contactRepository = mockk()
+        receivedLocationDao = mockk()
+        locationSharingManager = mockk()
+        announceDao = mockk()
+        settingsRepository = mockk()
+        mapTileSourceManager = mockk()
 
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
-        every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+        every { locationSharingManager.startSharing(any(), any(), any()) } just Runs
+        every { locationSharingManager.stopSharing(any()) } just Runs
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
+        coEvery { settingsRepository.markLocationPermissionSheetDismissed() } just Runs
+        coEvery { settingsRepository.setHttpEnabledForDownload(any()) } just Runs
         coEvery { mapTileSourceManager.getMapStyle(any(), any()) } returns MapStyleResult.Online(MapTileSourceManager.DEFAULT_STYLE_URL)
+        coEvery { mapTileSourceManager.setHttpEnabled(any()) } just Runs
         every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
     }
@@ -923,8 +929,9 @@ class MapViewModelTest {
                 )
             val duration = com.lxmf.messenger.ui.model.SharingDuration.ONE_HOUR
 
-            viewModel.startSharing(selectedContacts, duration)
+            val result = runCatching { viewModel.startSharing(selectedContacts, duration) }
 
+            assertTrue("startSharing should complete successfully", result.isSuccess)
             verify {
                 locationSharingManager.startSharing(
                     listOf("hash1", "hash2"),
@@ -948,8 +955,9 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES)
+            val result = runCatching { viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES) }
 
+            assertTrue("startSharing with empty list should complete successfully", result.isSuccess)
             verify {
                 locationSharingManager.startSharing(emptyList(), emptyMap(), any())
             }
@@ -977,8 +985,9 @@ class MapViewModelTest {
                     ),
                 )
 
-            viewModel.startSharing(selectedContacts, com.lxmf.messenger.ui.model.SharingDuration.INDEFINITE)
+            val result = runCatching { viewModel.startSharing(selectedContacts, com.lxmf.messenger.ui.model.SharingDuration.INDEFINITE) }
 
+            assertTrue("startSharing with single contact should complete successfully", result.isSuccess)
             verify {
                 locationSharingManager.startSharing(
                     listOf("single_hash"),
@@ -1004,8 +1013,9 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.stopSharing()
+            val result = runCatching { viewModel.stopSharing() }
 
+            assertTrue("stopSharing should complete successfully", result.isSuccess)
             verify {
                 locationSharingManager.stopSharing(null)
             }
@@ -1025,8 +1035,9 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.stopSharing("specific_hash")
+            val result = runCatching { viewModel.stopSharing("specific_hash") }
 
+            assertTrue("stopSharing with specific hash should complete successfully", result.isSuccess)
             verify {
                 locationSharingManager.stopSharing("specific_hash")
             }
@@ -1046,10 +1057,13 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.stopSharing("hash1")
-            viewModel.stopSharing("hash2")
-            viewModel.stopSharing()
+            val result1 = runCatching { viewModel.stopSharing("hash1") }
+            val result2 = runCatching { viewModel.stopSharing("hash2") }
+            val result3 = runCatching { viewModel.stopSharing() }
 
+            assertTrue("First stopSharing should complete successfully", result1.isSuccess)
+            assertTrue("Second stopSharing should complete successfully", result2.isSuccess)
+            assertTrue("Third stopSharing should complete successfully", result3.isSuccess)
             verify(exactly = 1) { locationSharingManager.stopSharing("hash1") }
             verify(exactly = 1) { locationSharingManager.stopSharing("hash2") }
             verify(exactly = 1) { locationSharingManager.stopSharing(null) }
@@ -1609,8 +1623,9 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.enableHttp()
+            val result = runCatching { viewModel.enableHttp() }
 
+            assertTrue("enableHttp should complete successfully", result.isSuccess)
             // Verify it clears the download flag and enables HTTP
             coVerify { settingsRepository.setHttpEnabledForDownload(false) }
             coVerify { mapTileSourceManager.setHttpEnabled(true) }
@@ -1630,8 +1645,9 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.enableHttp()
+            val result = runCatching { viewModel.enableHttp() }
 
+            assertTrue("enableHttp should complete successfully", result.isSuccess)
             // Verify getMapStyle is called (initial + after enableHttp)
             coVerify(atLeast = 2) { mapTileSourceManager.getMapStyle(any(), any()) }
         }
@@ -1656,8 +1672,9 @@ class MapViewModelTest {
                 )
 
             // Change HTTP enabled state
-            httpEnabledFlow.value = false
+            val result = runCatching { httpEnabledFlow.value = false }
 
+            assertTrue("Changing httpEnabledFlow should complete successfully", result.isSuccess)
             // Verify getMapStyle was called multiple times (initial + after flow change)
             coVerify(atLeast = 2) { mapTileSourceManager.getMapStyle(any(), any()) }
         }
@@ -1742,6 +1759,8 @@ class MapViewModelTest {
         }
 
     // Helper function to create mock Location
+    // Location is an Android framework class that requires relaxed mocking
+    @Suppress("NoRelaxedMocks")
     private fun createMockLocation(
         lat: Double,
         lng: Double,

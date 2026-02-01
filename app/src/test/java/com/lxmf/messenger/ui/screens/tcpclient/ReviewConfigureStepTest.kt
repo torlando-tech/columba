@@ -10,10 +10,14 @@ import androidx.compose.ui.test.performTextInput
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TcpClientWizardTestFixtures
 import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -41,7 +45,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_displaysServerLabel() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -59,7 +63,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_selectedServer_displaysServerName() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(
@@ -79,7 +83,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_customMode_displaysCustomServerText() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.customModeReviewState(),
@@ -99,7 +103,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_displaysInterfaceNameField() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -117,7 +121,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_displaysTargetHostField() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -135,7 +139,7 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_displaysTargetPortField() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -155,11 +159,13 @@ class ReviewConfigureStepTest {
     @Test
     fun reviewStep_onInterfaceNameChange_callsViewModel() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val capturedName = slot<String>()
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(interfaceName = ""),
             )
+        every { mockViewModel.updateInterfaceName(capture(capturedName)) } just Runs
 
         composeTestRule.setContent {
             ReviewConfigureStep(viewModel = mockViewModel)
@@ -169,17 +175,20 @@ class ReviewConfigureStepTest {
         composeTestRule.onNodeWithText("Interface Name").performTextInput("New Name")
 
         // Then
-        verify { mockViewModel.updateInterfaceName("New Name") }
+        assertTrue(capturedName.isCaptured)
+        assertEquals("New Name", capturedName.captured)
     }
 
     @Test
     fun reviewStep_onTargetHostChange_callsViewModel() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val capturedHost = slot<String>()
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.customModeReviewState(targetHost = ""),
             )
+        every { mockViewModel.updateTargetHost(capture(capturedHost)) } just Runs
 
         composeTestRule.setContent {
             ReviewConfigureStep(viewModel = mockViewModel)
@@ -189,17 +198,20 @@ class ReviewConfigureStepTest {
         composeTestRule.onNodeWithText("Target Host").performTextInput("new.host.com")
 
         // Then
-        verify { mockViewModel.updateTargetHost("new.host.com") }
+        assertTrue(capturedHost.isCaptured)
+        assertEquals("new.host.com", capturedHost.captured)
     }
 
     @Test
     fun reviewStep_onTargetPortChange_callsViewModel() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val capturedPort = slot<String>()
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.customModeReviewState(targetPort = ""),
             )
+        every { mockViewModel.updateTargetPort(capture(capturedPort)) } just Runs
 
         composeTestRule.setContent {
             ReviewConfigureStep(viewModel = mockViewModel)
@@ -209,13 +221,14 @@ class ReviewConfigureStepTest {
         composeTestRule.onNodeWithText("Target Port").performTextInput("5000")
 
         // Then
-        verify { mockViewModel.updateTargetPort("5000") }
+        assertTrue(capturedPort.isCaptured)
+        assertEquals("5000", capturedPort.captured)
     }
 
     @Test
     fun reviewStep_displaysCurrentFieldValues() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(

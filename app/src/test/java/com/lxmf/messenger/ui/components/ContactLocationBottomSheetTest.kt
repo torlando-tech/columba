@@ -11,8 +11,6 @@ import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MarkerState
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -142,7 +140,7 @@ class ContactLocationBottomSheetTest {
     @Test
     fun `formatDistanceAndDirection formats meters for short distances`() {
         // San Francisco coordinates
-        val userLocation = createMockLocation(37.7749, -122.4194)
+        val userLocation = createTestLocation(37.7749, -122.4194)
 
         // Location very close (~500m away)
         val result = formatDistanceAndDirection(userLocation, 37.7799, -122.4194)
@@ -152,14 +150,16 @@ class ContactLocationBottomSheetTest {
         // Should contain a direction
         assertTrue(
             "Result should contain a direction: $result",
-            result.contains("north") || result.contains("south") ||
-                result.contains("east") || result.contains("west"),
+            result.contains("north") ||
+                result.contains("south") ||
+                result.contains("east") ||
+                result.contains("west"),
         )
     }
 
     @Test
     fun `formatDistanceAndDirection formats kilometers for long distances`() {
-        val userLocation = createMockLocation(37.7749, -122.4194) // San Francisco
+        val userLocation = createTestLocation(37.7749, -122.4194) // San Francisco
 
         // Location ~10km away
         val result = formatDistanceAndDirection(userLocation, 37.8749, -122.4194)
@@ -170,7 +170,7 @@ class ContactLocationBottomSheetTest {
 
     @Test
     fun `formatDistanceAndDirection includes direction`() {
-        val userLocation = createMockLocation(37.7749, -122.4194)
+        val userLocation = createTestLocation(37.7749, -122.4194)
 
         // Location to the east
         val result = formatDistanceAndDirection(userLocation, 37.7749, -122.3194)
@@ -377,22 +377,21 @@ class ContactLocationBottomSheetTest {
 
     // ========== Helper Functions ==========
 
-    private fun createMockLocation(
+    private fun createTestLocation(
         lat: Double,
         lng: Double,
-    ): Location {
-        val location = mockk<Location>(relaxed = true)
-        every { location.latitude } returns lat
-        every { location.longitude } returns lng
-        return location
-    }
+    ): Location =
+        Location("test").apply {
+            latitude = lat
+            longitude = lng
+        }
 
     private fun createTestMarker(
         name: String,
         state: MarkerState,
         timestamp: Long = System.currentTimeMillis(),
-    ): ContactMarker {
-        return ContactMarker(
+    ): ContactMarker =
+        ContactMarker(
             destinationHash = "hash_$name",
             displayName = name,
             latitude = 37.7749,
@@ -401,5 +400,4 @@ class ContactLocationBottomSheetTest {
             state = state,
             approximateRadius = 0,
         )
-    }
 }

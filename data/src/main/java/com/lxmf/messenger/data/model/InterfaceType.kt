@@ -26,7 +26,7 @@ enum class InterfaceType {
             val name = interfaceName.lowercase()
             return when {
                 name.contains("autointerface") -> AUTO_INTERFACE
-                name.contains("tcpclient") || name.contains("tcpinterface") -> TCP_CLIENT
+                name.contains("tcpclient") || name.contains("tcpinterface") || name.contains("backbone") -> TCP_CLIENT
                 name.contains("ble") || name.contains("androidble") -> ANDROID_BLE
                 name.contains("rnode") -> RNODE
                 else -> UNKNOWN

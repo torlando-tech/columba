@@ -9,6 +9,7 @@ plugins {
     id("com.chaquo.python") version "16.0.0" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.21" apply false
     id("io.sentry.android.gradle") version "5.3.0" apply false
+    id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
@@ -94,8 +95,18 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
     group = "verification"
     description = "Generate unified Jacoco coverage report for all modules"
 
-    // Only depend on debug unit tests to avoid Robolectric issues with release builds
-    dependsOn(subprojects.mapNotNull { it.tasks.findByName("testDebugUnitTest") })
+    // Depend on unit tests from all modules:
+    // - app: noSentryDebug variant (sentry/noSentry share the same code)
+    // - reticulum, data: debug variant (no product flavors)
+    subprojects.forEach { subproject ->
+        // Try noSentryDebugUnitTest first (for app module), fall back to debugUnitTest (for other modules)
+        val testTask =
+            subproject.tasks.findByName("testNoSentryDebugUnitTest")
+                ?: subproject.tasks.findByName("testDebugUnitTest")
+        if (testTask != null) {
+            dependsOn(testTask)
+        }
+    }
 
     // Use lazy configuration - fileTree is resolved at execution time, not registration time
     val sourceDirectoriesList = mutableListOf<File>()
@@ -116,8 +127,11 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
         // Add patterns for class directories and exec data (resolved at execution time)
         val buildDir = subproject.layout.buildDirectory.get().asFile
         // Use ASM-transformed classes which contain all classes including UI/Compose
+        // Try both variant paths - noSentryDebug for app, debug for other modules
+        classDirectoriesList.add(File("$buildDir/intermediates/classes/noSentryDebug/transformNoSentryDebugClassesWithAsm/dirs"))
         classDirectoriesList.add(File("$buildDir/intermediates/classes/debug/transformDebugClassesWithAsm/dirs"))
         // Android puts coverage data in outputs/unit_test_code_coverage/
+        execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/noSentryDebugUnitTest")
         execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/debugUnitTest")
     }
 

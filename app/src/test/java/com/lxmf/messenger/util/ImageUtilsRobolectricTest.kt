@@ -129,12 +129,11 @@ class ImageUtilsRobolectricTest {
     private fun createTestBitmap(
         width: Int,
         height: Int,
-    ): Bitmap {
-        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+    ): Bitmap =
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
             // Fill with a solid color to make it compressible
             eraseColor(Color.BLUE)
         }
-    }
 
     // ========== CompressionResult with preset values ==========
 

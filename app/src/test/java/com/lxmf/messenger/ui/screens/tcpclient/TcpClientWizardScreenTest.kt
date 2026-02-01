@@ -12,7 +12,9 @@ import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.test.TcpClientWizardTestFixtures
 import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +46,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun serverSelectionStep_displaysChooseServerTitle() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(),
@@ -68,7 +70,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun reviewConfigureStep_displaysReviewSettingsTitle() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -94,7 +96,7 @@ class TcpClientWizardScreenTest {
     fun backButton_onFirstStep_callsNavigateBack() {
         // Given
         var backClicked = false
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(),
@@ -120,12 +122,13 @@ class TcpClientWizardScreenTest {
     @Test
     fun backButton_onSecondStep_callsPreviousStep() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
             )
         every { mockViewModel.canProceed() } returns true
+        every { mockViewModel.goToPreviousStep() } just Runs
 
         composeTestRule.setContent {
             TcpClientWizardScreen(
@@ -136,9 +139,13 @@ class TcpClientWizardScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithContentDescription("Back").performClick()
+            }
 
         // Then
+        assertTrue("Back button click should succeed", result.isSuccess)
         verify { mockViewModel.goToPreviousStep() }
     }
 
@@ -147,7 +154,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun serverSelectionStep_showsNextButton() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(
@@ -173,7 +180,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun reviewConfigureStep_showsSaveButton() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
@@ -196,7 +203,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun nextButton_click_goesToNextStep() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(
@@ -205,6 +212,7 @@ class TcpClientWizardScreenTest {
             )
         every { mockViewModel.canProceed() } returns true
         every { mockViewModel.getCommunityServers() } returns TcpClientWizardTestFixtures.testServers
+        every { mockViewModel.goToNextStep() } just Runs
 
         composeTestRule.setContent {
             TcpClientWizardScreen(
@@ -215,21 +223,26 @@ class TcpClientWizardScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithText("Next").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Next").performClick()
+            }
 
         // Then
+        assertTrue("Next button click should succeed", result.isSuccess)
         verify { mockViewModel.goToNextStep() }
     }
 
     @Test
     fun saveButton_click_callsSaveConfiguration() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.reviewConfigureState(),
             )
         every { mockViewModel.canProceed() } returns true
+        every { mockViewModel.saveConfiguration() } just Runs
 
         composeTestRule.setContent {
             TcpClientWizardScreen(
@@ -240,16 +253,20 @@ class TcpClientWizardScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithText("Save").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("Save").performClick()
+            }
 
         // Then
+        assertTrue("Save button click should succeed", result.isSuccess)
         verify { mockViewModel.saveConfiguration() }
     }
 
     @Test
     fun nextButton_disabled_whenCannotProceed() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         // No server selected
         every { mockViewModel.state } returns
             MutableStateFlow(
@@ -276,7 +293,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun saveError_displaysErrorDialog() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.errorState("Connection failed"),
@@ -300,12 +317,13 @@ class TcpClientWizardScreenTest {
     @Test
     fun errorDialog_okButton_clearsError() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.errorState("Connection failed"),
             )
         every { mockViewModel.canProceed() } returns true
+        every { mockViewModel.clearSaveError() } just Runs
 
         composeTestRule.setContent {
             TcpClientWizardScreen(
@@ -316,9 +334,13 @@ class TcpClientWizardScreenTest {
         }
 
         // When
-        composeTestRule.onNodeWithText("OK").performClick()
+        val result =
+            runCatching {
+                composeTestRule.onNodeWithText("OK").performClick()
+            }
 
         // Then
+        assertTrue("OK button click should succeed", result.isSuccess)
         verify { mockViewModel.clearSaveError() }
     }
 
@@ -328,7 +350,7 @@ class TcpClientWizardScreenTest {
     fun saveSuccess_callsOnComplete() {
         // Given
         var completeCalled = false
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.successState(),
@@ -353,7 +375,7 @@ class TcpClientWizardScreenTest {
     @Test
     fun savingState_buttonShowsLoadingIndicator() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.savingState(),

@@ -33,7 +33,7 @@ class ColumbaApplicationTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockProtocol = mockk(relaxed = true)
+        mockProtocol = mockk()
     }
 
     @After
@@ -109,7 +109,7 @@ class ColumbaApplicationTest {
     fun `withTimeoutOrNull for getLxmfIdentity returns identity when fast`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>(relaxed = true)
+            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } coAnswers {
                 delay(100)
                 Result.success(mockIdentity)
@@ -131,7 +131,7 @@ class ColumbaApplicationTest {
     fun `getLxmfIdentity returns identity when mock succeeds`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>(relaxed = true)
+            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
 
             // Act
@@ -272,7 +272,8 @@ class ColumbaApplicationTest {
         val expected = byteArrayOf(0x12, 0x34, 0xAB.toByte(), 0xCD.toByte())
 
         val result =
-            hex.chunked(2)
+            hex
+                .chunked(2)
                 .map { it.toInt(16).toByte() }
                 .toByteArray()
 
@@ -285,7 +286,8 @@ class ColumbaApplicationTest {
         val expected = byteArrayOf()
 
         val result =
-            hex.chunked(2)
+            hex
+                .chunked(2)
                 .filter { it.isNotEmpty() }
                 .map { it.toInt(16).toByte() }
                 .toByteArray()

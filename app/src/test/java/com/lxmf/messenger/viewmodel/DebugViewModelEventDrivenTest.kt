@@ -15,7 +15,6 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coJustRun
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +55,7 @@ class DebugViewModelEventDrivenTest {
 
     private val debugInfoFlow = MutableSharedFlow<String>(replay = 1)
 
+    @Suppress("NoRelaxedMocks") // Protocol/Repository mocks with many unused methods in these tests
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -219,15 +219,20 @@ class DebugViewModelEventDrivenTest {
     fun `observeDebugInfo falls back to fetchDebugInfo for non-ServiceProtocol`() =
         runTest {
             // Given - use a non-ServiceReticulumProtocol mock
+            // Protocol with many methods - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
             val nonServiceProtocol = mockk<ReticulumProtocol>(relaxed = true)
+            var getDebugInfoCalled = false
             every { nonServiceProtocol.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
-            coEvery { nonServiceProtocol.getDebugInfo() } returns
+            coEvery { nonServiceProtocol.getDebugInfo() } answers {
+                getDebugInfoCalled = true
                 mapOf(
                     "initialized" to true,
                     "reticulum_available" to true,
                     "storage_path" to "/fallback/path",
                     "interfaces" to emptyList<Map<String, Any>>(),
                 )
+            }
             coEvery { nonServiceProtocol.getFailedInterfaces() } returns emptyList()
 
             // When - create ViewModel with non-service protocol
@@ -242,7 +247,8 @@ class DebugViewModelEventDrivenTest {
             advanceUntilIdle()
 
             // Then - should have called getDebugInfo for fallback
-            coVerify { nonServiceProtocol.getDebugInfo() }
+            assertTrue("getDebugInfo should be called for non-service protocol", getDebugInfoCalled)
+            assertTrue("ViewModel should be created successfully", viewModel.debugInfo != null)
         }
 
     // ========== Interface Parsing Tests ==========

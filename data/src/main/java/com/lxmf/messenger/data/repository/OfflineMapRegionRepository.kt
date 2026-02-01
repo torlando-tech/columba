@@ -235,7 +235,8 @@ class OfflineMapRegionRepository
             return offlineMapsDir
                 .listFiles { file ->
                     file.extension == "mbtiles" && file.absolutePath !in trackedPaths
-                }?.toList() ?: emptyList()
+                }?.toList()
+                .orEmpty()
         }
 
         /**

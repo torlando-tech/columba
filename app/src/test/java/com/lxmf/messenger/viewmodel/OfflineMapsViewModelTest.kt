@@ -14,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,9 +57,16 @@ class OfflineMapsViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    // Android framework class - requires relaxed mock for complex internal state
+    @Suppress("NoRelaxedMocks")
     private lateinit var context: Context
+
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
+
+    // Android-dependent class with complex callback-based APIs
+    @Suppress("NoRelaxedMocks")
     private val mockMapLibreOfflineManager: MapLibreOfflineManager = mockk(relaxed = true)
+
     private lateinit var viewModel: OfflineMapsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -69,8 +77,9 @@ class OfflineMapsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        @Suppress("NoRelaxedMocks") // Android framework class
         context = mockk(relaxed = true)
-        offlineMapRegionRepository = mockk(relaxed = true)
+        offlineMapRegionRepository = mockk()
 
         // Setup repository flow mocks
         every { offlineMapRegionRepository.getAllRegions() } returns regionsFlow
@@ -83,13 +92,12 @@ class OfflineMapsViewModelTest {
         clearAllMocks()
     }
 
-    private fun createViewModel(): OfflineMapsViewModel {
-        return OfflineMapsViewModel(
+    private fun createViewModel(): OfflineMapsViewModel =
+        OfflineMapsViewModel(
             context = context,
             offlineMapRegionRepository = offlineMapRegionRepository,
             mapLibreOfflineManager = mockMapLibreOfflineManager,
         )
-    }
 
     /**
      * Configuration for test region creation.
@@ -358,6 +366,8 @@ class OfflineMapsViewModelTest {
             viewModel.deleteRegion(testRegion)
 
             coVerify { offlineMapRegionRepository.deleteRegion(42L) }
+            // Verify deletion completed (isDeleting returns to false)
+            assertFalse(viewModel.state.value.isDeleting)
         }
 
     @Test
@@ -386,8 +396,9 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
         }
 
@@ -399,8 +410,9 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Should not throw
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
         }
 
@@ -723,9 +735,11 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Call delete on multiple regions concurrently
-            viewModel.deleteRegion(region1)
-            viewModel.deleteRegion(region2)
+            val result1 = runCatching { viewModel.deleteRegion(region1) }
+            val result2 = runCatching { viewModel.deleteRegion(region2) }
 
+            assertTrue("First deleteRegion should complete without throwing", result1.isSuccess)
+            assertTrue("Second deleteRegion should complete without throwing", result2.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(1) }
             coVerify { offlineMapRegionRepository.deleteRegion(2) }
         }
@@ -854,10 +868,11 @@ class OfflineMapsViewModelTest {
             viewModel = createViewModel()
 
             // Trigger deletion - with UnconfinedTestDispatcher this completes synchronously
-            viewModel.deleteRegion(testRegion)
+            val result = runCatching { viewModel.deleteRegion(testRegion) }
 
             // Repository delete SHOULD be called even when file delete fails
             // This ensures the region is removed from the database to keep UI consistent
+            assertTrue("deleteRegion should complete without throwing", result.isSuccess)
             coVerify { offlineMapRegionRepository.deleteRegion(testRegion.id) }
 
             // Cleanup
@@ -1113,8 +1128,11 @@ class OfflineMapsViewModelTest {
             viewModel.deleteRegion(testRegion)
 
             // Verify MapLibre deletion was called
-            io.mockk.verify { mockMapLibreOfflineManager.deleteRegion(100L, any()) }
+            verify { mockMapLibreOfflineManager.deleteRegion(100L, any()) }
             coVerify { offlineMapRegionRepository.deleteRegion(1L) }
+            // Verify deletion completed successfully (no error, not deleting)
+            assertFalse(viewModel.state.value.isDeleting)
+            assertNull(viewModel.state.value.errorMessage)
         }
 
     @Test
@@ -1130,8 +1148,11 @@ class OfflineMapsViewModelTest {
             viewModel.deleteRegion(testRegion)
 
             // Verify MapLibre deletion was NOT called (no maplibreRegionId)
-            io.mockk.verify(exactly = 0) { mockMapLibreOfflineManager.deleteRegion(any(), any()) }
+            verify(exactly = 0) { mockMapLibreOfflineManager.deleteRegion(any(), any()) }
             coVerify { offlineMapRegionRepository.deleteRegion(1L) }
+            // Verify deletion completed successfully (no error, not deleting)
+            assertFalse(viewModel.state.value.isDeleting)
+            assertNull(viewModel.state.value.errorMessage)
         }
 
     // endregion

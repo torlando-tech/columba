@@ -75,8 +75,8 @@ class ContactsViewModelTest {
         every { Log.i(any(), any()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
 
-        contactRepository = mockk(relaxed = true)
-        propagationNodeManager = mockk(relaxed = true)
+        contactRepository = mockk()
+        propagationNodeManager = mockk()
 
         every { contactRepository.getEnrichedContacts() } returns contactsFlow
         every { contactRepository.getContactCountFlow() } returns contactCountFlow
@@ -467,10 +467,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
 
             // When
-            viewModel.addContactFromAnnounce(testDestHash, testPublicKey)
+            val result = runCatching { viewModel.addContactFromAnnounce(testDestHash, testPublicKey) }
             advanceUntilIdle()
 
             // Then
+            assertTrue("addContactFromAnnounce should complete without exception", result.isSuccess)
             coVerify { contactRepository.addContactFromAnnounce(testDestHash, testPublicKey) }
         }
 
@@ -481,10 +482,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.addContactManually(any(), any(), any()) } returns Result.success(Unit)
 
             // When
-            viewModel.addContactManually(testDestHash, testPublicKey, "Nickname")
+            val result = runCatching { viewModel.addContactManually(testDestHash, testPublicKey, "Nickname") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("addContactManually should complete without exception", result.isSuccess)
             coVerify { contactRepository.addContactManually(testDestHash, testPublicKey, "Nickname") }
         }
 
@@ -495,10 +497,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.deleteContact(any()) } just Runs
 
             // When
-            viewModel.deleteContact(testDestHash)
+            val result = runCatching { viewModel.deleteContact(testDestHash) }
             advanceUntilIdle()
 
             // Then
+            assertTrue("deleteContact should complete without exception", result.isSuccess)
             coVerify { contactRepository.deleteContact(testDestHash) }
         }
 
@@ -506,14 +509,16 @@ class ContactsViewModelTest {
     fun `unsetRelayAndDelete - deletes and triggers reselection`() =
         runTest {
             // Given
+            coEvery { propagationNodeManager.excludeFromAutoSelect(any()) } just Runs
             coEvery { contactRepository.deleteContact(any()) } just Runs
             coEvery { propagationNodeManager.onRelayDeleted() } just Runs
 
             // When
-            viewModel.unsetRelayAndDelete(testDestHash)
+            val result = runCatching { viewModel.unsetRelayAndDelete(testDestHash) }
             advanceUntilIdle()
 
             // Then
+            assertTrue("unsetRelayAndDelete should complete without exception", result.isSuccess)
             coVerify { contactRepository.deleteContact(testDestHash) }
             coVerify { propagationNodeManager.onRelayDeleted() }
         }
@@ -527,10 +532,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.updateNickname(any(), any()) } just Runs
 
             // When
-            viewModel.updateNickname(testDestHash, "New Nickname")
+            val result = runCatching { viewModel.updateNickname(testDestHash, "New Nickname") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("updateNickname should complete without exception", result.isSuccess)
             coVerify { contactRepository.updateNickname(testDestHash, "New Nickname") }
         }
 
@@ -541,10 +547,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.updateNotes(any(), any()) } just Runs
 
             // When
-            viewModel.updateNotes(testDestHash, "Some notes")
+            val result = runCatching { viewModel.updateNotes(testDestHash, "Some notes") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("updateNotes should complete without exception", result.isSuccess)
             coVerify { contactRepository.updateNotes(testDestHash, "Some notes") }
         }
 
@@ -555,10 +562,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.togglePin(any()) } just Runs
 
             // When
-            viewModel.togglePin(testDestHash)
+            val result = runCatching { viewModel.togglePin(testDestHash) }
             advanceUntilIdle()
 
             // Then
+            assertTrue("togglePin should complete without exception", result.isSuccess)
             coVerify { contactRepository.togglePin(testDestHash) }
         }
 
@@ -704,10 +712,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.resetContactForRetry(any()) } returns Result.success(Unit)
 
             // When
-            viewModel.retryIdentityResolution(testDestHash)
+            val result = runCatching { viewModel.retryIdentityResolution(testDestHash) }
             advanceUntilIdle()
 
             // Then: Should call resetContactForRetry and log success
+            assertTrue("retryIdentityResolution should complete without exception", result.isSuccess)
             coVerify { contactRepository.resetContactForRetry(testDestHash) }
             verify { Log.d(any(), match { it.contains("Reset contact for retry") }) }
         }
@@ -720,10 +729,11 @@ class ContactsViewModelTest {
                 Result.failure(RuntimeException("Reset failed"))
 
             // When: Should not crash
-            viewModel.retryIdentityResolution(testDestHash)
+            val result = runCatching { viewModel.retryIdentityResolution(testDestHash) }
             advanceUntilIdle()
 
             // Then: Verify attempt was made and error was logged (covers else branch)
+            assertTrue("retryIdentityResolution should handle failure gracefully", result.isSuccess)
             coVerify { contactRepository.resetContactForRetry(testDestHash) }
             verify { Log.e(any(), match { it.contains("Failed to reset contact") }) }
         }
@@ -736,10 +746,11 @@ class ContactsViewModelTest {
                 RuntimeException("Database error")
 
             // When: Should not crash
-            viewModel.retryIdentityResolution(testDestHash)
+            val result = runCatching { viewModel.retryIdentityResolution(testDestHash) }
             advanceUntilIdle()
 
             // Then: Verify attempt was made and exception was logged (covers catch block)
+            assertTrue("retryIdentityResolution should handle exception gracefully", result.isSuccess)
             coVerify { contactRepository.resetContactForRetry(testDestHash) }
             verify { Log.e(any(), match { it.contains("Error retrying identity") }, any<Throwable>()) }
         }
@@ -769,10 +780,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.deleteContact(any()) } throws RuntimeException("DB error")
 
             // When: Should not crash
-            viewModel.deleteContact(testDestHash)
+            val result = runCatching { viewModel.deleteContact(testDestHash) }
             advanceUntilIdle()
 
-            // Then: Verify attempt was made
+            // Then: Verify attempt was made and error was handled gracefully
+            assertTrue("deleteContact should handle errors gracefully", result.isSuccess)
             coVerify { contactRepository.deleteContact(testDestHash) }
         }
 
@@ -783,10 +795,11 @@ class ContactsViewModelTest {
             coEvery { contactRepository.updateNickname(any(), any()) } throws RuntimeException("DB error")
 
             // When: Should not crash
-            viewModel.updateNickname(testDestHash, "Name")
+            val result = runCatching { viewModel.updateNickname(testDestHash, "Name") }
             advanceUntilIdle()
 
-            // Then: Verify attempt was made
+            // Then: Verify attempt was made and error was handled gracefully
+            assertTrue("updateNickname should handle errors gracefully", result.isSuccess)
             coVerify { contactRepository.updateNickname(testDestHash, "Name") }
         }
 }

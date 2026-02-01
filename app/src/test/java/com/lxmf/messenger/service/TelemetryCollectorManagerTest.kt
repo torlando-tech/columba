@@ -51,12 +51,17 @@ class TelemetryCollectorManagerTest {
     private val lastSendTimeFlow = MutableStateFlow<Long?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.INITIALIZING)
     private val hostModeEnabledFlow = MutableStateFlow(false)
+    private val requestEnabledFlow = MutableStateFlow(false)
+    private val requestIntervalFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS)
+    private val lastRequestTimeFlow = MutableStateFlow<Long?>(null)
+    private val allowedRequestersFlow = MutableStateFlow<Set<String>>(emptySet())
 
+    @Suppress("NoRelaxedMocks") // Android Context requires relaxed mock
     @Before
     fun setup() {
         mockContext = mockk(relaxed = true)
-        mockSettingsRepository = mockk(relaxed = true)
-        mockReticulumProtocol = mockk(relaxed = true)
+        mockSettingsRepository = mockk()
+        mockReticulumProtocol = mockk()
 
         // Setup settings repository flows
         every { mockSettingsRepository.telemetryCollectorAddressFlow } returns collectorAddressFlow
@@ -64,6 +69,10 @@ class TelemetryCollectorManagerTest {
         every { mockSettingsRepository.telemetrySendIntervalSecondsFlow } returns sendIntervalFlow
         every { mockSettingsRepository.lastTelemetrySendTimeFlow } returns lastSendTimeFlow
         every { mockSettingsRepository.telemetryHostModeEnabledFlow } returns hostModeEnabledFlow
+        every { mockSettingsRepository.telemetryRequestEnabledFlow } returns requestEnabledFlow
+        every { mockSettingsRepository.telemetryRequestIntervalSecondsFlow } returns requestIntervalFlow
+        every { mockSettingsRepository.lastTelemetryRequestTimeFlow } returns lastRequestTimeFlow
+        every { mockSettingsRepository.telemetryAllowedRequestersFlow } returns allowedRequestersFlow
         every { mockReticulumProtocol.networkStatus } returns networkStatusFlow
 
         // Setup save methods
@@ -85,14 +94,13 @@ class TelemetryCollectorManagerTest {
         }
     }
 
-    private fun createManager(): TelemetryCollectorManager {
-        return TelemetryCollectorManager(
+    private fun createManager(): TelemetryCollectorManager =
+        TelemetryCollectorManager(
             context = mockContext,
             settingsRepository = mockSettingsRepository,
             reticulumProtocol = mockReticulumProtocol,
             scope = testScope,
         )
-    }
 
     // ========== State Flow Tests ==========
 
@@ -270,8 +278,9 @@ class TelemetryCollectorManagerTest {
             manager = createManager()
 
             val validAddress = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-            manager.setCollectorAddress(validAddress)
+            val result = runCatching { manager.setCollectorAddress(validAddress) }
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(validAddress) }
         }
 
@@ -280,8 +289,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setCollectorAddress(null)
+            val result = runCatching { manager.setCollectorAddress(null) }
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(null) }
         }
 
@@ -290,8 +300,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setCollectorAddress("a1b2c3d4e5f6") // Only 12 chars
+            val result = runCatching { manager.setCollectorAddress("a1b2c3d4e5f6") } // Only 12 chars
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
         }
 
@@ -300,8 +311,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setCollectorAddress("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6") // 36 chars
+            val result = runCatching { manager.setCollectorAddress("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6") } // 36 chars
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
         }
 
@@ -310,8 +322,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setCollectorAddress("g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4") // 'g' is invalid
+            val result = runCatching { manager.setCollectorAddress("g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4") } // 'g' is invalid
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { mockSettingsRepository.saveTelemetryCollectorAddress(any()) }
         }
 
@@ -322,8 +335,9 @@ class TelemetryCollectorManagerTest {
 
             val uppercaseAddress = "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"
             val expectedLowercase = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
-            manager.setCollectorAddress(uppercaseAddress)
+            val result = runCatching { manager.setCollectorAddress(uppercaseAddress) }
 
+            assertTrue("setCollectorAddress should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryCollectorAddress(expectedLowercase) }
         }
 
@@ -334,8 +348,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setEnabled(true)
+            val result = runCatching { manager.setEnabled(true) }
 
+            assertTrue("setEnabled should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(true) }
         }
 
@@ -344,8 +359,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setEnabled(false)
+            val result = runCatching { manager.setEnabled(false) }
 
+            assertTrue("setEnabled should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryCollectorEnabled(false) }
         }
 
@@ -356,8 +372,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setSendIntervalSeconds(900) // 15 minutes
+            val result = runCatching { manager.setSendIntervalSeconds(900) } // 15 minutes
 
+            assertTrue("setSendIntervalSeconds should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(900) }
         }
 
@@ -366,8 +383,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setSendIntervalSeconds(300)
+            val result = runCatching { manager.setSendIntervalSeconds(300) }
 
+            assertTrue("setSendIntervalSeconds should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(300) }
         }
 
@@ -376,8 +394,9 @@ class TelemetryCollectorManagerTest {
         testScope.runTest {
             manager = createManager()
 
-            manager.setSendIntervalSeconds(3600)
+            val result = runCatching { manager.setSendIntervalSeconds(3600) }
 
+            assertTrue("setSendIntervalSeconds should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetrySendIntervalSeconds(3600) }
         }
 
@@ -650,10 +669,11 @@ class TelemetryCollectorManagerTest {
             advanceUntilIdle()
 
             // Enable host mode
-            manager.setHostModeEnabled(true)
+            val result = runCatching { manager.setHostModeEnabled(true) }
             advanceUntilIdle()
 
             // Verify save was called
+            assertTrue("setHostModeEnabled should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
 
             manager.stop()
@@ -675,6 +695,7 @@ class TelemetryCollectorManagerTest {
             advanceUntilIdle()
 
             // Verify Python sync was called
+            assertTrue("isHostModeEnabled should be true", manager.isHostModeEnabled.value)
             coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
 
             // Disable host mode - simulate the flow update
@@ -682,6 +703,7 @@ class TelemetryCollectorManagerTest {
             advanceUntilIdle()
 
             // Verify Python sync was called with false
+            assertFalse("isHostModeEnabled should be false", manager.isHostModeEnabled.value)
             coVerify { mockReticulumProtocol.setTelemetryCollectorMode(false) }
 
             manager.stop()
@@ -702,7 +724,8 @@ class TelemetryCollectorManagerTest {
             hostModeEnabledFlow.value = true
             advanceUntilIdle()
 
-            // Verify Python layer was synced
+            // Verify Python layer was synced and state updated
+            assertTrue("isHostModeEnabled should reflect flow update", manager.isHostModeEnabled.value)
             coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
 
             manager.stop()
@@ -724,10 +747,11 @@ class TelemetryCollectorManagerTest {
             advanceUntilIdle()
 
             // Enable host mode - should not throw
-            manager.setHostModeEnabled(true)
+            val result = runCatching { manager.setHostModeEnabled(true) }
             advanceUntilIdle()
 
-            // Verify save was still called even if Python sync failed
+            // Verify operation completed successfully despite Python failure
+            assertTrue("setHostModeEnabled should complete without throwing", result.isSuccess)
             coVerify { mockSettingsRepository.saveTelemetryHostModeEnabled(true) }
 
             manager.stop()

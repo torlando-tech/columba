@@ -63,6 +63,46 @@ class ReceivingInterfaceInfoTest {
     }
 
     // ===========================================
+    // BackboneInterface Tests
+    // ===========================================
+
+    @Test
+    fun `BackboneInterface with user-configured name extracts friendly name`() {
+        val info = getReceivingInterfaceInfo("BackboneInterface[Beleth RNS Hub]")
+
+        assertEquals(Icons.Default.Cloud, info.icon)
+        assertEquals("Beleth RNS Hub", info.text)
+        assertEquals("BackboneInterface", info.subtitle)
+    }
+
+    @Test
+    fun `BackboneInterface with name and address extracts friendly name before slash`() {
+        val info = getReceivingInterfaceInfo("BackboneInterface[noDNS2/193.26.158.230:4965]")
+
+        assertEquals(Icons.Default.Cloud, info.icon)
+        assertEquals("noDNS2", info.text)
+        assertEquals("BackboneInterface", info.subtitle)
+    }
+
+    @Test
+    fun `BackboneClientInterface variant also recognized`() {
+        val info = getReceivingInterfaceInfo("BackboneClientInterface[My Backbone]")
+
+        assertEquals(Icons.Default.Cloud, info.icon)
+        assertEquals("My Backbone", info.text)
+        assertEquals("BackboneClientInterface", info.subtitle)
+    }
+
+    @Test
+    fun `BackboneInterface without brackets falls back to TCP IP`() {
+        val info = getReceivingInterfaceInfo("BackboneInterface")
+
+        assertEquals(Icons.Default.Cloud, info.icon)
+        assertEquals("TCP/IP", info.text)
+        assertEquals("BackboneInterface", info.subtitle)
+    }
+
+    // ===========================================
     // AutoInterface Tests
     // ===========================================
 

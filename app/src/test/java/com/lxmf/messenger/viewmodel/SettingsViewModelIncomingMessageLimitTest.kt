@@ -138,6 +138,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.telemetryCollectorAddressFlow } returns MutableStateFlow<String?>(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
         every { settingsRepository.lastTelemetrySendTimeFlow } returns MutableStateFlow<Long?>(null)
+        every { settingsRepository.mapSourceHttpEnabledFlow } returns MutableStateFlow(false)
+        every { settingsRepository.mapSourceRmspEnabledFlow } returns MutableStateFlow(false)
+        every { mapTileSourceManager.observeRmspServerCount() } returns flowOf(0)
+        every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
         // Mock PropagationNodeManager flows (StateFlows)

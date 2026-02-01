@@ -65,6 +65,11 @@ class StartupConfigLoaderTest {
         interfaceRepository = mockk()
         identityRepository = mockk()
         settingsRepository = mockk()
+
+        // Default stubs for settings that most tests don't override
+        coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+        coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+
         loader = StartupConfigLoader(interfaceRepository, identityRepository, settingsRepository)
     }
 

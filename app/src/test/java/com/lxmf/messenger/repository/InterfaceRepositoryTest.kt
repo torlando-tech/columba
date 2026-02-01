@@ -35,6 +35,8 @@ class InterfaceRepositoryTest {
         Dispatchers.setMain(testDispatcher)
         // Each test stubs the specific methods needed
         mockDao = mockk()
+        // Default stub for getEnabledInterfaceCount - tests don't use this directly
+        every { mockDao.getEnabledInterfaceCount() } returns flowOf(0)
     }
 
     @After

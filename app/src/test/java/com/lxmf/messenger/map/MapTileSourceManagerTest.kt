@@ -36,6 +36,7 @@ class MapTileSourceManagerTest {
 
         // Default: no offline regions, no RMSP servers
         every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())
+        coEvery { offlineMapRegionRepository.getFirstCompletedRegionWithStyle() } returns null
         every { rmspServerRepository.getAllServers() } returns flowOf(emptyList())
         every { rmspServerRepository.getNearestServers(any()) } returns flowOf(emptyList())
         every { rmspServerRepository.hasServers() } returns flowOf(false)

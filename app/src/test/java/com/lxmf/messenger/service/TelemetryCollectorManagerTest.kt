@@ -54,6 +54,7 @@ class TelemetryCollectorManagerTest {
     private val requestEnabledFlow = MutableStateFlow(false)
     private val requestIntervalFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS)
     private val lastRequestTimeFlow = MutableStateFlow<Long?>(null)
+    private val allowedRequestersFlow = MutableStateFlow<Set<String>>(emptySet())
 
     @Suppress("NoRelaxedMocks") // Android Context requires relaxed mock
     @Before
@@ -71,6 +72,7 @@ class TelemetryCollectorManagerTest {
         every { mockSettingsRepository.telemetryRequestEnabledFlow } returns requestEnabledFlow
         every { mockSettingsRepository.telemetryRequestIntervalSecondsFlow } returns requestIntervalFlow
         every { mockSettingsRepository.lastTelemetryRequestTimeFlow } returns lastRequestTimeFlow
+        every { mockSettingsRepository.telemetryAllowedRequestersFlow } returns allowedRequestersFlow
         every { mockReticulumProtocol.networkStatus } returns networkStatusFlow
 
         // Setup save methods

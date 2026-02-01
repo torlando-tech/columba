@@ -3,10 +3,14 @@ package com.lxmf.messenger.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.repository.SettingsRepository
+import io.mockk.Runs
 import io.mockk.clearAllMocks
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,7 +58,7 @@ class NotificationSettingsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        settingsRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
 
         // Setup repository flow mocks
         every { settingsRepository.notificationsEnabledFlow } returns notificationsEnabledFlow
@@ -64,6 +68,15 @@ class NotificationSettingsViewModelTest {
         every { settingsRepository.notificationBleConnectedFlow } returns notificationBleConnectedFlow
         every { settingsRepository.notificationBleDisconnectedFlow } returns notificationBleDisconnectedFlow
         every { settingsRepository.hasRequestedNotificationPermissionFlow } returns hasRequestedNotificationPermissionFlow
+
+        // Setup suspend function stubs
+        coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationReceivedMessage(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationReceivedMessageFavorite(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationHeardAnnounce(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationBleConnected(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationBleDisconnected(any()) } just Runs
+        coEvery { settingsRepository.markNotificationPermissionRequested() } just Runs
     }
 
     @After
@@ -72,9 +85,7 @@ class NotificationSettingsViewModelTest {
         clearAllMocks()
     }
 
-    private fun createViewModel(): NotificationSettingsViewModel {
-        return NotificationSettingsViewModel(settingsRepository)
-    }
+    private fun createViewModel(): NotificationSettingsViewModel = NotificationSettingsViewModel(settingsRepository)
 
     // ========== Initial State Tests ==========
 
@@ -122,6 +133,9 @@ class NotificationSettingsViewModelTest {
     @Test
     fun `toggleNotificationsEnabled calls repository saveNotificationsEnabled`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -129,11 +143,16 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationsEnabled(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should pass false to repository", capturedValue.captured)
         }
 
     @Test
     fun `toggleReceivedMessage calls repository saveNotificationReceivedMessage`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationReceivedMessage(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -141,11 +160,16 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationReceivedMessage(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should pass false to repository", capturedValue.captured)
         }
 
     @Test
     fun `toggleReceivedMessageFavorite calls repository saveNotificationReceivedMessageFavorite`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationReceivedMessageFavorite(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -153,11 +177,16 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationReceivedMessageFavorite(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should pass false to repository", capturedValue.captured)
         }
 
     @Test
     fun `toggleHeardAnnounce calls repository saveNotificationHeardAnnounce`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationHeardAnnounce(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -165,11 +194,16 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationHeardAnnounce(true) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertTrue("Should pass true to repository", capturedValue.captured)
         }
 
     @Test
     fun `toggleBleConnected calls repository saveNotificationBleConnected`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationBleConnected(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -177,11 +211,16 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationBleConnected(true) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertTrue("Should pass true to repository", capturedValue.captured)
         }
 
     @Test
     fun `toggleBleDisconnected calls repository saveNotificationBleDisconnected`() =
         runTest {
+            // Given - Capture the value passed to repository
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationBleDisconnected(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When
@@ -189,11 +228,18 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.saveNotificationBleDisconnected(true) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertTrue("Should pass true to repository", capturedValue.captured)
         }
 
     @Test
     fun `markNotificationPermissionRequested calls repository markNotificationPermissionRequested`() =
         runTest {
+            // Given - Track if repository method was called
+            var wasCalled = false
+            coEvery { settingsRepository.markNotificationPermissionRequested() } answers {
+                wasCalled = true
+            }
             viewModel = createViewModel()
 
             // When
@@ -201,6 +247,7 @@ class NotificationSettingsViewModelTest {
 
             // Then
             coVerify { settingsRepository.markNotificationPermissionRequested() }
+            assertTrue("Repository method should have been called", wasCalled)
         }
 
     // ========== Permission Grant Scenario Tests ==========
@@ -209,6 +256,8 @@ class NotificationSettingsViewModelTest {
     fun `permission granted scenario enables notifications`() =
         runTest {
             // Given - Simulates MainActivity's permission launcher callback when permission is granted
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When - Permission is granted (MainActivity.kt:239-242)
@@ -216,12 +265,16 @@ class NotificationSettingsViewModelTest {
 
             // Then - Notifications should be enabled in repository
             coVerify { settingsRepository.saveNotificationsEnabled(true) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertTrue("Should enable notifications", capturedValue.captured)
         }
 
     @Test
     fun `permission denied scenario disables notifications`() =
         runTest {
             // Given - Simulates MainActivity's permission launcher callback when permission is denied
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(capturedValue)) } just Runs
             viewModel = createViewModel()
 
             // When - Permission is denied (MainActivity.kt:244-246)
@@ -229,6 +282,8 @@ class NotificationSettingsViewModelTest {
 
             // Then - Notifications should be disabled in repository
             coVerify { settingsRepository.saveNotificationsEnabled(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should disable notifications", capturedValue.captured)
         }
 
     @Test
@@ -237,6 +292,14 @@ class NotificationSettingsViewModelTest {
             // Given - Simulates first launch where permission hasn't been requested yet
             hasRequestedNotificationPermissionFlow.value = false
             notificationsEnabledFlow.value = true // Default value
+
+            var permissionMarked = false
+            val enabledValue = slot<Boolean>()
+            coEvery { settingsRepository.markNotificationPermissionRequested() } answers {
+                permissionMarked = true
+            }
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(enabledValue)) } just Runs
+
             viewModel = createViewModel()
 
             // When - User grants permission on first launch
@@ -246,6 +309,8 @@ class NotificationSettingsViewModelTest {
             // Then - Both repository methods should be called
             coVerify { settingsRepository.markNotificationPermissionRequested() }
             coVerify { settingsRepository.saveNotificationsEnabled(true) }
+            assertTrue("Permission should be marked as requested", permissionMarked)
+            assertTrue("Notifications should be enabled", enabledValue.captured)
         }
 
     // ========== State Update Tests ==========

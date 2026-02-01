@@ -40,7 +40,7 @@ class MainActivityTcpClientNavigationTest {
     @Test
     fun tcpClientWizard_routeRegistered_displaysContent() {
         // Given - Create a test NavHost with tcp_client_wizard route
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(),
@@ -73,7 +73,7 @@ class MainActivityTcpClientNavigationTest {
     fun tcpClientWizard_onComplete_navigatesToDestination() {
         // Given
         var navigationCompleted = false
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.successState(),
@@ -107,7 +107,7 @@ class MainActivityTcpClientNavigationTest {
     @Test
     fun tcpClientWizard_onNavigateBack_popBackStack() {
         // Given
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(),
@@ -141,7 +141,7 @@ class MainActivityTcpClientNavigationTest {
         // This test verifies the route name matches what MainActivity uses
         // The route "tcp_client_wizard" is the same as in MainActivity.kt line 576
         val expectedRoute = "tcp_client_wizard"
-        val mockViewModel = mockk<TcpClientWizardViewModel>(relaxed = true)
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
         every { mockViewModel.state } returns
             MutableStateFlow(
                 TcpClientWizardTestFixtures.serverSelectionState(),

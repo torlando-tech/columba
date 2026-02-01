@@ -9,7 +9,11 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
-import io.mockk.*
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,17 +48,21 @@ class IdentityManagerViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
+    @Suppress("NoRelaxedMocks") // Context is an Android framework class
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        mockContext = mockk(relaxed = true)
-        mockRepository = mockk(relaxed = true)
-        mockProtocol = mockk(relaxed = true)
-        mockInterfaceConfigManager = mockk(relaxed = true)
+        mockContext = mockk(relaxed = true) // Android framework class
+        mockRepository = mockk()
+        mockProtocol = mockk()
+        mockInterfaceConfigManager = mockk()
 
-        // Default mocks
+        // Default stubs for repository flows
         every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
         every { mockRepository.activeIdentity } returns MutableStateFlow(null)
+
+        // Default stub for InterfaceConfigManager
+        coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
     }
 
     @After
@@ -728,8 +736,12 @@ class IdentityManagerViewModelTest {
             viewModel.createNewIdentity("My Work Identity")
             testDispatcher.scheduler.advanceUntilIdle()
 
-            // Then
+            // Then - verify the call was made and assert final state
             coVerify { mockProtocol.createIdentityWithName("My Work Identity") }
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue("Expected Success state after identity creation", state is IdentityManagerUiState.Success)
+            }
         }
 
     @Test
@@ -747,8 +759,12 @@ class IdentityManagerViewModelTest {
             viewModel.deleteIdentity("id_to_delete")
             testDispatcher.scheduler.advanceUntilIdle()
 
-            // Then
+            // Then - verify the calls were made and assert final state
             coVerify { mockProtocol.deleteIdentityFile("id_to_delete") }
             coVerify { mockRepository.deleteIdentity("id_to_delete") }
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue("Expected Success state after identity deletion", state is IdentityManagerUiState.Success)
+            }
         }
 }

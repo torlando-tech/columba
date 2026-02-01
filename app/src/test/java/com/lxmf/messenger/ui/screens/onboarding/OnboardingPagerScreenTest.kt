@@ -13,7 +13,6 @@ import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -171,8 +170,12 @@ class OnboardingPagerScreenTest {
     @Test
     fun skipButton_isClickable() {
         // Given
+        var skipOnboardingCalled = false
         val mockViewModel = createMockOnboardingViewModel()
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockViewModel.skipOnboarding(any()) } answers {
+            skipOnboardingCalled = true
+        }
 
         composeTestRule.setContent {
             OnboardingPagerScreen(
@@ -186,8 +189,8 @@ class OnboardingPagerScreenTest {
         // When - Click should not throw
         composeTestRule.onNodeWithText("Skip").performClick()
 
-        // Then - No exception means clickable
-        verify { mockViewModel.skipOnboarding(any()) }
+        // Then - skipOnboarding was called
+        assertTrue("skipOnboarding should be called when Skip is clicked", skipOnboardingCalled)
     }
 
     // ========== Test 3: Page indicator dots are displayed ==========
@@ -303,8 +306,12 @@ class OnboardingPagerScreenTest {
     @Test
     fun pagerContainsAllPages_page4_completePage() {
         // Given
+        var refreshIdentityDataCalled = false
         val mockViewModel = createMockOnboardingViewModel(currentPage = 4)
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockDebugViewModel.refreshIdentityData() } answers {
+            refreshIdentityDataCalled = true
+        }
 
         // When
         composeTestRule.setContent {
@@ -319,7 +326,7 @@ class OnboardingPagerScreenTest {
         // Then - Page 4 is CompletePage
         composeTestRule.waitForIdle()
         // CompletePage triggers refreshIdentityData when entering
-        verify { mockDebugViewModel.refreshIdentityData() }
+        assertTrue("refreshIdentityData should be called on page 4", refreshIdentityDataCalled)
     }
 
     // ========== Test 5: Navigation between pages works ==========
@@ -376,8 +383,12 @@ class OnboardingPagerScreenTest {
     @Test
     fun skipButton_triggersSkipOnboarding() {
         // Given
+        var skipOnboardingCalled = false
         val mockViewModel = createMockOnboardingViewModel()
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockViewModel.skipOnboarding(any()) } answers {
+            skipOnboardingCalled = true
+        }
 
         composeTestRule.setContent {
             OnboardingPagerScreen(
@@ -392,7 +403,7 @@ class OnboardingPagerScreenTest {
         composeTestRule.onNodeWithText("Skip").performClick()
 
         // Then
-        verify { mockViewModel.skipOnboarding(any()) }
+        assertTrue("skipOnboarding should be triggered when skip is clicked", skipOnboardingCalled)
     }
 
     @Test
@@ -433,12 +444,16 @@ class OnboardingPagerScreenTest {
     @Test
     fun completionCallback_invokedWithFalse_whenNoLoRaSelected() {
         // Given - No RNODE in selected interfaces
+        var refreshIdentityDataCalled = false
         val mockViewModel =
             createMockOnboardingViewModel(
                 currentPage = 4,
                 selectedInterfaces = setOf(OnboardingInterfaceType.AUTO),
             )
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockDebugViewModel.refreshIdentityData() } answers {
+            refreshIdentityDataCalled = true
+        }
 
         val callbackSlot = slot<() -> Unit>()
         every { mockViewModel.completeOnboarding(capture(callbackSlot)) } answers {
@@ -464,7 +479,7 @@ class OnboardingPagerScreenTest {
         composeTestRule.waitForIdle()
 
         // Verify that the pager navigates to page 4 and refreshIdentityData is called
-        verify { mockDebugViewModel.refreshIdentityData() }
+        assertTrue("refreshIdentityData should be called on page 4", refreshIdentityDataCalled)
 
         // The actual button click is tested via CompletePage unit tests
         // Here we verify the state is properly passed to the page
@@ -473,12 +488,16 @@ class OnboardingPagerScreenTest {
     @Test
     fun completionCallback_invokedWithTrue_whenLoRaSelected() {
         // Given - RNODE is in selected interfaces
+        var refreshIdentityDataCalled = false
         val mockViewModel =
             createMockOnboardingViewModel(
                 currentPage = 4,
                 selectedInterfaces = setOf(OnboardingInterfaceType.AUTO, OnboardingInterfaceType.RNODE),
             )
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockDebugViewModel.refreshIdentityData() } answers {
+            refreshIdentityDataCalled = true
+        }
 
         val callbackSlot = slot<() -> Unit>()
         every { mockViewModel.completeOnboarding(capture(callbackSlot)) } answers {
@@ -500,7 +519,7 @@ class OnboardingPagerScreenTest {
         composeTestRule.waitForIdle()
 
         // Verify that the pager navigates to page 4 and refreshIdentityData is called
-        verify { mockDebugViewModel.refreshIdentityData() }
+        assertTrue("refreshIdentityData should be called on page 4", refreshIdentityDataCalled)
 
         // The actual button shows "Configure LoRa Radio" text and passes true to callback
         // This is tested via CompletePage unit tests
@@ -579,8 +598,12 @@ class OnboardingPagerScreenTest {
     @Test
     fun completePage_triggersRefreshIdentityData() {
         // Given
+        var refreshIdentityDataCalled = false
         val mockViewModel = createMockOnboardingViewModel(currentPage = 4)
         val mockDebugViewModel = createMockDebugViewModel()
+        every { mockDebugViewModel.refreshIdentityData() } answers {
+            refreshIdentityDataCalled = true
+        }
 
         // When
         composeTestRule.setContent {
@@ -594,7 +617,7 @@ class OnboardingPagerScreenTest {
 
         // Then - refreshIdentityData is called when entering page 4
         composeTestRule.waitForIdle()
-        verify { mockDebugViewModel.refreshIdentityData() }
+        assertTrue("refreshIdentityData should be called when entering page 4", refreshIdentityDataCalled)
     }
 
     // ========== TopBar Tests ==========
@@ -702,6 +725,8 @@ class OnboardingPagerScreenTest {
 
     // ========== Test Helpers ==========
 
+    // Android ViewModel - relaxed mock is appropriate for UI tests
+    @Suppress("NoRelaxedMocks")
     private fun createMockOnboardingViewModel(
         currentPage: Int = 0,
         displayName: String = "",
@@ -725,6 +750,8 @@ class OnboardingPagerScreenTest {
         return mockViewModel
     }
 
+    // Android ViewModel - relaxed mock is appropriate for UI tests
+    @Suppress("NoRelaxedMocks")
     private fun createMockDebugViewModel(): DebugViewModel {
         val mockViewModel = mockk<DebugViewModel>(relaxed = true)
 

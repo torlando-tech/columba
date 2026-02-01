@@ -74,10 +74,10 @@ class PropagationNodeManagerTest {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher)
 
-        settingsRepository = mockk(relaxed = true)
-        contactRepository = mockk(relaxed = true)
-        announceRepository = mockk(relaxed = true)
-        reticulumProtocol = mockk(relaxed = true)
+        settingsRepository = mockk()
+        contactRepository = mockk()
+        announceRepository = mockk()
+        reticulumProtocol = mockk()
 
         // Initialize mutable flows for reactive testing
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
@@ -103,6 +103,8 @@ class PropagationNodeManagerTest {
         coEvery { settingsRepository.getRetrievalIntervalSeconds() } returns 30
         every { settingsRepository.autoSelectPropagationNodeFlow } returns autoSelectFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(30)
+        every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+        coEvery { settingsRepository.saveLastSyncTimestamp(any()) } just Runs
 
         // Default repository mocks
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
@@ -197,10 +199,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns null
 
             // When
-            manager.start()
+            val result = runCatching { manager.start() }
             advanceUntilIdle()
 
             // Then: Should not set relay (no setAsMyRelay call)
+            assertTrue("start() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
             manager.stop()
         }
@@ -214,10 +217,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
 
             // When
-            manager.start()
+            val result = runCatching { manager.start() }
             advanceUntilIdle()
 
             // Then: Should not set relay
+            assertTrue("start() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
             manager.stop()
         }
@@ -268,7 +272,7 @@ class PropagationNodeManagerTest {
     fun `start - observeRelayChanges syncs to Python on relay update`() =
         runTest {
             // Given: Manager started
-            manager.start()
+            val result = runCatching { manager.start() }
             advanceUntilIdle()
 
             // When: Relay is updated (simulating database change)
@@ -288,6 +292,7 @@ class PropagationNodeManagerTest {
             }
 
             // Then: Should sync to Python layer
+            assertTrue("start() should complete successfully", result.isSuccess)
             coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
 
             manager.stop()
@@ -302,7 +307,7 @@ class PropagationNodeManagerTest {
                     destinationHash = testDestHash,
                     isMyRelay = true,
                 )
-            manager.start()
+            val result = runCatching { manager.start() }
 
             // Keep both currentRelayState AND currentRelay active throughout test
             // With WhileSubscribed(5000L), we need active collectors on both for changes to propagate
@@ -332,6 +337,7 @@ class PropagationNodeManagerTest {
                 advanceUntilIdle()
 
                 // Then: Should clear Python layer
+                assertTrue("start() should complete successfully", result.isSuccess)
                 coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
 
                 cancelAndConsumeRemainingEvents()
@@ -357,10 +363,11 @@ class PropagationNodeManagerTest {
                 flowOf(listOf(announce))
 
             // When: Start observing announces
-            manager.start()
+            val result = runCatching { manager.start() }
             advanceUntilIdle()
 
             // Then: Should NOT auto-select relay (auto-select is disabled)
+            assertTrue("start() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
 
             manager.stop()
@@ -380,15 +387,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Test Relay",
-                hops = 3,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Test Relay",
+                        hops = 3,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should set as relay in database
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -418,15 +429,19 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // When: New relay at 2 hops
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Closer Relay",
-                hops = 2,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Closer Relay",
+                        hops = 2,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should switch to closer relay (verify setAsMyRelay called with new hash)
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -442,15 +457,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When: First announce received
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash2,
-                displayName = "Current Relay",
-                hops = 3,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash2,
+                        displayName = "Current Relay",
+                        hops = 3,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should set as relay
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
         }
 
@@ -474,15 +493,19 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // When: Same node announces again
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Relay v2",
-                hops = 3,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Relay v2",
+                        hops = 3,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should call setAsMyRelay again (to refresh)
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify(atLeast = 2) { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -516,15 +539,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When: New node announces with known hops
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash2,
-                displayName = "New Relay",
-                hops = 5,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash2,
+                        displayName = "New Relay",
+                        hops = 5,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should switch to new relay (current hops -1 means unknown, any known hops is better)
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
         }
 
@@ -559,15 +586,19 @@ class PropagationNodeManagerTest {
                 io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
 
                 // When: New node at 5 hops (farther) - call while collector is active
-                manager.onPropagationNodeAnnounce(
-                    destinationHash = testDestHash2,
-                    displayName = "Far Relay",
-                    hops = 5,
-                    publicKey = testPublicKey,
-                )
+                val result =
+                    runCatching {
+                        manager.onPropagationNodeAnnounce(
+                            destinationHash = testDestHash2,
+                            displayName = "Far Relay",
+                            hops = 5,
+                            publicKey = testPublicKey,
+                        )
+                    }
                 advanceUntilIdle()
 
                 // Then: Should NOT switch - current relay is closer
+                assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
                 coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
 
                 cancelAndConsumeRemainingEvents()
@@ -605,15 +636,19 @@ class PropagationNodeManagerTest {
                 io.mockk.clearMocks(contactRepository, answers = false, recordedCalls = true, verificationMarks = true)
 
                 // When: Different node at same hops - call while collector is active
-                manager.onPropagationNodeAnnounce(
-                    destinationHash = testDestHash2,
-                    displayName = "Other Relay",
-                    hops = 3,
-                    publicKey = testPublicKey,
-                )
+                val result =
+                    runCatching {
+                        manager.onPropagationNodeAnnounce(
+                            destinationHash = testDestHash2,
+                            displayName = "Other Relay",
+                            hops = 3,
+                            publicKey = testPublicKey,
+                        )
+                    }
                 advanceUntilIdle()
 
                 // Then: Should NOT switch - same hops, keep current
+                assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
                 coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash2, any()) }
 
                 cancelAndConsumeRemainingEvents()
@@ -628,15 +663,19 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getManualPropagationNode() } returns testDestHash3
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Auto Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Auto Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should not select (manual mode ignores auto-selection)
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
         }
 
@@ -653,15 +692,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "New Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "New Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should add contact
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.addContactFromAnnounce(testDestHash, testPublicKey) }
         }
 
@@ -678,15 +721,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Existing Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Existing Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should not add contact
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
         }
 
@@ -702,15 +749,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "New Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "New Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -726,15 +777,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "New Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "New Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Database should be updated
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -752,15 +807,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "New Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "New Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should set as relay in database (the new source of truth)
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -777,15 +836,19 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.onPropagationNodeAnnounce(
-                destinationHash = testDestHash,
-                displayName = "Auto Relay",
-                hops = 1,
-                publicKey = testPublicKey,
-            )
+            val result =
+                runCatching {
+                    manager.onPropagationNodeAnnounce(
+                        destinationHash = testDestHash,
+                        displayName = "Auto Relay",
+                        hops = 1,
+                        publicKey = testPublicKey,
+                    )
+                }
             advanceUntilIdle()
 
             // Then: Should set as relay in database
+            assertTrue("onPropagationNodeAnnounce() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -802,10 +865,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
         }
 
@@ -820,10 +884,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(testDestHash) }
         }
 
@@ -839,10 +904,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then: Should set as relay in database
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -857,10 +923,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then: Should set as relay in database (protocol update happens via observeRelayChanges)
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -875,10 +942,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -891,10 +959,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.addContactFromAnnounce(testDestHash, announce.publicKey) }
         }
 
@@ -907,10 +976,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then: Should NOT add contact
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
 
             // But should still set as relay
@@ -925,10 +995,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns null
 
             // When
-            manager.setManualRelay(testDestHash, "Manual Relay")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
             advanceUntilIdle()
 
             // Then: Should NOT add contact (no announce data)
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
 
             // But should still set as relay
@@ -941,10 +1012,11 @@ class PropagationNodeManagerTest {
     fun `enableAutoSelect - clears manual node`() =
         runTest {
             // When
-            manager.enableAutoSelect()
+            val result = runCatching { manager.enableAutoSelect() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("enableAutoSelect() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(null) }
         }
 
@@ -952,10 +1024,11 @@ class PropagationNodeManagerTest {
     fun `enableAutoSelect - enables auto-select setting`() =
         runTest {
             // When
-            manager.enableAutoSelect()
+            val result = runCatching { manager.enableAutoSelect() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("enableAutoSelect() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoSelectPropagationNode(true) }
         }
 
@@ -980,10 +1053,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash2) } returns farNode
 
             // When
-            manager.enableAutoSelect()
+            val result = runCatching { manager.enableAutoSelect() }
             advanceUntilIdle()
 
             // Then: Should set nearest as relay in database
+            assertTrue("enableAutoSelect() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -994,10 +1068,11 @@ class PropagationNodeManagerTest {
             every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(emptyList())
 
             // When
-            manager.enableAutoSelect()
+            val result = runCatching { manager.enableAutoSelect() }
             advanceUntilIdle()
 
             // Then: Should clear relay in database
+            assertTrue("enableAutoSelect() should complete successfully", result.isSuccess)
             coVerify { contactRepository.clearMyRelay() }
         }
 
@@ -1017,10 +1092,11 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // When
-            manager.clearRelay()
+            val result = runCatching { manager.clearRelay() }
             advanceUntilIdle()
 
             // Then: Should clear relay in database
+            assertTrue("clearRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.clearMyRelay() }
         }
 
@@ -1028,10 +1104,11 @@ class PropagationNodeManagerTest {
     fun `clearRelay - clears my relay in contacts`() =
         runTest {
             // When
-            manager.clearRelay()
+            val result = runCatching { manager.clearRelay() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("clearRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.clearMyRelay() }
         }
 
@@ -1039,10 +1116,11 @@ class PropagationNodeManagerTest {
     fun `clearRelay - clears manual node setting`() =
         runTest {
             // When
-            manager.clearRelay()
+            val result = runCatching { manager.clearRelay() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("clearRelay() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(null) }
         }
 
@@ -1062,10 +1140,11 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // When
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: Manual node setting should be cleared
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(null) }
         }
 
@@ -1076,10 +1155,11 @@ class PropagationNodeManagerTest {
             coEvery { settingsRepository.getAutoSelectPropagationNode() } returns false
 
             // When
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: Should enable auto-select
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoSelectPropagationNode(true) }
         }
 
@@ -1097,10 +1177,11 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash2) } returns newNode
 
             // When
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: Should set new relay in database
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
         }
 
@@ -1111,10 +1192,11 @@ class PropagationNodeManagerTest {
             every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(emptyList())
 
             // When
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: No relay to select, setAsMyRelay should not be called
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
         }
 
@@ -1208,10 +1290,11 @@ class PropagationNodeManagerTest {
                 Result.success(mockSyncState)
 
             // When
-            manager.syncWithPropagationNode()
+            val result = runCatching { manager.syncWithPropagationNode() }
             advanceUntilIdle()
 
             // Then: Should not call requestMessagesFromPropagationNode because network is not ready
+            assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
         }
 
@@ -1229,10 +1312,11 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            manager.syncWithPropagationNode()
+            val result = runCatching { manager.syncWithPropagationNode() }
             advanceUntilIdle()
 
             // Then: Should not call requestMessagesFromPropagationNode
+            assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
         }
 
@@ -1269,10 +1353,11 @@ class PropagationNodeManagerTest {
                 }
 
                 // When - call while collector is active
-                manager.syncWithPropagationNode()
+                val result = runCatching { manager.syncWithPropagationNode() }
                 advanceUntilIdle()
 
                 // Then: Should call requestMessagesFromPropagationNode
+                assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
                 coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
 
                 cancelAndConsumeRemainingEvents()
@@ -1286,10 +1371,11 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // When
-            manager.syncWithPropagationNode()
+            val result = runCatching { manager.syncWithPropagationNode() }
             advanceUntilIdle()
 
             // Then: Should not call requestMessagesFromPropagationNode
+            assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
         }
 
@@ -1323,10 +1409,11 @@ class PropagationNodeManagerTest {
                 }
 
                 // When: Call sync - while collector is active
-                manager.syncWithPropagationNode()
+                val result = runCatching { manager.syncWithPropagationNode() }
                 advanceUntilIdle()
 
                 // Then: Protocol should be called
+                assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
                 coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
 
                 cancelAndConsumeRemainingEvents()
@@ -1344,7 +1431,7 @@ class PropagationNodeManagerTest {
                 )
 
             // Start manager to observe propagation state changes
-            manager.start()
+            val startResult = runCatching { manager.start() }
 
             // Wait for currentRelayState to become Loaded
             manager.currentRelayState.test(timeout = 5.seconds) {
@@ -1381,6 +1468,7 @@ class PropagationNodeManagerTest {
             testScheduler.runCurrent()
 
             // Then: Should save timestamp to settings repository
+            assertTrue("start() should complete successfully", startResult.isSuccess)
             coVerify { settingsRepository.saveLastSyncTimestamp(any()) }
 
             // Stop manager to cancel observer
@@ -2003,10 +2091,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
         }
 
@@ -2019,10 +2108,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(testDestHash) }
         }
 
@@ -2035,10 +2125,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { contactRepository.addPendingContact(testDestHash, "My Relay") }
         }
 
@@ -2049,10 +2140,11 @@ class PropagationNodeManagerTest {
             coEvery { contactRepository.hasContact(testDestHash) } returns true
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then: Should NOT add contact
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addPendingContact(any(), any()) }
 
             // But should still set as relay
@@ -2068,10 +2160,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -2084,10 +2177,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, "Custom Nickname")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "Custom Nickname") }
             advanceUntilIdle()
 
             // Then: Nickname is passed to addPendingContact
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { contactRepository.addPendingContact(testDestHash, "Custom Nickname") }
         }
 
@@ -2100,10 +2194,11 @@ class PropagationNodeManagerTest {
                 Result.success(com.lxmf.messenger.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
-            manager.setManualRelayByHash(testDestHash, null)
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, null) }
             advanceUntilIdle()
 
             // Then: Null nickname is passed
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { contactRepository.addPendingContact(testDestHash, null) }
         }
 
@@ -2116,10 +2211,11 @@ class PropagationNodeManagerTest {
                 Result.failure(RuntimeException("Database error"))
 
             // When
-            manager.setManualRelayByHash(testDestHash, "My Relay")
+            val result = runCatching { manager.setManualRelayByHash(testDestHash, "My Relay") }
             advanceUntilIdle()
 
             // Then: Should still set as relay even if contact add fails
+            assertTrue("setManualRelayByHash() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -2624,7 +2720,7 @@ class PropagationNodeManagerTest {
             every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns announcesFlow
 
             // When: Manager starts
-            manager.start()
+            val startResult = runCatching { manager.start() }
             advanceUntilIdle()
 
             // First emission triggers selection
@@ -2655,6 +2751,7 @@ class PropagationNodeManagerTest {
 
             // Then: Second selection should NOT have called setAsMyRelay for testDestHash2
             // because state guard blocked it (state was STABLE, not IDLE)
+            assertTrue("start() should complete successfully", startResult.isSuccess)
             coVerify(atMost = 1) { contactRepository.setAsMyRelay(any(), any()) }
 
             manager.stop()
@@ -2850,10 +2947,11 @@ class PropagationNodeManagerTest {
 
             // When: Exclude node1 (the nearest one) and trigger relay deleted
             manager.excludeFromAutoSelect(testDestHash)
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: Should select node2 instead of excluded node1
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
         }
@@ -2883,10 +2981,11 @@ class PropagationNodeManagerTest {
 
             // Exclude node1 and select node2
             manager.excludeFromAutoSelect(testDestHash)
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Verify node2 was selected
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
 
             // Clear mocks to track new calls
@@ -2922,10 +3021,11 @@ class PropagationNodeManagerTest {
 
             // When: Exclude the only available node and trigger selection
             manager.excludeFromAutoSelect(testDestHash)
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: No relay should be set (the only candidate was excluded)
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
         }
 
@@ -2946,10 +3046,11 @@ class PropagationNodeManagerTest {
             manager.excludeFromAutoSelect(testDestHash)
 
             // When: User manually sets the excluded node as relay
-            manager.setManualRelay(testDestHash, "Manual Node")
+            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Node") }
             advanceUntilIdle()
 
             // Then: Manual selection should still work (exclusion only affects auto-select)
+            assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -2984,10 +3085,11 @@ class PropagationNodeManagerTest {
 
             // When: Exclude nearest node and trigger selection
             manager.excludeFromAutoSelect(testDestHash)
-            manager.onRelayDeleted()
+            val result = runCatching { manager.onRelayDeleted() }
             advanceUntilIdle()
 
             // Then: Should select node2 (next nearest after excluded node1)
+            assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash2, clearOther = true) }
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash, any()) }
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(testDestHash3, any()) }

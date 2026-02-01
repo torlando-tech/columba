@@ -49,6 +49,48 @@ jobs:
       - name: Run all lint checks
         run: ./gradlew ktlintCheck detekt cpdCheck --continue
 
+      - name: Check for forbidden test suppressions
+        run: |
+          echo "Checking for forbidden @Suppress annotations in test files..."
+
+          # Count files with NoRelaxedMocks suppression
+          RELAXED_COUNT=$(grep -r "Suppress.*NoRelaxedMocks" app/src/test reticulum/src/test --include="*.kt" -l 2>/dev/null | wc -l || echo "0")
+
+          # Count files with NoVerifyOnlyTests suppression
+          VERIFY_COUNT=$(grep -r "Suppress.*NoVerifyOnlyTests" app/src/test reticulum/src/test --include="*.kt" -l 2>/dev/null | wc -l || echo "0")
+
+          echo "Files with @Suppress(\"NoRelaxedMocks\"): $RELAXED_COUNT"
+          echo "Files with @Suppress(\"NoVerifyOnlyTests\"): $VERIFY_COUNT"
+
+          # These rules exist to prevent useless tests that don't test production code.
+          # Suppressing them defeats the purpose. Fix the tests instead.
+          #
+          # BASELINE: Ratchet down over time. Don't increase these numbers.
+          # Current state reflects Android framework mocks (Context, BluetoothManager, etc.)
+          # that are impractical to stub explicitly. Fix when possible.
+          RELAXED_BASELINE=37
+          VERIFY_BASELINE=3
+
+          FAIL=false
+
+          if [ "$RELAXED_COUNT" -gt "$RELAXED_BASELINE" ]; then
+            echo "::error::NoRelaxedMocks suppressions increased from $RELAXED_BASELINE to $RELAXED_COUNT"
+            echo "Do not add @Suppress(\"NoRelaxedMocks\"). Use explicit stubs instead of relaxed mocks."
+            FAIL=true
+          fi
+
+          if [ "$VERIFY_COUNT" -gt "$VERIFY_BASELINE" ]; then
+            echo "::error::NoVerifyOnlyTests suppressions increased from $VERIFY_BASELINE to $VERIFY_COUNT"
+            echo "Do not add @Suppress(\"NoVerifyOnlyTests\"). Add assertions to your tests."
+            FAIL=true
+          fi
+
+          if [ "$FAIL" = true ]; then
+            exit 1
+          fi
+
+          echo "✓ No new forbidden suppressions found"
+
       - name: Upload lint reports
         if: always()
         uses: actions/upload-artifact@v6
@@ -257,7 +299,7 @@ jobs:
     name: Kotlin Tests
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -307,7 +349,12 @@ jobs:
             robolectric-
 
       - name: Run unit tests and generate coverage report
-        run: ./gradlew testDebugUnitTest testNoSentryDebugUnitTest jacocoTestReport --stacktrace --max-workers=4 --no-build-cache
+        # Build cache enabled for faster incremental builds
+        # AIDL and JaCoCo caching issues are handled by clean steps above
+        # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
+        # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
+        # For other modules (reticulum, data), run their standard debug tests.
+        run: ./gradlew :app:testNoSentryDebugUnitTest :reticulum:testDebugUnitTest :data:testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
@@ -360,148 +407,145 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # instrumented-tests:
-  #   name: Instrumented Tests
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 90
+  instrumented-tests:
+    name: Instrumented Tests
+    # Run in parallel with other jobs
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v6
-  #       with:
-  #         submodules: recursive
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
 
-  #     - name: Setup Gradle
-  #       uses: gradle/actions/setup-gradle@v4
-  #       with:
-  #         cache-read-only: false
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v6
-  #       with:
-  #         python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
 
-  #     - name: Install Python build dependencies
-  #       run: pip install build
+      - name: Install Python build dependencies
+        run: pip install build
 
-  #     - name: Grant execute permission for gradlew
-  #       run: chmod +x gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-  #     - name: Clean AIDL generated code
-  #       run: |
-  #         # Clean AIDL generated code to avoid stale cache issues
-  #         # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
-  #         rm -rf app/build/generated/aidl_source_output_dir
-  #         rm -rf */build/generated/aidl_source_output_dir
+      - name: Clean AIDL generated code
+        run: |
+          # Clean AIDL generated code to avoid stale cache issues
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
 
-  #     # KVM configuration is handled at k3s pod/host level for ubuntu-latest runners
-  #     # No need for udev rules in containerized environment
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
-  #     - name: Pre-build test APKs to reduce emulator load
-  #       run: |
-  #         echo "Building APKs before starting emulator to reduce resource contention..."
-  #         ./gradlew :app:assembleDebugAndroidTest --stacktrace --max-workers=2
-  #         ./gradlew :app:assembleDebug --stacktrace --max-workers=2
-  #         echo "APKs built successfully"
+      - name: Pre-build test APKs
+        run: |
+          echo "Building APKs before starting emulator..."
+          ./gradlew :app:assembleNoSentryDebugAndroidTest --stacktrace --max-workers=2
+          ./gradlew :app:assembleNoSentryDebug --stacktrace --max-workers=2
+          echo "APKs built successfully"
 
-  #     - name: Clear stale emulator state
-  #       run: |
-  #         # Kill any emulators
-  #         adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
-  #         sleep 2
-  #         # Force kill qemu processes
-  #         pkill -9 qemu-system-x86_64 || true
-  #         pkill -9 qemu-system || true
-  #         # Kill ADB and wait for ports to free
-  #         adb kill-server || true
-  #         sleep 2
-  #         # Check if port 5554 is in use and kill the process
-  #         lsof -ti:5554 | xargs kill -9 || true
-  #         lsof -ti:5555 | xargs kill -9 || true
-  #         sleep 1
-  #         # Clean temp files
-  #         rm -rf /tmp/android-* || true
-  #         rm -rf /tmp/avd-* || true
-  #         # Start fresh ADB server
-  #         adb start-server
-  #         sleep 2
-  #         # Verify no emulators running
-  #         adb devices
+      - name: AVD cache
+        uses: actions/cache@v5
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-34-x86_64-v6
 
-  #     - name: AVD cache
-  #       uses: actions/cache@v5
-  #       id: avd-cache
-  #       with:
-  #         path: |
-  #           ~/.android/avd/*
-  #           ~/.android/adb*
-  #         key: avd-34-x86_64-v5-2gb
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            echo "Waiting for emulator to be ready..."
+            adb wait-for-device
+            adb shell getprop sys.boot_completed | grep -q 1 || sleep 10
+            echo "Emulator ready, generating snapshot for caching."
 
-  #     - name: Create AVD and generate snapshot for caching
-  #       if: steps.avd-cache.outputs.cache-hit != 'true'
-  #       uses: reactivecircus/android-emulator-runner@v2
-  #       with:
-  #         api-level: 34
-  #         arch: x86_64
-  #         target: google_apis
-  #         force-avd-creation: false
-  #         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -accel on
-  #         disable-animations: true
-  #         emulator-boot-timeout: 900
-  #         script: echo "Waiting for input service to be available..." && i=0 && while [ $i -lt 30 ]; do if adb shell service check input >/dev/null 2>&1; then echo "Input service is available" && break; fi; i=$((i + 1)); echo "Waiting for input service... ($i/30)"; sleep 2; done && echo "Generated AVD snapshot for caching."
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            echo "Running emulator health check..."
+            adb shell getprop ro.build.version.sdk
+            adb shell pm list packages | head -5
+            echo "Emulator is responsive, starting tests..."
+            # Run smoke tests and integration tests
+            # Use test orchestrator for isolation (configured in build.gradle.kts)
+            ./gradlew :app:connectedNoSentryDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lxmf.messenger.smoke.SmokeTest,com.lxmf.messenger.integration.MessageDataFlowTest,com.lxmf.messenger.integration.ConversationCreationFlowTest --stacktrace
 
-  #     - name: Run instrumented tests
-  #       uses: reactivecircus/android-emulator-runner@v2
-  #       with:
-  #         api-level: 34
-  #         arch: x86_64
-  #         target: google_apis
-  #         force-avd-creation: false
-  #         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -accel on
-  #         disable-animations: true
-  #         emulator-boot-timeout: 600
-  #         script: |
-  #           echo "Running emulator health check..." && adb shell getprop ro.build.version.sdk && adb shell pm list packages | head -5 && echo "Emulator is responsive, starting tests..." && ./gradlew :app:connectedDebugAndroidTest --stacktrace
+      - name: Upload instrumented test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: instrumented-test-results
+          path: |
+            **/build/outputs/androidTest-results/**/*.xml
+            **/build/outputs/androidTest-results/**/*.html
+          retention-days: 7
 
-  #     - name: Upload instrumented test results
-  #       if: always()
-  #       uses: actions/upload-artifact@v6
-  #       with:
-  #         name: instrumented-test-results
-  #         path: |
-  #           **/build/outputs/androidTest-results/**/*.xml
-  #           **/build/outputs/androidTest-results/**/*.html
-  #         retention-days: 7
+      - name: Upload instrumented test reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: instrumented-test-reports
+          path: |
+            **/build/reports/androidTests/
+          retention-days: 7
 
-  #     - name: Upload instrumented test reports
-  #       if: failure()
-  #       uses: actions/upload-artifact@v6
-  #       with:
-  #         name: instrumented-test-reports
-  #         path: |
-  #           **/build/reports/androidTests/
-  #         retention-days: 7
+      - name: Capture logcat on failure
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          adb logcat -d > artifacts/logcat.log || true
 
-  #     - name: Upload logcat output
-  #       if: failure()
-  #       uses: actions/upload-artifact@v6
-  #       with:
-  #         name: logcat
-  #         path: artifacts/logcat.log
-  #         retention-days: 7
-  #         if-no-files-found: ignore
+      - name: Upload logcat output
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: logcat
+          path: artifacts/logcat.log
+          retention-days: 7
+          if-no-files-found: ignore
 
-  #     - name: Cleanup emulator
-  #       if: always()
-  #       run: |
-  #         adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
-  #         pkill -9 qemu-system || true
-  #       adb kill-server || true
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
 
   ci-passed:
     name: ✅ CI Passed — APK Ready
     if: always()
-    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests]
+    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, instrumented-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
 

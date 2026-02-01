@@ -1,4 +1,5 @@
-@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+// PyObject is a Chaquopy framework class with many methods; explicit stubbing is not practical
+@file:Suppress("NoRelaxedMocks")
 
 package com.lxmf.messenger.reticulum.audio.bridge
 

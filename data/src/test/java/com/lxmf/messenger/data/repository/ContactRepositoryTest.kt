@@ -1,3 +1,5 @@
+// NoVerifyOnlyTests: Repository is a thin delegation layer; verifying correct DAO calls IS the behavior
+// NoRelaxedMocks: DAO interfaces have many methods; tests explicitly stub what they need
 @file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 
 package com.lxmf.messenger.data.repository

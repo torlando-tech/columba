@@ -1,3 +1,4 @@
+// Abstract prevents JUnit from trying to instantiate this base class directly
 @file:Suppress("UnnecessaryAbstractClass")
 
 package com.lxmf.messenger.test

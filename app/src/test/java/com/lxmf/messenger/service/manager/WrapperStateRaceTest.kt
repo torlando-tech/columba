@@ -1,4 +1,4 @@
-@file:Suppress("InjectDispatcher", "VarCouldBeVal")
+@file:Suppress("InjectDispatcher")
 
 package com.lxmf.messenger.service.manager
 
@@ -50,7 +50,7 @@ class WrapperStateRaceTest {
      */
     class UnsafeWrapperManager {
         var wrapper: MockWrapper? = null
-        private var nextId = AtomicInteger(0)
+        private val nextId = AtomicInteger(0)
 
         suspend fun initialize(): MockWrapper {
             // Check-then-act race condition
@@ -89,7 +89,7 @@ class WrapperStateRaceTest {
         private val mutex = Mutex()
         var wrapper: MockWrapper? = null
             private set
-        private var nextId = AtomicInteger(0)
+        private val nextId = AtomicInteger(0)
 
         suspend fun initialize(): MockWrapper =
             mutex.withLock {

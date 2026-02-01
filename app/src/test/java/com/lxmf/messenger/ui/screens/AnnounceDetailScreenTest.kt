@@ -1,5 +1,3 @@
-@file:Suppress("NoRelaxedMocks")
-
 package com.lxmf.messenger.ui.screens
 
 import android.app.Application
@@ -40,7 +38,7 @@ class AnnounceDetailScreenTest {
 
     @Test
     fun `transfer size limit card displays for propagation node with limit`() {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
         val announce = createPropagationNodeAnnounce(transferLimitKb = 25600) // 25 MB
 
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
@@ -68,7 +66,7 @@ class AnnounceDetailScreenTest {
 
     @Test
     fun `transfer size limit card displays KB for small limits`() {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
         val announce = createPropagationNodeAnnounce(transferLimitKb = 256)
 
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
@@ -92,7 +90,7 @@ class AnnounceDetailScreenTest {
 
     @Test
     fun `transfer size limit card displays fractional MB`() {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
         val announce = createPropagationNodeAnnounce(transferLimitKb = 1536) // 1.5 MB
 
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
@@ -116,7 +114,7 @@ class AnnounceDetailScreenTest {
 
     @Test
     fun `transfer size limit card not displayed when limit is null`() {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
         val announce = createPropagationNodeAnnounce(transferLimitKb = null)
 
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
@@ -139,7 +137,7 @@ class AnnounceDetailScreenTest {
 
     @Test
     fun `transfer size limit card not displayed for non-propagation nodes`() {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
         val announce = createLxmfPeerAnnounce()
 
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)

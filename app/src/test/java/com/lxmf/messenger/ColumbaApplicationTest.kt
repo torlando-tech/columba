@@ -1,5 +1,3 @@
-@file:Suppress("NoRelaxedMocks")
-
 package com.lxmf.messenger
 
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -35,7 +33,7 @@ class ColumbaApplicationTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockProtocol = mockk(relaxed = true)
+        mockProtocol = mockk()
     }
 
     @After
@@ -111,7 +109,7 @@ class ColumbaApplicationTest {
     fun `withTimeoutOrNull for getLxmfIdentity returns identity when fast`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>(relaxed = true)
+            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } coAnswers {
                 delay(100)
                 Result.success(mockIdentity)
@@ -133,7 +131,7 @@ class ColumbaApplicationTest {
     fun `getLxmfIdentity returns identity when mock succeeds`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>(relaxed = true)
+            val mockIdentity = mockk<com.lxmf.messenger.reticulum.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
 
             // Act

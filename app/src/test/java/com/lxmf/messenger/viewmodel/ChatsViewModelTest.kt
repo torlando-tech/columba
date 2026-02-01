@@ -1,4 +1,4 @@
-@file:Suppress("IgnoredReturnValue")
+@file:Suppress("IgnoredReturnValue") // awaitItem() calls consume flow emissions, result intentionally unused
 
 package com.lxmf.messenger.viewmodel
 

@@ -1,6 +1,7 @@
+// SleepInsteadOfDelay: tearDown needs Thread.sleep for IO coroutine completion, one test needs it for timestamp differentiation
+// IgnoredReturnValue: .first() calls trigger flow collection; result intentionally unused
+// UnnecessarySafeCall: MockK match { it?.size } and nullable StateFlow.value patterns are defensive
 @file:Suppress("SleepInsteadOfDelay", "IgnoredReturnValue", "UnnecessarySafeCall")
-// NoRelaxedMocks suppression: android.content.Context is an Android framework class that requires
-// relaxed mocking - explicitly stubbing all methods is not practical for framework classes
 
 package com.lxmf.messenger.viewmodel
 
@@ -120,6 +121,7 @@ class MessagingViewModelTest {
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
+        every { conversationLinkManager.openConversationLink(any()) } just Runs
 
         // Mock identityRepository to return null by default (no icon set)
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -521,6 +523,7 @@ class MessagingViewModelTest {
             every { failingPropagationNodeManager.manualSyncResult } returns MutableSharedFlow()
             every { failingPropagationNodeManager.syncProgress } returns
                 MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
+            every { failingPropagationNodeManager.currentRelay } returns MutableStateFlow(null)
             coEvery { failingPropagationNodeManager.triggerSync() } just Runs
             coEvery { failingPropagationNodeManager.triggerSync(silent = any()) } just Runs
 

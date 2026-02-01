@@ -1,4 +1,4 @@
-@file:Suppress("UnnecessaryApply", "IgnoredReturnValue")
+@file:Suppress("IgnoredReturnValue") // first() calls trigger flow collection, result intentionally unused
 
 package com.lxmf.messenger.viewmodel
 
@@ -202,7 +202,7 @@ class AnnounceStreamViewModelTest {
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
 
             // Fast-forward past the 10 second timeout
-            testScheduler.apply { advanceTimeBy(11000) }
+            testScheduler.advanceTimeBy(11000)
             advanceUntilIdle()
 
             viewModel.initializationStatus.test {

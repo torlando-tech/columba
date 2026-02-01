@@ -1,3 +1,5 @@
+// NoVerifyOnlyTests: Tests verify correct send path by checking which method was/wasn't called
+// NoRelaxedMocks: Context, BluetoothManager, BluetoothAdapter are Android framework classes
 @file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 
 package com.lxmf.messenger.reticulum.ble.bridge

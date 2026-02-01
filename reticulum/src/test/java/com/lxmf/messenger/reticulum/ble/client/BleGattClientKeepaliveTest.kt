@@ -1,4 +1,6 @@
-@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+// Context, BluetoothAdapter are Android framework classes; BleOperationQueue not used in these tests
+// (tests focus on keepalive counter logic via reflection, queue operations are incidental)
+@file:Suppress("NoRelaxedMocks")
 
 package com.lxmf.messenger.reticulum.ble.client
 

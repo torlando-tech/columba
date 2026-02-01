@@ -1,5 +1,3 @@
-@file:Suppress("SleepInsteadOfDelay")
-
 package com.lxmf.messenger.service.persistence
 
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
@@ -80,6 +78,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     // We use advanceUntilIdle() + Thread.sleep() to ensure the async operations complete.
     // This is a pragmatic compromise for testing fire-and-forget coroutines.
 
+    @Suppress("SleepInsteadOfDelay") // Room dispatches to IO, test dispatcher can't control it
     @Test
     fun `persistAnnounce inserts new announce into database`() =
         testScope.runTest {
@@ -539,6 +538,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
 
     // ========== persistPeerIdentity() Tests ==========
 
+    @Suppress("SleepInsteadOfDelay") // Room dispatches to IO, test dispatcher can't control it
     @Test
     fun `persistPeerIdentity saves peer identity to database`() =
         testScope.runTest {

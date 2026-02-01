@@ -1,3 +1,5 @@
+// NoVerifyOnlyTests: Tests verify Python handles cleanup by checking disconnect is NOT called
+// NoRelaxedMocks: Context, BluetoothManager, BluetoothAdapter, PyObject are framework classes
 @file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 
 package com.lxmf.messenger.reticulum.ble.bridge

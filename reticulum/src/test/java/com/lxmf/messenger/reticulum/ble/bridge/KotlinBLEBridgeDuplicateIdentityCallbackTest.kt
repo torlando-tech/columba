@@ -1,4 +1,5 @@
-@file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
+// Context, BluetoothManager, BluetoothAdapter, PyObject are framework classes with many methods
+@file:Suppress("NoRelaxedMocks")
 
 package com.lxmf.messenger.reticulum.ble.bridge
 

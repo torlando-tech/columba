@@ -1,3 +1,5 @@
+// Context, SharedPreferences, SharedPreferences.Editor are Android framework classes;
+// explicitly stubbing all methods is not practical
 @file:Suppress("NoRelaxedMocks")
 
 package com.lxmf.messenger.viewmodel

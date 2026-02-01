@@ -1,3 +1,5 @@
+// Production code uses withContext(Dispatchers.IO) for image decoding;
+// test dispatcher cannot control real IO threads, so Thread.sleep() is needed
 @file:Suppress("SleepInsteadOfDelay")
 
 package com.lxmf.messenger.viewmodel
@@ -141,9 +143,17 @@ class MessagingViewModelImageLoadingTest {
         coEvery { conversationRepository.markConversationAsRead(any()) } just Runs
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
         every { contactRepository.hasContactFlow(any()) } returns flowOf(false)
+        every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         coEvery { contactRepository.hasContact(any()) } returns false
+        coEvery { contactRepository.addContactFromConversation(any(), any()) } returns Result.success(Unit)
+        coEvery { contactRepository.deleteContact(any()) } just Runs
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
+        every { propagationNodeManager.syncProgress } returns
+            MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
+        every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
+        coEvery { propagationNodeManager.triggerSync() } just Runs
+        coEvery { propagationNodeManager.triggerSync(silent = any()) } just Runs
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
         every { reticulumProtocol.setConversationActive(any()) } just Runs
         every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()

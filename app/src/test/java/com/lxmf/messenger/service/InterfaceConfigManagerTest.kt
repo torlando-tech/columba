@@ -111,6 +111,8 @@ class InterfaceConfigManagerTest {
         every { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
         every { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns true
+        coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+        coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
 
         // Setup identity repository mock
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -354,6 +356,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(5)
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
@@ -395,6 +398,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(3)
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
 
@@ -466,6 +470,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
 
             coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
@@ -500,6 +505,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
 
             val announceDao = mockk<AnnounceDao>()
             every { database.announceDao() } returns announceDao
@@ -536,6 +542,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
@@ -575,6 +582,7 @@ class InterfaceConfigManagerTest {
             val serviceProtocol = mockk<ServiceReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceProtocol.bindService() } just Runs
             coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.failure(Exception("Test failure"))
             coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
 

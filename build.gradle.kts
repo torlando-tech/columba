@@ -95,9 +95,18 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
     group = "verification"
     description = "Generate unified Jacoco coverage report for all modules"
 
-    // NOTE: Use noSentryDebug variant - it's faster and tests the same code as sentryDebug.
-    // The only difference is SENTRY_DSN buildConfigField, which unit tests don't exercise.
-    dependsOn(subprojects.mapNotNull { it.tasks.findByName("testNoSentryDebugUnitTest") })
+    // Depend on unit tests from all modules:
+    // - app: noSentryDebug variant (sentry/noSentry share the same code)
+    // - reticulum, data: debug variant (no product flavors)
+    subprojects.forEach { subproject ->
+        // Try noSentryDebugUnitTest first (for app module), fall back to debugUnitTest (for other modules)
+        val testTask =
+            subproject.tasks.findByName("testNoSentryDebugUnitTest")
+                ?: subproject.tasks.findByName("testDebugUnitTest")
+        if (testTask != null) {
+            dependsOn(testTask)
+        }
+    }
 
     // Use lazy configuration - fileTree is resolved at execution time, not registration time
     val sourceDirectoriesList = mutableListOf<File>()
@@ -118,10 +127,12 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
         // Add patterns for class directories and exec data (resolved at execution time)
         val buildDir = subproject.layout.buildDirectory.get().asFile
         // Use ASM-transformed classes which contain all classes including UI/Compose
-        // NOTE: Using noSentryDebug variant for consistent test/class alignment
+        // Try both variant paths - noSentryDebug for app, debug for other modules
         classDirectoriesList.add(File("$buildDir/intermediates/classes/noSentryDebug/transformNoSentryDebugClassesWithAsm/dirs"))
+        classDirectoriesList.add(File("$buildDir/intermediates/classes/debug/transformDebugClassesWithAsm/dirs"))
         // Android puts coverage data in outputs/unit_test_code_coverage/
         execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/noSentryDebugUnitTest")
+        execDataPatterns.add("$buildDir/outputs/unit_test_code_coverage/debugUnitTest")
     }
 
     sourceDirectories.setFrom(sourceDirectoriesList)

@@ -351,10 +351,10 @@ jobs:
       - name: Run unit tests and generate coverage report
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
-        # NOTE: Only run noSentry variant tests - sentry and noSentry share the same test code.
-        # The only difference is SENTRY_DSN buildConfigField, which tests don't exercise.
-        # Running both variants doubles test time without additional coverage.
-        run: ./gradlew testNoSentryDebugUnitTest jacocoTestReport --stacktrace --max-workers=4
+        # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
+        # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
+        # For other modules (reticulum, data), run their standard debug tests.
+        run: ./gradlew :app:testNoSentryDebugUnitTest :reticulum:testDebugUnitTest :data:testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()

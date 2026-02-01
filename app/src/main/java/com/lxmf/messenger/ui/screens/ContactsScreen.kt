@@ -422,8 +422,14 @@ fun ContactsScreen(
         when (selectedTab) {
             ContactsTab.MY_CONTACTS -> {
                 // My Contacts tab content
+                // Only show loading spinner when loading AND list is empty
+                // This prevents flickering when data updates while content is displayed
+                val hasContacts =
+                    contactsState.groupedContacts.relay != null ||
+                        contactsState.groupedContacts.pinned.isNotEmpty() ||
+                        contactsState.groupedContacts.all.isNotEmpty()
                 when {
-                    contactsState.isLoading -> {
+                    contactsState.isLoading && !hasContacts -> {
                         LoadingContactsState(
                             modifier =
                                 Modifier
@@ -431,11 +437,7 @@ fun ContactsScreen(
                                     .padding(paddingValues),
                         )
                     }
-                    contactsState.groupedContacts.relay == null &&
-                        contactsState.groupedContacts.pinned
-                            .isEmpty() &&
-                        contactsState.groupedContacts.all
-                            .isEmpty() -> {
+                    !contactsState.isLoading && !hasContacts -> {
                         EmptyContactsState(
                             modifier =
                                 Modifier

@@ -678,14 +678,15 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
-    // Check loading state - show spinner while initial data loads
+    // Check loading state - only show spinner for initial load when list is empty
+    // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
 
     when {
-        isLoading -> {
+        isLoading && pagingItems.itemCount == 0 -> {
             LoadingNetworkState(modifier = modifier.fillMaxSize())
         }
-        pagingItems.itemCount == 0 -> {
+        !isLoading && pagingItems.itemCount == 0 -> {
             EmptyAnnounceState(modifier = modifier.fillMaxSize())
         }
         else -> {

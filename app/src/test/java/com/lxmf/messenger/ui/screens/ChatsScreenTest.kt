@@ -717,8 +717,8 @@ class ChatsScreenTest {
 
     @Test
     fun chatsScreen_emptyList_displaysEmptyState() {
-        // Given
-        val mockViewModel = createMockChatsViewModel(conversations = emptyList())
+        // Given - not loading and empty list
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = false)
 
         // When
         composeTestRule.setContent {
@@ -731,6 +731,70 @@ class ChatsScreenTest {
 
         // Then
         composeTestRule.onNodeWithText("No conversations yet").assertIsDisplayed()
+    }
+
+    // ========== Loading State Flickering Prevention Tests ==========
+
+    @Test
+    fun chatsScreen_loadingWithEmptyList_showsLoadingSpinner() {
+        // Given - loading AND empty list should show loading state
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = true)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - loading spinner should be visible
+        composeTestRule.onNodeWithText("Loading conversations...").assertIsDisplayed()
+        // Empty state should NOT be visible
+        composeTestRule.onNodeWithText("No conversations yet").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_loadingWithExistingConversations_showsConversationsNotSpinner() {
+        // Given - loading but list has items should show the list (prevents flickering)
+        val conversations =
+            listOf(
+                TestFactories.createConversation(peerHash = "peer1", peerName = "Alice"),
+            )
+        val mockViewModel = createMockChatsViewModel(conversations = conversations, isLoading = true)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - conversations should be visible, NOT the loading spinner
+        composeTestRule.onNodeWithText("Alice").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Loading conversations...").assertDoesNotExist()
+    }
+
+    @Test
+    fun chatsScreen_notLoadingWithEmptyList_showsEmptyStateNotSpinner() {
+        // Given - not loading and empty should show empty state, not loading spinner
+        val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = false)
+
+        // When
+        composeTestRule.setContent {
+            ChatsScreen(
+                onChatClick = { _, _ -> },
+                onViewPeerDetails = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // Then - empty state should be visible, NOT loading spinner
+        composeTestRule.onNodeWithText("No conversations yet").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Loading conversations...").assertDoesNotExist()
     }
 
     @Test

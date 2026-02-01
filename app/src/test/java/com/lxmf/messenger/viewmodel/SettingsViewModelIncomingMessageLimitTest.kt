@@ -144,6 +144,24 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
 
+        // Notification settings flows
+        every { settingsRepository.notificationsEnabledFlow } returns MutableStateFlow(true)
+        every { settingsRepository.notificationReceivedMessageFlow } returns MutableStateFlow(true)
+        every { settingsRepository.notificationReceivedMessageFavoriteFlow } returns MutableStateFlow(true)
+        every { settingsRepository.notificationHeardAnnounceFlow } returns MutableStateFlow(false)
+        every { settingsRepository.notificationBleConnectedFlow } returns MutableStateFlow(false)
+        every { settingsRepository.notificationBleDisconnectedFlow } returns MutableStateFlow(false)
+
+        // Privacy settings flows
+        every { settingsRepository.blockUnknownSendersFlow } returns MutableStateFlow(false)
+
+        // Telemetry request settings flows
+        every { settingsRepository.telemetryRequestEnabledFlow } returns MutableStateFlow(false)
+        every { settingsRepository.telemetryRequestIntervalSecondsFlow } returns MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS)
+        every { settingsRepository.lastTelemetryRequestTimeFlow } returns MutableStateFlow<Long?>(null)
+        every { settingsRepository.telemetryHostModeEnabledFlow } returns MutableStateFlow(false)
+        every { settingsRepository.telemetryAllowedRequestersFlow } returns MutableStateFlow(emptySet())
+
         // Mock PropagationNodeManager flows (StateFlows)
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)

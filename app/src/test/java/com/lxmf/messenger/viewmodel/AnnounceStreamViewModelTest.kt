@@ -254,8 +254,10 @@ class AnnounceStreamViewModelTest {
     fun `processes multiple announces sequentially`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
-            var count = 0
-            coEvery { announceRepository.getAnnounceCount() } answers { ++count }
+            var saveCount = 0
+            coEvery {
+                announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } answers { saveCount++ }
 
             viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
             advanceUntilIdle()
@@ -279,8 +281,8 @@ class AnnounceStreamViewModelTest {
             announceFlow.emit(announce3)
             advanceUntilIdle()
 
-            // Verify all announces were saved and count is correct
-            assertEquals("Count should reflect 3 saved announces", 3, count)
+            // Verify all announces were saved
+            assertEquals("Count should reflect 3 saved announces", 3, saveCount)
             coVerify(exactly = 3) {
                 announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }

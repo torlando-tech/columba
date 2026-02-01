@@ -509,6 +509,7 @@ class ContactsViewModelTest {
     fun `unsetRelayAndDelete - deletes and triggers reselection`() =
         runTest {
             // Given
+            coEvery { propagationNodeManager.excludeFromAutoSelect(any()) } just Runs
             coEvery { contactRepository.deleteContact(any()) } just Runs
             coEvery { propagationNodeManager.onRelayDeleted() } just Runs
 

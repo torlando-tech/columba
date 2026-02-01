@@ -14,10 +14,12 @@ import com.lxmf.messenger.data.model.RNodeRegionalPreset
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.service.InterfaceConfigManager
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +111,9 @@ class RNodeWizardViewModelTest {
 
         // Mock allInterfaces to return empty list (no duplicates)
         every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
+
+        // Mock configManager.setPendingChanges() which is called after successful save
+        every { configManager.setPendingChanges(any()) } just Runs
     }
 
     @After
@@ -2423,6 +2428,7 @@ class RNodeWizardViewModelTest {
             every { interfaceRepository.allInterfaces } returns flowOf(listOf(existingConfig))
             coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
             coEvery { interfaceRepository.entityToConfig(entity) } returns existingConfig
+            coEvery { interfaceRepository.updateInterface(interfaceId, any()) } just Runs
 
             viewModel.loadExistingConfig(interfaceId)
             advanceUntilIdle()

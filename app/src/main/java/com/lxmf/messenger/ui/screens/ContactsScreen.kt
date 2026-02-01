@@ -137,8 +137,9 @@ fun ContactsScreen(
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
-    // Tab selection state
-    var selectedTab by remember { mutableStateOf(ContactsTab.MY_CONTACTS) }
+    // Tab selection state - use rememberSaveable to preserve across navigation
+    var selectedTab by androidx.compose.runtime.saveable
+        .rememberSaveable { mutableStateOf(ContactsTab.MY_CONTACTS) }
 
     // Network tab state
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()

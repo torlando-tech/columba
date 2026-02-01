@@ -49,7 +49,8 @@ class SettingsRepositoryTest {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
 
-        mockCustomThemeRepository = mockk(relaxed = true)
+        // All methods explicitly stubbed below (no relaxed mock needed)
+        mockCustomThemeRepository = mockk()
 
         // Mock theme repository flows to prevent null pointer exceptions
         every { mockCustomThemeRepository.getAllThemes() } returns flowOf(emptyList())

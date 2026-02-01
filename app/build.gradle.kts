@@ -209,12 +209,14 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("Boolean", "USE_RUST", "false")
+            buildConfigField("Boolean", "ENABLE_MEMORY_PROFILING", "true")
         }
         debug {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
             buildConfigField("Boolean", "USE_RUST", "false")
+            buildConfigField("Boolean", "ENABLE_MEMORY_PROFILING", "true")
             enableUnitTestCoverage = true
             enableAndroidTestCoverage = true
         }
@@ -468,6 +470,8 @@ dependencies {
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)
+    // Note: mockk-android removed - requires minSdk 26 but project uses 24
+    // Use real implementations or test doubles instead for instrumented tests
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.turbine)
     androidTestImplementation(platform(libs.compose.bom))

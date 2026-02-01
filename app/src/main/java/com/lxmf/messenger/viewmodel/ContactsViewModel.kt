@@ -153,11 +153,7 @@ class ContactsViewModel
                     emit(ContactsState(isLoading = true))
                 }.stateIn(
                     scope = viewModelScope,
-                    started =
-                        SharingStarted.WhileSubscribed(
-                            stopTimeoutMillis = 0,
-                            replayExpirationMillis = 0,
-                        ),
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = ContactsState(isLoading = true),
                 )
 

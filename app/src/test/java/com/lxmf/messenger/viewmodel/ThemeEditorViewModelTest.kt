@@ -80,9 +80,18 @@ class ThemeEditorViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        customThemeRepository = mockk<CustomThemeRepository>(relaxed = true)
-        settingsRepository = mockk<com.lxmf.messenger.repository.SettingsRepository>(relaxed = true)
+        customThemeRepository = mockk<CustomThemeRepository>()
+        settingsRepository = mockk<com.lxmf.messenger.repository.SettingsRepository>()
         savedStateHandle = SavedStateHandle()
+
+        // Default stubs for repository methods
+        coEvery { customThemeRepository.getThemeById(any()) } returns null
+        coEvery {
+            customThemeRepository.saveTheme(any(), any(), any(), any(), any(), any(), any(), any())
+        } returns 1L
+        coEvery {
+            customThemeRepository.updateTheme(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } just Runs
     }
 
     @After
@@ -247,10 +256,11 @@ class ThemeEditorViewModelTest {
             } returns 1L
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "New Theme",
@@ -297,10 +307,11 @@ class ThemeEditorViewModelTest {
             advanceUntilIdle()
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,
@@ -874,15 +885,18 @@ class ThemeEditorViewModelTest {
 
             coEvery { customThemeRepository.getThemeById(savedThemeId) } returns savedTheme
 
-            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>()
+            // Data class with complex ColorScheme fields - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
+            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>(relaxed = true)
             every { settingsRepository.customThemeDataToAppTheme(savedTheme) } returns mockCustomTheme
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 
             // When
-            viewModel.saveAndApplyTheme()
+            val result = runCatching { viewModel.saveAndApplyTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveAndApplyTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "Applied Theme",
@@ -934,15 +948,18 @@ class ThemeEditorViewModelTest {
             } just Runs
             coEvery { customThemeRepository.getThemeById(themeId) } returns updatedTheme
 
-            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>()
+            // Data class with complex ColorScheme fields - relaxed mock is appropriate
+            @Suppress("NoRelaxedMocks")
+            val mockCustomTheme = mockk<com.lxmf.messenger.ui.theme.CustomTheme>(relaxed = true)
             every { settingsRepository.customThemeDataToAppTheme(updatedTheme) } returns mockCustomTheme
             coEvery { settingsRepository.saveThemePreference(mockCustomTheme) } just Runs
 
             // When
-            viewModel.saveAndApplyTheme()
+            val result = runCatching { viewModel.saveAndApplyTheme() }
             advanceUntilIdle()
 
             // Then
+            assertTrue("saveAndApplyTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,
@@ -1087,10 +1104,11 @@ class ThemeEditorViewModelTest {
             } returns 1L
 
             // When
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then - verify all three seed colors passed to repository
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.saveTheme(
                     name = "Three Seed Theme",
@@ -1185,10 +1203,11 @@ class ThemeEditorViewModelTest {
             viewModel.updateThemeName("Modified Theme")
             advanceUntilIdle()
 
-            viewModel.saveTheme()
+            val result = runCatching { viewModel.saveTheme() }
             advanceUntilIdle()
 
             // Then - seed colors preserved in update call
+            assertTrue("saveTheme should complete without exception", result.isSuccess)
             coVerify {
                 customThemeRepository.updateTheme(
                     id = themeId,

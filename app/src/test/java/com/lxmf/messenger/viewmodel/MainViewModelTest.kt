@@ -215,7 +215,11 @@ class MainViewModelTest {
                 )
             coEvery {
                 reticulumProtocol.createDestination(
-                    any(), any(), any(), any(), any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
                 )
             } returns Result.success(mockDestination)
 
@@ -312,7 +316,10 @@ class MainViewModelTest {
             viewModel.createIdentity()
             advanceUntilIdle()
 
-            // Verify all operations succeeded
+            // Verify all operations succeeded via state and protocol calls
+            viewModel.networkStatus.test {
+                assertEquals(NetworkStatus.READY, awaitItem())
+            }
             coVerify { reticulumProtocol.initialize(any()) }
             coVerify { reticulumProtocol.createIdentity() }
         }

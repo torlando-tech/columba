@@ -1,3 +1,4 @@
+@file:Suppress("UseOrEmpty", "UnsafeCast")
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.reticulum.model.NetworkStatus

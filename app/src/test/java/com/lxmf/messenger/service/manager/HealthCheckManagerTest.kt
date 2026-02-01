@@ -32,7 +32,9 @@ class HealthCheckManagerTest {
     @Before
     fun setup() {
         testScope = TestScope(testDispatcher)
-        wrapperManager = mockk(relaxed = true)
+        wrapperManager = mockk()
+        // Default stub: return fresh heartbeat (tests can override)
+        every { wrapperManager.getHeartbeat() } returns System.currentTimeMillis() / 1000.0
         staleHeartbeatCallCount = 0
         healthCheckManager =
             HealthCheckManager(

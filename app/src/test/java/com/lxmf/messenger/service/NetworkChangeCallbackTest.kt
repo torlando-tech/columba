@@ -4,9 +4,11 @@ package com.lxmf.messenger.service
 
 import com.lxmf.messenger.service.binder.ReticulumServiceBinder
 import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,8 +43,12 @@ class NetworkChangeCallbackTest {
 
     @Before
     fun setup() {
-        mockBinder = mockk(relaxed = true)
-        mockSettingsAccessor = mockk(relaxed = true)
+        mockBinder = mockk()
+        mockSettingsAccessor = mockk()
+
+        // Stub void methods that may be called in tests
+        every { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) } just Runs
+        every { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) } just Runs
     }
 
     @After
@@ -254,6 +260,15 @@ class NetworkChangeCallbackTest {
             every { mockBinder.isInitialized() } returns true
             coEvery { mockBinder.announceLxmfDestination() } throws RuntimeException("Announce failed")
 
+            var networkChangeTimeSaved = false
+            var autoAnnounceTimeSaved = false
+            every { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) } answers {
+                networkChangeTimeSaved = true
+            }
+            every { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) } answers {
+                autoAnnounceTimeSaved = true
+            }
+
             // Simulate the callback pattern with settings persistence
             launch {
                 try {
@@ -271,6 +286,8 @@ class NetworkChangeCallbackTest {
             advanceUntilIdle()
 
             // Then: Timestamps should NOT be saved
+            assertFalse("Network change time should not be saved on failure", networkChangeTimeSaved)
+            assertFalse("Auto announce time should not be saved on failure", autoAnnounceTimeSaved)
             verify(exactly = 0) { mockSettingsAccessor.saveNetworkChangeAnnounceTime(any()) }
             verify(exactly = 0) { mockSettingsAccessor.saveLastAutoAnnounceTime(any()) }
         }

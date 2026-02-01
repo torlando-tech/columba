@@ -53,7 +53,8 @@ class SettingsRepositoryCrossProcessTest {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
 
-        mockCustomThemeRepository = mockk(relaxed = true)
+        // All methods explicitly stubbed below (no relaxed mock needed)
+        mockCustomThemeRepository = mockk()
         every { mockCustomThemeRepository.getAllThemes() } returns flowOf(emptyList())
         every { mockCustomThemeRepository.getThemeByIdFlow(any()) } returns flowOf(null)
 
@@ -94,7 +95,8 @@ class SettingsRepositoryCrossProcessTest {
     fun `lastAutoAnnounceTimeFlow emits value from SharedPreferences`() =
         runTest {
             val timestamp = 1234567890L
-            crossProcessPrefs.edit()
+            crossProcessPrefs
+                .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
 
@@ -159,7 +161,8 @@ class SettingsRepositoryCrossProcessTest {
     fun `networkChangeAnnounceTimeFlow emits value from SharedPreferences`() =
         runTest {
             val timestamp = 1111111111L
-            crossProcessPrefs.edit()
+            crossProcessPrefs
+                .edit()
                 .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
                 .apply()
 
@@ -229,7 +232,8 @@ class SettingsRepositoryCrossProcessTest {
     fun `lastAutoAnnounceTimeFlow emits only on distinct values`() =
         runTest {
             val timestamp = 6666666666L
-            crossProcessPrefs.edit()
+            crossProcessPrefs
+                .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
 
@@ -238,7 +242,8 @@ class SettingsRepositoryCrossProcessTest {
                 assertEquals(timestamp, awaitItem())
 
                 // Write same value - should NOT emit due to distinctUntilChanged
-                crossProcessPrefs.edit()
+                crossProcessPrefs
+                    .edit()
                     .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                     .apply()
 

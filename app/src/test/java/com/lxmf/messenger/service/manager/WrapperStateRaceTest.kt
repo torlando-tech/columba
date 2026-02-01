@@ -1,3 +1,5 @@
+@file:Suppress("InjectDispatcher")
+
 package com.lxmf.messenger.service.manager
 
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +34,9 @@ class WrapperStateRaceTest {
     /**
      * Mock wrapper that tracks creation/shutdown for testing.
      */
-    class MockWrapper(val id: Int) {
+    class MockWrapper(
+        val id: Int,
+    ) {
         var isShutdown = false
             private set
 
@@ -46,7 +50,7 @@ class WrapperStateRaceTest {
      */
     class UnsafeWrapperManager {
         var wrapper: MockWrapper? = null
-        private var nextId = AtomicInteger(0)
+        private val nextId = AtomicInteger(0)
 
         suspend fun initialize(): MockWrapper {
             // Check-then-act race condition
@@ -85,10 +89,10 @@ class WrapperStateRaceTest {
         private val mutex = Mutex()
         var wrapper: MockWrapper? = null
             private set
-        private var nextId = AtomicInteger(0)
+        private val nextId = AtomicInteger(0)
 
-        suspend fun initialize(): MockWrapper {
-            return mutex.withLock {
+        suspend fun initialize(): MockWrapper =
+            mutex.withLock {
                 // Shutdown existing while holding lock
                 wrapper?.shutdown()
                 wrapper = null
@@ -100,7 +104,6 @@ class WrapperStateRaceTest {
                 wrapper = newWrapper
                 newWrapper
             }
-        }
 
         suspend fun shutdown() {
             val wrapperToShutdown: MockWrapper?

@@ -47,9 +47,9 @@ class NotificationHelperTest {
         val app = shadowOf(context as Application)
         app.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
-        // Mock injected dependencies
-        settingsRepository = mockk(relaxed = true)
-        activeConversationManager = mockk(relaxed = true)
+        // All repository methods are explicitly stubbed below (no relaxed mocks needed)
+        settingsRepository = mockk()
+        activeConversationManager = mockk()
 
         // Mock active conversation
         every { activeConversationManager.activeConversation } returns activeConversationFlow

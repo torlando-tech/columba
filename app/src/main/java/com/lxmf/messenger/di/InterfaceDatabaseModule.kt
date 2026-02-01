@@ -45,9 +45,7 @@ object InterfaceDatabaseModule {
     @ApplicationScope
     @Provides
     @Singleton
-    fun provideApplicationScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob())
-    }
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob())
 
     /**
      * Provides the Interface database singleton.
@@ -58,24 +56,25 @@ object InterfaceDatabaseModule {
         @ApplicationContext context: Context,
         @ApplicationScope applicationScope: CoroutineScope,
         database: Provider<InterfaceDatabase>,
-    ): InterfaceDatabase {
-        return Room.databaseBuilder(
-            context,
-            InterfaceDatabase::class.java,
-            "interface_database",
-        )
-            .addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
-            .addMigrations(InterfaceDatabase.MIGRATION_1_2, InterfaceDatabase.MIGRATION_2_3, InterfaceDatabase.MIGRATION_3_4)
-            .build()
-    }
+    ): InterfaceDatabase =
+        Room
+            .databaseBuilder(
+                context,
+                InterfaceDatabase::class.java,
+                "interface_database",
+            ).addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
+            .addMigrations(
+                InterfaceDatabase.MIGRATION_1_2,
+                InterfaceDatabase.MIGRATION_2_3,
+                InterfaceDatabase.MIGRATION_3_4,
+                InterfaceDatabase.MIGRATION_4_5,
+            ).build()
 
     /**
      * Provides the InterfaceDao from the database.
      */
     @Provides
-    fun provideInterfaceDao(database: InterfaceDatabase): InterfaceDao {
-        return database.interfaceDao()
-    }
+    fun provideInterfaceDao(database: InterfaceDatabase): InterfaceDao = database.interfaceDao()
 
     /**
      * Provides the InterfaceConfigManager for applying configuration changes.
@@ -96,8 +95,8 @@ object InterfaceDatabaseModule {
         identityResolutionManager: IdentityResolutionManager,
         propagationNodeManager: PropagationNodeManager,
         @ApplicationScope applicationScope: CoroutineScope,
-    ): InterfaceConfigManager {
-        return InterfaceConfigManager(
+    ): InterfaceConfigManager =
+        InterfaceConfigManager(
             context = context,
             reticulumProtocol = reticulumProtocol,
             interfaceRepository = interfaceRepository,
@@ -111,5 +110,4 @@ object InterfaceDatabaseModule {
             propagationNodeManager = propagationNodeManager,
             applicationScope = applicationScope,
         )
-    }
 }

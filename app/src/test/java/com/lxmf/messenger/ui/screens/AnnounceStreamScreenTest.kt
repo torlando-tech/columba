@@ -12,11 +12,14 @@ import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -114,7 +117,9 @@ class AnnounceStreamScreenTest {
 
     @Test
     fun announceButton_click_triggersTriggerAnnounce() {
+        var triggerAnnounceCalled = false
         val mockViewModel = createMockAnnounceStreamViewModel()
+        every { mockViewModel.triggerAnnounce() } answers { triggerAnnounceCalled = true }
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
@@ -123,6 +128,7 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithContentDescription("Announce now").performClick()
 
         verify { mockViewModel.triggerAnnounce() }
+        assertTrue("triggerAnnounce() should be called when button is clicked", triggerAnnounceCalled)
     }
 
     // ========== Search Tests ==========
@@ -269,8 +275,9 @@ class AnnounceStreamScreenTest {
         showAudioAnnounces: Boolean = true,
         searchQuery: String = "",
     ): AnnounceStreamViewModel {
-        val mockViewModel = mockk<AnnounceStreamViewModel>(relaxed = true)
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
 
+        // Stub StateFlow properties
         every { mockViewModel.announces } returns flowOf(PagingData.empty<Announce>())
         every { mockViewModel.reachableAnnounceCount } returns MutableStateFlow(reachableCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
@@ -279,6 +286,12 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.isAnnouncing } returns MutableStateFlow(isAnnouncing)
         every { mockViewModel.announceSuccess } returns MutableStateFlow(announceSuccess)
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
+
+        // Stub action methods that may be called
+        every { mockViewModel.triggerAnnounce() } just Runs
+        every { mockViewModel.updateSelectedNodeTypes(any()) } just Runs
+        every { mockViewModel.updateShowAudioAnnounces(any()) } just Runs
+        every { mockViewModel.clearAnnounceStatus() } just Runs
 
         return mockViewModel
     }

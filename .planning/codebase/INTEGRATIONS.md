@@ -7,7 +7,7 @@
 **Reticulum Mesh Network:**
 - Service: Reticulum (RNS) - Decentralized wireless networking protocol
 - What it's used for: Low-bandwidth mesh networking backbone for LXMF messaging, location sharing, voice calls
-- SDK/Client: Fork at `github.com/torlando-tech/Reticulum@rebase-1.1.3`
+- SDK/Client: Fork at `github.com/torlando-tech/Reticulum@fix/socket-leak-1.1.3`
 - Integration: Python library embedded via Chaquopy, initialized by `ReticulumService`
 
 **LXMF Protocol:**

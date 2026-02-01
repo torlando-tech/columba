@@ -279,6 +279,65 @@ class CallViewModelTest {
         assertFalse(viewModel.hasActiveCall())
     }
 
+    // ========== Duration Timer Tests ==========
+
+    @Test
+    fun `duration timer starts when call becomes Active`() =
+        runTest {
+            assertEquals(0L, viewModel.callDuration.value)
+
+            callStateFlow.value = CallState.Active("abc123")
+            testDispatcher.scheduler.advanceTimeBy(3000)
+            testDispatcher.scheduler.runCurrent()
+
+            // Duration should have incremented (at least 2 seconds after 3 seconds elapsed)
+            assertTrue("Duration should be > 0", viewModel.callDuration.value >= 2)
+
+            // Clean up - stop the timer
+            callStateFlow.value = CallState.Idle
+        }
+
+    @Test
+    fun `duration timer stops and resets when call ends`() =
+        runTest {
+            // Start a call
+            callStateFlow.value = CallState.Active("abc123")
+            testDispatcher.scheduler.advanceTimeBy(5000)
+            testDispatcher.scheduler.runCurrent()
+
+            val durationBeforeEnd = viewModel.callDuration.value
+            assertTrue("Duration should be > 0 before end", durationBeforeEnd >= 4)
+
+            // End the call
+            callStateFlow.value = CallState.Ended
+
+            // Duration should be reset to 0
+            assertEquals(0L, viewModel.callDuration.value)
+        }
+
+    @Test
+    fun `duration timer cancels previous timer on re-emit of Active`() =
+        runTest {
+            // Start first call
+            callStateFlow.value = CallState.Active("abc123")
+            testDispatcher.scheduler.advanceTimeBy(10000) // 10 seconds
+            testDispatcher.scheduler.runCurrent()
+
+            val durationAfterFirstPeriod = viewModel.callDuration.value
+            assertTrue("Duration should be >= 9", durationAfterFirstPeriod >= 9)
+
+            // Simulate re-emit of Active (e.g., ViewModel recreation scenario)
+            // Force a different instance by using a different hash
+            callStateFlow.value = CallState.Active("def456")
+            testDispatcher.scheduler.runCurrent()
+
+            // Duration should have been reset to 0 by the new timer
+            assertEquals(0L, viewModel.callDuration.value)
+
+            // Clean up
+            callStateFlow.value = CallState.Idle
+        }
+
     // ========== Duration Formatting Tests ==========
 
     @Test

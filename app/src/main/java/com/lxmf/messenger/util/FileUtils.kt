@@ -380,26 +380,42 @@ object FileUtils {
         context: Context,
         maxAgeMs: Long = 60 * 60 * 1000,
     ): Int {
-        var cleanedCount = 0
         val cutoffTime = System.currentTimeMillis() - maxAgeMs
+        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR)
 
-        listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR).forEach { dirName ->
-            val tempDir = File(context.cacheDir, dirName)
-            if (tempDir.exists()) {
-                tempDir.listFiles()?.forEach { file ->
-                    if (file.lastModified() < cutoffTime) {
-                        if (file.delete()) {
-                            cleanedCount++
-                            Log.d(TAG, "Cleaned up old temp file: $dirName/${file.name}")
-                        }
-                    }
-                }
+        val cleanedCount =
+            dirsToClean.sumOf { dirName ->
+                cleanupDirectory(File(context.cacheDir, dirName), cutoffTime, dirName)
             }
-        }
 
         if (cleanedCount > 0) {
             Log.d(TAG, "Cleaned up $cleanedCount old temp file(s)")
         }
         return cleanedCount
+    }
+
+    /**
+     * Clean up old files in a single directory.
+     *
+     * @param dir The directory to clean
+     * @param cutoffTime Files modified before this time will be deleted
+     * @param dirNameForLog Directory name for logging
+     * @return Number of files deleted
+     */
+    private fun cleanupDirectory(
+        dir: File,
+        cutoffTime: Long,
+        dirNameForLog: String,
+    ): Int {
+        if (!dir.exists()) return 0
+
+        return dir
+            .listFiles()
+            ?.filter { it.lastModified() < cutoffTime }
+            ?.count { file ->
+                file.delete().also { deleted ->
+                    if (deleted) Log.d(TAG, "Cleaned up old temp file: $dirNameForLog/${file.name}")
+                }
+            } ?: 0
     }
 }

@@ -342,12 +342,14 @@ class ChaquopyRecorder:
         try:
             if numframes is None:
                 # Return all available data
-                audio_bytes = bridge.readAudio(self.samples_per_frame)
-                if audio_bytes is None:
+                java_bytes = bridge.readAudio(self.samples_per_frame)
+                if java_bytes is None:
                     return np.reshape(
                         np.concatenate([self.flush().ravel(), self._record_chunk()]),
                         [-1, self.channels],
                     )
+                # Convert Java byte[] to Python bytes for numpy compatibility
+                audio_bytes = bytes(java_bytes)
                 samples = np.frombuffer(audio_bytes, dtype=np.int16) / self.TYPE_MAP_FACTOR
                 return np.reshape(samples.astype("float32"), [-1, self.channels])
             else:
@@ -380,15 +382,27 @@ class ChaquopyRecorder:
         if bridge is None:
             return np.zeros((0,), dtype="float32")
 
-        audio_bytes = bridge.readAudio(self.samples_per_frame)
-        if audio_bytes is None:
+        java_bytes = bridge.readAudio(self.samples_per_frame)
+        if java_bytes is None:
             return np.zeros((0,), dtype="float32")
 
+        # Debug: Log the type and first few bytes
+        ChaquopyRecorder._record_count += 1
+        if ChaquopyRecorder._record_count % 100 == 1:
+            RNS.log(f"📞 _record_chunk: java_bytes type={type(java_bytes).__name__}, len={len(java_bytes)}", RNS.LOG_DEBUG)
+            # Show first 20 bytes as hex
+            try:
+                first_bytes = list(java_bytes[:20]) if hasattr(java_bytes, '__getitem__') else []
+                RNS.log(f"📞 _record_chunk: first 20 bytes={first_bytes}", RNS.LOG_DEBUG)
+            except Exception as e:
+                RNS.log(f"📞 _record_chunk: error reading bytes: {e}", RNS.LOG_DEBUG)
+
+        # Convert Java byte[] to Python bytes for numpy compatibility
+        audio_bytes = bytes(java_bytes)
         samples = np.frombuffer(audio_bytes, dtype=np.int16) / self.TYPE_MAP_FACTOR
         result = samples.astype("float32")
 
-        # Log periodically to understand audio capture
-        ChaquopyRecorder._record_count += 1
+        # Log periodically to understand audio capture (count already incremented above)
         sample_max = abs(result).max() if len(result) > 0 else 0
         if sample_max > 0.001:
             ChaquopyRecorder._record_nonzero_count += 1

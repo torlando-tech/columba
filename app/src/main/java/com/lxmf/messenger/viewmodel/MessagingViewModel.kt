@@ -114,22 +114,23 @@ class MessagingViewModel
         // Image decoding happens asynchronously via loadImageAsync()
         // Combined with refresh trigger to force refresh on delivery status updates
         val messages: Flow<PagingData<MessageUi>> =
-            kotlinx.coroutines.flow.combine(
-                _currentConversation,
-                _messagesRefreshTrigger,
-            ) { peerHash, _ -> peerHash }
+            kotlinx.coroutines.flow
+                .combine(
+                    _currentConversation,
+                    _messagesRefreshTrigger,
+                ) { peerHash, _ -> peerHash }
                 .flatMapLatest { peerHash ->
                     Log.d(TAG, "Flow: Switching to conversation $peerHash")
                     if (peerHash != null) {
-                        conversationRepository.getMessagesPaged(peerHash)
+                        conversationRepository
+                            .getMessagesPaged(peerHash)
                             .map { pagingData ->
                                 pagingData.map { it.toMessageUi() }
                             }
                     } else {
                         flowOf(PagingData.empty())
                     }
-                }
-                .cachedIn(viewModelScope)
+                }.cachedIn(viewModelScope)
 
         // Announce info for online status - updates in real-time when new announces arrive
         val announceInfo: StateFlow<com.lxmf.messenger.data.repository.Announce?> =
@@ -140,8 +141,7 @@ class MessagingViewModel
                     } else {
                         flowOf(null)
                     }
-                }
-                .stateIn(
+                }.stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = null,
@@ -156,8 +156,7 @@ class MessagingViewModel
                     } else {
                         flowOf(null)
                     }
-                }
-                .stateIn(
+                }.stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = null,
@@ -249,8 +248,7 @@ class MessagingViewModel
                     } else {
                         flowOf(false)
                     }
-                }
-                .stateIn(
+                }.stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = false,
@@ -764,6 +762,12 @@ class MessagingViewModel
                         )
                     }
 
+                    // Record peer activity when delivery proof is received
+                    // This proves the peer was recently online and received our message
+                    if (update.status == "delivered") {
+                        conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
+                    }
+
                     // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
                     _messagesRefreshTrigger.value++
 
@@ -828,9 +832,7 @@ class MessagingViewModel
          * @param status The current message status
          * @return true if this is a terminal success status that shouldn't be degraded
          */
-        private fun isTerminalSuccessStatus(status: String): Boolean {
-            return status in setOf("sent", "propagated", "delivered")
-        }
+        private fun isTerminalSuccessStatus(status: String): Boolean = status in setOf("sent", "propagated", "delivered")
 
         private suspend fun saveMessageToDatabase(
             peerHash: String,
@@ -873,9 +875,6 @@ class MessagingViewModel
 
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
-
-            // Open link to peer for real-time connectivity status and speed probing
-            conversationLinkManager.openConversationLink(destinationHash)
 
             // Mark conversation as read when opening
             viewModelScope.launch {
@@ -969,15 +968,14 @@ class MessagingViewModel
                             iconAppearance = iconAppearance,
                         )
 
-                    result.onSuccess { receipt ->
-                        // Clear pending reply after successful send
-                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
-                        clearReplyTo()
-                        // Reset link inactivity timer
-                        conversationLinkManager.onMessageSent(destinationHash)
-                    }.onFailure { error ->
-                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
-                    }
+                    result
+                        .onSuccess { receipt ->
+                            // Clear pending reply after successful send
+                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
+                            clearReplyTo()
+                        }.onFailure { error ->
+                            handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                        }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
                 } finally {
@@ -1418,6 +1416,11 @@ class MessagingViewModel
             viewModelScope.launch {
                 Log.d(TAG, "Opening quality selection for image")
 
+                // Trigger link establishment for speed probing when user attaches an image
+                _currentConversation.value?.let { destHash ->
+                    conversationLinkManager.openConversationLink(destHash)
+                }
+
                 // Get the current link state for recommendations
                 val linkState = currentLinkState.value
 
@@ -1751,23 +1754,24 @@ class MessagingViewModel
                             replyToMessageId = failedMessage.replyToMessageId,
                         )
 
-                    result.onSuccess { receipt ->
-                        val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
-                        Log.d(TAG, "Retry successful, new hash: ${newMessageHash.take(16)}...")
+                    result
+                        .onSuccess { receipt ->
+                            val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                            Log.d(TAG, "Retry successful, new hash: ${newMessageHash.take(16)}...")
 
-                        // Update the message with the new hash
-                        // Delete the old message entry and create a new one with the new hash
-                        conversationRepository.updateMessageId(messageId, newMessageHash)
-                    }.onFailure { error ->
-                        Log.e(TAG, "Retry failed: ${error.message}", error)
-                        // Mark as failed again with the error message
-                        conversationRepository.updateMessageStatus(messageId, "failed")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = error.message,
-                        )
-                    }
+                            // Update the message with the new hash
+                            // Delete the old message entry and create a new one with the new hash
+                            conversationRepository.updateMessageId(messageId, newMessageHash)
+                        }.onFailure { error ->
+                            Log.e(TAG, "Retry failed: ${error.message}", error)
+                            // Mark as failed again with the error message
+                            conversationRepository.updateMessageStatus(messageId, "failed")
+                            conversationRepository.updateMessageDeliveryDetails(
+                                messageId,
+                                deliveryMethod = null,
+                                errorMessage = error.message,
+                            )
+                        }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error retrying message", e)
                     // Restore failed status
@@ -1820,8 +1824,8 @@ class MessagingViewModel
             // Phase 1 threading policy (zero runBlocking in production code).
             // See THREADING_REDESIGN_PLAN.md Phase 1.2
 
-            // Close conversation link to free resources immediately
-            _currentConversation.value?.let { conversationLinkManager.closeConversationLink(it) }
+            // Links are left open to naturally close via Reticulum's stale timeout (~12 min)
+            // rather than explicitly closing - this allows link reuse if user returns quickly
 
             // Clear active conversation (re-enables notifications)
             activeConversationManager.setActive(null)
@@ -1868,15 +1872,14 @@ internal fun validateAndSanitizeContent(
     return validationResult.getOrThrow()
 }
 
-private fun validateDestinationHash(destinationHash: String): ByteArray? {
-    return when (val result = InputValidator.validateDestinationHash(destinationHash)) {
+private fun validateDestinationHash(destinationHash: String): ByteArray? =
+    when (val result = InputValidator.validateDestinationHash(destinationHash)) {
         is ValidationResult.Success -> result.value
         is ValidationResult.Error -> {
             Log.e(HELPER_TAG, "Invalid destination hash: ${result.message}")
             null
         }
     }
-}
 
 private fun DeliveryMethod.toStorageString(): String =
     when (this) {
@@ -1990,21 +1993,20 @@ private val HEX_CHARS = "0123456789abcdef".toCharArray()
 private fun resolveActualDestHash(
     receipt: com.lxmf.messenger.reticulum.protocol.MessageReceipt,
     fallbackHash: String,
-): String {
-    return if (receipt.destinationHash.isNotEmpty()) {
+): String =
+    if (receipt.destinationHash.isNotEmpty()) {
         receipt.destinationHash.joinToString("") { "%02x".format(it) }
     } else {
         Log.w(HELPER_TAG, "Received empty destination hash from Python, falling back to original: $fallbackHash")
         fallbackHash
     }
-}
 
 /**
  * Parse image data from LXMF fields JSON.
  * Field 6 contains the image data as hex string.
  */
-private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? {
-    return try {
+private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? =
+    try {
         val json = org.json.JSONObject(fieldsJson)
         val hexImageData = json.optString("6", "")
         if (hexImageData.isNotEmpty()) {
@@ -2016,7 +2018,6 @@ private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? {
         Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
         null
     }
-}
 
 /**
  * Add a reaction to the fieldsJson of a message.
@@ -2097,7 +2098,9 @@ sealed class ContactToggleResult {
     data object Removed : ContactToggleResult()
 
     /** Operation failed with the given message */
-    data class Error(val message: String) : ContactToggleResult()
+    data class Error(
+        val message: String,
+    ) : ContactToggleResult()
 }
 
 /**

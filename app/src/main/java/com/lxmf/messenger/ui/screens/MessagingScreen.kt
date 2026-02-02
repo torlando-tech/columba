@@ -632,23 +632,25 @@ fun MessagingScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Online status indicator - considers active link OR recent announce
-                        val lastSeen = announceInfo?.lastSeenTimestamp
+                        // Online status indicator - combines link activity, delivery proofs, and announces
+                        val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
+                        val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
+                        val lastActivity = maxOf(lastSeenFromAnnounce, lastActivityFromLink)
                         val hasActiveLink = conversationLinkState?.isActive == true
                         val isEstablishing = conversationLinkState?.isEstablishing == true
-                        val hasRecentAnnounce =
-                            lastSeen != null &&
-                                System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
-                        val isOnline = hasActiveLink || hasRecentAnnounce
+                        val hasRecentActivity =
+                            lastActivity > 0 &&
+                                System.currentTimeMillis() - lastActivity < (5 * 60 * 1000L) // 5 minutes
+                        val isOnline = hasActiveLink || hasRecentActivity
 
                         // Debug logging
                         android.util.Log.d(
                             "MessagingScreen",
                             "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, " +
-                                "hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                                "hasRecentActivity=$hasRecentActivity, lastActivity=$lastActivity, linkState=$conversationLinkState",
                         )
 
-                        if (lastSeen != null || hasActiveLink || isEstablishing) {
+                        if (lastActivity > 0 || hasActiveLink || isEstablishing) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -687,8 +689,8 @@ fun MessagingScreen(
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        hasRecentAnnounce -> "Online"
-                                        lastSeen != null -> formatRelativeTime(lastSeen)
+                                        hasRecentActivity -> "Online"
+                                        lastActivity > 0 -> formatRelativeTime(lastActivity)
                                         else -> ""
                                     }
                                 Text(

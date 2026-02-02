@@ -34,7 +34,9 @@ object TextSanitizer {
     const val MAX_PREVIEW_LENGTH = 100
 
     // Pre-compiled regex patterns for performance
-    private val CONTROL_CHARS_PATTERN = Regex("[\\p{C}&&[^\n\r]]")
+    // Note: Excludes \n, \r (newlines) and \t (tabs) from control char removal
+    // so tabs can be normalized to spaces by WHITESPACE_PATTERN
+    private val CONTROL_CHARS_PATTERN = Regex("[\\p{C}&&[^\n\r\t]]")
     private val WHITESPACE_PATTERN = Regex("[ \\t]+")
 
     /**

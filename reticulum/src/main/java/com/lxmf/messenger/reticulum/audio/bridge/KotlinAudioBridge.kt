@@ -61,11 +61,10 @@ class KotlinAudioBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinAudioBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinAudioBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinAudioBridge(context.applicationContext).also { instance = it }
             }
-        }
 
         /**
          * Reset singleton instance (for testing).
@@ -130,6 +129,7 @@ class KotlinAudioBridge(
      * @param channels Number of channels (1 for mono, 2 for stereo)
      * @param lowLatency Enable low-latency mode (API 26+)
      */
+    @Suppress("LongMethod") // Audio setup requires detailed configuration and logging
     fun startPlayback(
         sampleRate: Int,
         channels: Int,
@@ -166,13 +166,15 @@ class KotlinAudioBridge(
         }
 
         val attributes =
-            AudioAttributes.Builder()
+            AudioAttributes
+                .Builder()
                 .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
 
         val format =
-            AudioFormat.Builder()
+            AudioFormat
+                .Builder()
                 .setSampleRate(sampleRate)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                 .setChannelMask(channelConfig)
@@ -180,7 +182,8 @@ class KotlinAudioBridge(
 
         try {
             val trackBuilder =
-                AudioTrack.Builder()
+                AudioTrack
+                    .Builder()
                     .setAudioAttributes(attributes)
                     .setAudioFormat(format)
                     .setBufferSizeInBytes(bufferSize * 2) // Double buffer for smoothness
@@ -383,15 +386,15 @@ class KotlinAudioBridge(
     }
 
     /**
-     * Set audio mode before creating AudioRecord.
-     * On Samsung devices, mic routing depends on mode being set first.
+     * Ensure audio mode is suitable for recording.
+     * NOTE: We intentionally do NOT force MODE_IN_COMMUNICATION here.
+     * On Samsung devices, setting this mode before AudioRecord creation
+     * can cause the microphone to return zeros. Let playback handle the mode.
      */
     private fun ensureAudioModeForRecording() {
-        val previousMode = audioManager.mode
-        if (previousMode != AudioManager.MODE_IN_COMMUNICATION) {
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            Log.i(TAG, "📞 Pre-recording: Audio mode $previousMode -> ${audioManager.mode}")
-        }
+        val currentMode = audioManager.mode
+        Log.i(TAG, "📞 Pre-recording: Audio mode is $currentMode (not forcing MODE_IN_COMMUNICATION)")
+        // Don't change the mode - let playback handle it, or leave it as-is
     }
 
     /** Create and initialize AudioRecord, returns null on error. */
@@ -402,10 +405,14 @@ class KotlinAudioBridge(
         samplesPerFrame: Int,
         channels: Int,
     ): AudioRecord? {
-        // Use MIC source - VOICE_COMMUNICATION may not be available on all devices
-        // The key fix is setting MODE_IN_COMMUNICATION before creating AudioRecord
-        val audioSource = MediaRecorder.AudioSource.MIC
-        Log.i(TAG, "📞 Using audio source: $audioSource (MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})")
+        // Use DEFAULT audio source for maximum compatibility across devices.
+        // On Samsung devices, VOICE_COMMUNICATION can fail to capture audio even when
+        // MODE_IN_COMMUNICATION is set. DEFAULT works more reliably.
+        val audioSource = MediaRecorder.AudioSource.DEFAULT
+        Log.i(
+            TAG,
+            "📞 Using audio source: $audioSource (DEFAULT=${MediaRecorder.AudioSource.DEFAULT}, MIC=${MediaRecorder.AudioSource.MIC}, VOICE_COMM=${MediaRecorder.AudioSource.VOICE_COMMUNICATION})",
+        )
 
         val record =
             AudioRecord(
@@ -705,14 +712,13 @@ class KotlinAudioBridge(
      * Check if speakerphone is enabled.
      */
     @Suppress("DEPRECATION")
-    fun isSpeakerphoneOn(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    fun isSpeakerphoneOn(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val device = audioManager.communicationDevice
             device?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
         } else {
             audioManager.isSpeakerphoneOn
         }
-    }
 
     /**
      * Check if microphone is muted.

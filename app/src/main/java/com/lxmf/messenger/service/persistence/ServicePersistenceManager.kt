@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -207,10 +208,19 @@ class ServicePersistenceManager(
                     activeIdentity.identityHash,
                 )
 
-            // Get peer name from existing conversation or use formatted hash
-            val peerName =
-                existingConversation?.peerName
-                    ?: "Peer ${sourceHash.take(8).uppercase()}"
+            // Get peer name using centralized resolver
+            val peerName = PeerNameResolver.resolve(
+                peerHash = sourceHash,
+                cachedName = existingConversation?.peerName,
+                contactNicknameLookup = {
+                    activeIdentity?.let {
+                        contactDao.getContact(sourceHash, it.identityHash)?.customNickname
+                    }
+                },
+                announcePeerNameLookup = {
+                    announceDao.getAnnounce(sourceHash)?.peerName
+                },
+            )
 
             // Insert/update conversation
             if (existingConversation != null) {
@@ -389,9 +399,11 @@ class ServicePersistenceManager(
      * Look up display name for a peer with priority:
      * 1. Contact's custom nickname (user-set)
      * 2. Announce peer name (from network)
-     * 3. null (caller should use formatted hash as fallback)
+     * 3. Announce peer name by identity hash (for LXST calls)
+     * 4. null (caller should use formatted hash as fallback)
+     *
+     * Uses PeerNameResolver for standard lookups, with additional identity hash fallback.
      */
-    @Suppress("ReturnCount") // Cascading lookup with early returns is clearer than alternatives
     suspend fun lookupDisplayName(destinationHash: String): String? {
         return try {
             Log.d(TAG, "Looking up display name for: $destinationHash")
@@ -400,20 +412,22 @@ class ServicePersistenceManager(
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
 
-            // Check contact for custom nickname first (by destination hash)
-            if (activeIdentity != null) {
-                val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash)
-                Log.d(TAG, "Contact lookup: ${contact?.customNickname ?: "not found"}")
-                if (!contact?.customNickname.isNullOrBlank()) {
-                    return contact!!.customNickname
-                }
-            }
+            // Use centralized resolver for standard lookups
+            val resolvedName = PeerNameResolver.resolve(
+                peerHash = destinationHash,
+                contactNicknameLookup = {
+                    activeIdentity?.let {
+                        contactDao.getContact(destinationHash, it.identityHash)?.customNickname
+                    }
+                },
+                announcePeerNameLookup = {
+                    announceDao.getAnnounce(destinationHash)?.peerName
+                },
+            )
 
-            // Check announce for peer name (by destination hash)
-            val announce = announceDao.getAnnounce(destinationHash)
-            Log.d(TAG, "Announce lookup: ${announce?.peerName ?: "not found"}")
-            if (!announce?.peerName.isNullOrBlank()) {
-                return announce!!.peerName
+            // If resolver found a valid name (not fallback), return it
+            if (PeerNameResolver.isValidPeerName(resolvedName)) {
+                return resolvedName
             }
 
             // For LXST calls, the hash might be the identity hash, not the destination hash.

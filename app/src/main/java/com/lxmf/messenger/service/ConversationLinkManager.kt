@@ -283,6 +283,7 @@ class ConversationLinkManager
                                     isActive = false,
                                     isEstablishing = false,
                                     error = e.message,
+                                    lastActivityTimestamp = System.currentTimeMillis(),
                                 ),
                             )
                         },
@@ -291,7 +292,12 @@ class ConversationLinkManager
                     Log.e(TAG, "Error opening conversation link", e)
                     updateLinkState(
                         destHashHex,
-                        LinkState(isActive = false, isEstablishing = false, error = e.message),
+                        LinkState(
+                            isActive = false,
+                            isEstablishing = false,
+                            error = e.message,
+                            lastActivityTimestamp = System.currentTimeMillis(),
+                        ),
                     )
                 }
 

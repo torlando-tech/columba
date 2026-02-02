@@ -356,4 +356,43 @@ class ConversationLinkManagerTest {
         assertEquals(false, state.isActive)
         assertEquals(recentTimestamp, state.lastActivityTimestamp)
     }
+
+    // ========== Refresh cleanup tests (require mocking) ==========
+
+    @Test
+    fun `refreshAllLinkStatuses does not cleanup entry that becomes active during refresh`() =
+        kotlinx.coroutines.test.runTest {
+            // Given: A mock protocol that returns "active" when queried
+            val mockProtocol = io.mockk.mockk<com.lxmf.messenger.reticulum.protocol.ReticulumProtocol>()
+            io.mockk.coEvery { mockProtocol.getConversationLinkStatus(any()) } returns
+                com.lxmf.messenger.reticulum.protocol.ConversationLinkResult(
+                    isActive = true, // Peer established link to us!
+                    establishmentRateBps = 100_000L,
+                    expectedRateBps = null,
+                    nextHopBitrateBps = null,
+                    rttSeconds = 0.1,
+                    hops = 1,
+                    linkMtu = 500,
+                )
+
+            val manager = ConversationLinkManager(mockProtocol)
+
+            // Set up an inactive, stale entry (would normally be cleaned up)
+            val staleTimestamp = System.currentTimeMillis() - (20 * 60 * 1000L) // 20 min ago
+            manager.updateLinkState(
+                "abc123def456",
+                ConversationLinkManager.LinkState(
+                    isActive = false,
+                    lastActivityTimestamp = staleTimestamp,
+                ),
+            )
+
+            // When: Refresh runs (which queries protocol and finds link is now active)
+            manager.refreshAllLinkStatuses()
+
+            // Then: Entry should NOT be cleaned up - it's now active!
+            val finalState = manager.getLinkState("abc123def456")
+            org.junit.Assert.assertNotNull("Entry should not be cleaned up", finalState)
+            org.junit.Assert.assertTrue("Entry should now be active", finalState!!.isActive)
+        }
 }

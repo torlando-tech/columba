@@ -399,7 +399,8 @@ class ConversationLinkManager
                 LinkState(isActive = false, error = e.message)
             }
 
-        private fun updateLinkState(
+        @androidx.annotation.VisibleForTesting
+        internal fun updateLinkState(
             destHashHex: String,
             state: LinkState,
         ) {
@@ -437,7 +438,8 @@ class ConversationLinkManager
          * 2. Detects when active links become stale (Reticulum closes after ~12 minutes)
          * 3. Cleans up entries that have been inactive for too long
          */
-        private suspend fun refreshAllLinkStatuses() {
+        @androidx.annotation.VisibleForTesting
+        internal suspend fun refreshAllLinkStatuses() {
             val currentStates = _linkStates.value
             val now = System.currentTimeMillis()
             val toRemove = mutableSetOf<String>()

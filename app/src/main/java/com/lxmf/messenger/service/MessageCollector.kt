@@ -48,6 +48,7 @@ class MessageCollector
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
         private val peerIconDao: PeerIconDao,
+        private val conversationLinkManager: ConversationLinkManager,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
@@ -145,6 +146,11 @@ class MessageCollector
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post notification for already-persisted message", e)
                             }
+
+                            // Record peer activity for "last seen" status
+                            // Receiving a message proves the peer was recently online
+                            conversationLinkManager.recordPeerActivity(sourceHash)
+
                             return@collect
                         }
 
@@ -235,6 +241,10 @@ class MessageCollector
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
                             Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
+
+                            // Record peer activity for "last seen" status
+                            // Receiving a message proves the peer was recently online
+                            conversationLinkManager.recordPeerActivity(sourceHash)
 
                             // Check if sender is a saved peer (favorite)
                             val isFavorite =

@@ -14,6 +14,7 @@ import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedConversation
 import com.lxmf.messenger.data.storage.AttachmentStorageManager
+import com.lxmf.messenger.data.util.TextSanitizer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -189,15 +190,10 @@ class ConversationRepository
             peerPublicKey: ByteArray? = null,
         ) {
             // VALIDATION: Sanitize message content before storage
-            val sanitizedContent = sanitizeText(message.content, MAX_MESSAGE_LENGTH)
-
-            // VALIDATION: Check content length after sanitization
-            if (sanitizedContent.length > MAX_MESSAGE_LENGTH) {
-                android.util.Log.w("ConversationRepository", "Message content exceeds max length, truncating")
-            }
+            val sanitizedContent = TextSanitizer.sanitizeMessage(message.content)
 
             // VALIDATION: Sanitize peer name
-            val sanitizedPeerName = sanitizeText(peerName, MAX_PEER_NAME_LENGTH)
+            val sanitizedPeerName = TextSanitizer.sanitizePeerName(peerName)
 
             // Get active identity hash (required for all data)
             val activeIdentity =
@@ -596,8 +592,8 @@ class ConversationRepository
 
             // Truncate content for preview
             val contentPreview =
-                previewEntity.content.take(REPLY_PREVIEW_MAX_LENGTH).let {
-                    if (previewEntity.content.length > REPLY_PREVIEW_MAX_LENGTH) "$it..." else it
+                previewEntity.content.take(TextSanitizer.MAX_PREVIEW_LENGTH).let {
+                    if (previewEntity.content.length > TextSanitizer.MAX_PREVIEW_LENGTH) "$it..." else it
                 }
 
             return ReplyPreview(
@@ -912,23 +908,4 @@ class ConversationRepository
             return result
         }
 
-        companion object {
-            private const val MAX_MESSAGE_LENGTH = 10_000
-            private const val MAX_PEER_NAME_LENGTH = 100
-            private const val REPLY_PREVIEW_MAX_LENGTH = 100
-
-            /**
-             * Sanitizes text input for database storage.
-             * Removes control characters and enforces length limits.
-             */
-            private fun sanitizeText(
-                text: String,
-                maxLength: Int,
-            ): String =
-                text
-                    .trim()
-                    .replace(Regex("[\\p{C}&&[^\n\r]]"), "") // Remove control chars except newlines
-                    .replace(Regex("[ \\t]+"), " ") // Normalize spaces/tabs, preserve newlines
-                    .take(maxLength)
-        }
     }

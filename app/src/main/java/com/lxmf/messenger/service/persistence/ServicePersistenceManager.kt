@@ -7,12 +7,13 @@ import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
+import com.lxmf.messenger.data.util.HashUtils
+import com.lxmf.messenger.data.util.TextSanitizer
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.security.MessageDigest
 
 /**
  * Manages database persistence from the service process.
@@ -208,8 +209,12 @@ class ServicePersistenceManager(
                     activeIdentity.identityHash,
                 )
 
-            // Get peer name using centralized resolver
-            val peerName =
+            // Sanitize content to remove control characters and normalize whitespace
+            val sanitizedContent = TextSanitizer.sanitizeMessage(content)
+            val sanitizedPreview = TextSanitizer.sanitizePreview(content)
+
+            // Get peer name using centralized resolver, then sanitize
+            val resolvedName =
                 PeerNameResolver.resolve(
                     peerHash = sourceHash,
                     cachedName = existingConversation?.peerName,
@@ -222,16 +227,17 @@ class ServicePersistenceManager(
                         announceDao.getAnnounce(sourceHash)?.peerName
                     },
                 )
+            val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
             // Insert/update conversation
             if (existingConversation != null) {
                 // Update peerName if we resolved a better name (nickname or announce)
                 val updatedPeerName =
-                    if (PeerNameResolver.isValidPeerName(peerName)) peerName else existingConversation.peerName
+                    if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else existingConversation.peerName
                 val updated =
                     existingConversation.copy(
                         peerName = updatedPeerName,
-                        lastMessage = content.take(100),
+                        lastMessage = sanitizedPreview,
                         lastMessageTimestamp = timestamp,
                         unreadCount = existingConversation.unreadCount + 1,
                         peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
@@ -244,7 +250,7 @@ class ServicePersistenceManager(
                         identityHash = activeIdentity.identityHash,
                         peerName = peerName,
                         peerPublicKey = publicKey,
-                        lastMessage = content.take(100),
+                        lastMessage = sanitizedPreview,
                         lastMessageTimestamp = timestamp,
                         unreadCount = 1,
                         lastSeenTimestamp = 0,
@@ -258,7 +264,7 @@ class ServicePersistenceManager(
                     id = messageHash,
                     conversationHash = sourceHash,
                     identityHash = activeIdentity.identityHash,
-                    content = content,
+                    content = sanitizedContent,
                     timestamp = timestamp,
                     isFromMe = false,
                     status = "delivered",
@@ -462,7 +468,7 @@ class ServicePersistenceManager(
             val allAnnounces = announceDao.getAllAnnouncesSync()
             Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
             for (announce in allAnnounces) {
-                val computedHash = computeIdentityHash(announce.publicKey)
+                val computedHash = HashUtils.computeIdentityHash(announce.publicKey)
                 Log.d(TAG, "  Announce ${announce.peerName}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}")
                 if (computedHash.equals(identityHash, ignoreCase = true)) {
                     Log.d(TAG, "  -> MATCHED!")
@@ -475,17 +481,6 @@ class ServicePersistenceManager(
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
-    }
-
-    /**
-     * Compute identity hash from public key.
-     * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
-     */
-    private fun computeIdentityHash(publicKey: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest(publicKey)
-        // Take first 16 bytes and convert to hex
-        return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
     /**

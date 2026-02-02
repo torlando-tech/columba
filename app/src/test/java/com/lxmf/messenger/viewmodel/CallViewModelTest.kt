@@ -1,3 +1,6 @@
+// NoVerifyOnlyTests: PTT tests verify side effects (IPC calls to bridge/protocol) which is the correct behavior
+@file:Suppress("NoVerifyOnlyTests")
+
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.data.db.entity.ContactEntity
@@ -7,12 +10,14 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.slot
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow

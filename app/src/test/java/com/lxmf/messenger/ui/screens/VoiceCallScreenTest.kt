@@ -1104,7 +1104,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasText("HOLD\nTO TALK", useUnmergedTree = true)).assertIsDisplayed()
+        composeTestRule.onNode(hasText("HOLD\nTO TALK"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -1126,7 +1126,7 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasText("TALKING", useUnmergedTree = true)).assertIsDisplayed()
+        composeTestRule.onNode(hasText("TALKING"), useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -1148,8 +1148,8 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasText("HOLD\nTO TALK", useUnmergedTree = true)).assertDoesNotExist()
-        composeTestRule.onNode(hasText("TALKING", useUnmergedTree = true)).assertDoesNotExist()
+        composeTestRule.onNode(hasText("HOLD\nTO TALK"), useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNode(hasText("TALKING"), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test

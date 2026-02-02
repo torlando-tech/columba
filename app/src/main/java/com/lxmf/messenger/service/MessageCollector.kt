@@ -11,13 +11,13 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import com.lxmf.messenger.service.util.PeerNameResolver
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -429,16 +429,20 @@ class MessageCollector
          * Get peer name with fallback - uses PeerNameResolver for consistent lookup across the app
          */
         private suspend fun getPeerNameWithFallback(peerHash: String): String {
-            val resolvedName = PeerNameResolver.resolve(
-                peerHash = peerHash,
-                cachedName = peerNames[peerHash],
-                announcePeerNameLookup = {
-                    announceRepository.getAnnounce(peerHash)?.peerName
-                },
-                conversationPeerNameLookup = {
-                    conversationRepository.getConversation(peerHash)?.peerName
-                },
-            )
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = peerHash,
+                    cachedName = peerNames[peerHash],
+                    contactNicknameLookup = {
+                        contactRepository.getContact(peerHash)?.customNickname
+                    },
+                    announcePeerNameLookup = {
+                        announceRepository.getAnnounce(peerHash)?.peerName
+                    },
+                    conversationPeerNameLookup = {
+                        conversationRepository.getConversation(peerHash)?.peerName
+                    },
+                )
 
             // Cache the resolved name if it's valid
             if (PeerNameResolver.isValidPeerName(resolvedName)) {
@@ -485,7 +489,5 @@ class MessageCollector
         /**
          * Get statistics about collected messages
          */
-        fun getStats(): String {
-            return "Messages collected: ${_messagesCollected.value}, Known peers: ${peerNames.size}"
-        }
+        fun getStats(): String = "Messages collected: ${_messagesCollected.value}, Known peers: ${peerNames.size}"
     }

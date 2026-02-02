@@ -9,10 +9,11 @@ import android.util.Log
  * used by both MessageCollector (app process) and ServicePersistenceManager (service process).
  *
  * The resolution priority is:
- * 1. Contact custom nickname (user-set, highest priority)
- * 2. Announce peer name (from network)
- * 3. Conversation peer name (from existing conversation)
- * 4. Formatted hash fallback (e.g., "Peer ABCD1234")
+ * 1. In-memory cache (fastest, for repeated lookups)
+ * 2. Contact custom nickname (user-set, highest semantic priority)
+ * 3. Announce peer name (from network)
+ * 4. Conversation peer name (from existing conversation)
+ * 5. Formatted hash fallback (e.g., "Peer ABCD1234")
  */
 object PeerNameResolver {
     private const val TAG = "PeerNameResolver"
@@ -33,61 +34,32 @@ object PeerNameResolver {
         contactNicknameLookup: (suspend () -> String?)? = null,
         announcePeerNameLookup: (suspend () -> String?)? = null,
         conversationPeerNameLookup: (suspend () -> String?)? = null,
-    ): String {
-        // Check cache first (fastest)
-        cachedName?.let {
-            if (isValidPeerName(it)) {
-                Log.d(TAG, "Found peer name in cache: $it")
-                return it
+    ): String =
+        tryLookup("cache") { cachedName }
+            ?: tryLookup("contact", contactNicknameLookup)
+            ?: tryLookup("announce", announcePeerNameLookup)
+            ?: tryLookup("conversation", conversationPeerNameLookup)
+            ?: formatHashAsFallback(peerHash).also {
+                Log.d(TAG, "Using fallback name for peer: $it")
             }
-        }
 
-        // Check contact custom nickname (highest priority for user-set names)
-        contactNicknameLookup?.let { lookup ->
-            try {
-                lookup()?.let { nickname ->
-                    if (isValidPeerName(nickname)) {
-                        Log.d(TAG, "Found peer name in contact nickname: $nickname")
-                        return nickname
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error looking up contact nickname", e)
+    /**
+     * Attempt a single lookup, returning the name only if valid.
+     * Handles null lookups and exceptions gracefully.
+     */
+    private suspend fun tryLookup(
+        source: String,
+        lookup: (suspend () -> String?)?,
+    ): String? {
+        if (lookup == null) return null
+        return try {
+            lookup()?.takeIf { isValidPeerName(it) }?.also {
+                Log.d(TAG, "Found peer name in $source: $it")
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error looking up $source peer name", e)
+            null
         }
-
-        // Check announce peer name (from network)
-        announcePeerNameLookup?.let { lookup ->
-            try {
-                lookup()?.let { name ->
-                    if (isValidPeerName(name)) {
-                        Log.d(TAG, "Found peer name in announce: $name")
-                        return name
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error looking up announce peer name", e)
-            }
-        }
-
-        // Check conversation peer name
-        conversationPeerNameLookup?.let { lookup ->
-            try {
-                lookup()?.let { name ->
-                    if (isValidPeerName(name)) {
-                        Log.d(TAG, "Found peer name in conversation: $name")
-                        return name
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error looking up conversation peer name", e)
-            }
-        }
-
-        // Fall back to formatted hash
-        val fallbackName = formatHashAsFallback(peerHash)
-        Log.d(TAG, "Using fallback name for peer: $fallbackName")
-        return fallbackName
     }
 
     /**

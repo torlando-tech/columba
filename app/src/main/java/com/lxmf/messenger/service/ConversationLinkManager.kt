@@ -13,18 +13,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Manages conversation links for real-time connectivity status and speed probing.
  *
- * When a conversation is opened, establishes a link to the peer. The link provides:
+ * When an image is attached, establishes a link to the peer. The link provides:
  * 1. Real-time "Online" status (active link = reachable)
  * 2. Instant link speed data for transfer time estimates
  *
- * Links are automatically closed after [INACTIVITY_TIMEOUT_MS] without sending a message.
+ * Links are left open and naturally close via Reticulum's stale timeout (~12 minutes).
  */
 @Singleton
 class ConversationLinkManager
@@ -34,10 +33,9 @@ class ConversationLinkManager
     ) {
         companion object {
             private const val TAG = "ConversationLinkManager"
-            private const val INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
-            private const val INACTIVITY_CHECK_INTERVAL_MS = 30 * 1000L // Check every 30 seconds
             private const val LINK_STATUS_REFRESH_INTERVAL_MS = 5 * 1000L // Refresh link status every 5 seconds
             private const val LINK_ESTABLISHMENT_TIMEOUT_SECONDS = 5.0f // Quick timeout - peer should respond fast if online
+            private const val STALE_ENTRY_CLEANUP_THRESHOLD_MS = 15 * 60 * 1000L // Clean up entries inactive for 15+ minutes
 
             // Bandwidth thresholds for preset recommendations (bits per second)
             private const val THRESHOLD_LOW_BPS = 5_000L // < 5 kbps -> LOW
@@ -91,17 +89,6 @@ class ConversationLinkManager
         val linkStates: StateFlow<Map<String, LinkState>> = _linkStates.asStateFlow()
 
         /**
-         * Last message sent time per conversation (for inactivity tracking).
-         * Uses ConcurrentHashMap for thread-safe access from multiple coroutines.
-         */
-        private val lastMessageSentTime = ConcurrentHashMap<String, Long>()
-
-        /**
-         * Background job for checking inactive links.
-         */
-        private var inactivityCheckJob: Job? = null
-
-        /**
          * Background job for refreshing link status (detects incoming links).
          */
         private var linkStatusRefreshJob: Job? = null
@@ -131,6 +118,8 @@ class ConversationLinkManager
             val isEstablishing: Boolean = false,
             /** Error message if establishment failed */
             val error: String? = null,
+            /** Timestamp of last peer activity (link, message, proof, announce) */
+            val lastActivityTimestamp: Long = 0L,
         ) {
             /**
              * Get the best available rate estimate in bits per second.
@@ -282,14 +271,9 @@ class ConversationLinkManager
                                     hops = linkResult.hops,
                                     linkMtu = linkResult.linkMtu,
                                     isEstablishing = false,
+                                    lastActivityTimestamp = if (linkResult.isActive) System.currentTimeMillis() else 0L,
                                 ),
                             )
-                            // Start inactivity timer only for NEW link establishments
-                            // Reused links keep their existing timer to prevent indefinite keep-alive
-                            if (!linkResult.alreadyExisted) {
-                                lastMessageSentTime[destHashHex] = System.currentTimeMillis()
-                            }
-                            startInactivityChecker()
                         },
                         onFailure = { e ->
                             Log.w(TAG, "Failed to establish link to ${destHashHex.take(16)}: ${e.message}")
@@ -317,16 +301,6 @@ class ConversationLinkManager
         }
 
         /**
-         * Record that a message was sent to reset the inactivity timer.
-         *
-         * @param destHashHex Destination hash as hex string
-         */
-        fun onMessageSent(destHashHex: String) {
-            lastMessageSentTime[destHashHex] = System.currentTimeMillis()
-            Log.d(TAG, "Message sent to ${destHashHex.take(16)}, resetting inactivity timer")
-        }
-
-        /**
          * Close a conversation link.
          *
          * @param destHashHex Destination hash as hex string
@@ -351,7 +325,6 @@ class ConversationLinkManager
 
                 // Remove from tracked states
                 _linkStates.value = _linkStates.value - destHashHex
-                lastMessageSentTime.remove(destHashHex)
             }
         }
 
@@ -361,15 +334,44 @@ class ConversationLinkManager
          * @param destHashHex Destination hash as hex string
          * @return LinkState or null if no link tracked
          */
-        fun getLinkState(destHashHex: String): LinkState? {
-            return _linkStates.value[destHashHex]
+        fun getLinkState(destHashHex: String): LinkState? = _linkStates.value[destHashHex]
+
+        /**
+         * Record peer activity (delivery proof, incoming message, etc).
+         *
+         * Updates the lastActivityTimestamp for the peer, which is used to determine
+         * "last seen" status in the UI. This should be called when:
+         * - A delivery proof is received (message was delivered to peer)
+         * - An incoming message is received from the peer
+         *
+         * @param destHashHex Destination hash as hex string
+         * @param timestamp Activity timestamp (defaults to current time)
+         */
+        fun recordPeerActivity(
+            destHashHex: String,
+            timestamp: Long = System.currentTimeMillis(),
+        ) {
+            val current = _linkStates.value[destHashHex]
+            if (current != null) {
+                updateLinkState(destHashHex, current.copy(lastActivityTimestamp = timestamp))
+            } else {
+                // Create minimal entry for peers we haven't linked to yet
+                updateLinkState(
+                    destHashHex,
+                    LinkState(
+                        isActive = false,
+                        lastActivityTimestamp = timestamp,
+                    ),
+                )
+            }
+            Log.d(TAG, "Recorded peer activity for ${destHashHex.take(16)}")
         }
 
         /**
          * Refresh link status from Python layer.
          */
-        suspend fun refreshLinkStatus(destHashHex: String): LinkState {
-            return try {
+        suspend fun refreshLinkStatus(destHashHex: String): LinkState =
+            try {
                 val destHashBytes = HexUtils.hexToBytes(destHashHex)
                 val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
 
@@ -390,7 +392,6 @@ class ConversationLinkManager
                 Log.e(TAG, "Error refreshing link status", e)
                 LinkState(isActive = false, error = e.message)
             }
-        }
 
         private fun updateLinkState(
             destHashHex: String,
@@ -398,21 +399,6 @@ class ConversationLinkManager
         ) {
             _linkStates.value = _linkStates.value + (destHashHex to state)
             Log.d(TAG, "Updated linkStates: key=$destHashHex, active=${state.isActive}, mapSize=${_linkStates.value.size}")
-        }
-
-        private fun startInactivityChecker() {
-            synchronized(this) {
-                if (inactivityCheckJob?.isActive == true) return
-
-                inactivityCheckJob =
-                    scope.launch {
-                        Log.d(TAG, "Starting inactivity checker")
-                        while (true) {
-                            delay(INACTIVITY_CHECK_INTERVAL_MS)
-                            checkInactiveLinks()
-                        }
-                    }
-            }
         }
 
         /**
@@ -431,90 +417,156 @@ class ConversationLinkManager
                         Log.d(TAG, "Starting link status refresh")
                         while (true) {
                             delay(LINK_STATUS_REFRESH_INTERVAL_MS)
-                            refreshNonActiveLinks()
+                            refreshAllLinkStatuses()
                         }
                     }
             }
         }
 
         /**
-         * Refresh status for links that are not currently active.
-         * This detects incoming links that the peer established to us.
+         * Refresh status for all tracked links.
+         *
+         * This method:
+         * 1. Detects incoming links that the peer established to us
+         * 2. Detects when active links become stale (Reticulum closes after ~12 minutes)
+         * 3. Cleans up entries that have been inactive for too long
          */
-        private suspend fun refreshNonActiveLinks() {
+        @Suppress("NestedBlockDepth")
+        private suspend fun refreshAllLinkStatuses() {
             val currentStates = _linkStates.value
+            val now = System.currentTimeMillis()
+            val toRemove = mutableSetOf<String>()
 
             currentStates.forEach { (destHashHex, state) ->
-                // Only refresh non-active, non-establishing links
-                if (!state.isActive && !state.isEstablishing) {
-                    try {
-                        val destHashBytes = HexUtils.hexToBytes(destHashHex)
-                        val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
+                if (state.isEstablishing) return@forEach
 
-                        if (result.isActive) {
-                            Log.d(
-                                TAG,
-                                "Detected incoming link from ${destHashHex.take(16)}: " +
-                                    "rate=${result.establishmentRateBps}, mtu=${result.linkMtu}",
-                            )
-                            updateLinkState(
-                                destHashHex,
-                                LinkState(
-                                    isActive = true,
-                                    establishmentRateBps = result.establishmentRateBps,
-                                    expectedRateBps = result.expectedRateBps,
-                                    nextHopBitrateBps = result.nextHopBitrateBps,
-                                    rttSeconds = result.rttSeconds,
-                                    hops = result.hops,
-                                    linkMtu = result.linkMtu,
-                                    isEstablishing = false,
-                                ),
-                            )
-                            // Don't start inactivity timer for incoming links
-                            // The peer owns this link and should manage its lifecycle
-                            // We only track inactivity for links WE established
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error refreshing link status for ${destHashHex.take(16)}: ${e.message}")
-                    }
+                refreshSingleLinkStatus(destHashHex, state)
+
+                // Check if entry should be cleaned up
+                if (shouldCleanupEntry(destHashHex, now)) {
+                    toRemove.add(destHashHex)
                 }
             }
 
-            // Stop refresh job if no tracked conversations
+            cleanupStaleEntries(toRemove)
+            stopRefreshJobIfEmpty()
+        }
+
+        /**
+         * Refresh status for a single link and update state accordingly.
+         */
+        private suspend fun refreshSingleLinkStatus(
+            destHashHex: String,
+            state: LinkState,
+        ) {
+            try {
+                val destHashBytes = HexUtils.hexToBytes(destHashHex)
+                val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
+
+                when {
+                    // Detect transition from active to inactive (link became stale)
+                    state.isActive && !result.isActive -> {
+                        Log.d(TAG, "Link to ${destHashHex.take(16)} became stale")
+                        updateLinkState(destHashHex, state.copy(isActive = false))
+                    }
+                    // Detect incoming link from peer
+                    !state.isActive && result.isActive -> {
+                        handleNewIncomingLink(destHashHex, result)
+                    }
+                    // Link is still active - update metrics if changed
+                    result.isActive -> {
+                        updateActiveLinkMetrics(destHashHex, state, result)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error refreshing link status for ${destHashHex.take(16)}: ${e.message}")
+            }
+        }
+
+        /**
+         * Handle detection of a new incoming link from peer.
+         */
+        private fun handleNewIncomingLink(
+            destHashHex: String,
+            result: com.lxmf.messenger.reticulum.protocol.ConversationLinkResult,
+        ) {
+            Log.d(
+                TAG,
+                "Detected incoming link from ${destHashHex.take(16)}: " +
+                    "rate=${result.establishmentRateBps}, mtu=${result.linkMtu}",
+            )
+            updateLinkState(
+                destHashHex,
+                LinkState(
+                    isActive = true,
+                    establishmentRateBps = result.establishmentRateBps,
+                    expectedRateBps = result.expectedRateBps,
+                    nextHopBitrateBps = result.nextHopBitrateBps,
+                    rttSeconds = result.rttSeconds,
+                    hops = result.hops,
+                    linkMtu = result.linkMtu,
+                    isEstablishing = false,
+                    lastActivityTimestamp = System.currentTimeMillis(),
+                ),
+            )
+        }
+
+        /**
+         * Update metrics for an active link if they have changed.
+         */
+        private fun updateActiveLinkMetrics(
+            destHashHex: String,
+            state: LinkState,
+            result: com.lxmf.messenger.reticulum.protocol.ConversationLinkResult,
+        ) {
+            val updatedState =
+                state.copy(
+                    isActive = true,
+                    establishmentRateBps = result.establishmentRateBps ?: state.establishmentRateBps,
+                    expectedRateBps = result.expectedRateBps ?: state.expectedRateBps,
+                    nextHopBitrateBps = result.nextHopBitrateBps ?: state.nextHopBitrateBps,
+                    rttSeconds = result.rttSeconds ?: state.rttSeconds,
+                    hops = result.hops ?: state.hops,
+                    linkMtu = result.linkMtu ?: state.linkMtu,
+                )
+            if (updatedState != state) {
+                updateLinkState(destHashHex, updatedState)
+            }
+        }
+
+        /**
+         * Check if an entry should be cleaned up based on staleness.
+         */
+        private fun shouldCleanupEntry(
+            destHashHex: String,
+            now: Long,
+        ): Boolean {
+            val currentState = _linkStates.value[destHashHex] ?: return false
+            val isInactive = !currentState.isActive && !currentState.isEstablishing
+            val hasOldActivity = currentState.lastActivityTimestamp > 0
+            val isStale = (now - currentState.lastActivityTimestamp) > STALE_ENTRY_CLEANUP_THRESHOLD_MS
+            return isInactive && hasOldActivity && isStale
+        }
+
+        /**
+         * Clean up stale link entries.
+         */
+        private fun cleanupStaleEntries(toRemove: Set<String>) {
+            if (toRemove.isNotEmpty()) {
+                _linkStates.value = _linkStates.value - toRemove
+                Log.d(TAG, "Cleaned up ${toRemove.size} stale link entries: ${toRemove.map { it.take(8) }}")
+            }
+        }
+
+        /**
+         * Stop the refresh job if there are no more tracked conversations.
+         */
+        private fun stopRefreshJobIfEmpty() {
             if (_linkStates.value.isEmpty()) {
                 Log.d(TAG, "No tracked conversations, stopping link status refresh")
                 synchronized(this@ConversationLinkManager) {
                     linkStatusRefreshJob?.cancel()
                     linkStatusRefreshJob = null
-                }
-            }
-        }
-
-        private suspend fun checkInactiveLinks() {
-            val now = System.currentTimeMillis()
-            val currentStates = _linkStates.value
-
-            currentStates.forEach { (destHashHex, state) ->
-                if (state.isActive) {
-                    val lastSent = lastMessageSentTime[destHashHex] ?: 0L
-                    val inactiveFor = now - lastSent
-
-                    if (inactiveFor > INACTIVITY_TIMEOUT_MS) {
-                        Log.d(
-                            TAG,
-                            "Link to ${destHashHex.take(16)} inactive for ${inactiveFor / 1000}s, closing",
-                        )
-                        closeConversationLink(destHashHex)
-                    }
-                }
-            }
-
-            // Stop checker if no active links
-            if (_linkStates.value.isEmpty()) {
-                Log.d(TAG, "No active links, stopping inactivity checker")
-                synchronized(this@ConversationLinkManager) {
-                    inactivityCheckJob?.cancel()
-                    inactivityCheckJob = null
                 }
             }
         }

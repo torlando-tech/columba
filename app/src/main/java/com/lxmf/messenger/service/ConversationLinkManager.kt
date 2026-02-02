@@ -431,7 +431,6 @@ class ConversationLinkManager
          * 2. Detects when active links become stale (Reticulum closes after ~12 minutes)
          * 3. Cleans up entries that have been inactive for too long
          */
-        @Suppress("NestedBlockDepth")
         private suspend fun refreshAllLinkStatuses() {
             val currentStates = _linkStates.value
             val now = System.currentTimeMillis()

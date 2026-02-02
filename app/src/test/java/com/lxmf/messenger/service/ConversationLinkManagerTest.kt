@@ -266,4 +266,94 @@ class ConversationLinkManagerTest {
 
         // The fix makes ORIGINAL estimates ~8x more accurate for typical photos
     }
+
+    // ========== lastActivityTimestamp tests ==========
+
+    @Test
+    fun `lastActivityTimestamp defaults to zero`() {
+        val state = ConversationLinkManager.LinkState(isActive = true)
+        assertEquals(0L, state.lastActivityTimestamp)
+    }
+
+    @Test
+    fun `lastActivityTimestamp can be set during construction`() {
+        val timestamp = System.currentTimeMillis()
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                lastActivityTimestamp = timestamp,
+            )
+        assertEquals(timestamp, state.lastActivityTimestamp)
+    }
+
+    @Test
+    fun `lastActivityTimestamp is preserved when copying state`() {
+        val originalTimestamp = 1234567890L
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                lastActivityTimestamp = originalTimestamp,
+            )
+
+        // Copy with different isActive but same timestamp
+        val copied = state.copy(isActive = false)
+        assertEquals(originalTimestamp, copied.lastActivityTimestamp)
+    }
+
+    @Test
+    fun `lastActivityTimestamp can be updated via copy`() {
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                lastActivityTimestamp = 1000L,
+            )
+
+        val newTimestamp = 2000L
+        val updated = state.copy(lastActivityTimestamp = newTimestamp)
+
+        assertEquals(newTimestamp, updated.lastActivityTimestamp)
+        assertEquals(1000L, state.lastActivityTimestamp) // Original unchanged
+    }
+
+    @Test
+    fun `LinkState with activity timestamp preserves other fields`() {
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = true,
+                establishmentRateBps = 50000L,
+                expectedRateBps = 40000L,
+                nextHopBitrateBps = 100000L,
+                rttSeconds = 0.5,
+                hops = 3,
+                linkMtu = 500,
+                isEstablishing = false,
+                error = null,
+                lastActivityTimestamp = 9999L,
+            )
+
+        assertEquals(true, state.isActive)
+        assertEquals(50000L, state.establishmentRateBps)
+        assertEquals(40000L, state.expectedRateBps)
+        assertEquals(100000L, state.nextHopBitrateBps)
+        assertEquals(0.5, state.rttSeconds!!, 0.001)
+        assertEquals(3, state.hops)
+        assertEquals(500, state.linkMtu)
+        assertEquals(false, state.isEstablishing)
+        assertNull(state.error)
+        assertEquals(9999L, state.lastActivityTimestamp)
+    }
+
+    @Test
+    fun `inactive state with recent activity timestamp is valid`() {
+        // This represents a peer we received a message from but don't have an active link to
+        val recentTimestamp = System.currentTimeMillis()
+        val state =
+            ConversationLinkManager.LinkState(
+                isActive = false,
+                lastActivityTimestamp = recentTimestamp,
+            )
+
+        assertEquals(false, state.isActive)
+        assertEquals(recentTimestamp, state.lastActivityTimestamp)
+    }
 }

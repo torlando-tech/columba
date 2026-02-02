@@ -72,6 +72,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TreePine
 import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
+import com.lxmf.messenger.ui.components.SortModeSelector
 import com.lxmf.messenger.ui.theme.MaterialDesignIcons
 import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
 import java.text.SimpleDateFormat
@@ -166,6 +167,15 @@ fun DiscoveredInterfacesScreen(
                                     staleCount = state.staleCount,
                                 )
                             }
+
+                            // Sort mode selector
+                            item {
+                                SortModeSelector(
+                                    currentMode = state.sortMode,
+                                    hasUserLocation = state.userLatitude != null && state.userLongitude != null,
+                                    onModeSelected = { viewModel.setSortMode(it) },
+                                )
+                            }
                         }
 
                         // Show empty state or interfaces
@@ -188,11 +198,12 @@ fun DiscoveredInterfacesScreen(
                                                 iface.name,
                                             )
                                         } else {
-                                            Toast.makeText(
-                                                context,
-                                                "Only TCP interfaces can be added currently",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    "Only TCP interfaces can be added currently",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
                                         }
                                     },
                                     onOpenLocation = {
@@ -222,11 +233,12 @@ fun DiscoveredInterfacesScreen(
                                     onCopyLoraParams = {
                                         val params = formatLoraParamsForClipboard(iface)
                                         clipboardManager.setText(AnnotatedString(params))
-                                        Toast.makeText(
-                                            context,
-                                            "LoRa parameters copied",
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "LoRa parameters copied",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
                                     },
                                     onUseForNewRNode = {
                                         onNavigateToRNodeWizardWithParams(
@@ -1097,8 +1109,8 @@ internal fun InterfaceTypeIcon(
 /**
  * Format interface type for display.
  */
-internal fun formatInterfaceType(type: String): String {
-    return when (type) {
+internal fun formatInterfaceType(type: String): String =
+    when (type) {
         "TCPServerInterface" -> "TCP Server"
         "TCPClientInterface" -> "TCP Client"
         "BackboneInterface" -> "Backbone (TCP)"
@@ -1108,7 +1120,6 @@ internal fun formatInterfaceType(type: String): String {
         "KISSInterface" -> "KISS"
         else -> type
     }
-}
 
 /**
  * Format last heard timestamp as relative time.
@@ -1134,8 +1145,8 @@ internal fun formatLastHeard(timestamp: Long): String {
 /**
  * Format LoRa parameters for clipboard.
  */
-internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
-    return buildString {
+internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String =
+    buildString {
         appendLine("LoRa Parameters from: ${iface.name}")
         appendLine("---")
         iface.frequency?.let { freq ->
@@ -1154,4 +1165,3 @@ internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
             appendLine("Modulation: $mod")
         }
     }.trim()
-}

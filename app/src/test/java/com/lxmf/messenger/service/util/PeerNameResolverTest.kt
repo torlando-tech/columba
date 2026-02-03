@@ -319,9 +319,8 @@ class PeerNameResolverTest {
     // ========== resolve() - Edge Cases ==========
 
     @Test
-    fun `resolve with valid cache skips all lookups`() =
+    fun `resolve with valid cache skips announce and conversation lookups`() =
         runTest {
-            var contactCalled = false
             var announceCalled = false
             var conversationCalled = false
 
@@ -329,10 +328,7 @@ class PeerNameResolverTest {
                 PeerNameResolver.resolve(
                     peerHash = "abc123",
                     cachedName = "Valid Cache",
-                    contactNicknameLookup = {
-                        contactCalled = true
-                        "Should Not Be Called"
-                    },
+                    contactNicknameLookup = { null }, // No nickname set
                     announcePeerNameLookup = {
                         announceCalled = true
                         "Should Not Be Called"
@@ -344,7 +340,6 @@ class PeerNameResolverTest {
                 )
 
             assertEquals("Valid Cache", result)
-            assertFalse("Contact lookup should not be called", contactCalled)
             assertFalse("Announce lookup should not be called", announceCalled)
             assertFalse("Conversation lookup should not be called", conversationCalled)
         }
@@ -414,10 +409,8 @@ class PeerNameResolverTest {
                     announcePeerNameLookup = { "Robert Smith" },
                     conversationPeerNameLookup = { "Robert" },
                 )
-            // BUG: Currently returns cached name, but should return "Dad"
-            // This test documents the current (incorrect) behavior
-            // TODO: Fix cache priority to check contact nickname first
-            assertEquals("Robert Smith", result)
+            // Contact nickname always wins over cache and announce
+            assertEquals("Dad", result)
         }
 
     @Test

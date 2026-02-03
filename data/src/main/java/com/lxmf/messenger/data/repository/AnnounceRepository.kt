@@ -7,9 +7,9 @@ import androidx.paging.map
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.model.EnrichedAnnounce
+import com.lxmf.messenger.data.util.HashUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -204,23 +204,12 @@ class AnnounceRepository
         suspend fun findByIdentityHash(identityHash: String): Announce? {
             val allAnnounces = announceDao.getAllAnnouncesSync()
             for (entity in allAnnounces) {
-                val computedHash = computeIdentityHash(entity.publicKey)
+                val computedHash = HashUtils.computeIdentityHash(entity.publicKey)
                 if (computedHash.equals(identityHash, ignoreCase = true)) {
                     return entity.toAnnounce()
                 }
             }
             return null
-        }
-
-        /**
-         * Compute identity hash from public key.
-         * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
-         */
-        private fun computeIdentityHash(publicKey: ByteArray): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val hash = digest.digest(publicKey)
-            // Take first 16 bytes and convert to hex
-            return hash.take(16).joinToString("") { "%02x".format(it) }
         }
 
         /**

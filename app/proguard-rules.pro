@@ -72,29 +72,23 @@
 # These classes bridge between Kotlin and Python
 -keep class com.lxmf.messenger.reticulum.protocol.** { *; }
 
-# ===== Kotlin-Python Bridge =====
-# KotlinReticulumBridge is called from Python via Chaquopy
-# Python expects specific method names (notifyAnnounceReceived, etc.) that must not be obfuscated
--keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
--keepclassmembers class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
-
-# ===== BLE Bridge =====
-# KotlinBLEBridge is called from Python via Chaquopy
-# Python expects specific method names that must not be obfuscated
--keep class com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge { *; }
--keepclassmembers class com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge { *; }
-
-# ===== RNode Bridge =====
-# KotlinRNodeBridge is called from Python via Chaquopy for RNode LoRa interface
-# Python expects specific method names (connect, disconnect, send, etc.)
--keep class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
--keepclassmembers class com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge { *; }
-
-# ===== Reticulum Bridge =====
-# KotlinReticulumBridge is called from Python via Chaquopy for event notifications
-# Python expects specific method names (notifyAnnounceReceived, etc.)
--keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
--keepclassmembers class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }
+# ===== Python-Kotlin Bridge Classes (CRITICAL) =====
+# Any class ending in "Bridge" may be called from Python via Chaquopy.
+# Python uses reflection to call methods by name, so these classes and their
+# methods MUST NOT be obfuscated. R8 would otherwise rename them, causing
+# runtime errors like "'h' object has no attribute 'onIncomingCall'".
+#
+# This generic pattern automatically protects:
+#   - KotlinReticulumBridge (announce callbacks)
+#   - KotlinBLEBridge (Bluetooth LE interface)
+#   - KotlinRNodeBridge (RNode LoRa interface)
+#   - KotlinAudioBridge (LXST audio streaming)
+#   - CallBridge (LXST voice call state)
+#   - Any future *Bridge classes
+#
+# Convention: Name any Python-callable Kotlin class with "Bridge" suffix.
+-keep class com.lxmf.messenger.**.*Bridge { *; }
+-keepclassmembers class com.lxmf.messenger.**.*Bridge { *; }
 
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations

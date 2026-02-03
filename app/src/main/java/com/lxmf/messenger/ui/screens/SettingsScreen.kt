@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
-import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
@@ -65,6 +64,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReport
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.DeviceInfoUtil
@@ -334,8 +334,8 @@ fun SettingsScreen(
                     onAddManualRelay = { hash, nickname ->
                         viewModel.addManualPropagationNode(hash, nickname)
                     },
-                    onSelectRelay = { hash, name ->
-                        viewModel.selectRelay(hash, name)
+                    onSelectRelay = { hash, _ ->
+                        viewModel.selectRelay(hash)
                     },
                     // Retrieval settings
                     autoRetrieveEnabled = state.autoRetrieveEnabled,

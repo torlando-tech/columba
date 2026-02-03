@@ -251,7 +251,7 @@ fun AnnounceDetailScreen(
 
                     Button(
                         onClick = {
-                            viewModel.setAsMyRelay(announceNonNull.destinationHash, announceNonNull.peerName)
+                            viewModel.setAsMyRelay(announceNonNull.destinationHash)
                         },
                         modifier =
                             Modifier
@@ -589,8 +589,8 @@ private fun formatFullTimestamp(timestamp: Long): String {
 }
 
 @Suppress("MagicNumber")
-private fun formatSizeLimit(sizeKb: Int): String {
-    return when {
+private fun formatSizeLimit(sizeKb: Int): String =
+    when {
         sizeKb >= 1024 -> {
             val sizeMb = sizeKb / 1024.0
             if (sizeMb == sizeMb.toLong().toDouble()) {
@@ -601,4 +601,3 @@ private fun formatSizeLimit(sizeKb: Int): String {
         }
         else -> "$sizeKb KB"
     }
-}

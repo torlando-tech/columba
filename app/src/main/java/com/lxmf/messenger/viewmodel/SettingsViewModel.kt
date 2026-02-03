@@ -1238,13 +1238,10 @@ class SettingsViewModel
          * Select a relay from the available relays list.
          * Used when user taps on the current relay card and selects a different one.
          */
-        fun selectRelay(
-            destinationHash: String,
-            displayName: String,
-        ) {
+        fun selectRelay(destinationHash: String) {
             viewModelScope.launch {
-                propagationNodeManager.setManualRelay(destinationHash, displayName)
-                Log.d(TAG, "Relay selected from list: $displayName")
+                propagationNodeManager.setManualRelay(destinationHash)
+                Log.d(TAG, "Relay selected from list: ${destinationHash.take(16)}")
             }
         }
 

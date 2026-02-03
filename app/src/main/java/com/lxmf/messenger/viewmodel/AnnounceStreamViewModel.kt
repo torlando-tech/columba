@@ -418,13 +418,10 @@ class AnnounceStreamViewModel
          * Set a propagation node as the user's relay.
          * This will add it to contacts if not already present and mark it as the relay.
          */
-        fun setAsMyRelay(
-            destinationHash: String,
-            peerName: String,
-        ) {
+        fun setAsMyRelay(destinationHash: String) {
             viewModelScope.launch {
                 try {
-                    propagationNodeManager.setManualRelay(destinationHash, peerName)
+                    propagationNodeManager.setManualRelay(destinationHash)
                     Log.d(TAG, "Set ${destinationHash.take(16)} as my relay")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set relay: $destinationHash", e)

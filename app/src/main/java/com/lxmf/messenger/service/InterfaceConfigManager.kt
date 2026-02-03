@@ -206,7 +206,7 @@ class InterfaceConfigManager
                         null
                     }
                 val displayName = activeIdentity?.displayName
-                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
+                Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set" else "none"}, verified path: $identityPath")
 
                 // Load shared instance preferences
                 val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()

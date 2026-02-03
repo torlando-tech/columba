@@ -122,7 +122,7 @@ class ServicePersistenceManager(
                     )
 
                 announceDao.upsertAnnounce(entity)
-                Log.d(TAG, "Service persisted announce: $peerName ($destinationHash)")
+                Log.d(TAG, "Service persisted announce: ${destinationHash.take(16)}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
             }
@@ -446,7 +446,7 @@ class ServicePersistenceManager(
             Log.d(TAG, "Trying identity hash lookup...")
             val announceByIdentity = findAnnounceByIdentityHash(destinationHash)
             if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
-                Log.d(TAG, "Found by identity hash: ${announceByIdentity.peerName}")
+                Log.d(TAG, "Found by identity hash")
                 return announceByIdentity.peerName
             }
 
@@ -469,7 +469,10 @@ class ServicePersistenceManager(
             Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
             for (announce in allAnnounces) {
                 val computedHash = HashUtils.computeIdentityHash(announce.publicKey)
-                Log.d(TAG, "  Announce ${announce.peerName}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}")
+                Log.d(
+                    TAG,
+                    "  Announce ${announce.destinationHash.take(16)}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}",
+                )
                 if (computedHash.equals(identityHash, ignoreCase = true)) {
                     Log.d(TAG, "  -> MATCHED!")
                     return announce

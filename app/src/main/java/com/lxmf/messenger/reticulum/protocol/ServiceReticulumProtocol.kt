@@ -2494,7 +2494,7 @@ class ServiceReticulumProtocol(
      */
     suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> =
         runCatching {
-            Log.d(TAG, "Triggering auto-announce with display name: $displayName")
+            Log.d(TAG, "Triggering auto-announce")
 
             // Get LXMF identity and destination
             val identity = getLxmfIdentity().getOrThrow()

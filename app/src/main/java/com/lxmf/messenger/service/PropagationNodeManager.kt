@@ -529,6 +529,7 @@ class PropagationNodeManager
          * Note: This method only updates the database. The currentRelay Flow automatically
          * picks up changes, and observeRelayChanges() syncs to Python layer.
          */
+        @Suppress("UNUSED_PARAMETER") // displayName kept for API compatibility, not logged for privacy
         suspend fun onPropagationNodeAnnounce(
             destinationHash: String,
             displayName: String,
@@ -540,7 +541,7 @@ class PropagationNodeManager
 
             // If user has manually selected a node, don't auto-switch
             if (!isAutoSelect && manualNode != null) {
-                Log.d(TAG, "Manual relay selected, ignoring announce from $displayName")
+                Log.d(TAG, "Manual relay selected, ignoring announce from ${destinationHash.take(16)}")
                 return
             }
 
@@ -557,7 +558,7 @@ class PropagationNodeManager
                 }
 
             if (shouldSwitch) {
-                Log.i(TAG, "Switching to relay $displayName ($destinationHash) at $hops hops")
+                Log.i(TAG, "Switching to relay ${destinationHash.take(16)} at $hops hops")
 
                 // Auto-add to contacts if not already present
                 val contactExists = contactRepository.hasContact(destinationHash)
@@ -583,6 +584,7 @@ class PropagationNodeManager
          * Note: This method only updates settings and database. The currentRelay Flow
          * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
+        @Suppress("UNUSED_PARAMETER") // displayName kept for API compatibility, not logged for privacy
         suspend fun setManualRelay(
             destinationHash: String,
             displayName: String,
@@ -596,7 +598,7 @@ class PropagationNodeManager
             _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
             excludedRelayHash = null // Clear exclusion - user made explicit choice
 
-            Log.i(TAG, "User manually selected relay: $displayName")
+            Log.i(TAG, "User manually selected relay: ${destinationHash.take(16)}")
 
             // Disable auto-select and save manual selection
             settingsRepository.saveAutoSelectPropagationNode(false)
@@ -759,7 +761,7 @@ class PropagationNodeManager
             val nearest = candidates.minByOrNull { it.hops }
 
             if (nearest != null) {
-                Log.i(TAG, "Auto-selecting new relay: ${nearest.peerName} at ${nearest.hops} hops")
+                Log.i(TAG, "Auto-selecting new relay: ${nearest.destinationHash.take(16)} at ${nearest.hops} hops")
                 onPropagationNodeAnnounce(
                     nearest.destinationHash,
                     nearest.peerName,
@@ -1052,7 +1054,7 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.displayName}")
+            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
             _isSyncing.value = true
             _syncProgress.value = SyncProgress.Starting
 
@@ -1120,7 +1122,7 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName} (silent=$silent)")
+            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
             _isSyncing.value = true
             _isManualSync = !silent // Track for toast display on completion
             _syncProgress.value = SyncProgress.Starting

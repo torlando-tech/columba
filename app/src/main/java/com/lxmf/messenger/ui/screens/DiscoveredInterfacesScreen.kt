@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -46,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,10 +67,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.lucide.Antenna
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TreePine
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
 import com.lxmf.messenger.ui.components.SortModeSelector
@@ -104,6 +109,33 @@ fun DiscoveredInterfacesScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    // Fetch user location for proximity sorting (if permission granted)
+    LaunchedEffect(Unit) {
+        val hasCoarsePermission =
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasFinePermission =
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (hasCoarsePermission || hasFinePermission) {
+            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedClient
+                .getCurrentLocation(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    CancellationTokenSource().token,
+                ).addOnSuccessListener { location ->
+                    location?.let {
+                        viewModel.setUserLocation(it.latitude, it.longitude)
+                    }
+                }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -184,13 +216,13 @@ fun DiscoveredInterfacesScreen(
                                 EmptyDiscoveredCard()
                             }
                         } else {
-                            items(
+                            itemsIndexed(
                                 state.interfaces,
-                                key = {
-                                    // Include networkId + endpoint details to ensure uniqueness
-                                    "${it.networkId}:${it.transportId ?: ""}:${it.reachableOn ?: ""}:${it.port ?: ""}"
+                                key = { index, iface ->
+                                    // Use index as fallback to guarantee uniqueness even with duplicate entries
+                                    "${iface.networkId}:${iface.name}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:$index"
                                 },
-                            ) { iface ->
+                            ) { _, iface ->
                                 val reachableHost = iface.reachableOn
                                 DiscoveredInterfaceCard(
                                     iface = iface,

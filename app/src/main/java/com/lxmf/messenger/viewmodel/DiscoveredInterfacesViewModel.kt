@@ -35,6 +35,8 @@ enum class DiscoveredInterfacesSortMode {
 @androidx.compose.runtime.Immutable
 data class DiscoveredInterfacesState(
     val interfaces: List<DiscoveredInterface> = emptyList(),
+    // Original list from Python, sorted by availability/quality - used to restore when switching back
+    val originalInterfaces: List<DiscoveredInterface> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     val availableCount: Int = 0,
@@ -120,6 +122,7 @@ class DiscoveredInterfacesViewModel
                             )
                         currentState.copy(
                             interfaces = sortedInterfaces,
+                            originalInterfaces = discovered, // Store original Python-sorted list
                             sortMode = effectiveSortMode,
                             isLoading = false,
                             availableCount = availableCount,
@@ -266,9 +269,16 @@ class DiscoveredInterfacesViewModel
                 ) {
                     return@update currentState
                 }
+                // Use originalInterfaces for QUALITY mode to restore Python's sort order
+                val sourceList =
+                    if (mode == DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY) {
+                        currentState.originalInterfaces
+                    } else {
+                        currentState.interfaces
+                    }
                 val sortedInterfaces =
                     sortInterfaces(
-                        currentState.interfaces,
+                        sourceList,
                         mode,
                         currentState.userLatitude,
                         currentState.userLongitude,

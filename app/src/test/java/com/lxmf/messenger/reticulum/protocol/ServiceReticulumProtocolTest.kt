@@ -1109,4 +1109,37 @@ class ServiceReticulumProtocolTest {
         assertEquals(0x3f.toByte(), result.sourceHash[1])
         assertEquals(0xfd.toByte(), result.sourceHash[2])
     }
+
+    // ========== setConversationActive() Tests ==========
+    // Documents fire-and-forget behavior after COLUMBA-1E fix.
+    // Note: Full service binding tests are in instrumented tests.
+    // The AIDL 'oneway' modifier makes this call non-blocking at Binder level.
+
+    @Test
+    fun `setConversationActive handles null service gracefully - COLUMBA-1E`() {
+        // Arrange: Service not bound (protocol created but not connected)
+        // This is the state during app startup or after service disconnect
+
+        // Act & Assert: Should not throw when service is null
+        // This is critical for ViewModel.onCleared() - must not crash during cleanup
+        val result = runCatching { protocol.setConversationActive(false) }
+
+        assertTrue(
+            "setConversationActive must handle null service gracefully. " +
+                "Called during ViewModel.onCleared() which runs on main thread. " +
+                "See: COLUMBA-1E (ANR fix - made AIDL method 'oneway')",
+            result.isSuccess
+        )
+    }
+
+    @Test
+    fun `setConversationActive with true handles null service gracefully`() {
+        // Act & Assert: Both true and false values should be safe with null service
+        val result = runCatching { protocol.setConversationActive(true) }
+
+        assertTrue(
+            "setConversationActive(true) must handle null service gracefully",
+            result.isSuccess
+        )
+    }
 }

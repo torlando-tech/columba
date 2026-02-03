@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -216,13 +216,13 @@ fun DiscoveredInterfacesScreen(
                                 EmptyDiscoveredCard()
                             }
                         } else {
-                            itemsIndexed(
+                            items(
                                 state.interfaces,
-                                key = { index, iface ->
-                                    // Use index as fallback to guarantee uniqueness even with duplicate entries
-                                    "${iface.networkId}:${iface.name}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:$index"
+                                key = { iface ->
+                                    // networkId + endpoint + lastHeard timestamp for stable uniqueness across sorts
+                                    "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:${iface.lastHeard}"
                                 },
-                            ) { _, iface ->
+                            ) { iface ->
                                 val reachableHost = iface.reachableOn
                                 DiscoveredInterfaceCard(
                                     iface = iface,

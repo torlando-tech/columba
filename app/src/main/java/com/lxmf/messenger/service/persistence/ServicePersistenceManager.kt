@@ -294,7 +294,7 @@ class ServicePersistenceManager(
                 persistPeerIdentity(sourceHash, publicKey)
             }
 
-            Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+            Log.d(TAG, "Service persisted message from ${sourceHash.take(16)}")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Error persisting message in service from $sourceHash", e)

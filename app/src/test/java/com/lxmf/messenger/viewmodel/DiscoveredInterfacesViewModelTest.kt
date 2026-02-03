@@ -538,6 +538,317 @@ class DiscoveredInterfacesViewModelTest {
             }
         }
 
+    // ========== Sort Mode Tests ==========
+
+    @Test
+    fun `sortMode - initial state is AVAILABILITY_AND_QUALITY`() =
+        runTest {
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode - changes sort mode to PROXIMITY when user location available`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode - changes sort mode back to AVAILABILITY_AND_QUALITY`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - sorts interfaces by distance when user location available`() =
+        runTest {
+            // Given: User at origin (0,0), interfaces at various distances
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0), // ~1570 km
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0), // ~157 km
+                    createTestDiscoveredInterface(name = "Medium", latitude = 5.0, longitude = 5.0), // ~786 km
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Should be sorted nearest first - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Medium", state.interfaces[1].name)
+            assertEquals("Far", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - ignored when user location not available`() =
+        runTest {
+            // Given: Interfaces with location but NO user location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "Third", latitude = 5.0, longitude = 5.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            // Note: NOT setting user location
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Sort mode should remain AVAILABILITY_AND_QUALITY (request ignored)
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - places interfaces without location at end`() =
+        runTest {
+            // Given: Mix of interfaces with and without location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "NoLocation1", latitude = null, longitude = null),
+                    createTestDiscoveredInterface(name = "HasLocation", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "NoLocation2", latitude = null, longitude = null),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Interface with location first, then those without (in original order)
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("HasLocation", state.interfaces[0].name)
+            assertEquals("NoLocation1", state.interfaces[1].name)
+            assertEquals("NoLocation2", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode AVAILABILITY_AND_QUALITY - preserves original order from Python`() =
+        runTest {
+            // Given: Interfaces in Python's sorted order (status_code desc, stamp_value desc)
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "Third", latitude = 5.0, longitude = 5.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When: Explicitly set to AVAILABILITY_AND_QUALITY (the default)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
+
+            // Then: Order should match original from Python - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setUserLocation - re-sorts interfaces when in PROXIMITY mode`() =
+        runTest {
+            // Given: Interfaces loaded, PROXIMITY mode set, then location updated
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set location first, then change to proximity mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Verify sorted by distance - use .value for synchronous state checks
+            var state = viewModel.state.value
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
+
+            // When: User moves to new location (closer to "Far" interface)
+            viewModel.setUserLocation(9.0, 9.0)
+
+            // Then: Should re-sort with new distances
+            state = viewModel.state.value
+            assertEquals("Far", state.interfaces[0].name) // Now closer
+            assertEquals("Near", state.interfaces[1].name) // Now farther
+        }
+
+    @Test
+    fun `setUserLocation - does NOT re-sort when in AVAILABILITY_AND_QUALITY mode`() =
+        runTest {
+            // Given: Interfaces in specific order
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When: Set user location while in AVAILABILITY_AND_QUALITY mode (default)
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // Then: Order should remain unchanged - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - applies current sort mode`() =
+        runTest {
+            // Given: Initial load with default sort mode
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set user location and switch to PROXIMITY mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Verify initial sort - use .value for synchronous state checks
+            assertEquals(
+                "Near",
+                viewModel.state.value.interfaces[0]
+                    .name,
+            )
+
+            // When: Reload interfaces (simulating refresh)
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then: New data should still be sorted by proximity
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - resets sortMode to QUALITY if location unavailable`() =
+        runTest {
+            // Given: User had PROXIMITY mode with location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Interface1"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set location and PROXIMITY mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
+
+            // Simulate location becoming unavailable via reflection (edge case)
+            val fieldState = DiscoveredInterfacesViewModel::class.java.getDeclaredField("_state")
+            fieldState.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val mutableState = fieldState.get(viewModel) as MutableStateFlow<DiscoveredInterfacesState>
+            mutableState.value = mutableState.value.copy(userLatitude = null, userLongitude = null)
+
+            // When: Reload interfaces while in PROXIMITY mode but no location
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then: sortMode should be reset to AVAILABILITY_AND_QUALITY
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - handles empty interfaces list`() =
+        runTest {
+            // Given: No interfaces
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Should not crash, empty list should remain empty
+            val state = viewModel.state.value
+            assertTrue(state.interfaces.isEmpty())
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - handles all interfaces without location`() =
+        runTest {
+            // Given: All interfaces missing location data
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "NoLoc1", latitude = null, longitude = null),
+                    createTestDiscoveredInterface(name = "NoLoc2", latitude = null, longitude = null),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Order should be preserved (all go to "without location" group)
+            val state = viewModel.state.value
+            assertEquals(2, state.interfaces.size)
+            assertEquals("NoLoc1", state.interfaces[0].name)
+            assertEquals("NoLoc2", state.interfaces[1].name)
+        }
+
     // ========== Helper Functions ==========
 
     private fun createTestDiscoveredInterface(

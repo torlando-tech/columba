@@ -209,23 +209,28 @@ class ServicePersistenceManager(
                 )
 
             // Get peer name using centralized resolver
-            val peerName = PeerNameResolver.resolve(
-                peerHash = sourceHash,
-                cachedName = existingConversation?.peerName,
-                contactNicknameLookup = {
-                    activeIdentity?.let {
-                        contactDao.getContact(sourceHash, it.identityHash)?.customNickname
-                    }
-                },
-                announcePeerNameLookup = {
-                    announceDao.getAnnounce(sourceHash)?.peerName
-                },
-            )
+            val peerName =
+                PeerNameResolver.resolve(
+                    peerHash = sourceHash,
+                    cachedName = existingConversation?.peerName,
+                    contactNicknameLookup = {
+                        activeIdentity?.let {
+                            contactDao.getContact(sourceHash, it.identityHash)?.customNickname
+                        }
+                    },
+                    announcePeerNameLookup = {
+                        announceDao.getAnnounce(sourceHash)?.peerName
+                    },
+                )
 
             // Insert/update conversation
             if (existingConversation != null) {
+                // Update peerName if we resolved a better name (nickname or announce)
+                val updatedPeerName =
+                    if (PeerNameResolver.isValidPeerName(peerName)) peerName else existingConversation.peerName
                 val updated =
                     existingConversation.copy(
+                        peerName = updatedPeerName,
                         lastMessage = content.take(100),
                         lastMessageTimestamp = timestamp,
                         unreadCount = existingConversation.unreadCount + 1,
@@ -294,14 +299,13 @@ class ServicePersistenceManager(
     /**
      * Check if an announce exists (for de-duplication in app process).
      */
-    suspend fun announceExists(destinationHash: String): Boolean {
-        return try {
+    suspend fun announceExists(destinationHash: String): Boolean =
+        try {
             announceDao.announceExists(destinationHash)
         } catch (e: Exception) {
             Log.e(TAG, "Error checking announce existence: $destinationHash", e)
             false
         }
-    }
 
     /**
      * Check if a message exists (for de-duplication in app process).
@@ -413,17 +417,18 @@ class ServicePersistenceManager(
             Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
 
             // Use centralized resolver for standard lookups
-            val resolvedName = PeerNameResolver.resolve(
-                peerHash = destinationHash,
-                contactNicknameLookup = {
-                    activeIdentity?.let {
-                        contactDao.getContact(destinationHash, it.identityHash)?.customNickname
-                    }
-                },
-                announcePeerNameLookup = {
-                    announceDao.getAnnounce(destinationHash)?.peerName
-                },
-            )
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = destinationHash,
+                    contactNicknameLookup = {
+                        activeIdentity?.let {
+                            contactDao.getContact(destinationHash, it.identityHash)?.customNickname
+                        }
+                    },
+                    announcePeerNameLookup = {
+                        announceDao.getAnnounce(destinationHash)?.peerName
+                    },
+                )
 
             // If resolver found a valid name (not fallback), return it
             if (PeerNameResolver.isValidPeerName(resolvedName)) {

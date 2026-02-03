@@ -9,8 +9,8 @@ import android.util.Log
  * used by both MessageCollector (app process) and ServicePersistenceManager (service process).
  *
  * The resolution priority is:
- * 1. In-memory cache (fastest, for repeated lookups)
- * 2. Contact custom nickname (user-set, highest semantic priority)
+ * 1. Contact custom nickname (user-set, always wins)
+ * 2. In-memory cache (fast path for repeated lookups)
  * 3. Announce peer name (from network)
  * 4. Conversation peer name (from existing conversation)
  * 5. Formatted hash fallback (e.g., "Peer ABCD1234")
@@ -35,8 +35,8 @@ object PeerNameResolver {
         announcePeerNameLookup: (suspend () -> String?)? = null,
         conversationPeerNameLookup: (suspend () -> String?)? = null,
     ): String =
-        tryLookup("cache") { cachedName }
-            ?: tryLookup("contact", contactNicknameLookup)
+        tryLookup("contact", contactNicknameLookup)
+            ?: tryLookup("cache") { cachedName }
             ?: tryLookup("announce", announcePeerNameLookup)
             ?: tryLookup("conversation", conversationPeerNameLookup)
             ?: formatHashAsFallback(peerHash).also {

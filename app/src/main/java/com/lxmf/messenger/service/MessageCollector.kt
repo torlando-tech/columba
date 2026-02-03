@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -100,7 +101,7 @@ class MessageCollector
                             // Even though message is persisted, we may still need to show notification
                             // and save icon appearance (service process can't do these)
                             val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
-                            val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+                            val peerName = getPeerNameWithFallback(sourceHash)
 
                             // Save icon appearance even for already-persisted messages
                             // (ServicePersistenceManager doesn't have access to icon data)
@@ -319,7 +320,7 @@ class MessageCollector
                             )
 
                         // Cache and update peer name if successfully extracted
-                        if (peerName != "Peer ${peerHash.take(8).uppercase()}" && peerName != "Unknown Peer") {
+                        if (PeerNameResolver.isValidPeerName(peerName)) {
                             peerNames[peerHash] = peerName
                             Log.d(TAG, "Learned peer name: $peerName for $peerHash")
 
@@ -431,48 +432,34 @@ class MessageCollector
             peerNames[peerHash]?.let { return it }
 
             // Format the hash as a short, readable identifier
-            return if (peerHash.length >= 8) {
-                "Peer ${peerHash.take(8).uppercase()}"
-            } else {
-                "Unknown Peer"
-            }
+            return PeerNameResolver.formatHashAsFallback(peerHash)
         }
 
         /**
-         * Get peer name with fallback - checks cache, database, then uses formatted hash
+         * Get peer name with fallback - uses PeerNameResolver for consistent lookup across the app
          */
         private suspend fun getPeerNameWithFallback(peerHash: String): String {
-            // First check our in-memory cache from announces
-            peerNames[peerHash]?.let {
-                Log.d(TAG, "Found peer name in cache: $it")
-                return it
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = peerHash,
+                    cachedName = peerNames[peerHash],
+                    contactNicknameLookup = {
+                        contactRepository.getContact(peerHash)?.customNickname
+                    },
+                    announcePeerNameLookup = {
+                        announceRepository.getAnnounce(peerHash)?.peerName
+                    },
+                    conversationPeerNameLookup = {
+                        conversationRepository.getConversation(peerHash)?.peerName
+                    },
+                )
+
+            // Cache the resolved name if it's valid
+            if (PeerNameResolver.isValidPeerName(resolvedName)) {
+                peerNames[peerHash] = resolvedName
             }
 
-            // Check if we have an existing conversation with this peer
-            try {
-                val existingConversation = conversationRepository.getConversation(peerHash)
-                if (existingConversation != null &&
-                    existingConversation.peerName != "Unknown" &&
-                    !existingConversation.peerName.startsWith("Peer ")
-                ) {
-                    // Cache it for future use
-                    peerNames[peerHash] = existingConversation.peerName
-                    Log.d(TAG, "Found peer name in database: ${existingConversation.peerName}")
-                    return existingConversation.peerName
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error checking database for peer name", e)
-            }
-
-            // Fall back to formatted hash
-            val fallbackName =
-                if (peerHash.length >= 8) {
-                    "Peer ${peerHash.take(8).uppercase()}"
-                } else {
-                    "Unknown Peer"
-                }
-            Log.d(TAG, "Using fallback name for peer: $fallbackName")
-            return fallbackName
+            return resolvedName
         }
 
         /**

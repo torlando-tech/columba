@@ -8,6 +8,7 @@ import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.reticulum.util.AppDataParser
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
+import com.lxmf.messenger.service.util.PeerNameResolver
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -351,12 +352,12 @@ class EventHandler(
                 when {
                     !displayName.isNullOrBlank() -> displayName
                     nodeType == NodeType.PROPAGATION_NODE -> {
-                        propagationMetadata?.name ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                        propagationMetadata?.name ?: PeerNameResolver.formatHashAsFallback(destinationHashHex)
                     }
                     else -> {
                         appData?.let {
                             String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 }
-                        } ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                        } ?: PeerNameResolver.formatHashAsFallback(destinationHashHex)
                     }
                 }
 

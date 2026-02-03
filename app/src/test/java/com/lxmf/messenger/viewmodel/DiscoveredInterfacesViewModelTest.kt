@@ -12,6 +12,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -536,6 +537,310 @@ class DiscoveredInterfacesViewModelTest {
                 val state = awaitItem()
                 assertNull(state.errorMessage)
             }
+        }
+
+    // ========== setAutoconnectCount Tests ==========
+
+    @Test
+    fun `setAutoconnectCount - updates state with new count`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - clamps value to minimum of 0`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(-5)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - clamps value to maximum of 10`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(15)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(10, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - saves to settings repository`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            coEvery { settingsRepository.saveAutoconnectDiscoveredCount(any()) } returns Unit
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(7)
+            advanceUntilIdle()
+
+            // Then: State reflects the new count AND repository was called
+            assertEquals(7, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+        }
+
+    @Test
+    fun `setAutoconnectCount - triggers service restart`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            assertFalse(viewModel.state.value.isRestarting)
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    @Test
+    fun `setAutoconnectCount - clears isRestarting after completion`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then: isRestarting should be false after completion
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `setAutoconnectCount - sets error message on failure`() =
+        runTest {
+            // Given
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.failure(RuntimeException("Restart failed"))
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to restart service") == true,
+            )
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    // ========== toggleDiscovery Tests ==========
+
+    @Test
+    fun `toggleDiscovery - when enabling and autoconnect is never configured defaults to 3`() =
+        runTest {
+            // Given: Discovery disabled, autoconnect never configured (-1 sentinel)
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns -1
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state (-1 coerced to 0 for UI display)
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should use default of 3
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(3, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(3) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when enabling preserves explicit 0 setting`() =
+        runTest {
+            // Given: Discovery disabled, but user explicitly set autoconnect to 0 for debugging
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should preserve 0 (user's explicit debugging choice)
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(0) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when enabling preserves existing autoconnect count`() =
+        runTest {
+            // Given: Discovery disabled, but autoconnect count was previously set to 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should preserve the 5
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(5) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when disabling sets UI autoconnect to 0 but preserves saved preference`() =
+        runTest {
+            // Given: Discovery enabled with autoconnect at 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to disable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: UI shows 0, but we do NOT save 0 to repository (preserving user's preference)
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+            // Verify saveAutoconnectDiscoveredCount was NOT called when disabling
+            coVerify(exactly = 0) { settingsRepository.saveAutoconnectDiscoveredCount(0) }
+        }
+
+    @Test
+    fun `toggleDiscovery - preserves user preference through disable and re-enable cycle`() =
+        runTest {
+            // Given: Discovery enabled with autoconnect at 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Disable discovery
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.state.value.autoconnectCount) // UI shows 0
+
+            // And: Re-enable discovery
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: User's preference of 5 is restored (read from repository)
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `toggleDiscovery - saves enabled state to settings repository`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: State reflects enabled AND repository was called
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            coVerify { settingsRepository.saveDiscoverInterfacesEnabled(true) }
+        }
+
+    @Test
+    fun `toggleDiscovery - triggers service restart`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            assertFalse(viewModel.state.value.isRestarting)
+            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+        }
+
+    @Test
+    fun `toggleDiscovery - sets error message on restart failure`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.failure(RuntimeException("Service error"))
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to restart service") == true,
+            )
+            assertFalse(viewModel.state.value.isRestarting)
         }
 
     // ========== Sort Mode Tests ==========

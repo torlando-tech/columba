@@ -428,9 +428,10 @@ class DiscoveredInterfacesScreenTest {
             EmptyDiscoveredCard()
         }
 
-        composeTestRule.onNodeWithText(
-            "Interfaces announced by other nodes will appear here once discovery is active.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Interfaces announced by other nodes will appear here once discovery is active.",
+            ).assertIsDisplayed()
     }
 
     // ========== DiscoverySettingsCard UI Tests ==========
@@ -494,9 +495,10 @@ class DiscoveredInterfacesScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(
-            "Enable to automatically discover and connect to interfaces announced by other RNS nodes.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Enable to automatically discover and connect to interfaces announced by other RNS nodes.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -509,9 +511,67 @@ class DiscoveredInterfacesScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(
-            "RNS will discover and auto-connect up to 5 interfaces from the network.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "RNS will discover and auto-connect up to 5 interfaces from the network.",
+            ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoverySettingsCard shows debug message when autoconnect is zero`() {
+        composeTestRule.setContent {
+            DiscoverySettingsCard(
+                isRuntimeEnabled = true,
+                isSettingEnabled = true,
+                autoconnectCount = 0,
+            )
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "Discovery is active but auto-connect is disabled. Useful for debugging.",
+            ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoverySettingsCard shows slider when enabled`() {
+        composeTestRule.setContent {
+            DiscoverySettingsCard(
+                isRuntimeEnabled = true,
+                isSettingEnabled = true,
+                autoconnectCount = 3,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Auto-connect limit").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoverySettingsCard slider shows Off when autoconnect is zero`() {
+        composeTestRule.setContent {
+            DiscoverySettingsCard(
+                isRuntimeEnabled = true,
+                isSettingEnabled = true,
+                autoconnectCount = 0,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Auto-connect limit").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Off").assertIsDisplayed()
+    }
+
+    @Test
+    fun `DiscoverySettingsCard hides slider when disabled`() {
+        composeTestRule.setContent {
+            DiscoverySettingsCard(
+                isRuntimeEnabled = false,
+                isSettingEnabled = false,
+                autoconnectCount = 0,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Auto-connect limit").assertDoesNotExist()
     }
 
     @Test
@@ -539,9 +599,10 @@ class DiscoveredInterfacesScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText(
-            "These interfaces will auto-detach once discovered interfaces connect.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "These interfaces will auto-detach once discovered interfaces connect.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -663,8 +724,8 @@ private fun createTestDiscoveredInterface(
     spreadingFactor: Int? = null,
     codingRate: Int? = null,
     modulation: String? = null,
-): DiscoveredInterface {
-    return DiscoveredInterface(
+): DiscoveredInterface =
+    DiscoveredInterface(
         name = name,
         type = type,
         transportId = null,
@@ -687,4 +748,3 @@ private fun createTestDiscoveredInterface(
         longitude = null,
         height = null,
     )
-}

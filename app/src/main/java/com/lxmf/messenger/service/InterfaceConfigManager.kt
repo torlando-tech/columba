@@ -224,8 +224,13 @@ class InterfaceConfigManager
 
                 // Load discovery settings
                 val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
-                val autoconnectDiscoveredCount = settingsRepository.getAutoconnectDiscoveredCount()
-                Log.d(TAG, "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount")
+                val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
+                // Coerce -1 (never configured sentinel) to 0 for Python layer
+                val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
+                Log.d(
+                    TAG,
+                    "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount (saved=$savedAutoconnect)",
+                )
 
                 val config =
                     ReticulumConfig(

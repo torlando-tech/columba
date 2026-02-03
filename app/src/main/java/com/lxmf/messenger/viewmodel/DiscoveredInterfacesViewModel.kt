@@ -152,8 +152,12 @@ class DiscoveredInterfacesViewModel
             viewModelScope.launch(ioDispatcher) {
                 try {
                     val discoverEnabled = settingsRepository.getDiscoverInterfacesEnabled()
-                    val autoconnectCount = settingsRepository.getAutoconnectDiscoveredCount()
+                    val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
                     val bootstrapNames = interfaceRepository.bootstrapInterfaceNames.first()
+
+                    // Coerce -1 (never configured) to 0 for UI display
+                    // The actual default of 3 is applied in toggleDiscovery() when enabling
+                    val autoconnectCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
 
                     _state.update {
                         it.copy(
@@ -162,7 +166,10 @@ class DiscoveredInterfacesViewModel
                             bootstrapInterfaceNames = bootstrapNames,
                         )
                     }
-                    Log.d(TAG, "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount, bootstrap=$bootstrapNames")
+                    Log.d(
+                        TAG,
+                        "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount (saved=$savedAutoconnect), bootstrap=$bootstrapNames",
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovery settings", e)
                 }
@@ -171,7 +178,7 @@ class DiscoveredInterfacesViewModel
 
         /**
          * Toggle interface discovery on/off.
-         * When enabled, sets autoconnect count to 3 (reasonable default).
+         * When enabled, preserves current autoconnect count (or defaults to 3 if 0).
          * When disabled, sets autoconnect count to 0.
          * Automatically restarts the Reticulum service to apply changes.
          */
@@ -180,7 +187,16 @@ class DiscoveredInterfacesViewModel
                 try {
                     val currentEnabled = _state.value.discoverInterfacesEnabled
                     val newEnabled = !currentEnabled
-                    val newAutoconnect = if (newEnabled) 3 else 0
+                    // When enabling: restore user's saved preference from repository (or default to 3)
+                    // savedCount of -1 means "never configured", 0+ means user explicitly chose that value
+                    // When disabling: set to 0 for UI (but don't persist, to preserve preference)
+                    val newAutoconnect =
+                        if (newEnabled) {
+                            val savedCount = settingsRepository.getAutoconnectDiscoveredCount()
+                            if (savedCount >= 0) savedCount else 3
+                        } else {
+                            0
+                        }
 
                     // Update UI immediately to show restarting state
                     _state.update {
@@ -193,7 +209,10 @@ class DiscoveredInterfacesViewModel
 
                     // Save settings to DataStore
                     settingsRepository.saveDiscoverInterfacesEnabled(newEnabled)
-                    settingsRepository.saveAutoconnectDiscoveredCount(newAutoconnect)
+                    // Only save autoconnect count when enabling (to preserve user's preference when disabling)
+                    if (newEnabled) {
+                        settingsRepository.saveAutoconnectDiscoveredCount(newAutoconnect)
+                    }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
                     // Restart the Reticulum service to apply changes
@@ -220,6 +239,61 @@ class DiscoveredInterfacesViewModel
                         it.copy(
                             isRestarting = false,
                             errorMessage = "Failed to update discovery settings: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Set the number of discovered interfaces to auto-connect.
+         * This allows users to configure how many interfaces RNS will automatically
+         * connect to when discovery is enabled. Set to 0 to disable auto-connect
+         * while keeping discovery active (useful for debugging).
+         *
+         * Automatically restarts the Reticulum service to apply changes.
+         */
+        fun setAutoconnectCount(count: Int) {
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    val clampedCount = count.coerceIn(0, 10)
+
+                    // Update UI immediately to show restarting state
+                    _state.update {
+                        it.copy(
+                            autoconnectCount = clampedCount,
+                            isRestarting = true,
+                        )
+                    }
+
+                    // Save settings to DataStore
+                    settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
+                    Log.d(TAG, "Autoconnect count saved: $clampedCount")
+
+                    // Restart the Reticulum service to apply changes
+                    Log.d(TAG, "Restarting Reticulum service to apply autoconnect count...")
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
+                        .onSuccess {
+                            Log.d(TAG, "Reticulum service restarted successfully")
+                            // Reload discovered interfaces after restart
+                            loadDiscoveredInterfaces()
+                            _state.update { it.copy(isRestarting = false) }
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to restart Reticulum service", error)
+                            _state.update {
+                                it.copy(
+                                    isRestarting = false,
+                                    errorMessage = "Failed to restart service: ${error.message}",
+                                )
+                            }
+                        }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set autoconnect count", e)
+                    _state.update {
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to update autoconnect count: ${e.message}",
                         )
                     }
                 }

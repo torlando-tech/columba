@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -186,6 +187,7 @@ fun DiscoveredInterfacesScreen(
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
+                                onAutoconnectCountChange = { viewModel.setAutoconnectCount(it) },
                             )
                         }
 
@@ -303,10 +305,11 @@ fun DiscoveredInterfacesScreen(
 internal fun DiscoverySettingsCard(
     isRuntimeEnabled: Boolean,
     isSettingEnabled: Boolean,
-    autoconnectCount: Int = 5,
+    autoconnectCount: Int = 0,
     bootstrapInterfaceNames: List<String> = emptyList(),
     isRestarting: Boolean = false,
     onToggleDiscovery: () -> Unit = {},
+    onAutoconnectCountChange: (Int) -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -437,7 +440,11 @@ internal fun DiscoverySettingsCard(
                 Text(
                     text =
                         if (isSettingEnabled) {
-                            "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                            if (autoconnectCount > 0) {
+                                "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                            } else {
+                                "Discovery is active but auto-connect is disabled. Useful for debugging."
+                            }
                         } else {
                             "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
                         },
@@ -449,6 +456,51 @@ internal fun DiscoverySettingsCard(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         },
                 )
+            }
+
+            // Autoconnect count slider (only shown when discovery is enabled)
+            if (isSettingEnabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Auto-connect limit",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            text = if (autoconnectCount == 0) "Off" else "$autoconnectCount",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    // Use a separate state to track slider changes and only commit on release
+                    var sliderValue by remember { mutableStateOf(autoconnectCount.toFloat()) }
+                    // Update local state when external state changes
+                    LaunchedEffect(autoconnectCount) {
+                        sliderValue = autoconnectCount.toFloat()
+                    }
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        onValueChangeFinished = {
+                            val newCount = sliderValue.toInt()
+                            if (newCount != autoconnectCount) {
+                                onAutoconnectCountChange(newCount)
+                            }
+                        },
+                        valueRange = 0f..10f,
+                        steps = 9,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isRestarting,
+                    )
+                }
             }
 
             // Bootstrap interfaces section

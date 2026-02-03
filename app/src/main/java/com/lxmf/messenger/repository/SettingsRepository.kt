@@ -182,8 +182,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATIONS_ENABLED] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the master notifications enabled state.
@@ -204,8 +203,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the received message notification preference.
@@ -226,8 +224,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_RECEIVED_MESSAGE_FAVORITE] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the received message from favorite notification preference.
@@ -248,8 +245,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_HEARD_ANNOUNCE] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the heard announce notification preference.
@@ -270,8 +266,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_CONNECTED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the BLE connected notification preference.
@@ -292,8 +287,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NOTIFICATION_BLE_DISCONNECTED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the BLE disconnected notification preference.
@@ -314,8 +308,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_REQUESTED_NOTIFICATION_PERMISSION] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Mark that we've requested notification permission from the user.
@@ -336,8 +329,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_DISMISSED_LOCATION_PERMISSION_SHEET] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Mark that the user has dismissed the location permission bottom sheet.
@@ -369,8 +361,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Mark that the user has completed onboarding.
@@ -392,8 +383,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_ANNOUNCE_ENABLED] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the auto-announce enabled state.
@@ -444,7 +434,8 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveLastAutoAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs().edit()
+            getCrossProcessPrefs()
+                .edit()
                 .putLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
                 .apply()
         }
@@ -457,8 +448,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.NEXT_AUTO_ANNOUNCE_TIME]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the next scheduled auto-announce timestamp.
@@ -494,7 +484,8 @@ class SettingsRepository
          */
         @Suppress("RedundantSuspendModifier") // Keep suspend for API compatibility
         suspend fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-            getCrossProcessPrefs().edit()
+            getCrossProcessPrefs()
+                .edit()
                 .putLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
                 .apply()
         }
@@ -509,8 +500,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_SERVICE_STATUS] ?: "UNKNOWN"
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the last known service status for persistence across app restarts.
@@ -534,8 +524,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.THEME_PREFERENCE]
-                }
-                .flatMapLatest { themeIdentifier ->
+                }.flatMapLatest { themeIdentifier ->
                     if (themeIdentifier == null) {
                         flowOf(PresetTheme.VIBRANT)
                     } else {
@@ -548,8 +537,8 @@ class SettingsRepository
          * Format: "preset:VIBRANT" or "custom:123"
          * For custom themes, uses Flow to reactively load from database.
          */
-        private fun parseThemeIdentifierFlow(identifier: String): Flow<AppTheme> {
-            return when {
+        private fun parseThemeIdentifierFlow(identifier: String): Flow<AppTheme> =
+            when {
                 identifier.startsWith("preset:") -> {
                     val presetName = identifier.substringAfter("preset:")
                     val theme =
@@ -565,7 +554,8 @@ class SettingsRepository
                     val themeId = identifier.substringAfter("custom:").toLongOrNull()
                     if (themeId != null) {
                         // Use Flow instead of suspend function for reactivity
-                        customThemeRepository.getThemeByIdFlow(themeId)
+                        customThemeRepository
+                            .getThemeByIdFlow(themeId)
                             .map { themeData ->
                                 themeData?.let { customThemeDataToAppTheme(it) }
                                     ?: PresetTheme.VIBRANT
@@ -585,7 +575,6 @@ class SettingsRepository
                     flowOf(theme)
                 }
             }
-        }
 
         /**
          * Save the selected app theme.
@@ -621,8 +610,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.PREFER_OWN_INSTANCE] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the prefer own instance setting.
@@ -644,8 +632,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.IS_SHARED_INSTANCE] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the current shared instance status.
@@ -669,8 +656,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.RPC_KEY]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the RPC key for shared instance authentication.
@@ -698,17 +684,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the default delivery method (non-flow for use in sending).
          */
-        suspend fun getDefaultDeliveryMethod(): String {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
-            }.first()
-        }
+        suspend fun getDefaultDeliveryMethod(): String =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DEFAULT_DELIVERY_METHOD] ?: "direct"
+                }.first()
 
         /**
          * Save the default delivery method.
@@ -729,17 +714,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get try propagation on fail setting (non-flow for use in sending).
          */
-        suspend fun getTryPropagationOnFail(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
-            }.first()
-        }
+        suspend fun getTryPropagationOnFail(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRY_PROPAGATION_ON_FAIL] ?: true
+                }.first()
 
         /**
          * Save the try propagation on fail setting.
@@ -760,17 +744,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the manually selected propagation node (non-flow).
          */
-        suspend fun getManualPropagationNode(): String? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
-            }.first()
-        }
+        suspend fun getManualPropagationNode(): String? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MANUAL_PROPAGATION_NODE]
+                }.first()
 
         /**
          * Save the manually selected propagation node.
@@ -795,17 +778,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the last used propagation node (non-flow).
          */
-        suspend fun getLastPropagationNode(): String? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
-            }.first()
-        }
+        suspend fun getLastPropagationNode(): String? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_PROPAGATION_NODE]
+                }.first()
 
         /**
          * Save the last used propagation node.
@@ -826,17 +808,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the auto-select propagation node setting (non-flow).
          */
-        suspend fun getAutoSelectPropagationNode(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
-            }.first()
-        }
+        suspend fun getAutoSelectPropagationNode(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_SELECT_PROPAGATION_NODE] ?: true
+                }.first()
 
         /**
          * Save the auto-select propagation node setting.
@@ -860,17 +841,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the auto-retrieve enabled setting (non-flow).
          */
-        suspend fun getAutoRetrieveEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
-            }.first()
-        }
+        suspend fun getAutoRetrieveEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_RETRIEVE_ENABLED] ?: true
+                }.first()
 
         /**
          * Save the auto-retrieve enabled setting.
@@ -893,17 +873,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 3600
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the retrieval interval in seconds (non-flow).
          */
-        suspend fun getRetrievalIntervalSeconds(): Int {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 3600
-            }.first()
-        }
+        suspend fun getRetrievalIntervalSeconds(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.RETRIEVAL_INTERVAL_SECONDS] ?: 3600
+                }.first()
 
         /**
          * Save the retrieval interval in seconds.
@@ -924,17 +903,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the last sync timestamp (non-flow).
          */
-        suspend fun getLastSyncTimestamp(): Long? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
-            }.first()
-        }
+        suspend fun getLastSyncTimestamp(): Long? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP]
+                }.first()
 
         /**
          * Save the last sync timestamp.
@@ -959,17 +937,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the transport node enabled setting (non-flow).
          */
-        suspend fun getTransportNodeEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
-            }.first()
-        }
+        suspend fun getTransportNodeEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+                }.first()
 
         /**
          * Save the transport node enabled setting.
@@ -993,17 +970,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the interface discovery enabled setting (non-flow).
          */
-        suspend fun getDiscoverInterfacesEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] ?: false
-            }.first()
-        }
+        suspend fun getDiscoverInterfacesEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.DISCOVER_INTERFACES_ENABLED] ?: false
+                }.first()
 
         /**
          * Save the interface discovery enabled setting.
@@ -1019,23 +995,25 @@ class SettingsRepository
         /**
          * Flow of the autoconnect discovered interfaces count.
          * Number of discovered interfaces to auto-connect (0 = disabled).
-         * Defaults to 0 if not set.
+         * Defaults to -1 if never configured (sentinel value).
+         * -1 means "user has never set this, use default when enabling discovery"
+         * 0+ means "user explicitly chose this value"
          */
         val autoconnectDiscoveredCountFlow: Flow<Int> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: 0
-                }
-                .distinctUntilChanged()
+                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: -1
+                }.distinctUntilChanged()
 
         /**
          * Get the autoconnect discovered interfaces count (non-flow).
+         * Returns -1 if never configured, 0+ if user has explicitly set a value.
          */
-        suspend fun getAutoconnectDiscoveredCount(): Int {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: 0
-            }.first()
-        }
+        suspend fun getAutoconnectDiscoveredCount(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: -1
+                }.first()
 
         /**
          * Save the autoconnect discovered interfaces count.
@@ -1059,8 +1037,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LOCATION_SHARING_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the location sharing enabled setting.
@@ -1082,8 +1059,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.DEFAULT_SHARING_DURATION] ?: "ONE_HOUR"
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the default sharing duration.
@@ -1105,8 +1081,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] ?: 0
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Save the location precision radius.
@@ -1130,8 +1105,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] ?: DEFAULT_INCOMING_SIZE_LIMIT_KB
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         // Image compression preferences
 
@@ -1148,8 +1122,7 @@ class SettingsRepository
                     } else {
                         ImageCompressionPreset.DEFAULT
                     }
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         // Map source preferences
 
@@ -1162,8 +1135,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the incoming message size limit in KB (non-flow).
@@ -1172,8 +1144,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.INCOMING_MESSAGE_SIZE_LIMIT_KB] ?: DEFAULT_INCOMING_SIZE_LIMIT_KB
-                }
-                .first()
+                }.first()
 
         /**
          * Save the incoming message size limit in KB.
@@ -1190,16 +1161,16 @@ class SettingsRepository
         /**
          * Get the image compression preset (non-flow).
          */
-        suspend fun getImageCompressionPreset(): ImageCompressionPreset {
-            return context.dataStore.data.map { preferences ->
-                val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
-                if (presetName != null) {
-                    ImageCompressionPreset.fromName(presetName)
-                } else {
-                    ImageCompressionPreset.DEFAULT
-                }
-            }.first()
-        }
+        suspend fun getImageCompressionPreset(): ImageCompressionPreset =
+            context.dataStore.data
+                .map { preferences ->
+                    val presetName = preferences[PreferencesKeys.IMAGE_COMPRESSION_PRESET]
+                    if (presetName != null) {
+                        ImageCompressionPreset.fromName(presetName)
+                    } else {
+                        ImageCompressionPreset.DEFAULT
+                    }
+                }.first()
 
         /**
          * Save the image compression preset.
@@ -1215,11 +1186,11 @@ class SettingsRepository
         /**
          * Get the HTTP map source enabled setting (non-flow).
          */
-        suspend fun getMapSourceHttpEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
-            }.first()
-        }
+        suspend fun getMapSourceHttpEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
+                }.first()
 
         // Telemetry collector preferences
 
@@ -1231,17 +1202,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry collector address (non-flow).
          */
-        suspend fun getTelemetryCollectorAddress(): String? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS]
-            }.first()
-        }
+        suspend fun getTelemetryCollectorAddress(): String? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ADDRESS]
+                }.first()
 
         /**
          * Save the telemetry collector address.
@@ -1266,17 +1236,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry collector enabled state (non-flow).
          */
-        suspend fun getTelemetryCollectorEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] ?: false
-            }.first()
-        }
+        suspend fun getTelemetryCollectorEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_COLLECTOR_ENABLED] ?: false
+                }.first()
 
         /**
          * Save the telemetry collector enabled state.
@@ -1297,17 +1266,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry send interval in seconds (non-flow).
          */
-        suspend fun getTelemetrySendIntervalSeconds(): Int {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS
-            }.first()
-        }
+        suspend fun getTelemetrySendIntervalSeconds(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_SEND_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS
+                }.first()
 
         /**
          * Save the telemetry send interval in seconds.
@@ -1328,17 +1296,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry request enabled state (non-flow).
          */
-        suspend fun getTelemetryRequestEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] ?: false
-            }.first()
-        }
+        suspend fun getTelemetryRequestEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_REQUEST_ENABLED] ?: false
+                }.first()
 
         /**
          * Save the telemetry request enabled state.
@@ -1359,17 +1326,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry request interval in seconds (non-flow).
          */
-        suspend fun getTelemetryRequestIntervalSeconds(): Int {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS
-            }.first()
-        }
+        suspend fun getTelemetryRequestIntervalSeconds(): Int =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_REQUEST_INTERVAL_SECONDS] ?: DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS
+                }.first()
 
         /**
          * Save the telemetry request interval in seconds.
@@ -1390,17 +1356,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the last telemetry send timestamp (non-flow).
          */
-        suspend fun getLastTelemetrySendTime(): Long? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME]
-            }.first()
-        }
+        suspend fun getLastTelemetrySendTime(): Long? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_TELEMETRY_SEND_TIME]
+                }.first()
 
         /**
          * Save the last telemetry send timestamp.
@@ -1421,17 +1386,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME]
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the last telemetry request timestamp (non-flow).
          */
-        suspend fun getLastTelemetryRequestTime(): Long? {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME]
-            }.first()
-        }
+        suspend fun getLastTelemetryRequestTime(): Long? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.LAST_TELEMETRY_REQUEST_TIME]
+                }.first()
 
         /**
          * Save the last telemetry request timestamp.
@@ -1455,17 +1419,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the telemetry host mode enabled state (non-flow).
          */
-        suspend fun getTelemetryHostModeEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] ?: false
-            }.first()
-        }
+        suspend fun getTelemetryHostModeEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_HOST_MODE_ENABLED] ?: false
+                }.first()
 
         /**
          * Save the telemetry host mode enabled state.
@@ -1489,17 +1452,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the allowed telemetry requesters (non-flow).
          */
-        suspend fun getTelemetryAllowedRequesters(): Set<String> {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
-            }.first()
-        }
+        suspend fun getTelemetryAllowedRequesters(): Set<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
+                }.first()
 
         /**
          * Save the allowed telemetry requesters.
@@ -1633,17 +1595,16 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the RMSP map source enabled setting (non-flow).
          */
-        suspend fun getMapSourceRmspEnabled(): Boolean {
-            return context.dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] ?: false
-            }.first()
-        }
+        suspend fun getMapSourceRmspEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] ?: false
+                }.first()
 
         /**
          * Save the RMSP map source enabled setting.
@@ -1664,8 +1625,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.HTTP_ENABLED_FOR_DOWNLOAD] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Set whether HTTP was enabled specifically for downloading offline maps.
@@ -1687,8 +1647,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] ?: false
-                }
-                .distinctUntilChanged()
+                }.distinctUntilChanged()
 
         /**
          * Get the block unknown senders setting (non-flow).
@@ -1697,8 +1656,7 @@ class SettingsRepository
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] ?: false
-                }
-                .first()
+                }.first()
 
         /**
          * Save the block unknown senders setting.
@@ -1715,7 +1673,8 @@ class SettingsRepository
                 preferences[PreferencesKeys.BLOCK_UNKNOWN_SENDERS] = enabled
             }
             // Write to SharedPreferences for cross-process access by the service
-            context.getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
                 .apply()

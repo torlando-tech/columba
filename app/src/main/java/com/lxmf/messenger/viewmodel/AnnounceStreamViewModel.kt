@@ -256,7 +256,7 @@ class AnnounceStreamViewModel
                     // Upsert to database - updates timestamp if exists, inserts if new
                     // This automatically moves re-announces to the top due to ORDER BY lastSeenTimestamp DESC
                     try {
-                        Log.d(TAG, "Saving announce: $peerName ($hashHex) with interface: ${announce.receivingInterface}")
+                        Log.d(TAG, "Saving announce: ${hashHex.take(16)} with interface: ${announce.receivingInterface}")
                         announceRepository.saveAnnounce(
                             destinationHash = hashHex,
                             peerName = peerName,
@@ -272,7 +272,7 @@ class AnnounceStreamViewModel
                             stampCostFlexibility = announce.stampCostFlexibility,
                             peeringCost = announce.peeringCost,
                         )
-                        Log.d(TAG, "Saved/updated announce in database: $peerName ($hashHex)")
+                        Log.d(TAG, "Saved/updated announce in database: ${hashHex.take(16)}")
 
                         // Update reachable count after new announce
                         updateReachableCount()
@@ -425,7 +425,7 @@ class AnnounceStreamViewModel
             viewModelScope.launch {
                 try {
                     propagationNodeManager.setManualRelay(destinationHash, peerName)
-                    Log.d(TAG, "Set $peerName as my relay")
+                    Log.d(TAG, "Set ${destinationHash.take(16)} as my relay")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set relay: $destinationHash", e)
                 }

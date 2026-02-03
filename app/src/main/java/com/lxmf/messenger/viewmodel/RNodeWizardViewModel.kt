@@ -219,7 +219,11 @@ data class RNodeWizardState(
      */
     fun defaultInterfaceNameFor(device: DiscoveredRNode): String =
         if (interfaceName == DEFAULT_INTERFACE_NAME) {
-            val identifier = device.name.removePrefix("RNode ").trim().ifEmpty { device.name }
+            val identifier =
+                device.name
+                    .removePrefix("RNode ")
+                    .trim()
+                    .ifEmpty { device.name }
             val suffix = if (device.type == BluetoothType.BLE) "BLE" else "BT"
             "RNode $identifier $suffix"
         } else {
@@ -263,7 +267,8 @@ class RNodeWizardViewModel
 
         // USB bridge (singleton from reticulum module)
         private val usbBridge by lazy {
-            com.lxmf.messenger.reticulum.usb.KotlinUSBBridge.getInstance(context)
+            com.lxmf.messenger.reticulum.usb.KotlinUSBBridge
+                .getInstance(context)
         }
 
         // RSSI update throttling - prevent excessive UI updates
@@ -486,8 +491,10 @@ class RNodeWizardViewModel
                     pendingSpreadingFactor = spreadingFactor,
                     pendingCodingRate = codingRate,
                     hasPendingParams =
-                        frequency != null || bandwidth != null ||
-                            spreadingFactor != null || codingRate != null,
+                        frequency != null ||
+                            bandwidth != null ||
+                            spreadingFactor != null ||
+                            codingRate != null,
                 )
             }
             Log.d(TAG, "Set pending LoRa params: freq=$frequency, bw=$bandwidth, sf=$spreadingFactor, cr=$codingRate")
@@ -1040,12 +1047,14 @@ class RNodeWizardViewModel
             val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
 
             val filter =
-                ScanFilter.Builder()
+                ScanFilter
+                    .Builder()
                     .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
                     .build()
 
             val settings =
-                ScanSettings.Builder()
+                ScanSettings
+                    .Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
 
@@ -1134,12 +1143,14 @@ class RNodeWizardViewModel
             val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return null
 
             val filter =
-                ScanFilter.Builder()
+                ScanFilter
+                    .Builder()
                     .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
                     .build()
 
             val settings =
-                ScanSettings.Builder()
+                ScanSettings
+                    .Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
 
@@ -1259,9 +1270,7 @@ class RNodeWizardViewModel
         /**
          * Check if CompanionDeviceManager is available.
          */
-        fun isCompanionDeviceAvailable(): Boolean {
-            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && companionDeviceManager != null
-        }
+        fun isCompanionDeviceAvailable(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && companionDeviceManager != null
 
         /**
          * Request device association via CompanionDeviceManager.
@@ -1389,19 +1398,21 @@ class RNodeWizardViewModel
             if (device.type == BluetoothType.BLE) {
                 // BLE device filter with NUS service UUID
                 val bleFilter =
-                    BluetoothLeDeviceFilter.Builder()
+                    BluetoothLeDeviceFilter
+                        .Builder()
                         .setNamePattern(Pattern.compile(escapedName))
                         .setScanFilter(
-                            ScanFilter.Builder()
+                            ScanFilter
+                                .Builder()
                                 .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
                                 .build(),
-                        )
-                        .build()
+                        ).build()
                 builder.addDeviceFilter(bleFilter)
             } else {
                 // Classic Bluetooth device filter
                 val classicFilter =
-                    BluetoothDeviceFilter.Builder()
+                    BluetoothDeviceFilter
+                        .Builder()
                         .setNamePattern(Pattern.compile(escapedName))
                         .build()
                 builder.addDeviceFilter(classicFilter)
@@ -1472,13 +1483,12 @@ class RNodeWizardViewModel
          * Validates the manual device name entry.
          * @return Pair of (error, warning) - error prevents proceeding, warning is informational
          */
-        private fun validateManualDeviceName(name: String): Pair<String?, String?> {
-            return when (val result = DeviceNameValidator.validate(name)) {
+        private fun validateManualDeviceName(name: String): Pair<String?, String?> =
+            when (val result = DeviceNameValidator.validate(name)) {
                 is DeviceNameValidator.ValidationResult.Valid -> null to null
                 is DeviceNameValidator.ValidationResult.Error -> result.message to null
                 is DeviceNameValidator.ValidationResult.Warning -> null to result.message
             }
-        }
 
         fun updateManualBluetoothType(type: BluetoothType) {
             _state.update { it.copy(manualBluetoothType = type) }
@@ -1776,7 +1786,7 @@ class RNodeWizardViewModel
                 val scannedDevice = _state.value.usbDevices.find { it.deviceId == deviceId }
                 if (scannedDevice != null) {
                     selectUsbDevice(scannedDevice)
-                    Log.d(TAG, "Found and selected USB device: ${scannedDevice.displayName}")
+                    Log.d(TAG, "Found and selected USB device: ${scannedDevice.deviceId}")
                 } else {
                     // If not found in scan, create a placeholder device
                     // (permission will be requested when selected)
@@ -2028,7 +2038,8 @@ class RNodeWizardViewModel
             // Don't filter by service UUID - RNode in pairing mode may not advertise NUS
             // We'll filter by device name in the callback instead
             val scanSettings =
-                ScanSettings.Builder()
+                ScanSettings
+                    .Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
 
@@ -2465,7 +2476,8 @@ class RNodeWizardViewModel
 
             // Don't filter by service UUID - RNode in pairing mode may not advertise NUS
             val scanSettings =
-                ScanSettings.Builder()
+                ScanSettings
+                    .Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
 
@@ -2873,7 +2885,7 @@ class RNodeWizardViewModel
 
                     // Auto-select the first USB device
                     val usbDevice = usbDevices.first()
-                    Log.d(TAG, "USB-assisted pairing: Found ${usbDevice.displayName}")
+                    Log.d(TAG, "USB-assisted pairing: Found USB device ${usbDevice.deviceId}")
 
                     // Check if we need USB permission
                     if (!usbDevice.hasPermission) {
@@ -3294,16 +3306,12 @@ class RNodeWizardViewModel
         /**
          * Get the maximum TX power for the selected region (or default fallback).
          */
-        private fun getMaxTxPower(): Int {
-            return RNodeConfigValidator.getMaxTxPower(_state.value.selectedFrequencyRegion)
-        }
+        private fun getMaxTxPower(): Int = RNodeConfigValidator.getMaxTxPower(_state.value.selectedFrequencyRegion)
 
         /**
          * Get the frequency range for the selected region (or default fallback).
          */
-        private fun getFrequencyRange(): Pair<Long, Long> {
-            return RNodeConfigValidator.getFrequencyRange(_state.value.selectedFrequencyRegion)
-        }
+        private fun getFrequencyRange(): Pair<Long, Long> = RNodeConfigValidator.getFrequencyRange(_state.value.selectedFrequencyRegion)
 
         /**
          * Validate configuration silently (without updating error messages).

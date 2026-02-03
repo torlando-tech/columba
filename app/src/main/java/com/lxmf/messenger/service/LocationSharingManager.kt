@@ -310,12 +310,13 @@ class LocationSharingManager
                 scope.launch {
                     try {
                         val locationRequest =
-                            LocationRequest.Builder(
-                                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                                LOCATION_UPDATE_INTERVAL_MS,
-                            ).apply {
-                                setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
-                            }.build()
+                            LocationRequest
+                                .Builder(
+                                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                    LOCATION_UPDATE_INTERVAL_MS,
+                                ).apply {
+                                    setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
+                                }.build()
 
                         fusedLocationClient.requestLocationUpdates(
                             locationRequest,
@@ -441,11 +442,12 @@ class LocationSharingManager
                                 sourceIdentity = sourceIdentity,
                             )
 
-                        result.onSuccess {
-                            Log.d(TAG, "Location sent to ${session.displayName} (approxRadius=$precisionRadius)")
-                        }.onFailure { e ->
-                            Log.e(TAG, "Failed to send location to ${session.displayName}", e)
-                        }
+                        result
+                            .onSuccess {
+                                Log.d(TAG, "Location sent to ${session.destinationHash.take(16)} (approxRadius=$precisionRadius)")
+                            }.onFailure { e ->
+                                Log.e(TAG, "Failed to send location to ${session.destinationHash.take(16)}", e)
+                            }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error sending location to ${session.destinationHash}", e)
                     }
@@ -567,11 +569,19 @@ class LocationSharingManager
  * Events emitted by LocationSharingManager for UI feedback.
  */
 sealed class SharingEvent {
-    data class Started(val contactCount: Int) : SharingEvent()
+    data class Started(
+        val contactCount: Int,
+    ) : SharingEvent()
 
-    data class Stopped(val destinationHash: String?) : SharingEvent()
+    data class Stopped(
+        val destinationHash: String?,
+    ) : SharingEvent()
 
-    data class SessionsExpired(val count: Int) : SharingEvent()
+    data class SessionsExpired(
+        val count: Int,
+    ) : SharingEvent()
 
-    data class Error(val message: String) : SharingEvent()
+    data class Error(
+        val message: String,
+    ) : SharingEvent()
 }

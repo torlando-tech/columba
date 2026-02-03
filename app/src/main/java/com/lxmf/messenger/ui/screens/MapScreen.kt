@@ -500,7 +500,7 @@ fun MapScreen(
                                         }
                                     if (marker != null) {
                                         selectedMarker = marker
-                                        Log.d("MapScreen", "Marker tapped: ${marker.displayName}")
+                                        Log.d("MapScreen", "Marker tapped: ${marker.destinationHash.take(16)}")
                                     }
                                 }
                             }

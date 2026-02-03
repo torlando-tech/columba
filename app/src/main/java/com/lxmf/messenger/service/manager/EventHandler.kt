@@ -381,7 +381,7 @@ class EventHandler(
 
                 // Also persist peer identity (public key)
                 persistenceManager.persistPeerIdentity(destinationHashHex, publicKey)
-                Log.d(TAG, "Announce persisted to database: $peerName ($destinationHashHex)")
+                Log.d(TAG, "Announce persisted to database: ${destinationHashHex.take(16)}")
             }
 
             // Broadcast to app process for UI updates (may be dead, that's OK)

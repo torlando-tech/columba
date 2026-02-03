@@ -378,7 +378,7 @@ class DebugViewModel
                             null
                         } ?: generateDefaultDisplayName(identity.hash)
 
-                    Log.d(TAG, "Using display name: $displayName")
+                    Log.d(TAG, "Using display name for announce")
 
                     // Announce it with configured display name
                     reticulumProtocol

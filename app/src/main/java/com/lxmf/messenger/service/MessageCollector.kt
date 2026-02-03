@@ -142,7 +142,7 @@ class MessageCollector
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
-                                Log.d(TAG, "Posted notification for already-persisted message from $peerName")
+                                Log.d(TAG, "Posted notification for already-persisted message")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post notification for already-persisted message", e)
                             }
@@ -240,7 +240,7 @@ class MessageCollector
                             }
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
-                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
+                            Log.d(TAG, "Message saved to database for peer ${sourceHash.take(16)} (hasPublicKey=${publicKey != null})")
 
                             // Record peer activity for "last seen" status
                             // Receiving a message proves the peer was recently online
@@ -264,7 +264,7 @@ class MessageCollector
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
-                                Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")
+                                Log.d(TAG, "Posted notification for message (favorite: $isFavorite)")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post message notification", e)
                             }
@@ -322,7 +322,7 @@ class MessageCollector
                         // Cache and update peer name if successfully extracted
                         if (PeerNameResolver.isValidPeerName(peerName)) {
                             peerNames[peerHash] = peerName
-                            Log.d(TAG, "Learned peer name: $peerName for $peerHash")
+                            Log.d(TAG, "Learned peer name for ${peerHash.take(16)}")
 
                             // Update existing conversation with the new name
                             conversationRepository.updatePeerName(peerHash, peerName)
@@ -359,7 +359,7 @@ class MessageCollector
                                 existingAnnounce.lastSeenTimestamp > fiveSecondsAgo &&
                                 !needsTransferLimitUpdate
                             ) {
-                                Log.d(TAG, "Announce already persisted by service: $peerName ($peerHash)")
+                                Log.d(TAG, "Announce already persisted by service: ${peerHash.take(16)}")
                             } else {
                                 announceRepository.saveAnnounce(
                                     destinationHash = peerHash,
@@ -379,7 +379,7 @@ class MessageCollector
                                 )
                                 Log.d(
                                     TAG,
-                                    "Persisted announce to database (fallback): $peerName ($peerHash)" +
+                                    "Persisted announce to database (fallback): ${peerHash.take(16)}" +
                                         if (propagationTransferLimitKb != null) " (transfer limit: ${propagationTransferLimitKb}KB)" else "",
                                 )
                             }
@@ -410,7 +410,7 @@ class MessageCollector
                                     peerName = peerName,
                                     appData = appDataString,
                                 )
-                                Log.d(TAG, "Posted notification for announce from $peerName")
+                                Log.d(TAG, "Posted notification for announce")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post announce notification", e)
                             }
@@ -471,7 +471,7 @@ class MessageCollector
         ) {
             if (name.isNotBlank()) {
                 peerNames[peerHash] = name
-                Log.d(TAG, "Updated peer name: $name for $peerHash")
+                Log.d(TAG, "Updated peer name for ${peerHash.take(16)}")
 
                 // Update in database too
                 scope.launch {

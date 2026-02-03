@@ -66,7 +66,7 @@ class IdentityManagerViewModel
         fun createNewIdentity(displayName: String) {
             viewModelScope.launch {
                 try {
-                    Log.d(TAG, "createNewIdentity: Starting creation for '$displayName'")
+                    Log.d(TAG, "createNewIdentity: Starting creation")
                     _uiState.value = IdentityManagerUiState.Loading("Creating identity...")
 
                     // Call Python service to create identity file
@@ -187,26 +187,26 @@ class IdentityManagerViewModel
                     // and pass the correct identity_<hash> path to Python.
                     // No need to copy to default_identity anymore.
 
-                    identityRepository.switchActiveIdentity(identityHash)
+                    identityRepository
+                        .switchActiveIdentity(identityHash)
                         .onSuccess {
                             // Restart service with new identity (no app restart needed)
                             Log.d(TAG, "Identity switched in database, restarting service...")
                             _uiState.value = IdentityManagerUiState.Loading("Restarting service...")
 
-                            interfaceConfigManager.applyInterfaceChanges()
+                            interfaceConfigManager
+                                .applyInterfaceChanges()
                                 .onSuccess {
                                     Log.d(TAG, "Service restarted with new identity")
                                     _uiState.value = IdentityManagerUiState.Success("Identity switched successfully")
-                                }
-                                .onFailure { e ->
+                                }.onFailure { e ->
                                     Log.e(TAG, "Failed to restart service", e)
                                     _uiState.value =
                                         IdentityManagerUiState.Error(
                                             "Identity switched but service restart failed: ${e.message}",
                                         )
                                 }
-                        }
-                        .onFailure { e ->
+                        }.onFailure { e ->
                             _uiState.value =
                                 IdentityManagerUiState.Error(
                                     e.message ?: "Failed to switch identity",
@@ -250,11 +250,11 @@ class IdentityManagerViewModel
                     }
 
                     // Delete from database (cascade delete will remove associated data)
-                    identityRepository.deleteIdentity(identityHash)
+                    identityRepository
+                        .deleteIdentity(identityHash)
                         .onSuccess {
                             _uiState.value = IdentityManagerUiState.Success("Identity deleted successfully")
-                        }
-                        .onFailure { e ->
+                        }.onFailure { e ->
                             _uiState.value =
                                 IdentityManagerUiState.Error(
                                     e.message ?: "Failed to delete identity from database",
@@ -280,11 +280,11 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Renaming identity...")
 
-                    identityRepository.updateDisplayName(identityHash, newName)
+                    identityRepository
+                        .updateDisplayName(identityHash, newName)
                         .onSuccess {
                             _uiState.value = IdentityManagerUiState.Success("Identity renamed successfully")
-                        }
-                        .onFailure { e ->
+                        }.onFailure { e ->
                             _uiState.value =
                                 IdentityManagerUiState.Error(
                                     e.message ?: "Failed to rename identity",
@@ -355,20 +355,21 @@ class IdentityManagerViewModel
                     }
 
                     // Save to database
-                    identityRepository.importIdentity(
-                        identityHash = identityHash,
-                        displayName = displayName,
-                        destinationHash = destinationHash,
-                        filePath = filePath,
-                        keyData = keyData,
-                    ).onSuccess {
-                        _uiState.value = IdentityManagerUiState.Success("Identity imported successfully")
-                    }.onFailure { e ->
-                        _uiState.value =
-                            IdentityManagerUiState.Error(
-                                e.message ?: "Failed to save imported identity",
-                            )
-                    }
+                    identityRepository
+                        .importIdentity(
+                            identityHash = identityHash,
+                            displayName = displayName,
+                            destinationHash = destinationHash,
+                            filePath = filePath,
+                            keyData = keyData,
+                        ).onSuccess {
+                            _uiState.value = IdentityManagerUiState.Success("Identity imported successfully")
+                        }.onFailure { e ->
+                            _uiState.value =
+                                IdentityManagerUiState.Error(
+                                    e.message ?: "Failed to save imported identity",
+                                )
+                        }
                 } catch (e: Exception) {
                     _uiState.value =
                         IdentityManagerUiState.Error(
@@ -398,11 +399,11 @@ class IdentityManagerViewModel
                     }
 
                     // Create shareable URI
-                    identityRepository.exportIdentity(identityHash, fileData)
+                    identityRepository
+                        .exportIdentity(identityHash, fileData)
                         .onSuccess { uri ->
                             _uiState.value = IdentityManagerUiState.ExportReady(uri)
-                        }
-                        .onFailure { e ->
+                        }.onFailure { e ->
                             _uiState.value =
                                 IdentityManagerUiState.Error(
                                     e.message ?: "Failed to create shareable file",
@@ -443,15 +444,23 @@ class IdentityManagerViewModel
 sealed class IdentityManagerUiState {
     object Idle : IdentityManagerUiState()
 
-    data class Loading(val message: String) : IdentityManagerUiState()
+    data class Loading(
+        val message: String,
+    ) : IdentityManagerUiState()
 
-    data class Success(val message: String) : IdentityManagerUiState()
+    data class Success(
+        val message: String,
+    ) : IdentityManagerUiState()
 
-    data class Error(val message: String) : IdentityManagerUiState()
+    data class Error(
+        val message: String,
+    ) : IdentityManagerUiState()
 
     object RequiresRestart : IdentityManagerUiState()
 
-    data class ExportReady(val uri: Uri) : IdentityManagerUiState()
+    data class ExportReady(
+        val uri: Uri,
+    ) : IdentityManagerUiState()
 }
 
 /**

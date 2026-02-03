@@ -48,7 +48,8 @@ class BleStatusRepository
             // Get the event-driven flow from ServiceReticulumProtocol
             val connectionEventsFlow =
                 if (reticulumProtocol is ServiceReticulumProtocol) {
-                    (reticulumProtocol as ServiceReticulumProtocol).bleConnectionsFlow
+                    (reticulumProtocol as ServiceReticulumProtocol)
+                        .bleConnectionsFlow
                         .onStart { emit("[]") } // Initial empty state
                         .map { json -> parseConnectionsJson(json) }
                 } else {
@@ -86,8 +87,8 @@ class BleStatusRepository
         /**
          * Parse connection details JSON into BleConnectionInfo list.
          */
-        private fun parseConnectionsJson(jsonString: String): List<BleConnectionInfo> {
-            return try {
+        private fun parseConnectionsJson(jsonString: String): List<BleConnectionInfo> =
+            try {
                 val jsonArray = JSONArray(jsonString)
                 val connections = mutableListOf<BleConnectionInfo>()
 
@@ -133,7 +134,6 @@ class BleStatusRepository
                 Log.e(TAG, "Error parsing connections JSON", e)
                 emptyList()
             }
-        }
 
         private fun stateToString(state: Int): String =
             when (state) {
@@ -186,7 +186,7 @@ class BleStatusRepository
                             else -> ConnectionType.CENTRAL
                         }
 
-                    Log.v(TAG, "  Peer: $peerName (${identityHash.take(8)}), RSSI: $rssi")
+                    Log.v(TAG, "  Peer: ${identityHash.take(8)}, RSSI: $rssi")
 
                     connections.add(
                         BleConnectionInfo(
@@ -223,14 +223,13 @@ class BleStatusRepository
          *
          * @return Number of currently connected peers
          */
-        fun getConnectedPeerCount(): Int {
-            return try {
+        fun getConnectedPeerCount(): Int =
+            try {
                 getConnectedPeers().size
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting connected peer count", e)
                 0
             }
-        }
 
         /**
          * Disconnect from a specific peer.

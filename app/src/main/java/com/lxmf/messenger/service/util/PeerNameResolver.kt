@@ -40,7 +40,7 @@ object PeerNameResolver {
             ?: tryLookup("announce", announcePeerNameLookup)
             ?: tryLookup("conversation", conversationPeerNameLookup)
             ?: formatHashAsFallback(peerHash).also {
-                Log.d(TAG, "Using fallback name for peer: $it")
+                Log.d(TAG, "Using fallback name for peer")
             }
 
     /**
@@ -54,7 +54,7 @@ object PeerNameResolver {
         if (lookup == null) return null
         return try {
             lookup()?.takeIf { isValidPeerName(it) }?.also {
-                Log.d(TAG, "Found peer name in $source: $it")
+                Log.d(TAG, "Found peer name in $source")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error looking up $source peer name", e)

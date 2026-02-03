@@ -547,28 +547,23 @@ class DiscoveredInterfacesViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
-            // Then
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
-            }
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
         }
 
     @Test
-    fun `setSortMode - changes sort mode to PROXIMITY`() =
+    fun `setSortMode - changes sort mode to PROXIMITY when user location available`() =
         runTest {
             // Given
             viewModel = createViewModel()
             advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
 
             // When
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
-            // Then
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
-            }
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
         }
 
     @Test
@@ -577,16 +572,14 @@ class DiscoveredInterfacesViewModelTest {
             // Given
             viewModel = createViewModel()
             advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
             // When
             viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
 
-            // Then
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
-            }
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
         }
 
     @Test
@@ -607,18 +600,16 @@ class DiscoveredInterfacesViewModelTest {
             // When
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
-            // Then: Should be sorted nearest first
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(3, state.interfaces.size)
-                assertEquals("Near", state.interfaces[0].name)
-                assertEquals("Medium", state.interfaces[1].name)
-                assertEquals("Far", state.interfaces[2].name)
-            }
+            // Then: Should be sorted nearest first - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Medium", state.interfaces[1].name)
+            assertEquals("Far", state.interfaces[2].name)
         }
 
     @Test
-    fun `setSortMode PROXIMITY - preserves order when user location not available`() =
+    fun `setSortMode PROXIMITY - ignored when user location not available`() =
         runTest {
             // Given: Interfaces with location but NO user location
             val interfaces =
@@ -635,14 +626,12 @@ class DiscoveredInterfacesViewModelTest {
             // When
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
-            // Then: Order should be preserved (can't sort without user location)
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(3, state.interfaces.size)
-                assertEquals("First", state.interfaces[0].name)
-                assertEquals("Second", state.interfaces[1].name)
-                assertEquals("Third", state.interfaces[2].name)
-            }
+            // Then: Sort mode should remain AVAILABILITY_AND_QUALITY (request ignored)
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
         }
 
     @Test
@@ -664,13 +653,11 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
             // Then: Interface with location first, then those without (in original order)
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(3, state.interfaces.size)
-                assertEquals("HasLocation", state.interfaces[0].name)
-                assertEquals("NoLocation1", state.interfaces[1].name)
-                assertEquals("NoLocation2", state.interfaces[2].name)
-            }
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("HasLocation", state.interfaces[0].name)
+            assertEquals("NoLocation1", state.interfaces[1].name)
+            assertEquals("NoLocation2", state.interfaces[2].name)
         }
 
     @Test
@@ -691,14 +678,12 @@ class DiscoveredInterfacesViewModelTest {
             // When: Explicitly set to AVAILABILITY_AND_QUALITY (the default)
             viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
 
-            // Then: Order should match original from Python
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(3, state.interfaces.size)
-                assertEquals("First", state.interfaces[0].name)
-                assertEquals("Second", state.interfaces[1].name)
-                assertEquals("Third", state.interfaces[2].name)
-            }
+            // Then: Order should match original from Python - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
         }
 
     @Test
@@ -718,22 +703,18 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setUserLocation(0.0, 0.0)
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
-            // Verify sorted by distance
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals("Near", state.interfaces[0].name)
-                assertEquals("Far", state.interfaces[1].name)
-            }
+            // Verify sorted by distance - use .value for synchronous state checks
+            var state = viewModel.state.value
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
 
             // When: User moves to new location (closer to "Far" interface)
             viewModel.setUserLocation(9.0, 9.0)
 
             // Then: Should re-sort with new distances
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals("Far", state.interfaces[0].name) // Now closer
-                assertEquals("Near", state.interfaces[1].name) // Now farther
-            }
+            state = viewModel.state.value
+            assertEquals("Far", state.interfaces[0].name) // Now closer
+            assertEquals("Near", state.interfaces[1].name) // Now farther
         }
 
     @Test
@@ -752,13 +733,11 @@ class DiscoveredInterfacesViewModelTest {
             // When: Set user location while in AVAILABILITY_AND_QUALITY mode (default)
             viewModel.setUserLocation(0.0, 0.0)
 
-            // Then: Order should remain unchanged
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
-                assertEquals("First", state.interfaces[0].name)
-                assertEquals("Second", state.interfaces[1].name)
-            }
+            // Then: Order should remain unchanged - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
         }
 
     @Test
@@ -778,23 +757,22 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setUserLocation(0.0, 0.0)
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
-            // Verify initial sort
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals("Near", state.interfaces[0].name)
-            }
+            // Verify initial sort - use .value for synchronous state checks
+            assertEquals(
+                "Near",
+                viewModel.state.value.interfaces[0]
+                    .name,
+            )
 
             // When: Reload interfaces (simulating refresh)
             viewModel.loadDiscoveredInterfaces()
             advanceUntilIdle()
 
             // Then: New data should still be sorted by proximity
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
-                assertEquals("Near", state.interfaces[0].name)
-                assertEquals("Far", state.interfaces[1].name)
-            }
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
         }
 
     @Test
@@ -810,11 +788,9 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
             // Then: Should not crash, empty list should remain empty
-            viewModel.state.test {
-                val state = awaitItem()
-                assertTrue(state.interfaces.isEmpty())
-                assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
-            }
+            val state = viewModel.state.value
+            assertTrue(state.interfaces.isEmpty())
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
         }
 
     @Test
@@ -835,12 +811,10 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
 
             // Then: Order should be preserved (all go to "without location" group)
-            viewModel.state.test {
-                val state = awaitItem()
-                assertEquals(2, state.interfaces.size)
-                assertEquals("NoLoc1", state.interfaces[0].name)
-                assertEquals("NoLoc2", state.interfaces[1].name)
-            }
+            val state = viewModel.state.value
+            assertEquals(2, state.interfaces.size)
+            assertEquals("NoLoc1", state.interfaces[0].name)
+            assertEquals("NoLoc2", state.interfaces[1].name)
         }
 
     // ========== Helper Functions ==========

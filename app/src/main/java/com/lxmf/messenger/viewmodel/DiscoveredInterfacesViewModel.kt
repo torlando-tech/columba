@@ -246,9 +246,16 @@ class DiscoveredInterfacesViewModel
 
         /**
          * Set the sort mode and re-sort the interfaces list.
+         * PROXIMITY mode requires user location; if unavailable, the request is ignored.
          */
         fun setSortMode(mode: DiscoveredInterfacesSortMode) {
             _state.update { currentState ->
+                // Guard: can't switch to PROXIMITY without user location
+                if (mode == DiscoveredInterfacesSortMode.PROXIMITY &&
+                    (currentState.userLatitude == null || currentState.userLongitude == null)
+                ) {
+                    return@update currentState
+                }
                 val sortedInterfaces =
                     sortInterfaces(
                         currentState.interfaces,

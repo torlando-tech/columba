@@ -101,16 +101,26 @@ class DiscoveredInterfacesViewModel
                     val staleCount = discovered.count { it.status == "stale" }
 
                     _state.update { currentState ->
-                        // Apply current sort mode to the newly loaded interfaces
+                        // Reset to QUALITY mode if in PROXIMITY but location unavailable
+                        val effectiveSortMode =
+                            if (currentState.sortMode == DiscoveredInterfacesSortMode.PROXIMITY &&
+                                (currentState.userLatitude == null || currentState.userLongitude == null)
+                            ) {
+                                DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY
+                            } else {
+                                currentState.sortMode
+                            }
+
                         val sortedInterfaces =
                             sortInterfaces(
                                 discovered,
-                                currentState.sortMode,
+                                effectiveSortMode,
                                 currentState.userLatitude,
                                 currentState.userLongitude,
                             )
                         currentState.copy(
                             interfaces = sortedInterfaces,
+                            sortMode = effectiveSortMode,
                             isLoading = false,
                             availableCount = availableCount,
                             unknownCount = unknownCount,

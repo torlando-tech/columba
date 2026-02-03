@@ -776,6 +776,38 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
+    fun `loadDiscoveredInterfaces - resets sortMode to QUALITY if location unavailable`() =
+        runTest {
+            // Given: User had PROXIMITY mode with location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Interface1"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set location and PROXIMITY mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
+
+            // Simulate location becoming unavailable via reflection (edge case)
+            val fieldState = DiscoveredInterfacesViewModel::class.java.getDeclaredField("_state")
+            fieldState.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val mutableState = fieldState.get(viewModel) as MutableStateFlow<DiscoveredInterfacesState>
+            mutableState.value = mutableState.value.copy(userLatitude = null, userLongitude = null)
+
+            // When: Reload interfaces while in PROXIMITY mode but no location
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then: sortMode should be reset to AVAILABILITY_AND_QUALITY
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
     fun `setSortMode PROXIMITY - handles empty interfaces list`() =
         runTest {
             // Given: No interfaces

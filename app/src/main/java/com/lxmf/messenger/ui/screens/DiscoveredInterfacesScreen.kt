@@ -184,7 +184,13 @@ fun DiscoveredInterfacesScreen(
                                 EmptyDiscoveredCard()
                             }
                         } else {
-                            items(state.interfaces, key = { "${it.transportId ?: ""}:${it.name}:${it.type}" }) { iface ->
+                            items(
+                                state.interfaces,
+                                key = {
+                                    // Include networkId + endpoint details to ensure uniqueness
+                                    "${it.networkId}:${it.transportId ?: ""}:${it.reachableOn ?: ""}:${it.port ?: ""}"
+                                },
+                            ) { iface ->
                                 val reachableHost = iface.reachableOn
                                 DiscoveredInterfaceCard(
                                     iface = iface,

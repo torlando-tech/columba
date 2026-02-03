@@ -391,7 +391,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Test Relay",
                         hops = 3,
                         publicKey = testPublicKey,
                     )
@@ -422,7 +421,6 @@ class PropagationNodeManagerTest {
 
             manager.onPropagationNodeAnnounce(
                 destinationHash = testDestHash2,
-                displayName = "Old Relay",
                 hops = 5,
                 publicKey = testPublicKey,
             )
@@ -433,7 +431,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Closer Relay",
                         hops = 2,
                         publicKey = testPublicKey,
                     )
@@ -461,7 +458,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash2,
-                        displayName = "Current Relay",
                         hops = 3,
                         publicKey = testPublicKey,
                     )
@@ -486,7 +482,6 @@ class PropagationNodeManagerTest {
 
             manager.onPropagationNodeAnnounce(
                 destinationHash = testDestHash,
-                displayName = "Relay v1",
                 hops = 3,
                 publicKey = testPublicKey,
             )
@@ -497,7 +492,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Relay v2",
                         hops = 3,
                         publicKey = testPublicKey,
                     )
@@ -543,7 +537,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash2,
-                        displayName = "New Relay",
                         hops = 5,
                         publicKey = testPublicKey,
                     )
@@ -590,7 +583,6 @@ class PropagationNodeManagerTest {
                     runCatching {
                         manager.onPropagationNodeAnnounce(
                             destinationHash = testDestHash2,
-                            displayName = "Far Relay",
                             hops = 5,
                             publicKey = testPublicKey,
                         )
@@ -640,7 +632,6 @@ class PropagationNodeManagerTest {
                     runCatching {
                         manager.onPropagationNodeAnnounce(
                             destinationHash = testDestHash2,
-                            displayName = "Other Relay",
                             hops = 3,
                             publicKey = testPublicKey,
                         )
@@ -667,7 +658,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Auto Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -696,7 +686,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "New Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -725,7 +714,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Existing Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -753,7 +741,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "New Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -781,7 +768,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "New Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -811,7 +797,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "New Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -840,7 +825,6 @@ class PropagationNodeManagerTest {
                 runCatching {
                     manager.onPropagationNodeAnnounce(
                         destinationHash = testDestHash,
-                        displayName = "Auto Relay",
                         hops = 1,
                         publicKey = testPublicKey,
                     )
@@ -865,7 +849,7 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then
@@ -884,7 +868,7 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then
@@ -904,7 +888,7 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then: Should set as relay in database
@@ -923,7 +907,7 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then: Should set as relay in database (protocol update happens via observeRelayChanges)
@@ -942,7 +926,7 @@ class PropagationNodeManagerTest {
                 )
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then
@@ -959,7 +943,7 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then
@@ -976,7 +960,7 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns announce
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then: Should NOT add contact
@@ -995,7 +979,7 @@ class PropagationNodeManagerTest {
             coEvery { announceRepository.getAnnounce(testDestHash) } returns null
 
             // When
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Relay") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then: Should NOT add contact (no announce data)
@@ -1088,7 +1072,7 @@ class PropagationNodeManagerTest {
                     peerName = "Relay",
                     hops = 1,
                 )
-            manager.onPropagationNodeAnnounce(testDestHash, "Relay", 1, testPublicKey)
+            manager.onPropagationNodeAnnounce(testDestHash, 1, testPublicKey)
             advanceUntilIdle()
 
             // When
@@ -1136,7 +1120,7 @@ class PropagationNodeManagerTest {
                     peerName = "Relay",
                     hops = 1,
                 )
-            manager.onPropagationNodeAnnounce(testDestHash, "Relay", 1, testPublicKey)
+            manager.onPropagationNodeAnnounce(testDestHash, 1, testPublicKey)
             advanceUntilIdle()
 
             // When
@@ -2787,7 +2771,7 @@ class PropagationNodeManagerTest {
             )
 
             // When: User manually selects a relay
-            manager.setManualRelay(testDestHash2, "Manual Relay")
+            manager.setManualRelay(testDestHash2)
             advanceUntilIdle()
 
             // Then: State should be reset to IDLE (user action cancels auto-select)
@@ -3046,7 +3030,7 @@ class PropagationNodeManagerTest {
             manager.excludeFromAutoSelect(testDestHash)
 
             // When: User manually sets the excluded node as relay
-            val result = runCatching { manager.setManualRelay(testDestHash, "Manual Node") }
+            val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
             // Then: Manual selection should still work (exclusion only affects auto-select)

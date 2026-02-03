@@ -82,7 +82,7 @@ object NodeTypeDetector {
                 // Check if it looks like a standard LXMF display name
                 // LXMF display names are typically just names or handles
                 appDataString.length < 50 && !appDataString.contains("\n") -> {
-                    Log.d(TAG, "Detected LXMF peer from display name: $appDataString")
+                    Log.d(TAG, "Detected LXMF peer from display name format")
                     return NodeType.PEER
                 }
             }
@@ -156,11 +156,10 @@ object NodeTypeDetector {
     /**
      * Get a human-readable description of the node type
      */
-    fun getNodeTypeDescription(nodeType: NodeType): String {
-        return when (nodeType) {
+    fun getNodeTypeDescription(nodeType: NodeType): String =
+        when (nodeType) {
             NodeType.PEER -> "LXMF messaging peer"
             NodeType.NODE -> "Content/service node"
             NodeType.PROPAGATION_NODE -> "Message relay node"
         }
-    }
 }

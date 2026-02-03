@@ -85,7 +85,7 @@ class AutoAnnounceManager
                     ) { enabled, intervalHours, activeIdentity ->
                         Triple(enabled, intervalHours, activeIdentity?.displayName)
                     }.collect { (enabled, intervalHours, displayName) ->
-                        Log.d(TAG, "Settings changed: enabled=$enabled, interval=${intervalHours}h, displayName=$displayName")
+                        Log.d(TAG, "Settings changed: enabled=$enabled, interval=${intervalHours}h")
 
                         if (enabled) {
                             startAnnounceLoop(intervalHours, displayName)

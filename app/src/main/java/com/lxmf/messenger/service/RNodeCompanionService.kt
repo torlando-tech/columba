@@ -113,7 +113,7 @@ class RNodeCompanionService : CompanionDeviceService() {
      * Android 13+ (API 33) version with AssociationInfo.
      */
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
-        Log.d(TAG, "████ RNODE DISAPPEARED ████ name=${associationInfo.displayName ?: "Unknown"}")
+        Log.d(TAG, "████ RNODE DISAPPEARED ████")
 
         // Cancel any pending reconnection if device disappears
         pendingReconnect?.let {

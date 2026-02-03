@@ -105,7 +105,7 @@ class ContactsViewModel
                 contacts.collect { list ->
                     Log.d(TAG, "Contacts flow emitted ${list.size} contacts")
                     list.forEach { c ->
-                        Log.d(TAG, "  - ${c.displayName} (${c.destinationHash.take(8)}), isMyRelay=${c.isMyRelay}")
+                        Log.d(TAG, "  - ${c.destinationHash.take(16)}, isMyRelay=${c.isMyRelay}")
                     }
                 }
             }
@@ -139,7 +139,7 @@ class ContactsViewModel
             filteredContacts
                 .map { contacts ->
                     val relay = contacts.find { it.isMyRelay }
-                    Log.d(TAG, "ContactsState: ${contacts.size} filtered, relay=${relay?.displayName}")
+                    Log.d(TAG, "ContactsState: ${contacts.size} filtered, hasRelay=${relay != null}")
                     ContactsState(
                         groupedContacts =
                             ContactGroups(

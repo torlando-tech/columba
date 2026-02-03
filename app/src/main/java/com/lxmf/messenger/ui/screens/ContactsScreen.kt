@@ -459,10 +459,10 @@ fun ContactsScreen(
                             // My Relay section (shown at top, separate from pinned)
                             android.util.Log.d(
                                 "ContactsScreen",
-                                "LazyColumn composing, relay=${contactsState.groupedContacts.relay?.displayName}",
+                                "LazyColumn composing, hasRelay=${contactsState.groupedContacts.relay != null}",
                             )
                             contactsState.groupedContacts.relay?.let { relay ->
-                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section for: ${relay.displayName}")
+                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section")
                                 item {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,

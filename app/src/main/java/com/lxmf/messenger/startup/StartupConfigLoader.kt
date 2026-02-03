@@ -52,6 +52,7 @@ class StartupConfigLoader
                 val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
                 val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
 
+                val savedAutoconnect = autoconnectCountDeferred.await()
                 StartupConfig(
                     interfaces = interfacesDeferred.await(),
                     identity = identityDeferred.await(),
@@ -59,7 +60,8 @@ class StartupConfigLoader
                     rpcKey = rpcKeyDeferred.await(),
                     transport = transportDeferred.await(),
                     discoverInterfaces = discoverInterfacesDeferred.await(),
-                    autoconnectDiscoveredCount = autoconnectCountDeferred.await(),
+                    // Coerce -1 (never configured sentinel) to 0 for Python layer
+                    autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
                 )
             }
     }

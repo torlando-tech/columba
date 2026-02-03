@@ -185,7 +185,7 @@ class SettingsViewModelTest {
         coEvery { propagationNodeManager.enableAutoSelect() } just Runs
         coEvery { propagationNodeManager.triggerSync() } just Runs
         coEvery { propagationNodeManager.setManualRelayByHash(any(), any()) } just Runs
-        coEvery { propagationNodeManager.setManualRelay(any(), any()) } just Runs
+        coEvery { propagationNodeManager.setManualRelay(any()) } just Runs
 
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
@@ -2363,12 +2363,11 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
-            val testName = "Selected Relay"
 
-            val result = runCatching { viewModel.selectRelay(testHash, testName) }
+            val result = runCatching { viewModel.selectRelay(testHash) }
 
             assertTrue("selectRelay should complete successfully", result.isSuccess)
-            coVerify { propagationNodeManager.setManualRelay(testHash, testName) }
+            coVerify { propagationNodeManager.setManualRelay(testHash) }
         }
 
     // endregion

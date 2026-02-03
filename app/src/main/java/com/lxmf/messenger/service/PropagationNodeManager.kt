@@ -529,10 +529,8 @@ class PropagationNodeManager
          * Note: This method only updates the database. The currentRelay Flow automatically
          * picks up changes, and observeRelayChanges() syncs to Python layer.
          */
-        @Suppress("UNUSED_PARAMETER") // displayName kept for API compatibility, not logged for privacy
         suspend fun onPropagationNodeAnnounce(
             destinationHash: String,
-            displayName: String,
             hops: Int,
             publicKey: ByteArray,
         ) {
@@ -584,11 +582,7 @@ class PropagationNodeManager
          * Note: This method only updates settings and database. The currentRelay Flow
          * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
-        @Suppress("UNUSED_PARAMETER") // displayName kept for API compatibility, not logged for privacy
-        suspend fun setManualRelay(
-            destinationHash: String,
-            displayName: String,
-        ) {
+        suspend fun setManualRelay(destinationHash: String) {
             // Cancel any ongoing auto-selection - user action takes precedence
             if (_selectionState.value != RelaySelectionState.IDLE) {
                 Log.i(TAG, "User manual selection - cancelling auto-select (state was ${_selectionState.value})")
@@ -637,7 +631,6 @@ class PropagationNodeManager
             if (nearest != null) {
                 onPropagationNodeAnnounce(
                     nearest.destinationHash,
-                    nearest.peerName,
                     nearest.hops,
                     nearest.publicKey,
                 )
@@ -764,7 +757,6 @@ class PropagationNodeManager
                 Log.i(TAG, "Auto-selecting new relay: ${nearest.destinationHash.take(16)} at ${nearest.hops} hops")
                 onPropagationNodeAnnounce(
                     nearest.destinationHash,
-                    nearest.peerName,
                     nearest.hops,
                     nearest.publicKey,
                 )
@@ -944,12 +936,11 @@ class PropagationNodeManager
                         if (nearest != null) {
                             Log.i(
                                 TAG,
-                                "Auto-selecting nearest relay: ${nearest.peerName} " +
-                                    "(${nearest.destinationHash.take(12)}...) at ${nearest.hops} hops",
+                                "Auto-selecting nearest relay: " +
+                                    "${nearest.destinationHash.take(12)}... at ${nearest.hops} hops",
                             )
                             onPropagationNodeAnnounce(
                                 nearest.destinationHash,
-                                nearest.peerName,
                                 nearest.hops,
                                 nearest.publicKey,
                             )

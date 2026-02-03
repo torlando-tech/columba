@@ -8,8 +8,8 @@ import com.lxmf.messenger.reticulum.protocol.NodeTypeDetector
 import com.lxmf.messenger.reticulum.util.AppDataParser
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
-import com.lxmf.messenger.service.util.PeerNameResolver
 import com.lxmf.messenger.service.state.ServiceState
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -41,31 +41,27 @@ class EventHandler(
         /**
          * Helper to convert ByteArray to Base64 string.
          */
-        private fun ByteArray?.toBase64(): String? {
-            return this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-        }
+        private fun ByteArray?.toBase64(): String? = this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
 
         /**
          * Safely parse PyObject to Int, handling Python None and parse errors.
          * Returns null if the value is None, not a number, or cannot be parsed.
          */
-        private fun PyObject?.toIntOrNull(): Int? {
-            return this?.let {
+        private fun PyObject?.toIntOrNull(): Int? =
+            this?.let {
                 val str = it.toString()
                 if (str == "None") null else str.toIntOrNull()
             }
-        }
 
         /**
          * Safely parse PyObject to Float, handling Python None and parse errors.
          * Returns null if the value is None, not a number, or cannot be parsed.
          */
-        private fun PyObject?.toFloatOrNull(): Float? {
-            return this?.let {
+        private fun PyObject?.toFloatOrNull(): Float? =
+            this?.let {
                 val str = it.toString()
                 if (str == "None") null else str.toFloatOrNull()
             }
-        }
     }
 
     /**
@@ -192,7 +188,7 @@ class EventHandler(
      */
     fun handleMessageReceivedEvent(messageJson: String) {
         try {
-            Log.d(TAG, "Message received event: ${messageJson.take(200)}...")
+            Log.d(TAG, "Message received event")
 
             scope.launch {
                 try {

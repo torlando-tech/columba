@@ -47,12 +47,15 @@ See git history for v0.7.3-beta milestone.
   2. Codec2 packets from Kotlin are decodable by Python pycodec2 with intelligible audio
   3. All 9 Opus profiles and 7 Codec2 modes work correctly
   4. Encoder/decoder round-trip preserves audio fidelity
-**Plans**: 3 plans
+**Plans**: 6 plans (3 implementation + 3 gap closure)
 
 Plans:
-- [ ] 07-01-PLAN.md — Base Codec infrastructure (Null codec, resample utilities)
-- [ ] 07-02-PLAN.md — Opus codec with all 9 profiles
-- [ ] 07-03-PLAN.md — Codec2 codec with all 7 modes
+- [x] 07-01-PLAN.md — Base Codec infrastructure (Null codec, resample utilities)
+- [x] 07-02-PLAN.md — Opus codec with all 9 profiles
+- [x] 07-03-PLAN.md — Codec2 codec with all 7 modes
+- [ ] 07-04-PLAN.md — [GAP CLOSURE] Opus instrumented tests (all 9 profiles)
+- [ ] 07-05-PLAN.md — [GAP CLOSURE] Codec2 instrumented tests (all 7 modes + headers)
+- [ ] 07-06-PLAN.md — [GAP CLOSURE] Round-trip fidelity and bitrate ceiling validation
 
 ### Phase 8: Audio Sources & Sinks
 **Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin
@@ -72,7 +75,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Mixer combines frames from multiple sources with gain control
   2. Mute/unmute works for both receive and transmit paths
-  3. Pipeline correctly wires source→codec→sink
+  3. Pipeline correctly wires source->codec->sink
   4. ToneSource generates dial tones with smooth fade in/out
 **Plans**: TBD
 
@@ -113,7 +116,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12
+**Execution Order:** Phases execute in numeric order: 7 -> 8 -> 9 -> 10 -> 11 -> 12
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -121,7 +124,7 @@ Plans:
 | 4. Relay Loop Resolution | 1/1 | Complete | 2026-01-29 |
 | 5. Memory Optimization | 1/3 | Deferred | - |
 | 6. Native Stability Verification | 0/1 | Deferred | - |
-| 7. Codec Foundation | 0/3 | Planned | - |
+| 7. Codec Foundation | 3/6 | Gap closure | - |
 | 8. Audio Sources & Sinks | 0/? | Not started | - |
 | 9. Mixer & Pipeline | 0/? | Not started | - |
 | 10. Network Bridge | 0/? | Not started | - |

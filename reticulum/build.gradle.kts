@@ -68,6 +68,9 @@ dependencies {
     // MessagePack
     implementation(libs.msgpack)
 
+    // Opus codec - for voice/audio encoding in Kotlin LXST
+    implementation("cn.entertech.android:wuqi-opus:1.0.3")
+
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
     implementation("io.sentry:sentry-android:8.29.0")
 

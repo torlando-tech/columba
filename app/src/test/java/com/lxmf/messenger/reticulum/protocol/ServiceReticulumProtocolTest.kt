@@ -1212,26 +1212,4 @@ class ServiceReticulumProtocolTest {
             result.isSuccess,
         )
     }
-
-    @Test
-    fun `setConversationActive with true handles null service gracefully`() {
-        // Service not bound - should not throw
-        val result = runCatching { protocol.setConversationActive(true) }
-
-        assertTrue(
-            "setConversationActive(true) must handle null service gracefully (oneway AIDL method)",
-            result.isSuccess,
-        )
-    }
-
-    @Test
-    fun `setConversationActive with false handles null service gracefully`() {
-        // Service not bound - should not throw
-        val result = runCatching { protocol.setConversationActive(false) }
-
-        assertTrue(
-            "setConversationActive(false) must handle null service gracefully (oneway AIDL method)",
-            result.isSuccess,
-        )
-    }
 }

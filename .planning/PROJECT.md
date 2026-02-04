@@ -8,6 +8,18 @@ Columba is an Android LXMF messenger built on the Reticulum mesh networking stac
 
 Reliable off-grid messaging with a polished, responsive user experience.
 
+## Current Milestone: v0.8.0 Kotlin LXST Audio Pipeline
+
+**Goal:** Rewrite the LXST audio pipeline in Kotlin to eliminate JNI bridge latency, sending only encoded packets to Python Reticulum.
+
+**Target features:**
+- Native Kotlin audio capture/playback (already have KotlinAudioBridge)
+- Native Kotlin audio filters (already have KotlinAudioFilters)
+- Native Kotlin Opus/Codec2 encoding/decoding
+- Thin Python bridge for network packet transmission only
+
+**Motivation:** Current architecture passes raw audio samples (~5760 bytes/frame) across JNI bridge every 60ms, adding 30-50ms latency per frame. This causes choppy audio and pops. By moving encoding to Kotlin, only small encoded packets (~20-60 bytes) need to cross to Python for Reticulum network transmission.
+
 ## Requirements
 
 ### Validated
@@ -26,7 +38,17 @@ Reliable off-grid messaging with a polished, responsive user experience.
 - ✓ **OFFLINE-MAP-01**: Offline maps render correctly after extended offline periods — v0.7.3
 - ✓ **UX-LOADING-01**: Show loading indicators instead of flashing empty states — v0.7.3
 
-### Active
+### Active (v0.8.0 - Kotlin LXST)
+
+- [ ] **AUDIO-01**: Voice calls work with Kotlin-native audio processing (<5ms filter latency)
+- [ ] **AUDIO-02**: Opus encoding/decoding works natively in Kotlin
+- [ ] **AUDIO-03**: Codec2 encoding/decoding works natively in Kotlin
+- [ ] **AUDIO-04**: Audio pipeline maintains same file/method structure as Python LXST
+- [ ] **AUDIO-05**: Only encoded packets (~20-60 bytes) cross JNI bridge to Python
+- [ ] **AUDIO-06**: All quality profiles (ULBW through ULL) work correctly
+- [ ] **AUDIO-07**: Voice call audio has no choppy/delayed artifacts on LAN calls
+
+### Deferred
 
 - [ ] **NOTF-01**: No duplicate notifications after service restart for already-read messages (#338)
 - [ ] **PERM-01**: Location permission dialog stays dismissed until app restart (#342)
@@ -36,6 +58,7 @@ Reliable off-grid messaging with a polished, responsive user experience.
 
 - iOS version — Android-first approach
 - Desktop version — mobile focus
+- Non-Android LXST implementations — this is Android-specific
 
 ## Context
 
@@ -43,31 +66,42 @@ Reliable off-grid messaging with a polished, responsive user experience.
 - ~205K lines of Kotlin
 - Tech stack: Kotlin, Compose, Hilt, Room, Chaquopy (Python bridge)
 - Sentry performance monitoring integrated (10% transactions, 5% profiling)
-- 137 commits, 107 files changed since v0.7.2-beta
 
-**Known Issues:**
-- Native memory growth (~1.4 MB/min) in Python/Reticulum layer — needs tracemalloc investigation
-- PropagationNodeManager is large class — could extract RelaySelectionStateMachine
+**Existing Kotlin Audio Code:**
+- `KotlinAudioBridge.kt` — Audio record/playback via AudioRecord/AudioTrack APIs
+- `KotlinAudioFilters.kt` — HighPass, LowPass, AGC filters (<1ms latency)
+
+**LXST Python Files to Rewrite (keeping same structure):**
+- Sources.py (361 lines) — LineSource, OpusFileSource, backends
+- Sinks.py (348 lines) — LineSink, OpusFileSink, backends
+- Mixer.py (177 lines) — Audio mixing with gain/mute
+- Network.py (145 lines) — Packetizer, LinkSource, SignallingReceiver
+- Pipeline.py (58 lines) — Pipeline orchestration
+- Filters.py (398 lines) — HighPass, LowPass, BandPass, AGC (already in Kotlin)
+- Generators.py (134 lines) — ToneSource for dial tones
+- Codecs/Codec.py (62 lines) — Base codec, resample utilities
+- Codecs/Opus.py (167 lines) — Opus encoder/decoder
+- Codecs/Codec2.py (121 lines) — Codec2 encoder/decoder
+- Primitives/Telephony.py (732 lines) — Telephone, Profiles, Signalling
+- Call.py (55 lines) — CallEndpoint (legacy)
 
 ## Constraints
 
 - **Platform**: Android 6.0+ (API 24), ARM64 only
 - **Architecture**: Must not break multi-process service model
-- **Testing**: Changes should be testable without requiring physical hardware where possible
+- **Compatibility**: Encoded packets must be wire-compatible with Python LXST
+- **Testing**: Audio quality should be testable with loopback calls
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Focus on #340 and #343 first | Highest user impact, both high severity | ✓ Fixed in v0.7.3 |
-| Defer #338 and #342 | Lower severity, can address in next milestone | — Active for v0.7.4 |
-| State machine for relay selection | Explicit states prevent re-entrancy bugs | ✓ Loop eliminated |
-| 1s debounce + 30s cooldown | Prevents rapid Room invalidation triggers | ✓ No cascading |
-| Exponential backoff on loop detection | Graceful degradation if edge cases occur | ✓ Good |
-| @Stable annotations for Compose | Reduces unnecessary recompositions | ✓ Smooth scrolling |
-| SQL subquery for contact-aware delete | More efficient than app-side filtering | ✓ Good |
-| Cache MapLibre style JSON locally | Enables indefinite offline map rendering | ✓ Good |
-| Boolean isLoading flag pattern | Consistent with existing MapViewModel | ✓ Good |
+| Match Python file/method structure | Easier to maintain parity, review, and debug | — |
+| Use android-opus-codec AAR | Production-ready, well-maintained | — |
+| Use UstadMobile/Codec2-Android | Only viable Android Codec2 implementation | — |
+| Reuse KotlinAudioBridge/Filters | Already working, <1ms filter latency | — |
+| Python only receives encoded packets | Eliminates raw audio JNI overhead | — |
+| Keep Python for Reticulum networking | Rewriting Reticulum in Kotlin out of scope | — |
 
 ---
-*Last updated: 2026-01-28 after v0.7.3 milestone*
+*Last updated: 2026-02-04 — Starting v0.8.0 Kotlin LXST milestone*

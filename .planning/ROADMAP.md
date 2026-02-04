@@ -3,7 +3,8 @@
 ## Milestones
 
 - v0.7.3-beta (Phases 1-2.3) - shipped 2026-01-28
-- **v0.7.4-beta Bug Fixes** (Phases 3-6) - in progress
+- v0.7.4-beta Bug Fixes (Phases 3-6) - partial (3-4 complete, 5-6 deferred)
+- **v0.8.0 Kotlin LXST Audio Pipeline** (Phases 7-12) - in progress
 
 ## Phases
 
@@ -14,78 +15,110 @@ See git history for v0.7.3-beta milestone.
 
 </details>
 
-### v0.7.4-beta Bug Fixes (In Progress)
-
-**Milestone Goal:** Address critical production issues identified via Sentry monitoring.
+<details>
+<summary>v0.7.4-beta Bug Fixes (Phases 3-6) - PARTIAL</summary>
 
 - [x] **Phase 3: ANR Elimination** - Fix synchronous IPC on main thread
 - [x] **Phase 4: Relay Loop Resolution** - Investigate and fix COLUMBA-3 regression
-- [ ] **Phase 5: Memory Optimization** - Address OOM-causing memory growth
-- [ ] **Phase 6: Native Stability Verification** - Verify MapLibre crashes after memory fix
+- [ ] **Phase 5: Memory Optimization** - DEFERRED (infrastructure added)
+- [ ] **Phase 6: Native Stability Verification** - DEFERRED
+
+</details>
+
+### v0.8.0 Kotlin LXST Audio Pipeline (In Progress)
+
+**Milestone Goal:** Rewrite LXST audio pipeline in Kotlin, eliminating JNI bridge latency by passing only encoded packets to Python Reticulum.
+
+- [ ] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
+- [ ] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
+- [ ] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
+- [ ] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
+- [ ] **Phase 11: Telephony Integration** - Port Telephone class and profiles
+- [ ] **Phase 12: Quality Verification** - End-to-end testing and optimization
 
 ## Phase Details
 
-### Phase 3: ANR Elimination
-**Goal**: ViewModel initialization never blocks the main thread
-**Depends on**: Nothing (quick win, independent)
-**Requirements**: ANR-01
+### Phase 7: Codec Foundation
+**Goal**: Kotlin Opus/Codec2 encode audio frames into wire-compatible packets
+**Depends on**: Nothing (foundation phase)
+**Requirements**: CODEC-01, CODEC-02, CODEC-03
 **Success Criteria** (what must be TRUE):
-  1. DebugViewModel initializes without blocking main thread (no ANR on screen open)
-  2. All IPC calls to service occur on IO dispatcher
-  3. Zero ANRs from IPC in Sentry for 48 hours post-release
-**Plans**: 1 plan
-
-Plans:
-- [x] 03-01-PLAN.md - Move IPC methods to IO dispatcher with suspend functions
-
-### Phase 4: Relay Loop Resolution
-**Goal**: Relay selection completes without looping under any conditions
-**Depends on**: Nothing (independent of Phase 3)
-**Requirements**: RELAY-03
-**Success Criteria** (what must be TRUE):
-  1. Relay selection settles on a single node without add/remove/add cycles
-  2. StateFlow uses `SharingStarted.WhileSubscribed` (per Seer recommendation)
-  3. Zero "Relay selection loop detected" warnings in Sentry for 48 hours
-**Plans**: 1 plan
-
-Plans:
-- [x] 04-01-PLAN.md - Change StateFlow sharing from Eagerly to WhileSubscribed(5000L)
-
-### Phase 5: Memory Optimization
-**Goal**: App runs indefinitely without OOM crashes
-**Depends on**: Nothing (independent, but largest scope)
-**Requirements**: MEM-01
-**Success Criteria** (what must be TRUE):
-  1. Memory growth rate reduced to sustainable level (measurable via profiling)
-  2. App survives 5+ days continuous runtime without OOM (verified via extended testing)
-  3. Zero OOM crashes in Sentry for 7 days post-release
-**Plans**: 3 plans
-
-Plans:
-- [ ] 05-01-PLAN.md - Add memory profiling infrastructure (tracemalloc + build flag)
-- [ ] 05-02-PLAN.md - Identify and fix memory leaks
-- [ ] 05-03-PLAN.md - Verify fixes with extended runtime testing
-
-### Phase 6: Native Stability Verification
-**Goal**: Confirm MapLibre native crashes are resolved by memory optimization
-**Depends on**: Phase 5 (crashes likely secondary to memory pressure)
-**Requirements**: NATIVE-01
-**Success Criteria** (what must be TRUE):
-  1. No MapRenderer SIGSEGV crashes in extended testing
-  2. MapLibre abort crashes eliminated or reduced to near-zero
-  3. No recurring native crashes in Sentry for 7 days post-release
+  1. Opus encoder produces bit-identical output to Python pyogg for same input
+  2. Codec2 encoder produces bit-identical output to Python pycodec2 for same input
+  3. All 9 Opus profiles and 7 Codec2 modes work correctly
+  4. Encoder/decoder round-trip preserves audio fidelity
 **Plans**: TBD
 
-Plans:
-- [ ] 06-01: Verify native stability after memory fix
+### Phase 8: Audio Sources & Sinks
+**Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin
+**Depends on**: Phase 7 (needs codecs for encode/decode)
+**Requirements**: SOURCE-01, SOURCE-02, SINK-01, SINK-02, QUAL-02
+**Success Criteria** (what must be TRUE):
+  1. LineSource captures audio from microphone using existing KotlinAudioBridge
+  2. LineSource applies filters (using KotlinAudioFilters) with <1ms latency
+  3. LineSink plays audio with buffer management (no underruns on normal operation)
+  4. LineSink handles low-latency mode
+**Plans**: TBD
+
+### Phase 9: Mixer & Pipeline
+**Goal**: Multiple audio sources mix correctly, pipeline orchestrates flow
+**Depends on**: Phase 8 (needs sources/sinks)
+**Requirements**: MIX-01, MIX-02, PIPE-01, GEN-01
+**Success Criteria** (what must be TRUE):
+  1. Mixer combines frames from multiple sources with gain control
+  2. Mute/unmute works for both receive and transmit paths
+  3. Pipeline correctly wires source→codec→sink
+  4. ToneSource generates dial tones with smooth fade in/out
+**Plans**: TBD
+
+### Phase 10: Network Bridge
+**Goal**: Encoded packets flow between Kotlin and Python Reticulum
+**Depends on**: Phase 9 (needs complete pipeline)
+**Requirements**: NET-01, NET-02, NET-03, BRIDGE-01, BRIDGE-02
+**Success Criteria** (what must be TRUE):
+  1. Kotlin Packetizer sends encoded frames to Python via Chaquopy
+  2. Python LinkSource receives encoded frames and passes to Kotlin
+  3. Signalling (call status, profile changes) works bidirectionally
+  4. Bridge latency under 5ms for packet transfer
+  5. Encoded packets are <100 bytes (typical: 20-60 bytes)
+**Plans**: TBD
+
+### Phase 11: Telephony Integration
+**Goal**: Telephone class fully works with Kotlin audio backend
+**Depends on**: Phase 10 (needs network bridge)
+**Requirements**: TEL-01, TEL-02, TEL-03, TEL-04, TEL-05
+**Success Criteria** (what must be TRUE):
+  1. All 8 quality profiles (ULBW through ULL) work
+  2. Outgoing calls connect with dial tone feedback
+  3. Incoming calls ring (using ringtone if configured)
+  4. Mid-call profile switching works
+  5. Mute controls work correctly
+**Plans**: TBD
+
+### Phase 12: Quality Verification
+**Goal**: Voice calls work smoothly on LAN without artifacts
+**Depends on**: Phase 11 (needs full integration)
+**Requirements**: QUAL-01, QUAL-03, QUAL-04, AUDIO-07
+**Success Criteria** (what must be TRUE):
+  1. LAN calls have no audible pops or delays
+  2. Encode/decode latency under 5ms per frame
+  3. End-to-end audio latency under 200ms on LAN
+  4. 10-minute call runs without audio degradation
+**Plans**: TBD
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 3 -> 4 -> 5 -> 6
+**Execution Order:** Phases execute in numeric order: 7 → 8 → 9 → 10 → 11 → 12
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 3. ANR Elimination | 1/1 | Complete | 2026-01-29 |
 | 4. Relay Loop Resolution | 1/1 | Complete | 2026-01-29 |
-| 5. Memory Optimization | 0/3 | Not started | - |
-| 6. Native Stability Verification | 0/1 | Not started | - |
+| 5. Memory Optimization | 1/3 | Deferred | - |
+| 6. Native Stability Verification | 0/1 | Deferred | - |
+| 7. Codec Foundation | 0/? | Not started | - |
+| 8. Audio Sources & Sinks | 0/? | Not started | - |
+| 9. Mixer & Pipeline | 0/? | Not started | - |
+| 10. Network Bridge | 0/? | Not started | - |
+| 11. Telephony Integration | 0/? | Not started | - |
+| 12. Quality Verification | 0/? | Not started | - |

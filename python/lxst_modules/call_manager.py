@@ -53,13 +53,14 @@ def get_call_manager():
         return _call_manager
 
 
-def initialize_call_manager(identity, audio_bridge, kotlin_call_bridge=None):
+def initialize_call_manager(identity, audio_bridge, kotlin_call_bridge=None, kotlin_network_bridge=None):
     """Initialize the global CallManager.
 
     Args:
         identity: RNS Identity for this node
         audio_bridge: KotlinAudioBridge instance
         kotlin_call_bridge: Optional CallBridge instance for state callbacks
+        kotlin_network_bridge: Optional NetworkPacketBridge for packet transfer
 
     Returns:
         CallManager instance
@@ -71,7 +72,7 @@ def initialize_call_manager(identity, audio_bridge, kotlin_call_bridge=None):
             return _call_manager
 
         _call_manager = CallManager(identity)
-        _call_manager.initialize(audio_bridge, kotlin_call_bridge)
+        _call_manager.initialize(audio_bridge, kotlin_call_bridge, kotlin_network_bridge)
         return _call_manager
 
 
@@ -113,18 +114,20 @@ class CallManager:
         self.telephone = None
         self._audio_bridge = None
         self._kotlin_call_bridge = None
+        self._kotlin_network_bridge = None  # Set by Kotlin via initialize()
         self._initialized = False
 
         # Internal state
         self._active_call_identity = None
         self._call_start_time = None
 
-    def initialize(self, audio_bridge, kotlin_call_bridge=None):
+    def initialize(self, audio_bridge, kotlin_call_bridge=None, kotlin_network_bridge=None):
         """Initialize the LXST Telephone with audio bridge.
 
         Args:
             audio_bridge: KotlinAudioBridge instance
             kotlin_call_bridge: Optional CallBridge for state callbacks
+            kotlin_network_bridge: Optional NetworkPacketBridge for packet transfer
         """
         if self._initialized:
             RNS.log("CallManager already initialized", RNS.LOG_WARNING)
@@ -132,6 +135,7 @@ class CallManager:
 
         self._audio_bridge = audio_bridge
         self._kotlin_call_bridge = kotlin_call_bridge
+        self._kotlin_network_bridge = kotlin_network_bridge
 
         # Set up Chaquopy audio backend
         from .chaquopy_audio_backend import set_kotlin_audio_bridge
@@ -478,3 +482,57 @@ class CallManager:
                 self._kotlin_call_bridge.onCallRejected()
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of rejection: {e}", RNS.LOG_ERROR)
+
+    # ===== Network Bridge Methods (Python <-> Kotlin) =====
+
+    def send_audio_packet(self, packet_data):
+        """Send encoded audio packet to Kotlin.
+
+        Called by Python LXST pipeline to deliver decoded frames to Kotlin.
+
+        Args:
+            packet_data: ByteArray (codec header byte + encoded frame)
+        """
+        if self._kotlin_network_bridge:
+            try:
+                self._kotlin_network_bridge.onPythonPacketReceived(packet_data)
+            except Exception as e:
+                RNS.log(f"Failed to send packet to Kotlin: {e}", RNS.LOG_ERROR)
+
+    def send_signal(self, signal):
+        """Send signalling to Kotlin.
+
+        Called by Python LXST to deliver call signals to Kotlin.
+
+        Args:
+            signal: int signal value (STATUS_* or profile change)
+        """
+        if self._kotlin_network_bridge:
+            try:
+                self._kotlin_network_bridge.onPythonSignalReceived(signal)
+            except Exception as e:
+                RNS.log(f"Failed to send signal to Kotlin: {e}", RNS.LOG_ERROR)
+
+    def receive_audio_packet(self, packet_data):
+        """Receive encoded audio packet from Kotlin.
+
+        Called by Kotlin NetworkPacketBridge to deliver encoded frames to Python LXST.
+        Will be wired to LXST Packetizer in Phase 11.
+
+        Args:
+            packet_data: bytes (codec header byte + encoded frame)
+        """
+        # TODO: Phase 11 will wire this to LXST Telephone's receive path
+        RNS.log(f"Received audio packet from Kotlin ({len(packet_data)} bytes)", RNS.LOG_DEBUG)
+
+    def receive_signal(self, signal):
+        """Receive signalling from Kotlin.
+
+        Called by Kotlin NetworkPacketBridge to deliver signals to Python LXST.
+        Will be wired to LXST SignallingReceiver in Phase 11.
+
+        Args:
+            signal: int signal value
+        """
+        # TODO: Phase 11 will wire this to LXST Telephone's signalling
+        RNS.log(f"Received signal from Kotlin: {signal:#04x}", RNS.LOG_DEBUG)

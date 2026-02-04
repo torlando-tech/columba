@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 07 of 10 (Codec Foundation)
-Plan: 01 of 03 complete
+Plan: 02 of 03 complete
 Status: In progress
-Last activity: 2026-02-04 — Completed 07-01-PLAN.md
+Last activity: 2026-02-04 — Completed 07-02-PLAN.md
 
-Progress: [█░░░░░░░░░░░] 8% — Phase 07 started (1/12 plans complete)
+Progress: [██░░░░░░░░░░] 17% — Phase 07 in progress (2/12 plans complete)
 
 ## Milestone Summary
 
@@ -22,7 +22,7 @@ Progress: [█░░░░░░░░░░░] 8% — Phase 07 started (1/12 p
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | 1/3 complete |
+| 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | 2/3 complete |
 | 08 | Sources & Sinks | Audio I/O abstractions | Not started |
 | 09 | Network & Packetizer | Link layer integration | Not started |
 | 10 | Telephony & Call | High-level call management | Not started |
@@ -48,7 +48,7 @@ Root cause cannot be fixed without architectural change. User explicitly request
 ### Research Findings
 
 **Available Kotlin/Android Codecs:**
-- **Opus**: `io.rebble.cobble:opus-jni:1.3.0` (android-opus-codec, production-ready)
+- **Opus**: `cn.entertech.android:wuqi-opus:1.0.3` (theeasiestway/android-opus-codec via Maven Central, libopus 1.3.1)
 - **Codec2**: `com.ustadmobile.codec2:codec2-android:0.9.2-1` (UstadMobile, only viable option)
 
 **Existing Kotlin Code to Reuse:**
@@ -90,6 +90,10 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Float32 range [-1.0, 1.0] | Matches Python LXST, multiply by 32767 for int16 | 07-01 |
 | Linear interpolation resampler | Sufficient quality for testing, can upgrade later | 07-01 |
 | Little-endian int16 wire format | Python compatibility for decode-compatible packets | 07-01 |
+| Use wuqi-opus from Maven Central | Reliable distribution vs JitPack instability | 07-02 |
+| ShortArray to ByteArray conversion | JNI uses ShortArray, wire needs ByteArray for Python | 07-02 |
+| Configuration-only unit tests | JNI libraries can't load in Robolectric | 07-02 |
+| Override minSdk 26 in manifest | Opus library safe for API 24+ (basic JNI only) | 07-02 |
 
 ### Blockers/Concerns
 
@@ -97,15 +101,21 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 - Encoded packets must be decode-compatible with Python LXST (not bit-identical)
 - Codec2 mode headers must match (0x00-0x06)
 - Opus packets must be decodable by Python pyogg with intelligible audio
+- ShortArray/ByteArray conversion in Opus needs validation with real packets
 
 **Integration Complexity:**
 - `call_manager.py` wraps Python LXST Telephone — needs Kotlin bridge
 - Signalling still goes through Python Reticulum links
 - Must coordinate Kotlin audio thread with Python network thread
 
+**Testing Limitations:**
+- JNI encode/decode requires instrumented tests (actual device)
+- Unit tests limited to configuration logic only
+- Wire compatibility validation requires Python LXST integration testing
+
 ## Session Continuity
 
-Last session: 2026-02-04 21:48:35 UTC
-Stopped at: Completed 07-01-PLAN.md (Codec base infrastructure)
+Last session: 2026-02-04 19:19:05 UTC
+Stopped at: Completed 07-02-PLAN.md (Opus codec with 9 profiles)
 Resume file: None
-Next: Execute 07-02-PLAN.md (Opus codec integration)
+Next: Execute 07-03-PLAN.md (Codec2 codec integration)

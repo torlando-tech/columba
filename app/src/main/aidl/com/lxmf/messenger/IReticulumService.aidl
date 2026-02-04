@@ -248,9 +248,12 @@ interface IReticulumService {
      * When a conversation is active, message polling uses a faster 1-second interval
      * for lower latency. When inactive, standard adaptive polling (2-30s) is used.
      *
+     * This is a fire-and-forget call (oneway) to prevent ANRs when called during
+     * ViewModel cleanup on the main thread. See: COLUMBA-1E
+     *
      * @param active true if a conversation screen is currently open and active
      */
-    void setConversationActive(boolean active);
+    oneway void setConversationActive(boolean active);
 
     /**
      * Get BLE connection details for all currently connected peers.

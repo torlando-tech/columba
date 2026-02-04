@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 08 of 12 (Audio Sources & Sinks)
-Plan: 04 of 04 complete
-Status: Phase complete
-Last activity: 2026-02-04 — Completed Phase 08 (LineSource, LineSink, unit tests)
+Phase: 09 of 12 (Mixer & Pipeline)
+Plan: 02 of 03 complete
+Status: In progress
+Last activity: 2026-02-04 — Completed 09-02-PLAN.md (ToneSource)
 
-Progress: [████████░░░░] 67% — Phase 08 complete (10/16 plans complete)
+Progress: [█████████░░░] 75% — Phase 09 plan 2 complete (11/16 plans complete)
 
 ## Milestone Summary
 
@@ -24,7 +24,7 @@ Progress: [████████░░░░] 67% — Phase 08 complete (10/1
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
-| 09 | Network & Packetizer | Link layer integration | Not started |
+| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (2/3) |
 | 10 | Telephony & Call | High-level call management | Not started |
 
 ## Accumulated Context
@@ -104,6 +104,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Backpressure via canReceive() | Sink returns false when buffer near full, prevents overflow | 08-01 |
 | Phase 8 loopback: encode→decode→sink | Source decodes locally for testing; Phase 9 will send encoded over network | 08-02 |
 | Public setters on override var | Kotlin abstract var requires public setter in implementing class | 08-02 |
+| 382Hz default tone frequency | Matches Python LXST Telephony.py, not 440Hz ITU-T standard | 09-02 |
+| Float32 ToneSource output | Local playback path pushes decoded float32 to sink, encoding in transmit path | 09-02 |
+| Double for phase accumulator | Avoids floating point drift over long dial tones | 09-02 |
 
 ### Blockers/Concerns
 
@@ -127,6 +130,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed Phase 08 (Audio Sources & Sinks) - VERIFIED
+Stopped at: Completed 09-02-PLAN.md (ToneSource)
 Resume file: None
-Next: Phase 09 (Mixer & Pipeline) - ready for planning
+Next: 09-03-PLAN.md (Pipeline orchestration)

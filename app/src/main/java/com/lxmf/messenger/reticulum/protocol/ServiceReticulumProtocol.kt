@@ -2879,4 +2879,19 @@ class ServiceReticulumProtocol(
                 profile = result.optString("profile", null),
             )
         }
+
+    /**
+     * Force exit the service process.
+     * This is a fire-and-forget method that triggers immediate process termination.
+     * Safe to call when service is not bound (will silently return).
+     */
+    fun forceExit() {
+        try {
+            val svc = this.service ?: return
+            Log.i(TAG, "Forcing service exit")
+            svc.forceExit()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error forcing service exit", e)
+        }
+    }
 }

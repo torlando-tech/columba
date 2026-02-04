@@ -29,7 +29,7 @@ See git history for v0.7.3-beta milestone.
 
 **Milestone Goal:** Rewrite LXST audio pipeline in Kotlin, eliminating JNI bridge latency by passing only encoded packets to Python Reticulum.
 
-- [ ] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
+- [x] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
 - [ ] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
 - [ ] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
 - [ ] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
@@ -53,9 +53,9 @@ Plans:
 - [x] 07-01-PLAN.md — Base Codec infrastructure (Null codec, resample utilities)
 - [x] 07-02-PLAN.md — Opus codec with all 9 profiles
 - [x] 07-03-PLAN.md — Codec2 codec with all 7 modes
-- [ ] 07-04-PLAN.md — [GAP CLOSURE] Opus instrumented tests (all 9 profiles)
-- [ ] 07-05-PLAN.md — [GAP CLOSURE] Codec2 instrumented tests (all 7 modes + headers)
-- [ ] 07-06-PLAN.md — [GAP CLOSURE] Round-trip fidelity and bitrate ceiling validation
+- [x] 07-04-PLAN.md — [GAP CLOSURE] Opus instrumented tests (all 9 profiles)
+- [x] 07-05-PLAN.md — [GAP CLOSURE] Codec2 instrumented tests (all 7 modes + headers)
+- [x] 07-06-PLAN.md — [GAP CLOSURE] Round-trip fidelity and bitrate ceiling validation
 
 ### Phase 8: Audio Sources & Sinks
 **Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin
@@ -124,7 +124,7 @@ Plans:
 | 4. Relay Loop Resolution | 1/1 | Complete | 2026-01-29 |
 | 5. Memory Optimization | 1/3 | Deferred | - |
 | 6. Native Stability Verification | 0/1 | Deferred | - |
-| 7. Codec Foundation | 3/6 | Gap closure | - |
+| 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
 | 8. Audio Sources & Sinks | 0/? | Not started | - |
 | 9. Mixer & Pipeline | 0/? | Not started | - |
 | 10. Network Bridge | 0/? | Not started | - |

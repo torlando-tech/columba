@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 10 of 12 (Network Bridge)
-Plan: 04 of 04 complete (10-04-SignallingReceiver)
+Plan: 05 of 05 complete (10-05-BridgeIntegration)
 Status: **Phase Complete**
-Last activity: 2026-02-04 — Completed 10-04-PLAN.md (SignallingReceiver)
+Last activity: 2026-02-04 — Completed 10-05-PLAN.md (Bridge Integration)
 
-Progress: [█████████████░░░] 95% — Phase 10 complete (18/20 plans complete)
+Progress: [██████████████░░] 95% — Phase 10 complete (19/20 plans complete)
 
 ## Milestone Summary
 
@@ -126,6 +126,8 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Signalling constants match Python exactly | STATUS_* 0x00-0x06, PREFERRED_PROFILE 0xFF | 10-04 |
 | Profile detection >= PREFERRED_PROFILE | Matches Python Telephony.py line 726 comparison | 10-04 |
 | Fire-and-forget signalling | signal() delegates to bridge IO dispatch, no blocking | 10-04 |
+| Eager NetworkPacketBridge init | Initialize in setupCallManager with other bridges | 10-05 |
+| Python stubs for Phase 11 | receive_audio_packet/receive_signal stubbed for LXST wiring | 10-05 |
 
 ### Blockers/Concerns
 
@@ -149,6 +151,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 10-04-PLAN.md (SignallingReceiver)
+Stopped at: Completed 10-05-PLAN.md (Bridge Integration)
 Resume file: None
 Next: Phase 11 (Telephony - Profiles, Telephone class)

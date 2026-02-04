@@ -58,7 +58,7 @@ Plans:
 - [x] 07-06-PLAN.md — [GAP CLOSURE] Round-trip fidelity and bitrate ceiling validation
 
 ### Phase 8: Audio Sources & Sinks
-**Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin
+**Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin wrapping existing KotlinAudioBridge
 **Depends on**: Phase 7 (needs codecs for encode/decode)
 **Requirements**: SOURCE-01, SOURCE-02, SINK-01, SINK-02, QUAL-02
 **Success Criteria** (what must be TRUE):
@@ -66,7 +66,13 @@ Plans:
   2. LineSource applies filters (using KotlinAudioFilters) with <1ms latency
   3. LineSink plays audio with buffer management (no underruns on normal operation)
   4. LineSink handles low-latency mode
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Base interfaces (Source, LocalSource, Sink, LocalSink) + data conversion helpers
+- [ ] 08-02-PLAN.md — LineSource implementation wrapping KotlinAudioBridge
+- [ ] 08-03-PLAN.md — LineSink implementation with queue-based playback
+- [ ] 08-04-PLAN.md — Unit tests for configuration logic (mocked bridge/codec)
 
 ### Phase 9: Mixer & Pipeline
 **Goal**: Multiple audio sources mix correctly, pipeline orchestrates flow
@@ -125,7 +131,7 @@ Plans:
 | 5. Memory Optimization | 1/3 | Deferred | - |
 | 6. Native Stability Verification | 0/1 | Deferred | - |
 | 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
-| 8. Audio Sources & Sinks | 0/? | Not started | - |
+| 8. Audio Sources & Sinks | 0/4 | Not started | - |
 | 9. Mixer & Pipeline | 0/? | Not started | - |
 | 10. Network Bridge | 0/? | Not started | - |
 | 11. Telephony Integration | 0/? | Not started | - |

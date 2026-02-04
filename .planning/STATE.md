@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 07 of 10 (Codec Foundation)
-Plan: 06 of 06 complete
-Status: Phase complete
-Last activity: 2026-02-04 — Completed 07-06-PLAN.md (Round-trip fidelity and bitrate ceiling tests)
+Phase: 08 of 10 (Audio Sources & Sinks)
+Plan: 01 of 06 complete
+Status: In progress
+Last activity: 2026-02-04 — Completed 08-01-PLAN.md (Source and Sink base classes)
 
-Progress: [████░░░░░░░░] 50% — Phase 07 complete (6/12 plans complete)
+Progress: [████░░░░░░░░] 58% — Phase 08 started (7/12 plans complete)
 
 ## Milestone Summary
 
@@ -23,7 +23,7 @@ Progress: [████░░░░░░░░] 50% — Phase 07 complete (6/12
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
-| 08 | Sources & Sinks | Audio I/O abstractions | Not started |
+| 08 | Sources & Sinks | Audio I/O abstractions | **In Progress (1/6)** |
 | 09 | Network & Packetizer | Link layer integration | Not started |
 | 10 | Telephony & Call | High-level call management | Not started |
 
@@ -99,6 +99,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | PREFER_SETTINGS repository mode | Allow submodule project repos while preferring settings | 07-03 |
 | 17 instrumented tests for Codec2 | 7 encode + 7 header + decode + comprehensive + mode-switch | 07-05 |
 | Energy-based fidelity check | RMS energy ratio 0.1-10.0 for lossy codec round-trip validation | 07-06 |
+| Match Python LXST class hierarchy | Source/LocalSource/RemoteSource, Sink/LocalSink/RemoteSink for future extensibility | 08-01 |
+| Float32 internal audio format | [-1.0, 1.0] range for pipeline, convert to/from int16 at edges | 08-01 |
+| Backpressure via canReceive() | Sink returns false when buffer near full, prevents overflow | 08-01 |
 
 ### Blockers/Concerns
 
@@ -121,7 +124,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 ## Session Continuity
 
-Last session: 2026-02-04 21:06:18 UTC
-Stopped at: Completed 07-06-PLAN.md (Round-trip fidelity and bitrate ceiling validation tests)
+Last session: 2026-02-04 22:02:15 UTC
+Stopped at: Completed 08-01-PLAN.md (Source and Sink base classes)
 Resume file: None
-Next: Phase 07 complete - ready for verification and next phase planning
+Next: Ready for 08-02 (LineSource implementation) or 08-03 (LineSink implementation)

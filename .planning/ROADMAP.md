@@ -47,7 +47,12 @@ See git history for v0.7.3-beta milestone.
   2. Codec2 encoder produces bit-identical output to Python pycodec2 for same input
   3. All 9 Opus profiles and 7 Codec2 modes work correctly
   4. Encoder/decoder round-trip preserves audio fidelity
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Base Codec infrastructure (Null codec, resample utilities)
+- [ ] 07-02-PLAN.md — Opus codec with all 9 profiles
+- [ ] 07-03-PLAN.md — Codec2 codec with all 7 modes
 
 ### Phase 8: Audio Sources & Sinks
 **Goal**: LineSource captures mic audio, LineSink plays to speaker, both in Kotlin
@@ -116,7 +121,7 @@ See git history for v0.7.3-beta milestone.
 | 4. Relay Loop Resolution | 1/1 | Complete | 2026-01-29 |
 | 5. Memory Optimization | 1/3 | Deferred | - |
 | 6. Native Stability Verification | 0/1 | Deferred | - |
-| 7. Codec Foundation | 0/? | Not started | - |
+| 7. Codec Foundation | 0/3 | Planned | - |
 | 8. Audio Sources & Sinks | 0/? | Not started | - |
 | 9. Mixer & Pipeline | 0/? | Not started | - |
 | 10. Network Bridge | 0/? | Not started | - |

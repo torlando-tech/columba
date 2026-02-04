@@ -43,8 +43,8 @@ See git history for v0.7.3-beta milestone.
 **Depends on**: Nothing (foundation phase)
 **Requirements**: CODEC-01, CODEC-02, CODEC-03
 **Success Criteria** (what must be TRUE):
-  1. Opus encoder produces bit-identical output to Python pyogg for same input
-  2. Codec2 encoder produces bit-identical output to Python pycodec2 for same input
+  1. Opus packets from Kotlin are decodable by Python pyogg with intelligible audio
+  2. Codec2 packets from Kotlin are decodable by Python pycodec2 with intelligible audio
   3. All 9 Opus profiles and 7 Codec2 modes work correctly
   4. Encoder/decoder round-trip preserves audio fidelity
 **Plans**: 3 plans

@@ -90,9 +90,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ### Blockers/Concerns
 
 **Wire Compatibility:**
-- Encoded packets must be bit-identical to Python LXST output
+- Encoded packets must be decode-compatible with Python LXST (not bit-identical)
 - Codec2 mode headers must match (0x00-0x06)
-- Opus frame format must match Python pyogg output
+- Opus packets must be decodable by Python pyogg with intelligible audio
 
 **Integration Complexity:**
 - `call_manager.py` wraps Python LXST Telephone — needs Kotlin bridge

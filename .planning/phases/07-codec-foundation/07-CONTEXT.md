@@ -20,7 +20,9 @@ Implement Opus and Codec2 codecs in Kotlin that produce wire-compatible encoded 
 - Bundle native .so libraries in APK (not downloaded at runtime)
 
 ### Wire format compatibility
-- **Bit-identical required** — Kotlin output must match Python byte-for-byte
+- **Decode-compatible required** — Kotlin packets must be decodable by Python decoders (and vice versa)
+- Bit-identical encoding is NOT required (different encoder implementations produce different bytes)
+- What matters: header bytes correct + valid packets decodable by any compliant decoder
 - Document codec header byte format in code comments (0x00-0x06 for Codec2 modes, 0x01 for Opus)
 - Packet format: header byte + encoded data (same as Python LXST)
 
@@ -32,14 +34,14 @@ Implement Opus and Codec2 codecs in Kotlin that produce wire-compatible encoded 
 - Profile constants use same hex values as Python (0x00-0x08 for Opus, 700-3200 for Codec2)
 
 ### Resampling approach
+- Use Android's SRC (Kaiser-windowed sinc resampler) via AudioTrack/AudioRecord
 - Prioritize audio quality over CPU efficiency
 - Pre-allocate resampling buffers (no per-frame allocation)
 - Reuse buffers to avoid GC pressure during calls
 
 ### Claude's Discretion
-- Verification approach for bit-identical output (test vectors, live comparison, etc.)
-- Debugging strategy for encoder mismatch
-- Resampling library/method selection (Android resampler, Oboe, or manual)
+- Verification approach for decode-compatible output (cross-implementation decode test)
+- Debugging strategy for decode failures
 - Where resampling happens in the pipeline (in codec or before codec)
 
 </decisions>

@@ -39,6 +39,10 @@ except ImportError:
 _kotlin_audio_bridge = None
 _bridge_lock = threading.Lock()
 
+# Flag to indicate Kotlin-native filters are active (disables Python/LXST filters)
+# This is set when KotlinAudioBridge has filtersEnabled=true
+_kotlin_filters_active = True  # Default to True since Kotlin filters are faster
+
 
 def set_kotlin_audio_bridge(bridge):
     """Set the KotlinAudioBridge instance from Kotlin.
@@ -58,6 +62,28 @@ def get_kotlin_audio_bridge():
     """Get the current KotlinAudioBridge instance."""
     with _bridge_lock:
         return _kotlin_audio_bridge
+
+
+def are_kotlin_filters_active():
+    """Check if Kotlin-native filters are handling audio processing.
+
+    When True, Python/LXST filters should be skipped to avoid double-filtering.
+    Kotlin filters run in KotlinAudioBridge.recordingLoop() at <1ms latency,
+    vs Python/CFFI filters at 20-50ms latency.
+    """
+    return _kotlin_filters_active
+
+
+def set_kotlin_filters_active(active):
+    """Set whether Kotlin-native filters are active.
+
+    Args:
+        active: True to use Kotlin filters (Python filters skipped),
+                False to use Python/LXST filters
+    """
+    global _kotlin_filters_active
+    _kotlin_filters_active = active
+    RNS.log(f"Kotlin filters active: {active} (Python/LXST filters {'disabled' if active else 'enabled'})", RNS.LOG_INFO)
 
 
 def get_backend():
@@ -245,27 +271,33 @@ class ChaquopyPlayer:
             frame: numpy array of float32 samples in range [-1, 1]
         """
         if not self._started:
+            ChaquopyPlayer._play_count += 1
+            if ChaquopyPlayer._play_count % 25 == 1:
+                RNS.log(f"🔊 Player: NOT STARTED, dropping frame #{ChaquopyPlayer._play_count}", RNS.LOG_WARNING)
             return
 
         bridge = get_kotlin_audio_bridge()
         if bridge is None:
+            ChaquopyPlayer._play_count += 1
+            if ChaquopyPlayer._play_count % 25 == 1:
+                RNS.log(f"🔊 Player: NO BRIDGE, dropping frame #{ChaquopyPlayer._play_count}", RNS.LOG_WARNING)
             return
 
         try:
             # Log periodically to understand audio flow
             ChaquopyPlayer._play_count += 1
-            frame_max = abs(frame).max()
+            frame_max = abs(frame).max() if frame is not None and len(frame) > 0 else 0
             if frame_max > 0.001:
                 ChaquopyPlayer._play_nonzero_count += 1
-            if ChaquopyPlayer._play_count % 100 == 1:
-                RNS.log(f"📞 Player: frame #{ChaquopyPlayer._play_count}, nonzero={ChaquopyPlayer._play_nonzero_count}, shape={frame.shape}, min={frame.min():.3f}, max={frame.max():.3f}", RNS.LOG_DEBUG)
+            if ChaquopyPlayer._play_count % 25 == 1:
+                RNS.log(f"🔊 Player#{ChaquopyPlayer._play_count}: max={frame_max:.4f} nz={ChaquopyPlayer._play_nonzero_count} shape={frame.shape}", RNS.LOG_DEBUG)
 
             # Convert float32 [-1, 1] to int16 bytes
             samples = (frame * self.TYPE_MAP_FACTOR).astype(np.int16)
             audio_bytes = samples.tobytes()
             bridge.writeAudio(audio_bytes)
         except Exception as e:
-            RNS.log(f"ChaquopyPlayer: Error playing audio: {e}", RNS.LOG_ERROR)
+            RNS.log(f"🔊 Player: ERROR: {e}", RNS.LOG_ERROR)
 
     def enable_low_latency(self):
         """Enable low-latency mode (restart required to take effect)."""
@@ -342,12 +374,14 @@ class ChaquopyRecorder:
         try:
             if numframes is None:
                 # Return all available data
-                audio_bytes = bridge.readAudio(self.samples_per_frame)
-                if audio_bytes is None:
+                java_bytes = bridge.readAudio(self.samples_per_frame)
+                if java_bytes is None:
                     return np.reshape(
                         np.concatenate([self.flush().ravel(), self._record_chunk()]),
                         [-1, self.channels],
                     )
+                # Convert Java byte[] to Python bytes for numpy compatibility
+                audio_bytes = bytes(java_bytes)
                 samples = np.frombuffer(audio_bytes, dtype=np.int16) / self.TYPE_MAP_FACTOR
                 return np.reshape(samples.astype("float32"), [-1, self.channels])
             else:
@@ -374,26 +408,64 @@ class ChaquopyRecorder:
             RNS.log(f"ChaquopyRecorder: Error recording: {e}", RNS.LOG_ERROR)
             return np.zeros((numframes or self.samples_per_frame, self.channels), dtype="float32")
 
+    # Timing accumulators for JNI performance analysis
+    _jni_timing = {'read_ms': 0.0, 'convert_ms': 0.0, 'samples': 0}
+
     def _record_chunk(self):
         """Read a single chunk from the bridge."""
+        ChaquopyRecorder._record_count += 1
+
         bridge = get_kotlin_audio_bridge()
         if bridge is None:
+            if ChaquopyRecorder._record_count % 25 == 1:
+                RNS.log(f"🎙️ Rec#{ChaquopyRecorder._record_count}: NO BRIDGE", RNS.LOG_WARNING)
             return np.zeros((0,), dtype="float32")
 
-        audio_bytes = bridge.readAudio(self.samples_per_frame)
-        if audio_bytes is None:
+        # TIME: JNI call to readAudio
+        jni_start = time.time()
+        java_bytes = bridge.readAudio(self.samples_per_frame)
+        jni_time = (time.time() - jni_start) * 1000
+
+        if java_bytes is None:
+            if ChaquopyRecorder._record_count % 25 == 1:
+                RNS.log(f"🎙️ Rec#{ChaquopyRecorder._record_count}: readAudio returned None (waited {jni_time:.1f}ms)", RNS.LOG_DEBUG)
+            return np.zeros((0,), dtype="float32")
+
+        # TIME: bytes() conversion and numpy processing
+        convert_start = time.time()
+
+        # Convert Java byte[] to Python bytes for numpy compatibility
+        try:
+            java_len = len(java_bytes)
+            audio_bytes = bytes(java_bytes)
+            py_len = len(audio_bytes)
+        except Exception as e:
+            if ChaquopyRecorder._record_count % 25 == 1:
+                RNS.log(f"🎙️ Rec#{ChaquopyRecorder._record_count}: bytes() FAILED: {e}, type={type(java_bytes)}", RNS.LOG_ERROR)
             return np.zeros((0,), dtype="float32")
 
         samples = np.frombuffer(audio_bytes, dtype=np.int16) / self.TYPE_MAP_FACTOR
         result = samples.astype("float32")
+        convert_time = (time.time() - convert_start) * 1000
 
-        # Log periodically to understand audio capture
-        ChaquopyRecorder._record_count += 1
+        # Track timing
+        ChaquopyRecorder._jni_timing['read_ms'] += jni_time
+        ChaquopyRecorder._jni_timing['convert_ms'] += convert_time
+        ChaquopyRecorder._jni_timing['samples'] += 1
+
+        # Log less frequently to reduce overhead (every 100 frames instead of 25)
         sample_max = abs(result).max() if len(result) > 0 else 0
         if sample_max > 0.001:
             ChaquopyRecorder._record_nonzero_count += 1
         if ChaquopyRecorder._record_count % 100 == 1:
-            RNS.log(f"📞 Recorder: chunk #{ChaquopyRecorder._record_count}, nonzero={ChaquopyRecorder._record_nonzero_count}, len={len(result)}, max={sample_max:.3f}", RNS.LOG_DEBUG)
+            n = ChaquopyRecorder._jni_timing['samples'] if ChaquopyRecorder._jni_timing['samples'] > 0 else 1
+            avg_jni = ChaquopyRecorder._jni_timing['read_ms'] / n
+            avg_conv = ChaquopyRecorder._jni_timing['convert_ms'] / n
+            RNS.log(
+                f"🎙️ Rec#{ChaquopyRecorder._record_count}: len={java_len} max={sample_max:.4f} | "
+                f"⏱️ jni={avg_jni:.1f}ms conv={avg_conv:.1f}ms",
+                RNS.LOG_DEBUG
+            )
 
         return result
 

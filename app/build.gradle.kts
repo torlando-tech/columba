@@ -347,10 +347,15 @@ chaquopy {
             options("--find-links", file("../wheels/pycodec2").absolutePath)
             install("pycodec2==4.1.1")
 
+            // LXST wheel with pre-compiled Android filterlib .so files
+            // Built as pure Python wheel with .so files as package_data
+            options("--find-links", file("../wheels/lxst").absolutePath)
+            install("lxst==0.4.5")
+
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
-            // Install requirements from requirements.txt (includes LXST which has pycodec2 removed)
+            // Install requirements from requirements.txt (LXST installed above via wheel)
             install("-r", "../python/requirements.txt")
         }
 
@@ -363,7 +368,8 @@ chaquopy {
 
         // Extract package files so .py sources are accessible at runtime
         // pycodec2 needs to be extracted so libcodec2.so can be loaded at runtime
-        extractPackages("ble_reticulum", "ble_modules", "pycodec2")
+        // LXST needs to be extracted so filterlib.*.so can be loaded via cffi.dlopen()
+        extractPackages("ble_reticulum", "ble_modules", "pycodec2", "LXST")
     }
 
     sourceSets {
@@ -443,6 +449,11 @@ dependencies {
 
     // MessagePack - for LXMF stamp generation
     implementation("org.msgpack:msgpack-core:0.9.8")
+
+    // Opus codec - for voice/audio encoding in Kotlin LXST
+    // Uses theeasiestway/android-opus-codec library published as wuqi-opus
+    // Provides OpusEncoder/OpusDecoder with JNI bindings to libopus 1.3.1
+    implementation("cn.entertech.android:wuqi-opus:1.0.3")
 
     // MapLibre - for offline-capable maps
     implementation("org.maplibre.gl:android-sdk:11.13.5")

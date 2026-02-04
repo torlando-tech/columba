@@ -53,7 +53,7 @@ class KotlinAudioBridge(
         const val DEFAULT_SAMPLE_RATE = 48000
         const val DEFAULT_CHANNELS = 1
         const val DEFAULT_FRAME_SIZE_MS = 20 // 20ms frames
-        const val BUFFER_QUEUE_SIZE = 10 // Number of audio frames to buffer
+        const val BUFFER_QUEUE_SIZE = 20 // Number of audio frames to buffer (increased for smoother playback)
 
         @Volatile
         private var instance: KotlinAudioBridge? = null
@@ -110,6 +110,14 @@ class KotlinAudioBridge(
 
     @Volatile
     private var microphoneMuted = false
+
+    // Kotlin-native audio filters (replaces slow Python/CFFI filters)
+    // These run in the recording loop for <1ms latency vs 20-50ms in Python
+    @Volatile
+    private var filtersEnabled = true
+
+    @Volatile
+    private var filterChain: KotlinAudioFilters.VoiceFilterChain? = null
 
     // Python callbacks (set by Python call manager)
     @Volatile
@@ -268,9 +276,19 @@ class KotlinAudioBridge(
             }
             if (hasNonZero) writeNonZeroCount++
 
-            if (writeAudioCount % 100L == 1L) {
+            if (writeAudioCount % 25L == 1L) {
                 val trackState = track.playState
-                Log.d(TAG, "📞 writeAudio #$writeAudioCount: ${audioData.size} bytes, nonzero=$writeNonZeroCount, hasAudio=$hasNonZero, trackState=$trackState")
+                // Find max amplitude for logging
+                var maxAmp = 0
+                for (i in 0 until audioData.size step 2) {
+                    if (i + 1 < audioData.size) {
+                        val sample = (audioData[i].toInt() and 0xFF) or (audioData[i + 1].toInt() shl 8)
+                        val signedSample = if (sample > 32767) sample - 65536 else sample
+                        val absSample = kotlin.math.abs(signedSample)
+                        if (absSample > maxAmp) maxAmp = absSample
+                    }
+                }
+                Log.d(TAG, "🔊 KWrite#$writeAudioCount: ${audioData.size}b max=$maxAmp nz=$writeNonZeroCount state=$trackState")
             }
 
             val written =
@@ -283,12 +301,10 @@ class KotlinAudioBridge(
             if (written < 0) {
                 Log.w(
                     TAG,
-                    "📞 AudioTrack write error: $written " +
+                    "🔊 AudioTrack write error: $written " +
                         "(ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, " +
                         "ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})",
                 )
-            } else if (writeAudioCount % 100L == 1L) {
-                Log.d(TAG, "📞 writeAudio #$writeAudioCount: wrote $written bytes successfully")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error writing audio", e)
@@ -454,6 +470,22 @@ class KotlinAudioBridge(
         }
         Log.i(TAG, "📞 System mic mute: ${audioManager.isMicrophoneMute}, mode: ${audioManager.mode}")
 
+        // Initialize Kotlin-native audio filter chain
+        // These replace slow Python/CFFI filters (~20-50ms → <1ms per frame)
+        if (filtersEnabled) {
+            filterChain = KotlinAudioFilters.VoiceFilterChain(
+                channels = recordChannels,
+                highPassCutoff = 300f,   // Remove low-frequency rumble/hum
+                lowPassCutoff = 3400f,   // Voice band limit
+                agcTargetDb = -12f,      // Target level for AGC
+                agcMaxGain = 12f,        // Max gain boost
+            )
+            Log.i(TAG, "📞 Kotlin filter chain initialized: HP=300Hz LP=3400Hz AGC=-12dB (max +12dB)")
+        } else {
+            filterChain = null
+            Log.i(TAG, "📞 Kotlin filters DISABLED")
+        }
+
         isRecording.set(true)
         recordBuffer.clear()
 
@@ -485,10 +517,12 @@ class KotlinAudioBridge(
     private fun recordingLoop() {
         val frameBytes = recordFrameSize * recordChannels * 2 // 16-bit = 2 bytes per sample
         val buffer = ByteArray(frameBytes)
+        // Reusable ShortArray for filter processing (avoids allocations per frame)
+        val shortBuffer = ShortArray(recordFrameSize * recordChannels)
         recordFrameCount = 0
         recordNonZeroCount = 0
 
-        Log.d(TAG, "Recording loop started, frame size: $frameBytes bytes")
+        Log.d(TAG, "Recording loop started, frame size: $frameBytes bytes, filters=${filterChain != null}")
 
         while (isRecording.get()) {
             val record = audioRecord ?: break
@@ -499,6 +533,30 @@ class KotlinAudioBridge(
                 when {
                     bytesRead > 0 -> {
                         recordFrameCount++
+
+                        // Apply Kotlin-native filters if enabled (replaces slow Python/CFFI filters)
+                        val chain = filterChain
+                        if (chain != null && bytesRead >= 2) {
+                            // Convert ByteArray (little-endian int16) to ShortArray
+                            val numSamples = bytesRead / 2
+                            for (i in 0 until numSamples) {
+                                val lo = buffer[i * 2].toInt() and 0xFF
+                                val hi = buffer[i * 2 + 1].toInt()
+                                shortBuffer[i] = ((hi shl 8) or lo).toShort()
+                            }
+
+                            // Apply filter chain (HighPass → LowPass → AGC)
+                            // This runs in <1ms vs 20-50ms in Python/CFFI
+                            chain.process(shortBuffer, recordSampleRate)
+
+                            // Convert back to ByteArray (little-endian int16)
+                            for (i in 0 until numSamples) {
+                                val sample = shortBuffer[i].toInt()
+                                buffer[i * 2] = (sample and 0xFF).toByte()
+                                buffer[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
+                            }
+                        }
+
                         // Check if frame has any non-zero samples and find max amplitude
                         var hasNonZero = false
                         var maxSample = 0
@@ -516,9 +574,9 @@ class KotlinAudioBridge(
                         }
                         if (hasNonZero) recordNonZeroCount++
 
-                        // Log periodically with max amplitude
+                        // Log periodically with max amplitude (every 100 frames to reduce overhead)
                         if (recordFrameCount % 100L == 1L) {
-                            Log.d(TAG, "📞 Recording: frame #$recordFrameCount, nonzero=$recordNonZeroCount, bytes=$bytesRead, maxAmp=$maxSample")
+                            Log.d(TAG, "🎙️ KRec#$recordFrameCount: bytes=$bytesRead maxAmp=$maxSample nz=$recordNonZeroCount q=${recordBuffer.size} flt=${chain != null}")
                         }
 
                         // Queue frame for Python (non-blocking, drops oldest if full)
@@ -576,10 +634,22 @@ class KotlinAudioBridge(
                 lastMuteState = microphoneMuted
             }
 
-            if (readAudioCount % 100L == 1L || muteStateChanged) {
+            if (readAudioCount % 25L == 1L || muteStateChanged) {
                 val size = data?.size ?: 0
                 val queueSize = recordBuffer.size
-                Log.d(TAG, "📞 readAudio #$readAudioCount: ${if (data != null) "$size bytes" else "null"}, queue=$queueSize, muted=$microphoneMuted")
+                // Calculate max amplitude if we have data
+                var maxAmp = 0
+                if (data != null && data.size >= 2) {
+                    for (i in 0 until data.size step 2) {
+                        if (i + 1 < data.size) {
+                            val sample = (data[i].toInt() and 0xFF) or (data[i + 1].toInt() shl 8)
+                            val signedSample = if (sample > 32767) sample - 65536 else sample
+                            val absSample = kotlin.math.abs(signedSample)
+                            if (absSample > maxAmp) maxAmp = absSample
+                        }
+                    }
+                }
+                Log.d(TAG, "🎙️ KRead#$readAudioCount: ${if (data != null) "${size}b max=$maxAmp" else "null"} q=$queueSize")
             }
 
             // NOTE: We do NOT do software mute here anymore.
@@ -612,6 +682,43 @@ class KotlinAudioBridge(
             Log.e(TAG, "Error stopping recording", e)
         }
     }
+
+    // ===== Kotlin Filter Control (called from Python) =====
+
+    /**
+     * Enable or disable Kotlin-native audio filters.
+     *
+     * When enabled, filters run in Kotlin (<1ms per frame) instead of
+     * Python/CFFI (20-50ms per frame on Android).
+     *
+     * @param enabled True to enable filters, false to disable
+     */
+    fun setFiltersEnabled(enabled: Boolean) {
+        Log.i(TAG, "📞 setFiltersEnabled: $filtersEnabled -> $enabled")
+        filtersEnabled = enabled
+
+        // If recording is active, reinitialize filter chain
+        if (isRecording.get()) {
+            if (enabled) {
+                filterChain = KotlinAudioFilters.VoiceFilterChain(
+                    channels = recordChannels,
+                    highPassCutoff = 300f,
+                    lowPassCutoff = 3400f,
+                    agcTargetDb = -12f,
+                    agcMaxGain = 12f,
+                )
+                Log.i(TAG, "📞 Filter chain reinitialized while recording")
+            } else {
+                filterChain = null
+                Log.i(TAG, "📞 Filter chain disabled while recording")
+            }
+        }
+    }
+
+    /**
+     * Check if Kotlin-native filters are enabled.
+     */
+    fun areFiltersEnabled(): Boolean = filtersEnabled
 
     // ===== Audio Routing (called from Python) =====
 

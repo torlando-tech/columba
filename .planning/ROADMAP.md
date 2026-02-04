@@ -32,7 +32,7 @@ See git history for v0.7.3-beta milestone.
 - [x] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
 - [x] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
 - [x] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
-- [ ] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
+- [x] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
 - [ ] **Phase 11: Telephony Integration** - Port Telephone class and profiles
 - [ ] **Phase 12: Quality Verification** - End-to-end testing and optimization
 
@@ -104,11 +104,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — NetworkPacketBridge (low-level Kotlin-Python packet coordination)
-- [ ] 10-02-PLAN.md — Packetizer (RemoteSink, Kotlin->Python audio transmission)
-- [ ] 10-03-PLAN.md — LinkSource (RemoteSource, Python->Kotlin audio reception)
-- [ ] 10-04-PLAN.md — SignallingReceiver (bidirectional call signalling)
-- [ ] 10-05-PLAN.md — Integration with call_manager.py and PythonWrapperManager
+- [x] 10-01-PLAN.md — NetworkPacketBridge (low-level Kotlin-Python packet coordination)
+- [x] 10-02-PLAN.md — Packetizer (RemoteSink, Kotlin->Python audio transmission)
+- [x] 10-03-PLAN.md — LinkSource (RemoteSource, Python->Kotlin audio reception)
+- [x] 10-04-PLAN.md — SignallingReceiver (bidirectional call signalling)
+- [x] 10-05-PLAN.md — Integration with call_manager.py and PythonWrapperManager
 
 ### Phase 11: Telephony Integration
 **Goal**: Telephone class fully works with Kotlin audio backend
@@ -146,6 +146,6 @@ Plans:
 | 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
 | 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
 | 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
-| 10. Network Bridge | 0/5 | Not started | - |
+| 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
 | 11. Telephony Integration | 0/? | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

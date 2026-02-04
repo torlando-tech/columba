@@ -31,7 +31,7 @@ See git history for v0.7.3-beta milestone.
 
 - [x] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
 - [x] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
-- [ ] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
+- [x] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
 - [ ] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
 - [ ] **Phase 11: Telephony Integration** - Port Telephone class and profiles
 - [ ] **Phase 12: Quality Verification** - End-to-end testing and optimization
@@ -86,10 +86,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Mixer implementation (multi-source combining with gain control)
-- [ ] 09-02-PLAN.md — ToneSource implementation (sine wave generator with fade in/out)
-- [ ] 09-03-PLAN.md — Pipeline implementation (component orchestration wrapper)
-- [ ] 09-04-PLAN.md — Unit tests for configuration logic (mocked dependencies)
+- [x] 09-01-PLAN.md — Mixer implementation (multi-source combining with gain control)
+- [x] 09-02-PLAN.md — ToneSource implementation (sine wave generator with fade in/out)
+- [x] 09-03-PLAN.md — Pipeline implementation (component orchestration wrapper)
+- [x] 09-04-PLAN.md — Unit tests for configuration logic (mocked dependencies)
 
 ### Phase 10: Network Bridge
 **Goal**: Encoded packets flow between Kotlin and Python Reticulum
@@ -138,7 +138,7 @@ Plans:
 | 6. Native Stability Verification | 0/1 | Deferred | - |
 | 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
 | 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
-| 9. Mixer & Pipeline | 0/4 | Not started | - |
+| 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
 | 10. Network Bridge | 0/? | Not started | - |
 | 11. Telephony Integration | 0/? | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

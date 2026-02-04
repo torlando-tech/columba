@@ -11,10 +11,10 @@
 - [x] **SOURCE-02**: LineSource applies filters and gain before encoding
 - [x] **SINK-01**: LineSink plays decoded audio with buffer management
 - [x] **SINK-02**: LineSink handles underrun/overrun gracefully
-- [ ] **MIX-01**: Mixer combines multiple audio sources with gain control
-- [ ] **MIX-02**: Mixer supports mute/unmute for receive and transmit
-- [ ] **PIPE-01**: Pipeline orchestrates source → codec → sink flow
-- [ ] **GEN-01**: ToneSource generates dial/busy tones with ease-in/out
+- [x] **MIX-01**: Mixer combines multiple audio sources with gain control
+- [x] **MIX-02**: Mixer supports mute/unmute for receive and transmit
+- [x] **PIPE-01**: Pipeline orchestrates source → codec → sink flow
+- [x] **GEN-01**: ToneSource generates dial/busy tones with ease-in/out
 
 ### Network Integration
 

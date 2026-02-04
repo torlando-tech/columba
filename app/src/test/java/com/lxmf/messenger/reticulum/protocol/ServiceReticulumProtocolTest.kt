@@ -1212,4 +1212,15 @@ class ServiceReticulumProtocolTest {
             result.isSuccess,
         )
     }
+
+    @Test
+    fun `forceExit handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.forceExit() }
+
+        assertTrue(
+            "forceExit must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
+        )
+    }
 }

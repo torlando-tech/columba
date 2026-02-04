@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 09 of 12 (Mixer & Pipeline)
-Plan: 02 of 03 complete
+Plan: 02 of 04 complete (09-01-Mixer, 09-02-ToneSource)
 Status: In progress
-Last activity: 2026-02-04 — Completed 09-02-PLAN.md (ToneSource)
+Last activity: 2026-02-04 — Completed 09-01-PLAN.md (Mixer)
 
-Progress: [█████████░░░] 75% — Phase 09 plan 2 complete (11/16 plans complete)
+Progress: [█████████░░░] 75% — Phase 09 plan 2 of 4 complete (12/16 plans complete)
 
 ## Milestone Summary
 
@@ -24,7 +24,7 @@ Progress: [█████████░░░] 75% — Phase 09 plan 2 complet
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
-| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (2/3) |
+| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (2/4) |
 | 10 | Telephony & Call | High-level call management | Not started |
 
 ## Accumulated Context
@@ -107,6 +107,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | 382Hz default tone frequency | Matches Python LXST Telephony.py, not 440Hz ITU-T standard | 09-02 |
 | Float32 ToneSource output | Local playback path pushes decoded float32 to sink, encoding in transmit path | 09-02 |
 | Double for phase accumulator | Avoids floating point drift over long dial tones | 09-02 |
+| Mixer extends LocalSource only | Kotlin single inheritance - implement Sink methods directly in class body | 09-01 |
+| Float32 only to sink in Mixer | Kotlin Sink interface limitation - codec encoding for future network path | 09-01 |
+| Global gain only in Mixer | Matches Python LXST, no per-source gain (simplicity) | 09-01 |
 
 ### Blockers/Concerns
 
@@ -130,6 +133,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 09-02-PLAN.md (ToneSource)
+Stopped at: Completed 09-01-PLAN.md (Mixer)
 Resume file: None
 Next: 09-03-PLAN.md (Pipeline orchestration)

@@ -1,0 +1,34 @@
+{
+  "sample_message": {
+    "id": "test-msg-001",
+    "content": "Hello, this is a test message",
+    "sender_hash": "abcd1234",
+    "timestamp": 1729987200000,
+    "is_read": false
+  },
+  "sample_conversation": {
+    "id": "test-conv-001",
+    "peer_hash": "efgh5678",
+    "last_message": "Last message content",
+    "last_timestamp": 1729987200000,
+    "unread_count": 3
+  },
+  "sample_announce": {
+    "destination_hash": "ijkl9012",
+    "aspect": "lxmf.delivery",
+    "app_data": "test app data",
+    "received_at": 1729987200000
+  },
+  "sample_config": {
+    "storage_path": "/tmp/test",
+    "enable_transport": true,
+    "interfaces": [
+      {
+        "type": "TCPClientInterface",
+        "enabled": true,
+        "target_host": "testserver.local",
+        "target_port": 4242
+      }
+    ]
+  }
+}

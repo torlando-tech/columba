@@ -149,6 +149,10 @@ class CallManager:
             # Note: LXST must be installed or available in Python path
             from LXST.Primitives.Telephony import Telephone
 
+            # Install debug instrumentation on LXST audio pipeline
+            from .lxst_debug_instrumentation import install_instrumentation
+            install_instrumentation()
+
             # Check Telephone constructor parameters for sidetone/monitoring options
             import inspect
             try:

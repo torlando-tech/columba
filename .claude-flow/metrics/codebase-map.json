@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-02-04T19:00:17.024Z",
+  "projectRoot": "/home/tyler/repos/public/columba",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1770231617024
+}

@@ -1,0 +1,147 @@
+// Jetpack Compose Dependencies
+// Last Updated: October 2025
+// Compose BOM: 2025.10.01
+// Material 3: 1.4.0 (via BOM)
+// Target: Android 15+ (SDK 35)
+
+dependencies {
+    // ==============================================================================
+    // COMPOSE BOM - Manages all Compose versions
+    // ==============================================================================
+    val composeBom = platform("androidx.compose:compose-bom:2025.10.01")
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+
+    // ==============================================================================
+    // COMPOSE UI - Core Components
+    // ==============================================================================
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-util")
+
+    // ==============================================================================
+    // MATERIAL 3 - Design System
+    // ==============================================================================
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class")
+
+    // ==============================================================================
+    // MATERIAL ICONS (Optional - choose one)
+    // ==============================================================================
+    implementation("androidx.compose.material:material-icons-core")
+    // Extended icons (large - use only if needed)
+    // implementation("androidx.compose.material:material-icons-extended")
+
+    // ==============================================================================
+    // ACTIVITY COMPOSE - For enableEdgeToEdge()
+    // ==============================================================================
+    implementation("androidx.activity:activity-compose:1.9.0")
+
+    // ==============================================================================
+    // LIFECYCLE - ViewModel + StateFlow Integration
+    // ==============================================================================
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+
+    // ==============================================================================
+    // NAVIGATION COMPOSE (Optional)
+    // ==============================================================================
+    implementation("androidx.navigation:navigation-compose:2.7.5")
+
+    // ==============================================================================
+    // HILT NAVIGATION COMPOSE (If using Hilt)
+    // ==============================================================================
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+
+    // ==============================================================================
+    // IMMUTABLE COLLECTIONS - For Performance
+    // ==============================================================================
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.5")
+
+    // ==============================================================================
+    // COIL - Image Loading (Optional)
+    // ==============================================================================
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // ==============================================================================
+    // TESTING - Compose UI Tests
+    // ==============================================================================
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // ==============================================================================
+    // ACCOMPANIST - DEPRECATED, DO NOT USE
+    // ==============================================================================
+    // All Accompanist libraries are deprecated as of August 2023
+    // Use androidx equivalents:
+    // - System UI Controller → enableEdgeToEdge()
+    // - Insets → WindowInsets from androidx.compose.foundation
+    // - Navigation Animation → androidx.compose.animation
+    // - Pager → androidx.compose.foundation.pager
+}
+
+// ==============================================================================
+// COMPOSE COMPILER CONFIGURATION
+// ==============================================================================
+composeCompiler {
+    // Enable stability configuration (optional - for custom stability)
+    // stabilityConfigurationFile = rootProject.layout.projectDirectory.file("stability_config.conf")
+
+    // Enable compiler reports for stability analysis
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+
+    // Strong skipping mode (Kotlin 2.0+)
+    enableStrongSkippingMode = true
+}
+
+// ==============================================================================
+// ANDROID CONFIGURATION
+// ==============================================================================
+android {
+    // Minimum versions for Compose
+    compileSdk = 35  // Android 15
+    defaultConfig {
+        minSdk = 24  // Android 7.0 (recommended minimum)
+        targetSdk = 35  // Android 15
+    }
+
+    // Kotlin compiler options
+    kotlinOptions {
+        jvmTarget = "1.8"  // Or "11" / "17" depending on project
+    }
+
+    // Build features
+    buildFeatures {
+        compose = true
+    }
+
+    // Packaging options
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+// ==============================================================================
+// VERSION CATALOG (Modern Approach - Optional)
+// ==============================================================================
+// Instead of hardcoded versions, use version catalogs in gradle/libs.versions.toml:
+//
+// [versions]
+// composeBom = "2025.10.01"
+// activityCompose = "1.9.0"
+// lifecycle = "2.6.2"
+// navigation = "2.7.5"
+//
+// [libraries]
+// androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+// androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+// ...
+//
+// Then use:
+// implementation(libs.androidx.compose.bom)

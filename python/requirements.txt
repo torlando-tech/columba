@@ -27,4 +27,5 @@ u-msgpack-python
 # LXST for voice calls over Reticulum
 # NOTE: pycodec2 is removed from LXST's dependencies and installed via pre-built
 # wheel in build.gradle.kts. audioop is built-in on Python 3.11.
-lxst @ git+https://github.com/torlando-tech/LXST.git@chaquopy-compat
+# LXST is installed via build.gradle.kts pip block with local wheel containing
+# native filterlib .so files for Android (similar to pycodec2)

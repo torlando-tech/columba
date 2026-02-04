@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 09 of 12 (Mixer & Pipeline)
-Plan: 03 of 04 complete (09-01-Mixer, 09-02-ToneSource, 09-03-Pipeline)
-Status: In progress
-Last activity: 2026-02-04 — Completed 09-03-PLAN.md (Pipeline)
+Plan: 04 of 04 complete (09-01-Mixer, 09-02-ToneSource, 09-03-Pipeline, 09-04-Tests)
+Status: **Phase Complete**
+Last activity: 2026-02-04 — Completed 09-04-PLAN.md (Unit Tests)
 
-Progress: [██████████░░] 81% — Phase 09 plan 3 of 4 complete (13/16 plans complete)
+Progress: [███████████░] 88% — Phase 09 complete (14/16 plans complete)
 
 ## Milestone Summary
 
@@ -24,7 +24,7 @@ Progress: [██████████░░] 81% — Phase 09 plan 3 of 4 co
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
-| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (3/4) |
+| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
 | 10 | Telephony & Call | High-level call management | Not started |
 
 ## Accumulated Context
@@ -112,6 +112,8 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Global gain only in Mixer | Matches Python LXST, no per-source gain (simplicity) | 09-01 |
 | Pipeline delegation pattern | All work delegated to source, Pipeline is pure coordination | 09-03 |
 | LineSource codec immutable in Pipeline | No runtime codec changes for LineSource (set at creation time) | 09-03 |
+| Test private mixingGain indirectly | Use mute/unmute and setGain to verify behavior without @VisibleForTesting | 09-04 |
+| MockK for Sink dependencies | Avoid JNI by mocking Sink interface | 09-04 |
 
 ### Blockers/Concerns
 
@@ -135,6 +137,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 09-03-PLAN.md (Pipeline)
+Stopped at: Completed 09-04-PLAN.md (Unit Tests) - Phase 09 Complete
 Resume file: None
-Next: 09-04-PLAN.md (E2E Integration Test)
+Next: Phase 10 (Telephony & Call)

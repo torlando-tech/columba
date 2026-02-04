@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 10 of 12 (Network Bridge)
-Plan: 03 of 04 complete (10-03-LinkSource)
-Status: **In Progress**
-Last activity: 2026-02-04 — Completed 10-03-PLAN.md (LinkSource)
+Plan: 04 of 04 complete (10-04-SignallingReceiver)
+Status: **Phase Complete**
+Last activity: 2026-02-04 — Completed 10-04-PLAN.md (SignallingReceiver)
 
-Progress: [████████████░] 94% — Phase 10 in progress (17/20 plans complete)
+Progress: [█████████████░░░] 95% — Phase 10 complete (18/20 plans complete)
 
 ## Milestone Summary
 
@@ -25,7 +25,7 @@ Progress: [████████████░] 94% — Phase 10 in progress
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
 | 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
-| 10 | Network Bridge | Kotlin-Python packet handoff | **In Progress** (3/4) |
+| 10 | Network Bridge | Kotlin-Python packet handoff | **Complete** |
 
 ## Accumulated Context
 
@@ -123,6 +123,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | MAX_PACKETS=8 for LinkSource | Matches Mixer backpressure, provides bounded queue | 10-03 |
 | Drop oldest on queue full | Backpressure strategy - prefer fresh audio over stale | 10-03 |
 | RAW header maps to Null | Both 0x00 and 0xFF map to Null codec for simplicity | 10-03 |
+| Signalling constants match Python exactly | STATUS_* 0x00-0x06, PREFERRED_PROFILE 0xFF | 10-04 |
+| Profile detection >= PREFERRED_PROFILE | Matches Python Telephony.py line 726 comparison | 10-04 |
+| Fire-and-forget signalling | signal() delegates to bridge IO dispatch, no blocking | 10-04 |
 
 ### Blockers/Concerns
 
@@ -146,6 +149,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 10-03-PLAN.md (LinkSource)
+Stopped at: Completed 10-04-PLAN.md (SignallingReceiver)
 Resume file: None
-Next: 10-04 (SignallingReceiver for inband signalling)
+Next: Phase 11 (Telephony - Profiles, Telephone class)

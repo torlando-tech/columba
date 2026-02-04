@@ -6,6 +6,7 @@ import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
+import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
@@ -40,6 +41,10 @@ class PythonWrapperManager(
 ) {
     // Thread-safety: Mutex protects wrapper state transitions (check-then-act patterns)
     private val wrapperLock = Mutex()
+
+    // Network packet bridge for Kotlin-Python audio packet handoff
+    @Volatile
+    private var networkPacketBridge: NetworkPacketBridge? = null
 
     companion object {
         private const val TAG = "PythonWrapperManager"
@@ -167,6 +172,10 @@ class PythonWrapperManager(
             wrapperToShutdown = state.wrapper
             state.wrapper = null
             shutdownGeneration = state.initializationGeneration.get()
+
+            // Shutdown network packet bridge
+            networkPacketBridge?.shutdown()
+            networkPacketBridge = null
         }
 
         if (wrapperToShutdown == null) {
@@ -355,8 +364,8 @@ class PythonWrapperManager(
     /**
      * Setup LXST CallManager for voice calls.
      *
-     * Sets up the audio bridge, call bridge, and initializes the Python CallManager.
-     * Must be called after Reticulum is initialized.
+     * Sets up the audio bridge, call bridge, network packet bridge, and initializes
+     * the Python CallManager. Must be called after Reticulum is initialized.
      *
      * @return true if call manager was initialized successfully
      */
@@ -372,6 +381,12 @@ class PythonWrapperManager(
                 val callBridge = CallBridge.getInstance()
                 wrapper.callAttr("set_call_bridge", callBridge)
                 Log.d(TAG, "Call bridge set in Python wrapper")
+
+                // Get network packet bridge singleton (eager init for Phase 10)
+                val netBridge = NetworkPacketBridge.getInstance(context)
+                networkPacketBridge = netBridge
+                wrapper.callAttr("set_network_bridge", netBridge)
+                Log.d(TAG, "Network packet bridge set in Python wrapper")
 
                 // Initialize the call manager
                 val result = wrapper.callAttr("initialize_call_manager")

@@ -71,6 +71,9 @@ dependencies {
     // Opus codec - for voice/audio encoding in Kotlin LXST
     implementation("cn.entertech.android:wuqi-opus:1.0.3")
 
+    // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
+    implementation(project(":external:codec2_talkie:libcodec2-android"))
+
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
     implementation("io.sentry:sentry-android:8.29.0")
 

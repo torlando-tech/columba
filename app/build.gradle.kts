@@ -455,6 +455,11 @@ dependencies {
     // Provides OpusEncoder/OpusDecoder with JNI bindings to libopus 1.3.1
     implementation("cn.entertech.android:wuqi-opus:1.0.3")
 
+    // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
+    // Uses sh123/codec2_talkie as git submodule
+    // Provides Codec2 with JNI bindings to codec2 library
+    implementation(project(":external:codec2_talkie:libcodec2-android"))
+
     // MapLibre - for offline-capable maps
     implementation("org.maplibre.gl:android-sdk:11.13.5")
 

@@ -30,7 +30,7 @@ See git history for v0.7.3-beta milestone.
 **Milestone Goal:** Rewrite LXST audio pipeline in Kotlin, eliminating JNI bridge latency by passing only encoded packets to Python Reticulum.
 
 - [x] **Phase 7: Codec Foundation** - Implement Opus and Codec2 codecs in Kotlin
-- [ ] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
+- [x] **Phase 8: Audio Sources & Sinks** - Implement LineSource, LineSink with existing bridge
 - [ ] **Phase 9: Mixer & Pipeline** - Implement audio mixing and pipeline orchestration
 - [ ] **Phase 10: Network Bridge** - Connect Kotlin audio to Python Reticulum
 - [ ] **Phase 11: Telephony Integration** - Port Telephone class and profiles
@@ -69,10 +69,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Base interfaces (Source, LocalSource, Sink, LocalSink) + data conversion helpers
-- [ ] 08-02-PLAN.md — LineSource implementation wrapping KotlinAudioBridge
-- [ ] 08-03-PLAN.md — LineSink implementation with queue-based playback
-- [ ] 08-04-PLAN.md — Unit tests for configuration logic (mocked bridge/codec)
+- [x] 08-01-PLAN.md — Base interfaces (Source, LocalSource, Sink, LocalSink) + data conversion helpers
+- [x] 08-02-PLAN.md — LineSource implementation wrapping KotlinAudioBridge
+- [x] 08-03-PLAN.md — LineSink implementation with queue-based playback
+- [x] 08-04-PLAN.md — Unit tests for configuration logic (mocked bridge/codec)
 
 ### Phase 9: Mixer & Pipeline
 **Goal**: Multiple audio sources mix correctly, pipeline orchestrates flow
@@ -131,7 +131,7 @@ Plans:
 | 5. Memory Optimization | 1/3 | Deferred | - |
 | 6. Native Stability Verification | 0/1 | Deferred | - |
 | 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
-| 8. Audio Sources & Sinks | 0/4 | Not started | - |
+| 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
 | 9. Mixer & Pipeline | 0/? | Not started | - |
 | 10. Network Bridge | 0/? | Not started | - |
 | 11. Telephony Integration | 0/? | Not started | - |

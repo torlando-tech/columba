@@ -7,10 +7,10 @@
 - [ ] **CODEC-01**: Kotlin Opus encoder/decoder with all 9 profiles (VOICE_LOW through AUDIO_MAX)
 - [ ] **CODEC-02**: Kotlin Codec2 encoder/decoder with all 7 modes (700C through 3200)
 - [ ] **CODEC-03**: Wire-compatible packet format (codec header byte + encoded data)
-- [ ] **SOURCE-01**: LineSource captures audio from microphone with configurable frame time
-- [ ] **SOURCE-02**: LineSource applies filters and gain before encoding
-- [ ] **SINK-01**: LineSink plays decoded audio with buffer management
-- [ ] **SINK-02**: LineSink handles underrun/overrun gracefully
+- [x] **SOURCE-01**: LineSource captures audio from microphone with configurable frame time
+- [x] **SOURCE-02**: LineSource applies filters and gain before encoding
+- [x] **SINK-01**: LineSink plays decoded audio with buffer management
+- [x] **SINK-02**: LineSink handles underrun/overrun gracefully
 - [ ] **MIX-01**: Mixer combines multiple audio sources with gain control
 - [ ] **MIX-02**: Mixer supports mute/unmute for receive and transmit
 - [ ] **PIPE-01**: Pipeline orchestrates source → codec → sink flow
@@ -35,7 +35,7 @@
 ### Quality
 
 - [ ] **QUAL-01**: Voice calls on LAN have no audible pops/delays
-- [ ] **QUAL-02**: Filter latency under 1ms (already achieved in KotlinAudioFilters)
+- [x] **QUAL-02**: Filter latency under 1ms (already achieved in KotlinAudioFilters)
 - [ ] **QUAL-03**: Encode/decode latency under 5ms per frame
 - [ ] **QUAL-04**: End-to-end audio latency under 200ms on LAN
 

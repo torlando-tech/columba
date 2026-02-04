@@ -86,6 +86,11 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
     testImplementation("org.json:json:20240303")
+
+    // Instrumented Testing (androidTest)
+    androidTestImplementation(libs.junit.android)
+    androidTestImplementation(libs.test.core)
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }
 
 ksp {

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 07 of 10 (Codec Foundation)
-Plan: 03 of 03 complete
+Plan: 06 of 06 complete
 Status: Phase complete
-Last activity: 2026-02-04 — Completed 07-03-PLAN.md
+Last activity: 2026-02-04 — Completed 07-06-PLAN.md (Round-trip fidelity and bitrate ceiling tests)
 
-Progress: [███░░░░░░░░░] 25% — Phase 07 complete (3/12 plans complete)
+Progress: [████░░░░░░░░] 50% — Phase 07 complete (6/12 plans complete)
 
 ## Milestone Summary
 
@@ -97,6 +97,8 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Use git submodule for codec2_talkie | Not published to Maven, JitPack unreliable | 07-03 |
 | Only build arm64-v8a ABI | Match Chaquopy Python configuration | 07-03 |
 | PREFER_SETTINGS repository mode | Allow submodule project repos while preferring settings | 07-03 |
+| 17 instrumented tests for Codec2 | 7 encode + 7 header + decode + comprehensive + mode-switch | 07-05 |
+| Energy-based fidelity check | RMS energy ratio 0.1-10.0 for lossy codec round-trip validation | 07-06 |
 
 ### Blockers/Concerns
 
@@ -119,7 +121,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 ## Session Continuity
 
-Last session: 2026-02-04 20:26:06 UTC
-Stopped at: Completed 07-03-PLAN.md (Codec2 codec with 7 modes via git submodule)
+Last session: 2026-02-04 21:06:18 UTC
+Stopped at: Completed 07-06-PLAN.md (Round-trip fidelity and bitrate ceiling validation tests)
 Resume file: None
-Next: Phase 07 (Codec Foundation) complete — ready for Phase 08 (Sources & Sinks)
+Next: Phase 07 complete - ready for verification and next phase planning

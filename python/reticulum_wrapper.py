@@ -405,6 +405,7 @@ class ReticulumWrapper:
         # Voice call support (LXST Telephony integration)
         self.kotlin_audio_bridge = None  # KotlinAudioBridge instance (passed from Kotlin)
         self.kotlin_call_bridge = None  # CallBridge instance (passed from Kotlin)
+        self.kotlin_network_bridge = None  # NetworkPacketBridge instance (passed from Kotlin)
         self._call_manager = None  # LXST CallManager instance (initialized when bridges are set)
 
         # Opportunistic message timeout tracking
@@ -541,6 +542,17 @@ class ReticulumWrapper:
         """
         self.kotlin_call_bridge = bridge
         log_info("ReticulumWrapper", "set_call_bridge", "CallBridge instance set")
+
+    def set_network_bridge(self, bridge):
+        """
+        Set the NetworkPacketBridge instance for Kotlin-Python packet transfer.
+        Should be called from Kotlin before initialize_call_manager().
+
+        Args:
+            bridge: NetworkPacketBridge instance from Kotlin
+        """
+        self.kotlin_network_bridge = bridge
+        log_info("ReticulumWrapper", "set_network_bridge", "NetworkPacketBridge instance set")
 
     def set_telemetry_collector_enabled(self, enabled: bool) -> Dict:
         """
@@ -741,6 +753,7 @@ class ReticulumWrapper:
                 identity=identity,
                 audio_bridge=self.kotlin_audio_bridge,
                 kotlin_call_bridge=self.kotlin_call_bridge,
+                kotlin_network_bridge=self.kotlin_network_bridge,
             )
 
             if self._call_manager is None:

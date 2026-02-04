@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.8.0 Kotlin LXST Audio Pipeline - Defining Requirements
+**Current focus:** v0.8.0 Kotlin LXST Audio Pipeline - Network Bridge
 
 ## Current Position
 
-Phase: 09 of 12 (Mixer & Pipeline)
-Plan: 04 of 04 complete (09-01-Mixer, 09-02-ToneSource, 09-03-Pipeline, 09-04-Tests)
-Status: **Phase Complete**
-Last activity: 2026-02-04 — Completed 09-04-PLAN.md (Unit Tests)
+Phase: 10 of 12 (Network Bridge)
+Plan: 01 of 04 complete (10-01-NetworkPacketBridge)
+Status: **In Progress**
+Last activity: 2026-02-04 — Completed 10-01-PLAN.md (NetworkPacketBridge)
 
-Progress: [███████████░] 88% — Phase 09 complete (14/16 plans complete)
+Progress: [████████████░] 94% — Phase 10 started (15/16 plans complete)
 
 ## Milestone Summary
 
@@ -25,7 +25,7 @@ Progress: [███████████░] 88% — Phase 09 complete (14/1
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
 | 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
-| 10 | Telephony & Call | High-level call management | Not started |
+| 10 | Network Bridge | Kotlin-Python packet handoff | **In Progress** (1/4) |
 
 ## Accumulated Context
 
@@ -114,12 +114,16 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | LineSource codec immutable in Pipeline | No runtime codec changes for LineSource (set at creation time) | 09-03 |
 | Test private mixingGain indirectly | Use mute/unmute and setGain to verify behavior without @VisibleForTesting | 09-04 |
 | MockK for Sink dependencies | Avoid JNI by mocking Sink interface | 09-04 |
+| No Log.d in hot path | Logging blocks audio thread causing choppiness | 10-01 |
+| Dispatchers.IO for Python calls | Avoids blocking audio thread on GIL | 10-01 |
+| Silent exception in sendPacket | Packet loss acceptable for fire-and-forget audio | 10-01 |
+| Callback-only inbound path | No processing in onPythonPacketReceived to release GIL fast | 10-01 |
 
 ### Blockers/Concerns
 
 **Wire Compatibility:**
 - Encoded packets must be decode-compatible with Python LXST (not bit-identical)
-- ✓ Codec2 mode headers implemented (0x00-0x06)
+- Codec2 mode headers implemented (0x00-0x06)
 - Opus packets must be decodable by Python pyogg with intelligible audio
 - ShortArray/ByteArray conversion in Opus needs validation with real packets
 - Codec2 encode/decode needs cross-implementation validation (Kotlin → Python)
@@ -137,6 +141,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 09-04-PLAN.md (Unit Tests) - Phase 09 Complete
+Stopped at: Completed 10-01-PLAN.md (NetworkPacketBridge)
 Resume file: None
-Next: Phase 10 (Telephony & Call)
+Next: 10-02 (Packetizer - RemoteSink for outbound packets)

@@ -101,7 +101,14 @@ Plans:
   3. Signalling (call status, profile changes) works bidirectionally
   4. Bridge latency under 5ms for packet transfer
   5. Encoded packets are <100 bytes (typical: 20-60 bytes)
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — NetworkPacketBridge (low-level Kotlin-Python packet coordination)
+- [ ] 10-02-PLAN.md — Packetizer (RemoteSink, Kotlin->Python audio transmission)
+- [ ] 10-03-PLAN.md — LinkSource (RemoteSource, Python->Kotlin audio reception)
+- [ ] 10-04-PLAN.md — SignallingReceiver (bidirectional call signalling)
+- [ ] 10-05-PLAN.md — Integration with call_manager.py and PythonWrapperManager
 
 ### Phase 11: Telephony Integration
 **Goal**: Telephone class fully works with Kotlin audio backend
@@ -139,6 +146,6 @@ Plans:
 | 7. Codec Foundation | 6/6 | Complete | 2026-02-04 |
 | 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
 | 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
-| 10. Network Bridge | 0/? | Not started | - |
+| 10. Network Bridge | 0/5 | Not started | - |
 | 11. Telephony Integration | 0/? | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

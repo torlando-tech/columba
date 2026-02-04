@@ -118,6 +118,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Dispatchers.IO for Python calls | Avoids blocking audio thread on GIL | 10-01 |
 | Silent exception in sendPacket | Packet loss acceptable for fire-and-forget audio | 10-01 |
 | Callback-only inbound path | No processing in onPythonPacketReceived to release GIL fast | 10-01 |
+| Codec via property not source | Packetizer uses var codec instead of accessing source.codec for clean transmit path | 10-02 |
 | Queue-based packet handling | onPacketReceived queues packet, processingLoop decodes and pushes | 10-03 |
 | MAX_PACKETS=8 for LinkSource | Matches Mixer backpressure, provides bounded queue | 10-03 |
 | Drop oldest on queue full | Backpressure strategy - prefer fresh audio over stale | 10-03 |

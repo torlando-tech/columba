@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 08 of 10 (Audio Sources & Sinks)
-Plan: 03 of 06 complete
+Plan: 02 of 06 complete
 Status: In progress
-Last activity: 2026-02-04 — Completed 08-03-PLAN.md (LineSink speaker playback)
+Last activity: 2026-02-04 — Completed 08-02-PLAN.md (LineSource microphone capture)
 
-Progress: [█████░░░░░░░] 60% — Phase 08 in progress (9/12 plans complete)
+Progress: [████░░░░░░░░] 58% — Phase 08 in progress (8/12 plans complete)
 
 ## Milestone Summary
 
@@ -23,7 +23,7 @@ Progress: [█████░░░░░░░] 60% — Phase 08 in progress (9
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
-| 08 | Sources & Sinks | Audio I/O abstractions | **In Progress (3/6)** |
+| 08 | Sources & Sinks | Audio I/O abstractions | **In Progress (2/6)** |
 | 09 | Network & Packetizer | Link layer integration | Not started |
 | 10 | Telephony & Call | High-level call management | Not started |
 
@@ -102,8 +102,8 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Match Python LXST class hierarchy | Source/LocalSource/RemoteSource, Sink/LocalSink/RemoteSink for future extensibility | 08-01 |
 | Float32 internal audio format | [-1.0, 1.0] range for pipeline, convert to/from int16 at edges | 08-01 |
 | Backpressure via canReceive() | Sink returns false when buffer near full, prevents overflow | 08-01 |
-| LinkedBlockingQueue for sink buffering | Lock-free queue operations, non-blocking offer with oldest drop | 08-03 |
-| Underrun stops playback | Cleaner than silence insertion, stops after FRAME_TIMEOUT_FRAMES timeout | 08-03 |
+| Phase 8 loopback: encode→decode→sink | Source decodes locally for testing; Phase 9 will send encoded over network | 08-02 |
+| Public setters on override var | Kotlin abstract var requires public setter in implementing class | 08-02 |
 
 ### Blockers/Concerns
 
@@ -126,7 +126,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 ## Session Continuity
 
-Last session: 2026-02-04 22:05:50 UTC
-Stopped at: Completed 08-03-PLAN.md (LineSink speaker playback)
+Last session: 2026-02-04 22:06:23 UTC
+Stopped at: Completed 08-02-PLAN.md (LineSource microphone capture)
 Resume file: None
-Next: Ready for 08-04 (Packetizer) or 08-05 (ToneSource) or 08-06 (Integration testing)
+Next: Ready for 08-03 (LineSink) or 08-04 (File sources) or 08-05 (Integration testing)

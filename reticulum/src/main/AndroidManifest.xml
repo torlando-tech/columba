@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Override minSdk requirement for opus library (requires 26, we use 24) -->
+    <!-- Safe because we only use basic JNI features available since API 21 -->
+    <uses-sdk tools:overrideLibrary="com.theeasiestway.opus" />
+
+</manifest>

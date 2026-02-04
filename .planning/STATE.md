@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 07 of 10 (Codec Foundation)
-Plan: 02 of 03 complete
-Status: In progress
-Last activity: 2026-02-04 — Completed 07-02-PLAN.md
+Plan: 03 of 03 complete
+Status: Phase complete
+Last activity: 2026-02-04 — Completed 07-03-PLAN.md
 
-Progress: [██░░░░░░░░░░] 17% — Phase 07 in progress (2/12 plans complete)
+Progress: [███░░░░░░░░░] 25% — Phase 07 complete (3/12 plans complete)
 
 ## Milestone Summary
 
@@ -22,7 +22,7 @@ Progress: [██░░░░░░░░░░] 17% — Phase 07 in progress (2
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | 2/3 complete |
+| 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | Audio I/O abstractions | Not started |
 | 09 | Network & Packetizer | Link layer integration | Not started |
 | 10 | Telephony & Call | High-level call management | Not started |
@@ -94,14 +94,18 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | ShortArray to ByteArray conversion | JNI uses ShortArray, wire needs ByteArray for Python | 07-02 |
 | Configuration-only unit tests | JNI libraries can't load in Robolectric | 07-02 |
 | Override minSdk 26 in manifest | Opus library safe for API 24+ (basic JNI only) | 07-02 |
+| Use git submodule for codec2_talkie | Not published to Maven, JitPack unreliable | 07-03 |
+| Only build arm64-v8a ABI | Match Chaquopy Python configuration | 07-03 |
+| PREFER_SETTINGS repository mode | Allow submodule project repos while preferring settings | 07-03 |
 
 ### Blockers/Concerns
 
 **Wire Compatibility:**
 - Encoded packets must be decode-compatible with Python LXST (not bit-identical)
-- Codec2 mode headers must match (0x00-0x06)
+- ✓ Codec2 mode headers implemented (0x00-0x06)
 - Opus packets must be decodable by Python pyogg with intelligible audio
 - ShortArray/ByteArray conversion in Opus needs validation with real packets
+- Codec2 encode/decode needs cross-implementation validation (Kotlin → Python)
 
 **Integration Complexity:**
 - `call_manager.py` wraps Python LXST Telephone — needs Kotlin bridge
@@ -115,7 +119,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 ## Session Continuity
 
-Last session: 2026-02-04 19:19:05 UTC
-Stopped at: Completed 07-02-PLAN.md (Opus codec with 9 profiles)
+Last session: 2026-02-04 20:26:06 UTC
+Stopped at: Completed 07-03-PLAN.md (Codec2 codec with 7 modes via git submodule)
 Resume file: None
-Next: Execute 07-03-PLAN.md (Codec2 codec integration)
+Next: Phase 07 (Codec Foundation) complete — ready for Phase 08 (Sources & Sinks)

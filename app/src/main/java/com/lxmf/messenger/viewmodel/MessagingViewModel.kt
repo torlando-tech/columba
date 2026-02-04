@@ -900,6 +900,15 @@ class MessagingViewModel
             }
         }
 
+        /**
+         * Refresh the messages list to update relative timestamps.
+         * Called when the app resumes from background to ensure timestamps like
+         * "Just now" are recalculated based on the current time.
+         */
+        fun refreshTimestamps() {
+            _messagesRefreshTrigger.value++
+        }
+
         fun sendMessage(
             destinationHash: String,
             content: String,

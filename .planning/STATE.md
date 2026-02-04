@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 09 of 12 (Mixer & Pipeline)
-Plan: 02 of 04 complete (09-01-Mixer, 09-02-ToneSource)
+Plan: 03 of 04 complete (09-01-Mixer, 09-02-ToneSource, 09-03-Pipeline)
 Status: In progress
-Last activity: 2026-02-04 — Completed 09-01-PLAN.md (Mixer)
+Last activity: 2026-02-04 — Completed 09-03-PLAN.md (Pipeline)
 
-Progress: [█████████░░░] 75% — Phase 09 plan 2 of 4 complete (12/16 plans complete)
+Progress: [██████████░░] 81% — Phase 09 plan 3 of 4 complete (13/16 plans complete)
 
 ## Milestone Summary
 
@@ -24,7 +24,7 @@ Progress: [█████████░░░] 75% — Phase 09 plan 2 of 4 co
 |-------|------|--------------|--------|
 | 07 | Codec Foundation | Base Codec class, Null/Opus/Codec2 codecs | **Complete** |
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
-| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (2/4) |
+| 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **In Progress** (3/4) |
 | 10 | Telephony & Call | High-level call management | Not started |
 
 ## Accumulated Context
@@ -110,6 +110,8 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Mixer extends LocalSource only | Kotlin single inheritance - implement Sink methods directly in class body | 09-01 |
 | Float32 only to sink in Mixer | Kotlin Sink interface limitation - codec encoding for future network path | 09-01 |
 | Global gain only in Mixer | Matches Python LXST, no per-source gain (simplicity) | 09-01 |
+| Pipeline delegation pattern | All work delegated to source, Pipeline is pure coordination | 09-03 |
+| LineSource codec immutable in Pipeline | No runtime codec changes for LineSource (set at creation time) | 09-03 |
 
 ### Blockers/Concerns
 
@@ -133,6 +135,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 09-01-PLAN.md (Mixer)
+Stopped at: Completed 09-03-PLAN.md (Pipeline)
 Resume file: None
-Next: 09-03-PLAN.md (Pipeline orchestration)
+Next: 09-04-PLAN.md (E2E Integration Test)

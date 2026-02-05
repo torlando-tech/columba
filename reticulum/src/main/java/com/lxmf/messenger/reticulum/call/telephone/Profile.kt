@@ -81,10 +81,10 @@ sealed class Profile(
 
     companion object {
         /** Default profile for new calls */
-        val DEFAULT: Profile = MQ
+        val DEFAULT: Profile get() = MQ
 
         /** All profiles in order (low bandwidth to low latency) */
-        val all: List<Profile> = listOf(ULBW, VLBW, LBW, MQ, HQ, SHQ, LL, ULL)
+        val all: List<Profile> get() = listOf(ULBW, VLBW, LBW, MQ, HQ, SHQ, LL, ULL)
 
         /**
          * Look up profile by ID.

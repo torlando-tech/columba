@@ -591,6 +591,9 @@ class Telephone(
     private fun openPipelines() {
         Log.d(TAG, "Opening audio pipelines")
 
+        // Disable Python LXST audio - Kotlin will handle it
+        (networkTransport as? PythonNetworkTransport)?.setKotlinAudioActive(true)
+
         // Ensure dialling pipelines exist
         prepareDiallingPipelines()
 
@@ -672,6 +675,9 @@ class Telephone(
         dialTone?.stop()
 
         Log.d(TAG, "Audio pipelines stopped")
+
+        // Re-enable Python LXST audio after Kotlin pipelines closed
+        (networkTransport as? PythonNetworkTransport)?.setKotlinAudioActive(false)
     }
 
     /**

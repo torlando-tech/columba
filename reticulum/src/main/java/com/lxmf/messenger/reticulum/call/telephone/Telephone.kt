@@ -1,5 +1,8 @@
 package com.lxmf.messenger.reticulum.call.telephone
 
+import android.content.Context
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.util.Log
 import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
@@ -43,6 +46,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * - STATUS_BUSY (0x00) - Remote busy
  * - STATUS_REJECTED (0x01) - Call rejected
  *
+ * @param context Application context for system services (RingtoneManager)
  * @param networkTransport NetworkTransport implementation for network ops
  * @param audioBridge KotlinAudioBridge for audio capture/playback
  * @param networkPacketBridge NetworkPacketBridge for packet transfer
@@ -51,6 +55,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * @param waitTime Maximum wait time for outgoing calls in milliseconds (default 70s)
  */
 class Telephone(
+    private val context: Context,
     private val networkTransport: NetworkTransport,
     private val audioBridge: KotlinAudioBridge,
     private val networkPacketBridge: NetworkPacketBridge,
@@ -112,6 +117,29 @@ class Telephone(
     private var linkSource: LinkSource? = null
     private var packetizer: Packetizer? = null
     private var dialTone: ToneSource? = null
+
+    // ===== Ringtone Components =====
+
+    /** Use system ringtone (default true) or ToneSource pattern (false) */
+    private var useSystemRingtone: Boolean = true
+
+    /** Custom ringtone path (null = use default system ringtone) */
+    private var customRingtonePath: String? = null
+
+    /** Android Ringtone for system ringtone playback */
+    private var systemRingtone: Ringtone? = null
+
+    /** Separate mixer for ringtone (independent of call pipeline) */
+    private var ringerMixer: Mixer? = null
+
+    /** Separate sink for ringtone output */
+    private var ringerSink: LineSink? = null
+
+    /** ToneSource for ringtone when not using system ringtone */
+    private var ringTone: ToneSource? = null
+
+    /** Job controlling ring tone pattern loop */
+    private var ringToneJob: Job? = null
 
     // ===== Coroutine Management =====
 
@@ -194,6 +222,7 @@ class Telephone(
         startPipelines()
 
         // Disable ring tone / dial tone
+        stopRingTone()
         disableDialTone()
 
         // Signal established to remote
@@ -229,6 +258,10 @@ class Telephone(
         // Stop all pipelines
         stopPipelines()
 
+        // Stop all tones
+        stopRingTone()
+        disableDialTone()
+
         // Clear pipeline references
         receiveMixer = null
         transmitMixer = null
@@ -241,6 +274,11 @@ class Telephone(
         dialTone = null
         dialToneJob?.cancel()
         dialToneJob = null
+
+        // Clear ringtone references
+        ringerMixer = null
+        ringerSink = null
+        ringTone = null
 
         // Reset state
         val previousIdentity = remoteIdentityHash
@@ -330,6 +368,32 @@ class Telephone(
      */
     fun isCallActive(): Boolean {
         return callStatus != Signalling.STATUS_AVAILABLE
+    }
+
+    // ===== Ringtone Configuration =====
+
+    /**
+     * Configure ringtone to use for incoming calls.
+     *
+     * @param path Path to custom ringtone, or null to use system default
+     */
+    fun setRingtone(path: String?) {
+        customRingtonePath = path
+        if (path == null) {
+            Log.d(TAG, "Using system default ringtone")
+        } else {
+            Log.d(TAG, "Using custom ringtone: $path")
+        }
+    }
+
+    /**
+     * Toggle between system ringtone and ToneSource pattern.
+     *
+     * @param use True to use system ringtone (default), false for ToneSource pattern
+     */
+    fun setUseSystemRingtone(use: Boolean) {
+        useSystemRingtone = use
+        Log.d(TAG, "Use system ringtone: $use")
     }
 
     // ===== Signal Handling (matches Python Telephony.py signalling_received lines 683-729) =====
@@ -686,13 +750,100 @@ class Telephone(
     /**
      * Activate ring tone for incoming call.
      *
-     * For now, uses dial tone pattern. Future: system ringtone support.
+     * Uses system ringtone by default, falls back to ToneSource pattern.
+     * Matches Python Telephony.py lines 526-539.
      */
     private fun activateRingTone() {
-        Log.d(TAG, "Activating ring tone")
-        // TODO: Support system ringtone (CONTEXT.md: user setting)
-        // For now, use same tone as dial tone
-        activateDialTone()
+        Log.d(TAG, "Activating ring tone (useSystemRingtone=$useSystemRingtone)")
+
+        if (useSystemRingtone) {
+            // Use Android RingtoneManager
+            scope.launch(Dispatchers.Main) {
+                try {
+                    val uri = if (customRingtonePath != null) {
+                        android.net.Uri.parse(customRingtonePath)
+                    } else {
+                        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    }
+                    systemRingtone = RingtoneManager.getRingtone(context, uri)
+                    systemRingtone?.play()
+                    Log.d(TAG, "System ringtone started")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to play system ringtone, using fallback tone", e)
+                    playToneRingPattern()
+                }
+            }
+        } else {
+            // Use ToneSource pattern
+            playToneRingPattern()
+        }
+    }
+
+    /**
+     * Play ring tone pattern using ToneSource.
+     *
+     * Pattern: 2 seconds on, 4 seconds off (standard telephone ring).
+     * Used as fallback when system ringtone unavailable.
+     */
+    private fun playToneRingPattern() {
+        Log.d(TAG, "Playing tone ring pattern")
+
+        ringToneJob?.cancel()
+        ringToneJob = scope.launch {
+            // Create ringer pipeline if needed (separate from main call pipeline)
+            if (ringerSink == null) {
+                ringerSink = LineSink(bridge = audioBridge)
+            }
+            if (ringerMixer == null) {
+                ringerMixer = Mixer(
+                    targetFrameMs = 60,
+                    sink = ringerSink
+                )
+            }
+            if (ringTone == null) {
+                val ringerMixerAsSink = MixerSinkAdapter(ringerMixer!!)
+                ringTone = ToneSource(
+                    frequency = DIAL_TONE_FREQUENCY,
+                    targetGain = 0.1f,  // Louder than dial tone for ringtone
+                    ease = true,
+                    easeTimeMs = DIAL_TONE_EASE_MS
+                ).apply {
+                    sink = ringerMixerAsSink
+                }
+            }
+
+            // Ring pattern: 2s on, 4s off (standard telephone ring)
+            while (isIncomingCall && callStatus == Signalling.STATUS_RINGING) {
+                ringerMixer?.start()
+                ringTone?.start()
+                delay(2000)
+                ringTone?.stop()
+                delay(4000)
+            }
+
+            // Cleanup when loop exits
+            ringTone?.stop()
+            ringerMixer?.stop()
+        }
+    }
+
+    /**
+     * Stop ring tone (both system ringtone and ToneSource pattern).
+     *
+     * Called on answer() or hangup().
+     */
+    private fun stopRingTone() {
+        Log.d(TAG, "Stopping ring tone")
+
+        // Stop system ringtone
+        systemRingtone?.stop()
+        systemRingtone = null
+
+        // Stop ToneSource ring pattern
+        ringToneJob?.cancel()
+        ringToneJob = null
+        ringTone?.stop()
+        ringerMixer?.stop()
     }
 
     /**
@@ -821,6 +972,7 @@ class Telephone(
         Log.i(TAG, "Shutting down telephone")
         hangup()
         dialToneJob?.cancel()
+        ringToneJob?.cancel()
         timeoutJob?.cancel()
     }
 }

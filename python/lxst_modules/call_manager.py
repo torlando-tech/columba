@@ -237,6 +237,20 @@ class CallManager:
         self._kotlin_telephone_callback = callback
         RNS.log("Kotlin Telephone callback set", RNS.LOG_DEBUG)
 
+    def set_kotlin_audio_active(self, active):
+        """Enable/disable Python LXST audio when Kotlin LXST handles audio.
+
+        Called by Kotlin Telephone:
+        - When call CONNECTING: set_kotlin_audio_active(True) - Kotlin opens pipelines
+        - When call ENDED: set_kotlin_audio_active(False) - Python can process again
+
+        Args:
+            active: True when Kotlin handles audio, False when Python can process
+        """
+        from .chaquopy_audio_backend import set_kotlin_audio_active as _set_active
+        _set_active(active)
+        RNS.log(f"📞 Kotlin audio active: {active}", RNS.LOG_INFO)
+
     # ===== Kotlin Telephone Integration =====
 
     def on_state_changed(self, state_code):

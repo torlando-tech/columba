@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 11 of 12 (Telephony Integration)
-Plan: 03 of ?? complete (11-03-AudioFeedback)
-Status: **In Progress**
-Last activity: 2026-02-05 — Completed 11-03-PLAN.md (Audio Feedback)
+Plan: 04 of 04 complete (11-04-KotlinPythonWiring)
+Status: **Phase Complete**
+Last activity: 2026-02-05 — Completed 11-04-PLAN.md (Kotlin-Python Wiring)
 
-Progress: [███████████████░] 98% — Phase 11 plan 03 complete (22/23 plans complete)
+Progress: [████████████████] 100% — Phase 11 complete (23/23 plans complete)
 
 ## Milestone Summary
 
@@ -26,7 +26,7 @@ Progress: [███████████████░] 98% — Phase 11 pl
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
 | 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
 | 10 | Network Bridge | Kotlin-Python packet handoff | **Complete** |
-| 11 | Telephony Integration | Profile, NetworkTransport, Telephone class | **In Progress** |
+| 11 | Telephony Integration | Profile, NetworkTransport, Telephone class | **Complete** |
 
 ## Accumulated Context
 
@@ -138,6 +138,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Context parameter for Telephone | RingtoneManager requires Context for system services | 11-03 |
 | Separate ringer pipeline | Ringtone uses independent Mixer/LineSink from call pipeline | 11-03 |
 | System ringtone default | System ringtone by default, ToneSource fallback if unavailable | 11-03 |
+| Callback-based Kotlin integration | Python notifies Kotlin via set_kotlin_telephone_callback | 11-04 |
+| Store callManagerPyObject | Needed for PythonNetworkTransport creation | 11-04 |
+| Event-based Python notifications | Python fires events (ringing, established, ended) to Kotlin | 11-04 |
 
 ### Blockers/Concerns
 
@@ -161,6 +164,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 11-03-PLAN.md (Audio Feedback)
+Stopped at: Completed 11-04-PLAN.md (Kotlin-Python Wiring)
 Resume file: None
-Next: 11-04 (Full pipeline integration and verification)
+Next: Phase 12 (Testing & Verification)

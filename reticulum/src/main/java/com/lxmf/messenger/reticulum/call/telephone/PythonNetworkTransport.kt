@@ -3,7 +3,9 @@ package com.lxmf.messenger.reticulum.call.telephone
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**

@@ -140,9 +140,13 @@ class NetworkPacketBridge private constructor(
      * Called by Python via Chaquopy callback when signal arrives from remote peer.
      * **MUST BE FAST** - Python GIL is held during this call.
      *
+     * Note: Debug logging is acceptable here (unlike packet path) because signals
+     * are infrequent (state transitions only, not continuous audio).
+     *
      * @param signal Signalling value received from remote
      */
     fun onPythonSignalReceived(signal: Int) {
+        Log.d(TAG, "Signal from Python: 0x${signal.toString(16).padStart(2, '0')}")
         onSignalReceived?.invoke(signal)
     }
 

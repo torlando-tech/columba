@@ -116,6 +116,7 @@ class CallManager:
         self._kotlin_call_bridge = None
         self._kotlin_network_bridge = None  # Set by Kotlin via initialize()
         self._initialized = False
+        self._kotlin_telephone_callback = None  # Callback to notify Kotlin of state changes
 
         # Internal state
         self._active_call_identity = None
@@ -217,6 +218,56 @@ class CallManager:
         """
         self._kotlin_call_bridge = bridge
         RNS.log("Kotlin CallBridge set", RNS.LOG_DEBUG)
+
+    def set_kotlin_telephone_callback(self, callback):
+        """Set callback for notifying Kotlin Telephone of state changes.
+
+        Called by PythonWrapperManager after Kotlin Telephone initialization.
+        Callback receives (state: str, data: dict) tuples.
+        """
+        self._kotlin_telephone_callback = callback
+        RNS.log("Kotlin Telephone callback set", RNS.LOG_DEBUG)
+
+    # ===== Kotlin Telephone Integration =====
+
+    def on_state_changed(self, state_code):
+        """Called by Kotlin Telephone when call state changes.
+
+        Kotlin drives state machine, Python is notified for network coordination.
+
+        Args:
+            state_code: Signalling status code (0x00-0x06)
+        """
+        RNS.log(f"Kotlin state change: {state_code:#04x}", RNS.LOG_DEBUG)
+        # Update internal state if needed for network coordination
+        # Python LXST Telephone handles network aspects
+
+    def on_profile_changed(self, profile_id):
+        """Called by Kotlin Telephone when profile changes.
+
+        Kotlin is single source of truth for profiles; push to Python.
+
+        Args:
+            profile_id: Profile ID (0x10-0x80)
+        """
+        RNS.log(f"Kotlin profile change: {profile_id:#04x}", RNS.LOG_DEBUG)
+        # If we have an active call, update Python LXST profile
+        if self.telephone and self.telephone.active_call:
+            try:
+                self.telephone.switch_profile(profile_id, from_signalling=True)
+            except Exception as e:
+                RNS.log(f"Error switching profile: {e}", RNS.LOG_ERROR)
+
+    def _notify_kotlin(self, event, identity_hash=None, extra=None):
+        """Notify Kotlin Telephone of event."""
+        if self._kotlin_telephone_callback:
+            try:
+                data = {'identity': identity_hash}
+                if extra:
+                    data.update(extra)
+                self._kotlin_telephone_callback(event, data)
+            except Exception as e:
+                RNS.log(f"Error notifying Kotlin: {e}", RNS.LOG_ERROR)
 
     # ===== Call Actions (called from Kotlin) =====
 
@@ -429,6 +480,9 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of incoming call: {e}", RNS.LOG_ERROR)
 
+        # Notify Kotlin Telephone
+        self._notify_kotlin('ringing', identity_hash)
+
     def _handle_established(self, identity):
         """Handle call established."""
         RNS.log("📞 _handle_established() CALLBACK FIRED", RNS.LOG_INFO)
@@ -444,6 +498,9 @@ class CallManager:
                 self._kotlin_call_bridge.onCallEstablished(identity_hash)
             except Exception as e:
                 RNS.log(f"📞 Error notifying Kotlin of call established: {e}", RNS.LOG_ERROR)
+
+        # Notify Kotlin Telephone
+        self._notify_kotlin('established', identity_hash)
 
     def _handle_ended(self, identity):
         """Handle call ended."""
@@ -463,8 +520,12 @@ class CallManager:
         else:
             RNS.log("📞 WARNING: No Kotlin CallBridge set!", RNS.LOG_WARNING)
 
+        # Notify Kotlin Telephone
+        self._notify_kotlin('ended', identity_hash)
+
     def _handle_busy(self, identity):
         """Handle remote busy."""
+        identity_hash = identity.hash.hex() if identity else None
         RNS.log("Remote is busy", RNS.LOG_INFO)
 
         if self._kotlin_call_bridge is not None:
@@ -473,8 +534,12 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of busy: {e}", RNS.LOG_ERROR)
 
+        # Notify Kotlin Telephone
+        self._notify_kotlin('busy', identity_hash)
+
     def _handle_rejected(self, identity):
         """Handle call rejected."""
+        identity_hash = identity.hash.hex() if identity else None
         RNS.log("Call rejected", RNS.LOG_INFO)
 
         if self._kotlin_call_bridge is not None:
@@ -482,6 +547,9 @@ class CallManager:
                 self._kotlin_call_bridge.onCallRejected()
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of rejection: {e}", RNS.LOG_ERROR)
+
+        # Notify Kotlin Telephone
+        self._notify_kotlin('rejected', identity_hash)
 
     # ===== Network Bridge Methods (Python <-> Kotlin) =====
 
@@ -516,23 +584,33 @@ class CallManager:
     def receive_audio_packet(self, packet_data):
         """Receive encoded audio packet from Kotlin.
 
-        Called by Kotlin NetworkPacketBridge to deliver encoded frames to Python LXST.
-        Will be wired to LXST Packetizer in Phase 11.
+        Called by Kotlin Packetizer (via PythonNetworkTransport) to deliver
+        encoded frames to Python LXST for network transmission.
 
         Args:
             packet_data: bytes (codec header byte + encoded frame)
         """
-        # TODO: Phase 11 will wire this to LXST Telephone's receive path
-        RNS.log(f"Received audio packet from Kotlin ({len(packet_data)} bytes)", RNS.LOG_DEBUG)
+        if self.telephone and self.telephone.active_call:
+            # Forward to LXST Packetizer
+            try:
+                packetizer = getattr(self.telephone.active_call, 'packetizer', None)
+                if packetizer:
+                    # LXST Packetizer sends to network
+                    packetizer.send(packet_data)
+            except Exception as e:
+                RNS.log(f"Error forwarding packet to LXST: {e}", RNS.LOG_ERROR)
 
     def receive_signal(self, signal):
         """Receive signalling from Kotlin.
 
-        Called by Kotlin NetworkPacketBridge to deliver signals to Python LXST.
-        Will be wired to LXST SignallingReceiver in Phase 11.
+        Called by Kotlin SignallingReceiver to deliver signals to Python LXST
+        for network transmission to remote peer.
 
         Args:
             signal: int signal value
         """
-        # TODO: Phase 11 will wire this to LXST Telephone's signalling
-        RNS.log(f"Received signal from Kotlin: {signal:#04x}", RNS.LOG_DEBUG)
+        if self.telephone and self.telephone.active_call:
+            try:
+                self.telephone.signal(signal, self.telephone.active_call)
+            except Exception as e:
+                RNS.log(f"Error forwarding signal to LXST: {e}", RNS.LOG_ERROR)

@@ -143,7 +143,7 @@ Plans:
   4. Kotlin Telephone transitions through CONNECTING → ESTABLISHED
 
 Plans:
-- [ ] 11.5-01-PLAN.md — Wire integer signals from Python to Kotlin
+- [x] 11.5-01-PLAN.md — Wire integer signals from Python to Kotlin
 
 ### Phase 11.6: Python Audio Disable (GAP CLOSURE)
 **Goal:** Disable Python LXST audio when Kotlin LXST handles audio
@@ -185,6 +185,6 @@ Plans:
 | 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
 | 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
 | 11. Telephony Integration | 5/5 | Gaps found | 2026-02-05 |
-| 11.5 Signal Bridge Fix | 0/1 | Not started | - |
+| 11.5 Signal Bridge Fix | 1/1 | Complete | 2026-02-05 |
 | 11.6 Python Audio Disable | 0/1 | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

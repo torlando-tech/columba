@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.8.0 Kotlin LXST Audio Pipeline - Network Bridge
+**Current focus:** v0.8.0 Kotlin LXST Audio Pipeline - Gap Closure
 
 ## Current Position
 
 Phase: 11.5 of 12 (Signal Bridge Fix - Gap Closure)
-Plan: 00 of 01 (Ready to plan)
-Status: **Ready for planning**
-Last activity: 2026-02-05 — Created gap closure phases 11.5 and 11.6
+Plan: 01 of 01 (Complete)
+Status: **Phase 11.5 Complete**
+Last activity: 2026-02-05 — Completed 11.5-01-PLAN.md (Signal Bridge Fix)
 
-Progress: [████████████░░░░] 75% — Gap closure phases created
+Progress: [█████████████░░░] 80% — Signal bridge wired, Python audio disable next
 
 ## Milestone Summary
 
@@ -27,6 +27,7 @@ Progress: [████████████░░░░] 75% — Gap closure
 | 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
 | 10 | Network Bridge | Kotlin-Python packet handoff | **Complete** |
 | 11 | Telephony Integration | Profile, NetworkTransport, Telephone class | **Gaps Found** |
+| 11.5 | Signal Bridge Fix | Wire INTEGER signals from Python to Kotlin | **Complete** |
 
 ## Accumulated Context
 
@@ -41,8 +42,8 @@ Progress: [████████████░░░░] 75% — Gap closure
 ### Why v0.8.0 Now?
 
 Voice call quality is fundamentally limited by JNI bridge latency:
-- **Current**: 5760 bytes raw audio crosses JNI every 60ms → 30-50ms latency per frame
-- **Target**: 20-60 bytes encoded packet crosses JNI → <1ms overhead
+- **Current**: 5760 bytes raw audio crosses JNI every 60ms -> 30-50ms latency per frame
+- **Target**: 20-60 bytes encoded packet crosses JNI -> <1ms overhead
 
 Root cause cannot be fixed without architectural change. User explicitly requested full LXST rewrite in Kotlin.
 
@@ -53,22 +54,22 @@ Root cause cannot be fixed without architectural change. User explicitly request
 - **Codec2**: `com.ustadmobile.codec2:codec2-android:0.9.2-1` (UstadMobile, only viable option)
 
 **Existing Kotlin Code to Reuse:**
-- `KotlinAudioBridge.kt` — AudioRecord/AudioTrack with ring buffers
-- `KotlinAudioFilters.kt` — HighPass, LowPass, AGC (<1ms latency, already working)
+- `KotlinAudioBridge.kt` - AudioRecord/AudioTrack with ring buffers
+- `KotlinAudioFilters.kt` - HighPass, LowPass, AGC (<1ms latency, already working)
 
 ### LXST Python Structure (to match)
 
 ```
 LXST/
 ├── __init__.py (7 lines)
-├── Sources.py (361 lines) — LineSource, OpusFileSource, backends
-├── Sinks.py (348 lines) — LineSink, OpusFileSink, backends
-├── Mixer.py (177 lines) — Audio mixing
-├── Network.py (145 lines) — Packetizer, LinkSource
-├── Pipeline.py (58 lines) — Pipeline orchestration
-├── Filters.py (398 lines) — Already in Kotlin
-├── Generators.py (134 lines) — ToneSource
-├── Call.py (55 lines) — Legacy endpoint
+├── Sources.py (361 lines) - LineSource, OpusFileSource, backends
+├── Sinks.py (348 lines) - LineSink, OpusFileSink, backends
+├── Mixer.py (177 lines) - Audio mixing
+├── Network.py (145 lines) - Packetizer, LinkSource
+├── Pipeline.py (58 lines) - Pipeline orchestration
+├── Filters.py (398 lines) - Already in Kotlin
+├── Generators.py (134 lines) - ToneSource
+├── Call.py (55 lines) - Legacy endpoint
 ├── Codecs/
 │   ├── __init__.py (29 lines)
 │   ├── Codec.py (62 lines)
@@ -76,7 +77,7 @@ LXST/
 │   ├── Codec2.py (121 lines)
 │   └── Raw.py (small)
 └── Primitives/
-    └── Telephony.py (732 lines) — Profiles, Signalling, Telephone
+    └── Telephony.py (732 lines) - Profiles, Signalling, Telephone
 ```
 
 Total Python lines to port: ~2,700 (excluding libs, platforms)
@@ -85,9 +86,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 | Decision | Rationale | Phase |
 |----------|-----------|-------|
-| Start v0.8.0 immediately | Audio quality is blocking user adoption | — |
-| Defer v0.7.4 remaining phases | Memory issues less critical than audio quality | — |
-| Match Python file structure | User explicitly requested identical organization | — |
+| Start v0.8.0 immediately | Audio quality is blocking user adoption | - |
+| Defer v0.7.4 remaining phases | Memory issues less critical than audio quality | - |
+| Match Python file structure | User explicitly requested identical organization | - |
 | Float32 range [-1.0, 1.0] | Matches Python LXST, multiply by 32767 for int16 | 07-01 |
 | Linear interpolation resampler | Sufficient quality for testing, can upgrade later | 07-01 |
 | Little-endian int16 wire format | Python compatibility for decode-compatible packets | 07-01 |
@@ -103,7 +104,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Match Python LXST class hierarchy | Source/LocalSource/RemoteSource, Sink/LocalSink/RemoteSink for future extensibility | 08-01 |
 | Float32 internal audio format | [-1.0, 1.0] range for pipeline, convert to/from int16 at edges | 08-01 |
 | Backpressure via canReceive() | Sink returns false when buffer near full, prevents overflow | 08-01 |
-| Phase 8 loopback: encode→decode→sink | Source decodes locally for testing; Phase 9 will send encoded over network | 08-02 |
+| Phase 8 loopback: encode->decode->sink | Source decodes locally for testing; Phase 9 will send encoded over network | 08-02 |
 | Public setters on override var | Kotlin abstract var requires public setter in implementing class | 08-02 |
 | 382Hz default tone frequency | Matches Python LXST Telephony.py, not 440Hz ITU-T standard | 09-02 |
 | Float32 ToneSource output | Local playback path pushes decoded float32 to sink, encoding in transmit path | 09-02 |
@@ -141,6 +142,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Callback-based Kotlin integration | Python notifies Kotlin via set_kotlin_telephone_callback | 11-04 |
 | Store callManagerPyObject | Needed for PythonNetworkTransport creation | 11-04 |
 | Event-based Python notifications | Python fires events (ringing, established, ended) to Kotlin | 11-04 |
+| CONNECTING before ESTABLISHED | Send STATUS_CONNECTING then STATUS_ESTABLISHED for pipeline init | 11.5-01 |
+| STATUS_AVAILABLE on ended | Send STATUS_AVAILABLE when call ends to indicate ready state | 11.5-01 |
+| Debug logging in signal path | Acceptable for infrequent state transitions (not audio packets) | 11.5-01 |
 
 ### Blockers/Concerns
 
@@ -149,10 +153,10 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 - Codec2 mode headers implemented (0x00-0x06)
 - Opus packets must be decodable by Python pyogg with intelligible audio
 - ShortArray/ByteArray conversion in Opus needs validation with real packets
-- Codec2 encode/decode needs cross-implementation validation (Kotlin → Python)
+- Codec2 encode/decode needs cross-implementation validation (Kotlin -> Python)
 
 **Integration Complexity:**
-- `call_manager.py` wraps Python LXST Telephone — needs Kotlin bridge
+- `call_manager.py` wraps Python LXST Telephone - needs Kotlin bridge
 - Signalling still goes through Python Reticulum links
 - Must coordinate Kotlin audio thread with Python network thread
 
@@ -161,13 +165,18 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 - Unit tests limited to configuration logic only
 - Wire compatibility validation requires Python LXST integration testing
 
+**Gap 2 Remaining (11.6):**
+- Python LXST audio still active during calls
+- Need to disable Python audio sources/sinks when Kotlin handles audio
+- Prevents duplicate processing and resource contention
+
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Created gap closure phases
-Resume file: .planning/v0.8.0-MILESTONE-AUDIT.md
-Next: `/gsd:plan-phase 11.5` to plan signal bridge fix
+Stopped at: Completed 11.5-01-PLAN.md
+Resume file: .planning/phases/11.5-signal-bridge-fix/11.5-01-SUMMARY.md
+Next: `/gsd:plan-phase 11.6` to plan Python audio disable
 
 **Gap Closure Phases:**
-- **11.5**: Signal Bridge Fix — Wire INTEGER signals from Python to Kotlin
-- **11.6**: Python Audio Disable — Stop Python LXST audio when Kotlin active
+- **11.5**: Signal Bridge Fix - Wire INTEGER signals from Python to Kotlin **COMPLETE**
+- **11.6**: Python Audio Disable - Stop Python LXST audio when Kotlin active

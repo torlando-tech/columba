@@ -159,7 +159,26 @@ Plans:
 Plans:
 - [x] 11.6-01-PLAN.md — Disable Python audio when Kotlin active
 
-**VERIFICATION STATUS: HUMAN_NEEDED** — See 11.6-VERIFICATION.md for runtime testing required
+**VERIFICATION STATUS: SUPERSEDED** — Phase 11.6 approach superseded by Phase 11.7 (LXST removal)
+
+### Phase 11.7: Remove Python LXST
+**Goal:** Remove Python LXST dependency; rewrite call_manager.py to use raw Reticulum link APIs with msgpack wire protocol, making Python a pure network transport
+**Depends on:** Phase 11 (needs Kotlin Telephone, codecs, pipelines)
+**Supersedes:** Phase 11.6 (flag-based audio disable — band-aid for dual-pipeline problem)
+**Requirements:** TEL-01, NET-01, NET-02, NET-03, BRIDGE-01, BRIDGE-02
+**Success Criteria** (what must be TRUE):
+  1. Python LXST library is not imported or used anywhere in the codebase
+  2. call_manager.py uses raw Reticulum Link APIs (RNS.Link, RNS.Packet) for call setup/teardown
+  3. Audio packets use LXST-compatible msgpack wire format: `{0x01: [codec_byte + frame]}`
+  4. Signalling uses LXST-compatible msgpack wire format: `{0x00: [signal_byte]}`
+  5. Outgoing and incoming calls connect with audible audio (no dual-pipeline conflict)
+  6. Calls interoperate with Sideband (same wire protocol)
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 11.7-01-PLAN.md — Rewrite call_manager.py with raw Reticulum Link APIs, delete instrumentation, clean audio backend
+- [ ] 11.7-02-PLAN.md — Remove Phase 11.6 Kotlin code, remove LXST from build, compile and test
 
 ### Phase 12: Quality Verification
 **Goal**: Voice calls work smoothly on LAN without artifacts
@@ -188,5 +207,6 @@ Plans:
 | 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
 | 11. Telephony Integration | 5/5 | Gaps found | 2026-02-05 |
 | 11.5 Signal Bridge Fix | 1/1 | Complete | 2026-02-05 |
-| 11.6 Python Audio Disable | 1/1 | Complete | 2026-02-05 |
+| 11.6 Python Audio Disable | 1/1 | Superseded | 2026-02-05 |
+| 11.7 Remove Python LXST | 0/2 | Planned | - |
 | 12. Quality Verification | 0/? | Not started | - |

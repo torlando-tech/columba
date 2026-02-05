@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 11.5 of 12 (Signal Bridge Fix - Gap Closure)
+Phase: 11.6 of 12 (Python Audio Disable - Gap Closure)
 Plan: 01 of 01 (Complete)
-Status: **Phase 11.5 Complete**
-Last activity: 2026-02-05 — Completed 11.5-01-PLAN.md (Signal Bridge Fix)
+Status: **Phase 11.6 Complete - Gap Closure Done**
+Last activity: 2026-02-05 — Completed 11.6-01-PLAN.md (Python audio disabled during Kotlin calls)
 
-Progress: [█████████████░░░] 80% — Signal bridge wired, Python audio disable next
+Progress: [██████████████░░] 87% — Gap 2 closed, system ready for integration testing
 
 ## Milestone Summary
 
@@ -28,6 +28,7 @@ Progress: [█████████████░░░] 80% — Signal brid
 | 10 | Network Bridge | Kotlin-Python packet handoff | **Complete** |
 | 11 | Telephony Integration | Profile, NetworkTransport, Telephone class | **Gaps Found** |
 | 11.5 | Signal Bridge Fix | Wire INTEGER signals from Python to Kotlin | **Complete** |
+| 11.6 | Python Audio Disable | Disable Python LXST when Kotlin handles audio | **Complete** |
 
 ## Accumulated Context
 
@@ -145,6 +146,11 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | CONNECTING before ESTABLISHED | Send STATUS_CONNECTING then STATUS_ESTABLISHED for pipeline init | 11.5-01 |
 | STATUS_AVAILABLE on ended | Send STATUS_AVAILABLE when call ends to indicate ready state | 11.5-01 |
 | Debug logging in signal path | Acceptable for infrequent state transitions (not audio packets) | 11.5-01 |
+| Global flag pattern for audio disable | Matches _kotlin_filters_active, simple coordination mechanism | 11.6-01 |
+| Return silence from recorder | Prevents Python from accessing AudioRecord during Kotlin calls | 11.6-01 |
+| Drop frames in player | Prevents Python from accessing AudioTrack during Kotlin calls | 11.6-01 |
+| Dispatchers.IO for GIL calls | Avoids blocking Kotlin audio thread on Python execution | 11.6-01 |
+| Safe cast for PythonNetworkTransport | Handles mock NetworkTransport gracefully in tests | 11.6-01 |
 
 ### Blockers/Concerns
 
@@ -165,18 +171,22 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 - Unit tests limited to configuration logic only
 - Wire compatibility validation requires Python LXST integration testing
 
-**Gap 2 Remaining (11.6):**
-- Python LXST audio still active during calls
-- Need to disable Python audio sources/sinks when Kotlin handles audio
-- Prevents duplicate processing and resource contention
+**Gap Closure Complete:**
+- Gap 1 (Signal Bridge): ✅ Closed in Phase 11.5
+- Gap 2 (Dual Audio Pipeline): ✅ Closed in Phase 11.6
+
+**Next Steps:**
+- Integration testing with real calls
+- Performance validation (AudioFlinger stability)
+- User acceptance testing for call quality
 
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 11.5-01-PLAN.md
-Resume file: .planning/phases/11.5-signal-bridge-fix/11.5-01-SUMMARY.md
-Next: `/gsd:plan-phase 11.6` to plan Python audio disable
+Stopped at: Completed 11.6-01-PLAN.md
+Resume file: None (Phase 11.6 complete)
+Next: Integration testing or proceed to Phase 12 (Testing & Validation)
 
 **Gap Closure Phases:**
 - **11.5**: Signal Bridge Fix - Wire INTEGER signals from Python to Kotlin **COMPLETE**
-- **11.6**: Python Audio Disable - Stop Python LXST audio when Kotlin active
+- **11.6**: Python Audio Disable - Stop Python LXST audio when Kotlin active **COMPLETE**

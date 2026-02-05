@@ -157,7 +157,9 @@ Plans:
   4. No AudioFlinger BUFFER TIMEOUT errors during calls
 
 Plans:
-- [ ] 11.6-01-PLAN.md — Disable Python audio when Kotlin active
+- [x] 11.6-01-PLAN.md — Disable Python audio when Kotlin active
+
+**VERIFICATION STATUS: HUMAN_NEEDED** — See 11.6-VERIFICATION.md for runtime testing required
 
 ### Phase 12: Quality Verification
 **Goal**: Voice calls work smoothly on LAN without artifacts
@@ -186,5 +188,5 @@ Plans:
 | 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
 | 11. Telephony Integration | 5/5 | Gaps found | 2026-02-05 |
 | 11.5 Signal Bridge Fix | 1/1 | Complete | 2026-02-05 |
-| 11.6 Python Audio Disable | 0/1 | Not started | - |
+| 11.6 Python Audio Disable | 1/1 | Complete | 2026-02-05 |
 | 12. Quality Verification | 0/? | Not started | - |

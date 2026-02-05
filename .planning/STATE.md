@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 11 of 12 (Telephony Integration)
-Plan: 02 of ?? complete (11-02-TelephonePythonNetworkTransport)
+Plan: 03 of ?? complete (11-03-AudioFeedback)
 Status: **In Progress**
-Last activity: 2026-02-04 — Completed 11-02-PLAN.md (PythonNetworkTransport and Telephone)
+Last activity: 2026-02-05 — Completed 11-03-PLAN.md (Audio Feedback)
 
-Progress: [██████████████░░] 97% — Phase 11 plan 02 complete (21/22 plans complete)
+Progress: [███████████████░] 98% — Phase 11 plan 03 complete (22/23 plans complete)
 
 ## Milestone Summary
 
@@ -135,6 +135,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | MixerSinkAdapter for Kotlin inheritance | Wraps Mixer to provide Sink interface for sources | 11-02 |
 | Internal link state in PythonNetworkTransport | Track linkActive locally, easier than querying Python | 11-02 |
 | Mute state persists in Telephone | Store transmitMuted, restore after reconfigureTransmitPipeline | 11-02 |
+| Context parameter for Telephone | RingtoneManager requires Context for system services | 11-03 |
+| Separate ringer pipeline | Ringtone uses independent Mixer/LineSink from call pipeline | 11-03 |
+| System ringtone default | System ringtone by default, ToneSource fallback if unavailable | 11-03 |
 
 ### Blockers/Concerns
 
@@ -157,7 +160,7 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: Completed 11-02-PLAN.md (PythonNetworkTransport and Telephone)
+Last session: 2026-02-05
+Stopped at: Completed 11-03-PLAN.md (Audio Feedback)
 Resume file: None
-Next: 11-03 (Full pipeline wiring and verification)
+Next: 11-04 (Full pipeline integration and verification)

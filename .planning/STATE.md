@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 10 of 12 (Network Bridge)
-Plan: 05 of 05 complete (10-05-BridgeIntegration)
-Status: **Phase Complete**
-Last activity: 2026-02-04 — Completed 10-05-PLAN.md (Bridge Integration)
+Phase: 11 of 12 (Telephony Integration)
+Plan: 01 of ?? in progress (11-01-ProfileNetworkTransport)
+Status: **In Progress**
+Last activity: 2026-02-04 — Completed 11-01-PLAN.md (Profile and NetworkTransport)
 
-Progress: [██████████████░░] 95% — Phase 10 complete (19/20 plans complete)
+Progress: [██████████████░░] 96% — Phase 11 started (20/21 plans complete)
 
 ## Milestone Summary
 
@@ -26,6 +26,7 @@ Progress: [██████████████░░] 95% — Phase 10 co
 | 08 | Sources & Sinks | LineSource, LineSink wrapping KotlinAudioBridge | **Complete** |
 | 09 | Mixer & Pipeline | Mixer, ToneSource, Pipeline | **Complete** |
 | 10 | Network Bridge | Kotlin-Python packet handoff | **Complete** |
+| 11 | Telephony Integration | Profile, NetworkTransport, Telephone class | **In Progress** |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Fire-and-forget signalling | signal() delegates to bridge IO dispatch, no blocking | 10-04 |
 | Eager NetworkPacketBridge init | Initialize in setupCallManager with other bridges | 10-05 |
 | Python stubs for Phase 11 | receive_audio_packet/receive_signal stubbed for LXST wiring | 10-05 |
+| Profile.createCodec() factory | Encapsulates codec config in Profile, cleaner than Telephone mapping | 11-01 |
+| data object for profiles | Modern Kotlin idiom, provides automatic equals/hashCode/toString | 11-01 |
+| suspend fun establishLink() | Link establishment takes time, avoid blocking caller | 11-01 |
 
 ### Blockers/Concerns
 
@@ -151,6 +155,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 10-05-PLAN.md (Bridge Integration)
+Stopped at: Completed 11-01-PLAN.md (Profile and NetworkTransport)
 Resume file: None
-Next: Phase 11 (Telephony - Profiles, Telephone class)
+Next: 11-02 (Telephone class using Profile and NetworkTransport)

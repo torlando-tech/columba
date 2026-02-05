@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 11 of 12 (Telephony Integration)
-Plan: 01 of ?? in progress (11-01-ProfileNetworkTransport)
+Plan: 02 of ?? complete (11-02-TelephonePythonNetworkTransport)
 Status: **In Progress**
-Last activity: 2026-02-04 — Completed 11-01-PLAN.md (Profile and NetworkTransport)
+Last activity: 2026-02-04 — Completed 11-02-PLAN.md (PythonNetworkTransport and Telephone)
 
-Progress: [██████████████░░] 96% — Phase 11 started (20/21 plans complete)
+Progress: [██████████████░░] 97% — Phase 11 plan 02 complete (21/22 plans complete)
 
 ## Milestone Summary
 
@@ -132,6 +132,9 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 | Profile.createCodec() factory | Encapsulates codec config in Profile, cleaner than Telephone mapping | 11-01 |
 | data object for profiles | Modern Kotlin idiom, provides automatic equals/hashCode/toString | 11-01 |
 | suspend fun establishLink() | Link establishment takes time, avoid blocking caller | 11-01 |
+| MixerSinkAdapter for Kotlin inheritance | Wraps Mixer to provide Sink interface for sources | 11-02 |
+| Internal link state in PythonNetworkTransport | Track linkActive locally, easier than querying Python | 11-02 |
+| Mute state persists in Telephone | Store transmitMuted, restore after reconfigureTransmitPipeline | 11-02 |
 
 ### Blockers/Concerns
 
@@ -155,6 +158,6 @@ Total Python lines to port: ~2,700 (excluding libs, platforms)
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 11-01-PLAN.md (Profile and NetworkTransport)
+Stopped at: Completed 11-02-PLAN.md (PythonNetworkTransport and Telephone)
 Resume file: None
-Next: 11-02 (Telephone class using Profile and NetworkTransport)
+Next: 11-03 (Full pipeline wiring and verification)

@@ -123,11 +123,41 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Profile sealed class and NetworkTransport interface
-- [ ] 11-02-PLAN.md — Telephone core (state machine, call/answer/hangup, mute)
-- [ ] 11-03-PLAN.md — Audio feedback (dial tone, busy tone, ringtone)
-- [ ] 11-04-PLAN.md — Python integration (call_manager wiring, PythonWrapperManager)
-- [ ] 11-05-PLAN.md — Unit tests (Profile, Telephone configuration logic)
+- [x] 11-01-PLAN.md — Profile sealed class and NetworkTransport interface
+- [x] 11-02-PLAN.md — Telephone core (state machine, call/answer/hangup, mute)
+- [x] 11-03-PLAN.md — Audio feedback (dial tone, busy tone, ringtone)
+- [x] 11-04-PLAN.md — Python integration (call_manager wiring, PythonWrapperManager)
+- [x] 11-05-PLAN.md — Unit tests (Profile, Telephone configuration logic)
+
+**VERIFICATION STATUS: GAPS_FOUND** — See 11-VERIFICATION.md for critical blockers
+
+### Phase 11.5: Signal Bridge Fix (GAP CLOSURE)
+**Goal:** Wire INTEGER signals from Python LXST to Kotlin Telephone
+**Depends on:** Phase 11 (uses existing NetworkPacketBridge)
+**Requirements:** NET-03
+**Gap Closure:** Fixes signal type mismatch (Python STRING → Kotlin INTEGER)
+**Success Criteria** (what must be TRUE):
+  1. NetworkPacketBridge has `receiveSignal(int)` method callable from Python
+  2. Python call_manager forwards LXST signals as integers to Kotlin
+  3. Kotlin logs show `Signal received: 0x06` when call establishes
+  4. Kotlin Telephone transitions through CONNECTING → ESTABLISHED
+
+Plans:
+- [ ] 11.5-01-PLAN.md — Wire integer signals from Python to Kotlin
+
+### Phase 11.6: Python Audio Disable (GAP CLOSURE)
+**Goal:** Disable Python LXST audio when Kotlin LXST handles audio
+**Depends on:** Phase 11.5 (signals must work first)
+**Requirements:** BRIDGE-01, QUAL-01
+**Gap Closure:** Eliminates dual audio pipeline conflict
+**Success Criteria** (what must be TRUE):
+  1. Python LXST has `set_kotlin_audio_active(bool)` method
+  2. Kotlin Telephone calls this when opening/closing pipelines
+  3. No Python audio logs (`📡 PKT.tx`, `🎤 LS:`) during Kotlin calls
+  4. No AudioFlinger BUFFER TIMEOUT errors during calls
+
+Plans:
+- [ ] 11.6-01-PLAN.md — Disable Python audio when Kotlin active
 
 ### Phase 12: Quality Verification
 **Goal**: Voice calls work smoothly on LAN without artifacts
@@ -154,5 +184,7 @@ Plans:
 | 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
 | 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
 | 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
-| 11. Telephony Integration | 0/5 | Not started | - |
+| 11. Telephony Integration | 5/5 | Gaps found | 2026-02-05 |
+| 11.5 Signal Bridge Fix | 0/1 | Not started | - |
+| 11.6 Python Audio Disable | 0/1 | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

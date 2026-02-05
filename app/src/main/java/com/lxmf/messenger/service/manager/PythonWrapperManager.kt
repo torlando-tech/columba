@@ -10,6 +10,8 @@ import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.reticulum.call.bridge.CallBridge
+import com.lxmf.messenger.reticulum.call.telephone.PythonNetworkTransport
+import com.lxmf.messenger.reticulum.call.telephone.Telephone
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,14 @@ class PythonWrapperManager(
     // Network packet bridge for Kotlin-Python audio packet handoff
     @Volatile
     private var networkPacketBridge: NetworkPacketBridge? = null
+
+    // Kotlin Telephone for voice calls
+    @Volatile
+    private var telephone: Telephone? = null
+
+    // PyObject reference for call_manager (needed for PythonNetworkTransport)
+    @Volatile
+    private var callManagerPyObject: PyObject? = null
 
     companion object {
         private const val TAG = "PythonWrapperManager"
@@ -172,6 +182,11 @@ class PythonWrapperManager(
             wrapperToShutdown = state.wrapper
             state.wrapper = null
             shutdownGeneration = state.initializationGeneration.get()
+
+            // Shutdown Kotlin Telephone
+            telephone?.shutdown()
+            telephone = null
+            callManagerPyObject = null
 
             // Shutdown network packet bridge
             networkPacketBridge?.shutdown()
@@ -402,6 +417,10 @@ class PythonWrapperManager(
 
                 if (success) {
                     Log.i(TAG, "📞 CallManager initialized successfully")
+
+                    // Store reference to call_manager for Telephone setup
+                    callManagerPyObject = wrapper.callAttr("get_call_manager")
+
                     true
                 } else {
                     val error =
@@ -418,6 +437,108 @@ class PythonWrapperManager(
                 false
             }
         } ?: false
+
+    /**
+     * Setup Kotlin Telephone with Python network transport.
+     *
+     * Creates PythonNetworkTransport wrapping NetworkPacketBridge and call_manager,
+     * then creates Telephone using that transport.
+     *
+     * Call this after setupCallManager() completes successfully.
+     *
+     * @return true if Telephone was initialized successfully
+     */
+    fun setupTelephone(): Boolean {
+        val callManager = callManagerPyObject ?: run {
+            Log.e(TAG, "Cannot setup Telephone: call_manager not initialized")
+            return false
+        }
+
+        val netBridge = networkPacketBridge ?: run {
+            Log.e(TAG, "Cannot setup Telephone: NetworkPacketBridge not initialized")
+            return false
+        }
+
+        return try {
+            val audioBridge = KotlinAudioBridge.getInstance(context)
+            val callBridge = CallBridge.getInstance()
+
+            // Create Python network transport
+            val transport = PythonNetworkTransport(netBridge, callManager)
+
+            // Create Telephone
+            telephone = Telephone(
+                context = context,
+                networkTransport = transport,
+                audioBridge = audioBridge,
+                networkPacketBridge = netBridge,
+                callBridge = callBridge
+            )
+
+            // Set up Python -> Kotlin callback for state events
+            try {
+                callManager.callAttr("set_kotlin_telephone_callback", ::handlePythonTelephoneEvent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set Kotlin telephone callback: ${e.message}")
+                // Non-fatal - Telephone can still work without this callback
+            }
+
+            Log.i(TAG, "📞 Kotlin Telephone initialized")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up Telephone: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Handle events from Python call_manager.
+     *
+     * Callback invoked by Python when call state changes occur on the Python side.
+     * This enables Python LXST to notify Kotlin Telephone of incoming calls and
+     * other network events.
+     *
+     * @param event Event type (e.g., "ringing", "established", "ended")
+     * @param data Event data map containing identity and other details
+     */
+    @Suppress("UNUSED_PARAMETER") // data used via map access
+    private fun handlePythonTelephoneEvent(event: String, data: Map<String, Any?>) {
+        Log.d(TAG, "📞 Python telephone event: $event")
+
+        when (event) {
+            "ringing" -> {
+                // Incoming call ringing notification
+                val identity = data["identity"] as? String
+                if (identity != null) {
+                    telephone?.onIncomingCall(identity)
+                }
+            }
+            "established" -> {
+                // Call established notification from Python
+                // Kotlin Telephone already handling this via signalling
+                Log.d(TAG, "📞 Python reports call established")
+            }
+            "ended" -> {
+                // Call ended from Python side
+                Log.d(TAG, "📞 Python reports call ended")
+            }
+            "busy" -> {
+                // Remote busy from Python
+                Log.d(TAG, "📞 Python reports remote busy")
+            }
+            "rejected" -> {
+                // Call rejected from Python
+                Log.d(TAG, "📞 Python reports call rejected")
+            }
+        }
+    }
+
+    /**
+     * Get the Kotlin Telephone instance.
+     *
+     * @return Telephone instance or null if not initialized
+     */
+    fun getTelephone(): Telephone? = telephone
 
     /**
      * Set native Kotlin stamp generator callback.

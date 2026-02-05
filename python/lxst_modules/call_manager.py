@@ -104,6 +104,15 @@ class CallManager:
 
     DEFAULT_PROFILE = PROFILE_MQ
 
+    # Signalling status codes (match Kotlin Signalling.kt)
+    STATUS_BUSY = 0x00
+    STATUS_REJECTED = 0x01
+    STATUS_CALLING = 0x02
+    STATUS_AVAILABLE = 0x03
+    STATUS_RINGING = 0x04
+    STATUS_CONNECTING = 0x05
+    STATUS_ESTABLISHED = 0x06
+
     def __init__(self, identity):
         """Initialize CallManager.
 
@@ -480,8 +489,12 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of incoming call: {e}", RNS.LOG_ERROR)
 
-        # Notify Kotlin Telephone
+        # Notify Kotlin Telephone (string event for UI)
         self._notify_kotlin('ringing', identity_hash)
+
+        # Send INTEGER signal to Kotlin Telephone state machine
+        self.send_signal(self.STATUS_RINGING)
+        RNS.log(f"Sent signal {self.STATUS_RINGING:#04x} (RINGING) to Kotlin", RNS.LOG_DEBUG)
 
     def _handle_established(self, identity):
         """Handle call established."""
@@ -499,8 +512,15 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"📞 Error notifying Kotlin of call established: {e}", RNS.LOG_ERROR)
 
-        # Notify Kotlin Telephone
+        # Notify Kotlin Telephone (string event for UI)
         self._notify_kotlin('established', identity_hash)
+
+        # Send INTEGER signals to Kotlin Telephone state machine
+        # CONNECTING first (opens pipelines), then ESTABLISHED (starts audio)
+        self.send_signal(self.STATUS_CONNECTING)
+        RNS.log(f"Sent signal {self.STATUS_CONNECTING:#04x} (CONNECTING) to Kotlin", RNS.LOG_DEBUG)
+        self.send_signal(self.STATUS_ESTABLISHED)
+        RNS.log(f"Sent signal {self.STATUS_ESTABLISHED:#04x} (ESTABLISHED) to Kotlin", RNS.LOG_DEBUG)
 
     def _handle_ended(self, identity):
         """Handle call ended."""
@@ -520,8 +540,13 @@ class CallManager:
         else:
             RNS.log("📞 WARNING: No Kotlin CallBridge set!", RNS.LOG_WARNING)
 
-        # Notify Kotlin Telephone
+        # Notify Kotlin Telephone (string event for UI)
         self._notify_kotlin('ended', identity_hash)
+
+        # Send INTEGER signal to Kotlin Telephone state machine
+        # STATUS_AVAILABLE indicates call ended and ready for new calls
+        self.send_signal(self.STATUS_AVAILABLE)
+        RNS.log(f"Sent signal {self.STATUS_AVAILABLE:#04x} (AVAILABLE) to Kotlin", RNS.LOG_DEBUG)
 
     def _handle_busy(self, identity):
         """Handle remote busy."""
@@ -534,8 +559,12 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of busy: {e}", RNS.LOG_ERROR)
 
-        # Notify Kotlin Telephone
+        # Notify Kotlin Telephone (string event for UI)
         self._notify_kotlin('busy', identity_hash)
+
+        # Send INTEGER signal to Kotlin Telephone state machine
+        self.send_signal(self.STATUS_BUSY)
+        RNS.log(f"Sent signal {self.STATUS_BUSY:#04x} (BUSY) to Kotlin", RNS.LOG_DEBUG)
 
     def _handle_rejected(self, identity):
         """Handle call rejected."""
@@ -548,8 +577,12 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error notifying Kotlin of rejection: {e}", RNS.LOG_ERROR)
 
-        # Notify Kotlin Telephone
+        # Notify Kotlin Telephone (string event for UI)
         self._notify_kotlin('rejected', identity_hash)
+
+        # Send INTEGER signal to Kotlin Telephone state machine
+        self.send_signal(self.STATUS_REJECTED)
+        RNS.log(f"Sent signal {self.STATUS_REJECTED:#04x} (REJECTED) to Kotlin", RNS.LOG_DEBUG)
 
     # ===== Network Bridge Methods (Python <-> Kotlin) =====
 

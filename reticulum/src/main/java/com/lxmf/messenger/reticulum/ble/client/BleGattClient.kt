@@ -84,7 +84,7 @@ class BleGattClient(
         var connectionJob: Job? = null,
         var handshakeInProgress: Boolean = false, // Track if handshake is already started
         var keepaliveJob: Job? = null, // Keepalive job to prevent supervision timeout
-        var consecutiveKeepaliveFailures: Int = 0, // Track consecutive keepalive failures
+        var consecutiveKeepaliveWriteFailures: Int = 0, // Track consecutive WRITE failures (not reset by receives)
     )
 
     // Active connections: address -> ConnectionData
@@ -113,7 +113,9 @@ class BleGattClient(
      * GATT callback handler.
      * Runs on main thread (Android requirement).
      */
-    private inner class GattCallback(private val address: String) : BluetoothGattCallback() {
+    private inner class GattCallback(
+        private val address: String,
+    ) : BluetoothGattCallback() {
         override fun onConnectionStateChange(
             gatt: BluetoothGatt,
             status: Int,
@@ -379,9 +381,7 @@ class BleGattClient(
     /**
      * Get current MTU for a connection.
      */
-    suspend fun getMtu(address: String): Int? {
-        return connectionsMutex.withLock { connections[address]?.mtu }
-    }
+    suspend fun getMtu(address: String): Int? = connectionsMutex.withLock { connections[address]?.mtu }
 
     /**
      * Determine if we should initiate connection based on MAC address comparison.
@@ -421,16 +421,12 @@ class BleGattClient(
     /**
      * Check if connected to a device.
      */
-    suspend fun isConnected(address: String): Boolean {
-        return connectionsMutex.withLock { connections.containsKey(address) }
-    }
+    suspend fun isConnected(address: String): Boolean = connectionsMutex.withLock { connections.containsKey(address) }
 
     /**
      * Get list of connected device addresses.
      */
-    suspend fun getConnectedDevices(): List<String> {
-        return connectionsMutex.withLock { connections.keys.toList() }
-    }
+    suspend fun getConnectedDevices(): List<String> = connectionsMutex.withLock { connections.keys.toList() }
 
     // ========== GATT Callback Handlers ==========
 
@@ -1100,8 +1096,8 @@ class BleGattClient(
     /**
      * Check if BLUETOOTH_CONNECT permission is granted.
      */
-    private fun hasConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT,
@@ -1109,16 +1105,21 @@ class BleGattClient(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     // ========== Connection Keepalive ==========
 
     /**
-     * Start connection keepalive to prevent Android supervision timeout.
-     * Sends a 1-byte keepalive packet every 15 seconds to keep the connection alive.
+     * Start connection keepalive to prevent Android BLE idle disconnects.
+     * Sends a 1-byte keepalive packet every 7 seconds to keep the connection alive.
      *
-     * Android BLE connections timeout after 20-30 seconds of inactivity (status code 8).
-     * This keepalive mechanism prevents that timeout during idle periods.
+     * Android has multiple timeout mechanisms:
+     * - GATT supervision timeout: 20-30 seconds of inactivity (status code 8)
+     * - L2CAP idle timer: ~20 seconds with no active logical channels
+     *
+     * The L2CAP idle timer is more aggressive - even if data is being RECEIVED,
+     * the connection can be killed if outgoing GATT writes are failing. This
+     * keepalive mechanism tracks WRITE failures separately and disconnects early
+     * to allow reconnection rather than waiting for L2CAP cleanup.
      *
      * @param address MAC address of the device
      */
@@ -1132,9 +1133,7 @@ class BleGattClient(
                     // Start new keepalive job
                     connData.keepaliveJob =
                         scope.launch {
-                            // Send immediate first keepalive to prevent supervision timeout
-                            // Android BLE connections can timeout after ~20s of inactivity,
-                            // so we send immediately rather than waiting for the first interval
+                            // Send immediate first keepalive to establish bidirectional traffic
                             try {
                                 val keepalivePacket = byteArrayOf(0x00)
                                 val result = sendData(address, keepalivePacket)
@@ -1156,31 +1155,34 @@ class BleGattClient(
 
                                     if (result.isSuccess) {
                                         Log.v(TAG, "Keepalive sent to $address")
-                                        // Reset failure counter on success
+                                        // Reset WRITE failure counter on successful write
                                         connectionsMutex.withLock {
-                                            connections[address]?.consecutiveKeepaliveFailures = 0
+                                            connections[address]?.consecutiveKeepaliveWriteFailures = 0
                                         }
                                     } else {
-                                        val failures =
+                                        // Track write failures - these indicate GATT session degradation
+                                        // even if we're still receiving data from peer
+                                        val writeFailures =
                                             connectionsMutex.withLock {
                                                 val conn = connections[address]
                                                 if (conn != null) {
-                                                    conn.consecutiveKeepaliveFailures++
-                                                    conn.consecutiveKeepaliveFailures
+                                                    conn.consecutiveKeepaliveWriteFailures++
+                                                    conn.consecutiveKeepaliveWriteFailures
                                                 } else {
                                                     0
                                                 }
                                             }
                                         Log.w(
                                             TAG,
-                                            "Keepalive failed for $address ($failures/${BleConstants.MAX_CONNECTION_FAILURES} failures)",
+                                            "Keepalive WRITE failed for $address ($writeFailures/${BleConstants.MAX_KEEPALIVE_WRITE_FAILURES} failures)",
                                         )
 
-                                        // Disconnect after too many consecutive failures
-                                        if (failures >= BleConstants.MAX_CONNECTION_FAILURES) {
+                                        // Disconnect early on write failures - don't wait for L2CAP cleanup
+                                        // The connection is degraded if writes are failing, even if receives work
+                                        if (writeFailures >= BleConstants.MAX_KEEPALIVE_WRITE_FAILURES) {
                                             Log.e(
                                                 TAG,
-                                                "Connection to $address is dead after $failures consecutive keepalive failures, disconnecting",
+                                                "GATT writes to $address are failing (L2CAP may be degraded), disconnecting to allow reconnection",
                                             )
                                             // Launch disconnect in separate coroutine to avoid blocking keepalive loop
                                             scope.launch {
@@ -1213,6 +1215,34 @@ class BleGattClient(
         }
         Log.v(TAG, "Stopped keepalive for $address")
     }
+
+    /**
+     * Send an immediate keepalive to a specific peripheral device.
+     *
+     * This is used during deduplication to keep the L2CAP link alive when
+     * closing the peripheral connection. Android's Bluetooth stack starts a
+     * 1-second idle timer when GATT connections are closed, which can tear
+     * down the underlying ACL link. By sending traffic just before closing
+     * peripheral, we keep the L2CAP layer active for the central connection.
+     *
+     * @param address MAC address of the peripheral to send keepalive to
+     * @return true if keepalive was sent successfully
+     */
+    suspend fun sendImmediateKeepalive(address: String): Boolean =
+        try {
+            val keepalivePacket = byteArrayOf(0x00)
+            val result = sendData(address, keepalivePacket)
+            if (result.isSuccess) {
+                Log.d(TAG, "Immediate keepalive sent to $address (deduplication)")
+                true
+            } else {
+                Log.w(TAG, "Failed to send immediate keepalive to $address")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending immediate keepalive to $address", e)
+            false
+        }
 
     /**
      * Shutdown the client and disconnect all devices.

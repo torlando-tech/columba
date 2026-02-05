@@ -120,7 +120,14 @@ Plans:
   3. Incoming calls ring (using ringtone if configured)
   4. Mid-call profile switching works
   5. Mute controls work correctly
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — Profile sealed class and NetworkTransport interface
+- [ ] 11-02-PLAN.md — Telephone core (state machine, call/answer/hangup, mute)
+- [ ] 11-03-PLAN.md — Audio feedback (dial tone, busy tone, ringtone)
+- [ ] 11-04-PLAN.md — Python integration (call_manager wiring, PythonWrapperManager)
+- [ ] 11-05-PLAN.md — Unit tests (Profile, Telephone configuration logic)
 
 ### Phase 12: Quality Verification
 **Goal**: Voice calls work smoothly on LAN without artifacts
@@ -147,5 +154,5 @@ Plans:
 | 8. Audio Sources & Sinks | 4/4 | Complete | 2026-02-04 |
 | 9. Mixer & Pipeline | 4/4 | Complete | 2026-02-04 |
 | 10. Network Bridge | 5/5 | Complete | 2026-02-04 |
-| 11. Telephony Integration | 0/? | Not started | - |
+| 11. Telephony Integration | 0/5 | Not started | - |
 | 12. Quality Verification | 0/? | Not started | - |

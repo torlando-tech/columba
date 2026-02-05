@@ -98,6 +98,17 @@ def install_instrumentation():
 
                         _counters['ls_ingest'] += 1
 
+                        # Check if Kotlin LXST is handling audio
+                        try:
+                            from lxst_modules.chaquopy_audio_backend import is_kotlin_audio_active
+                            if is_kotlin_audio_active():
+                                if _counters['ls_ingest'] % 100 == 1:
+                                    RNS.log(f"🎤 LS#{_counters['ls_ingest']}: Kotlin audio active, skipping ingest", RNS.LOG_DEBUG)
+                                time.sleep(self.frame_time)  # Maintain timing
+                                continue  # Skip this frame
+                        except ImportError:
+                            pass  # Not on Android
+
                         raw_max = 0
                         if frame_samples is not None and len(frame_samples) > 0:
                             raw_max = abs(frame_samples).max()

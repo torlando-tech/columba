@@ -56,15 +56,25 @@ class PythonNetworkTransport(
                 // Returns dict with "success" and optional "error" keys
                 val result = callManager.callAttr("call", destinationHashHex)
 
-                // Check result for success
-                val success = result?.get("success")?.toBoolean() ?: false
+                // Parse Python dict result using asMap() (Chaquopy pattern)
+                @Suppress("UNCHECKED_CAST")
+                val resultDict = result?.asMap() as? Map<PyObject, PyObject>
+                val success = resultDict
+                    ?.entries
+                    ?.find { it.key.toString() == "success" }
+                    ?.value
+                    ?.toBoolean() ?: false
 
                 if (success) {
                     linkActive = true
-                    Log.i(TAG, "Link established to ${destinationHashHex.take(16)}...")
+                    Log.i(TAG, "Call initiated to ${destinationHashHex.take(16)}...")
                 } else {
-                    val error = result?.get("error")?.toString() ?: "Unknown error"
-                    Log.w(TAG, "Link establishment failed: $error")
+                    val error = resultDict
+                        ?.entries
+                        ?.find { it.key.toString() == "error" }
+                        ?.value
+                        ?.toString() ?: "Unknown error"
+                    Log.w(TAG, "Call initiation failed: $error")
                 }
 
                 success
@@ -165,6 +175,23 @@ class PythonNetworkTransport(
      */
     internal fun markLinkInactive() {
         linkActive = false
+    }
+
+    /**
+     * Enable/disable Python LXST audio when Kotlin LXST handles audio.
+     *
+     * When true, Python recorder returns silence and player drops frames.
+     * This prevents dual audio pipeline conflict.
+     */
+    fun setKotlinAudioActive(active: Boolean) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                callManager.callAttr("set_kotlin_audio_active", active)
+                Log.d(TAG, "Set Kotlin audio active: $active")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting Kotlin audio active: ${e.message}")
+            }
+        }
     }
 }
 

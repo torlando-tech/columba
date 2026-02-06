@@ -101,9 +101,9 @@ fun VoiceCallScreen(
         android.util.Log.w("VoiceCallScreen", "📞 VoiceCallScreen opened! destHash=${destinationHash.take(16)}..., autoAnswer=$autoAnswer")
         android.util.Log.w("VoiceCallScreen", "📞 Current callState=$callState, hasAudioPermission=$hasAudioPermission")
 
-        // Auto-answer incoming call from notification
-        if (autoAnswer && (callState is CallState.Incoming || callState is CallState.Ringing)) {
-            android.util.Log.w("VoiceCallScreen", "📞 Auto-answering incoming call...")
+        // Auto-answer incoming call from notification or IncomingCallScreen
+        if (autoAnswer) {
+            android.util.Log.w("VoiceCallScreen", "📞 Auto-answering incoming call (callState=$callState)...")
             viewModel.answerCall()
             return@LaunchedEffect
         }

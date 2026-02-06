@@ -1,8 +1,8 @@
-package com.lxmf.messenger.reticulum.call.telephone
+package tech.torlando.lxst.telephone
 
-import com.lxmf.messenger.reticulum.audio.codec.Codec
-import com.lxmf.messenger.reticulum.audio.codec.Codec2
-import com.lxmf.messenger.reticulum.audio.codec.Opus
+import tech.torlando.lxst.codec.Codec
+import tech.torlando.lxst.codec.Codec2
+import tech.torlando.lxst.codec.Opus
 
 /**
  * Quality profile definitions for LXST telephony.

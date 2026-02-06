@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.call.telephone
+package tech.torlando.lxst.telephone
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

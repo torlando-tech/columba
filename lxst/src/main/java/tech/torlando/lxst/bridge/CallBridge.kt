@@ -1,7 +1,6 @@
-package com.lxmf.messenger.reticulum.call.bridge
+package tech.torlando.lxst.bridge
 
 import android.util.Log
-import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,31 +53,6 @@ interface PythonCallManagerInterface {
     fun muteMicrophone(muted: Boolean)
 
     fun setSpeaker(enabled: Boolean)
-}
-
-/**
- * Default implementation that wraps PyObject.
- */
-internal class PyObjectCallManager(private val pyObject: PyObject) : PythonCallManagerInterface {
-    override fun call(destinationHash: String) {
-        pyObject.callAttr("call", destinationHash)
-    }
-
-    override fun answer() {
-        pyObject.callAttr("answer")
-    }
-
-    override fun hangup() {
-        pyObject.callAttr("hangup")
-    }
-
-    override fun muteMicrophone(muted: Boolean) {
-        pyObject.callAttr("mute_microphone", muted)
-    }
-
-    override fun setSpeaker(enabled: Boolean) {
-        pyObject.callAttr("set_speaker", enabled)
-    }
 }
 
 /**
@@ -155,10 +129,6 @@ class CallBridge private constructor(
     @Volatile
     private var pythonCallManager: PythonCallManagerInterface? = null
 
-    // Python callbacks for state changes (set by Python call_manager)
-    @Volatile
-    private var onCallStateChanged: PyObject? = null
-
     // Callback for incoming calls (for IPC notification to UI process)
     @Volatile
     private var incomingCallListener: ((String) -> Unit)? = null
@@ -172,30 +142,17 @@ class CallBridge private constructor(
     @Volatile
     private var callStateChangedListener: ((String, String?) -> Unit)? = null
 
-    // ===== Python Call Manager Setup =====
+    // ===== Call Manager Setup =====
 
     /**
-     * Set the Python CallManager instance.
+     * Set the call manager interface implementation.
      *
      * Called by PythonWrapperManager after initializing the call manager.
+     * Accepts the PythonCallManagerInterface so `:lxst` has no PyObject dependency.
      */
-    fun setPythonCallManager(manager: PyObject) {
-        pythonCallManager = PyObjectCallManager(manager)
-        Log.i(TAG, "Python CallManager set")
-    }
-
-    /**
-     * Set a custom call manager interface (for testing).
-     */
-    internal fun setCallManagerInterface(manager: PythonCallManagerInterface?) {
+    fun setCallManager(manager: PythonCallManagerInterface?) {
         pythonCallManager = manager
-    }
-
-    /**
-     * Set callback for state changes (called by Python).
-     */
-    fun setOnCallStateChanged(callback: PyObject) {
-        onCallStateChanged = callback
+        Log.i(TAG, "CallManager ${if (manager != null) "set" else "cleared"}")
     }
 
     /**

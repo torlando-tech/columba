@@ -34,7 +34,7 @@ class LineSink(
         private const val TAG = "Columba:LineSink"
 
         // Buffer configuration (matches Python LXST Sinks.py:119-121)
-        const val MAX_FRAMES = 8           // Queue depth (must be > AUTOSTART_MIN + 1)
+        const val MAX_FRAMES = 15          // Queue depth: 900ms at 60ms/frame for network jitter absorption
         const val AUTOSTART_MIN = 5        // Pre-fill 5 frames (300ms at MQ) before playback
     }
 
@@ -158,23 +158,53 @@ class LineSink(
         Log.d(TAG, "Digest job started")
         var frameCount = 0L
         var underrunStartMs: Long? = null
+        var nextFrameNs = 0L
+        var framePeriodNs = frameTimeMs * 1_000_000L
+        var needsRebuffer = false
 
         while (isRunningFlag.get()) {
+            // After underrun: wait for queue to reach AUTOSTART_MIN before resuming.
+            // This prevents rapid underrun/recovery micro-cycles (12-18ms) that cause
+            // audible pops. A deliberate re-buffer silence is less noticeable.
+            if (needsRebuffer) {
+                if (frameQueue.size >= AUTOSTART_MIN) {
+                    needsRebuffer = false
+                    nextFrameNs = System.nanoTime()
+                    Log.d(TAG, "Re-buffer complete, queue=${frameQueue.size}, resuming playback")
+                } else {
+                    delay(frameTimeMs)
+                    continue
+                }
+            }
+
             // Poll with frame-period timeout so we almost always find a frame in steady state
             val frame = frameQueue.poll(frameTimeMs, TimeUnit.MILLISECONDS)
 
             if (frame != null) {
-                // Log underrun recovery
+                // Underrun recovery: decide whether to re-buffer or resume immediately.
+                // Brief glitches (<2 frame periods) just reset the clock — re-buffering
+                // would cause a 300-1000ms silence for a minor hiccup. Sustained gaps
+                // (>=2 frame periods) need re-buffering to absorb continued jitter.
                 if (underrunStartMs != null) {
                     val underrunMs = System.currentTimeMillis() - underrunStartMs
-                    Log.d(TAG, "Underrun ended after ${underrunMs}ms")
+                    underrunStartMs = null
+                    if (underrunMs >= frameTimeMs * 2) {
+                        Log.d(TAG, "Underrun after ${underrunMs}ms, re-buffering to $AUTOSTART_MIN frames")
+                        needsRebuffer = true
+                        frameQueue.offer(frame) // Put back (queue was empty, order preserved)
+                        continue
+                    } else {
+                        Log.d(TAG, "Brief underrun ended after ${underrunMs}ms, resuming")
+                        nextFrameNs = System.nanoTime() // Reset clock
+                    }
                 }
-                underrunStartMs = null
                 frameCount++
 
-                // Calculate frame time from first frame
+                // Calculate frame time from first frame and initialize monotonic clock
                 if (frameCount == 1L && sampleRate > 0) {
                     frameTimeMs = ((frame.size.toFloat() / sampleRate) * 1000).toLong()
+                    framePeriodNs = frameTimeMs * 1_000_000L
+                    nextFrameNs = System.nanoTime()
                     Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples at ${sampleRate}Hz)")
                 }
 
@@ -186,20 +216,24 @@ class LineSink(
                 // Convert float32 to int16 bytes
                 val frameBytes = float32ToBytes(frame)
 
-                // Write to AudioTrack via bridge, measuring write duration
-                val writeStartNs = System.nanoTime()
+                // Write to AudioTrack via bridge
                 bridge.writeAudio(frameBytes)
-                val writeElapsedMs = (System.nanoTime() - writeStartNs) / 1_000_000L
 
-                // Pace output at frame rate to prevent burst-drain oscillation.
-                // When AudioTrack buffer has room (after underrun), writeAudio returns
-                // instantly. Without pacing, we'd drain the entire queue in microseconds,
-                // causing another underrun. Pacing keeps one frame per period, turning
-                // the queue into a proper jitter buffer.
-                // Skip pacing during initial fill (first AUTOSTART_MIN frames) so the
-                // AudioTrack buffer fills quickly.
-                if (frameCount > AUTOSTART_MIN.toLong() && writeElapsedMs < frameTimeMs - 5) {
-                    delay(frameTimeMs - writeElapsedMs - 2) // -2ms safety margin
+                // Monotonic clock pacing: target absolute time for next frame.
+                // Unlike relative delay(), this self-corrects jitter and has no
+                // cumulative drift from safety margins.
+                nextFrameNs += framePeriodNs
+                val remainingNs = nextFrameNs - System.nanoTime()
+
+                when {
+                    // On schedule or slightly ahead: delay until target
+                    remainingNs > 1_000_000L ->
+                        delay(remainingNs / 1_000_000L)
+                    // Fell behind by >3 frame periods (underrun recovery): reset clock
+                    // instead of trying to catch up (which would drain the burst instantly)
+                    remainingNs < -framePeriodNs * 3 ->
+                        nextFrameNs = System.nanoTime()
+                    // Slightly behind (<3 frames): skip delay, will self-correct
                 }
 
                 // Drop oldest if buffer is lagging (prevents increasing delay)

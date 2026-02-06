@@ -2,9 +2,10 @@ package com.lxmf.messenger.reticulum.call.telephone
 
 import android.util.Log
 import com.chaquo.python.PyObject
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.telephone.NetworkTransport
 
 /**
  * NetworkTransport implementation that wraps Python call_manager via Chaquopy.

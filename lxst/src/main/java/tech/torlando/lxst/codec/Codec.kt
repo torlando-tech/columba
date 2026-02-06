@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.codec
+package tech.torlando.lxst.codec
 
 import android.media.AudioAttributes
 import android.media.AudioFormat

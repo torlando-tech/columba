@@ -1,10 +1,10 @@
-package com.lxmf.messenger.reticulum.call.telephone
+package tech.torlando.lxst.telephone
 
 import android.content.Context
-import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
-import com.lxmf.messenger.reticulum.audio.lxst.Signalling
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
+import tech.torlando.lxst.bridge.KotlinAudioBridge
+import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.audio.Signalling
+import tech.torlando.lxst.bridge.CallBridge
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every

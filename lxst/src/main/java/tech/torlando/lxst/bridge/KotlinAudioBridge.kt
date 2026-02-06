@@ -289,15 +289,17 @@ class KotlinAudioBridge(
             audioTrack?.release()
             audioTrack = null
 
-            // Clear communication device on Android 12+
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                audioManager.clearCommunicationDevice()
-                Log.i(TAG, "📞 Communication device cleared")
+            // Only reset audio mode if recording is not still active.
+            // Both paths depend on MODE_IN_COMMUNICATION for proper routing,
+            // AEC, and NS — the last one to stop cleans up.
+            if (!isRecording.get()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.clearCommunicationDevice()
+                    Log.i(TAG, "📞 Communication device cleared")
+                }
+                audioManager.mode = AudioManager.MODE_NORMAL
             }
-
-            // Reset audio mode
-            audioManager.mode = AudioManager.MODE_NORMAL
-            Log.i(TAG, "Playback stopped")
+            Log.i(TAG, "Playback stopped (recording still active: ${isRecording.get()})")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping playback", e)
         }
@@ -608,7 +610,16 @@ class KotlinAudioBridge(
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
-            Log.i(TAG, "Recording stopped")
+
+            // Symmetric cleanup: reset audio mode only if playback is not still active.
+            if (!isPlaying.get()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.clearCommunicationDevice()
+                    Log.i(TAG, "📞 Communication device cleared")
+                }
+                audioManager.mode = AudioManager.MODE_NORMAL
+            }
+            Log.i(TAG, "Recording stopped (playback still active: ${isPlaying.get()})")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping recording", e)
         }
@@ -860,6 +871,17 @@ class KotlinAudioBridge(
     fun setOnPlaybackError(callback: (String) -> Unit) {
         onPlaybackError = callback
     }
+
+    // ===== Diagnostics =====
+
+    /**
+     * Get AudioTrack underrun count.
+     *
+     * Returns the number of times the AudioTrack ran out of data since
+     * playback started. Each underrun is an audible pop/click.
+     * Only called by diagnostics and instrumented tests — never on the audio hot path.
+     */
+    fun getUnderrunCount(): Int = audioTrack?.underrunCount ?: 0
 
     // ===== Lifecycle =====
 

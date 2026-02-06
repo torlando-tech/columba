@@ -5,13 +5,15 @@ import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.lxmf.messenger.crypto.StampGenerator
-import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
 import com.lxmf.messenger.reticulum.call.telephone.PythonNetworkTransport
-import com.lxmf.messenger.reticulum.call.telephone.Telephone
+import tech.torlando.lxst.bridge.AudioPacketHandler
+import tech.torlando.lxst.bridge.CallBridge
+import tech.torlando.lxst.bridge.KotlinAudioBridge
+import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.bridge.PythonCallManagerInterface
+import tech.torlando.lxst.telephone.Telephone
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -421,11 +423,34 @@ class PythonWrapperManager(
                     // Store reference to call_manager for Telephone setup
                     callManagerPyObject = wrapper.callAttr("get_call_manager")
 
-                    // Register call_manager as network handler for Kotlin→Python audio packets.
-                    // Without this, Packetizer encodes audio but NetworkPacketBridge's consumer
-                    // loop silently drops all packets (pythonNetworkHandler is null).
                     callManagerPyObject?.let { cm ->
-                        netBridge.setPythonNetworkHandler(cm)
+                        // Register AudioPacketHandler for Kotlin→Python audio/signal packets.
+                        // Without this, Packetizer encodes audio but NetworkPacketBridge's consumer
+                        // loop silently drops all packets (packetHandler is null).
+                        netBridge.setPacketHandler(object : AudioPacketHandler {
+                            override fun receiveAudioPacket(packet: ByteArray) {
+                                cm.callAttr("receive_audio_packet", packet)?.close()
+                            }
+                            override fun receiveSignal(signal: Int) {
+                                cm.callAttr("receive_signal", signal)?.close()
+                            }
+                        })
+
+                        // Register PythonCallManagerInterface wrapper for CallBridge.
+                        // Kotlin wraps the PyObject so :lxst has no Chaquopy dependency.
+                        callBridge.setCallManager(object : PythonCallManagerInterface {
+                            override fun call(destinationHash: String) {
+                                cm.callAttr("call", destinationHash)
+                            }
+                            override fun answer() { cm.callAttr("answer") }
+                            override fun hangup() { cm.callAttr("hangup") }
+                            override fun muteMicrophone(muted: Boolean) {
+                                cm.callAttr("mute_microphone", muted)
+                            }
+                            override fun setSpeaker(enabled: Boolean) {
+                                cm.callAttr("set_speaker", enabled)
+                            }
+                        })
                     }
 
                     true

@@ -1,10 +1,11 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
-import com.lxmf.messenger.reticulum.audio.codec.Codec
-import com.lxmf.messenger.reticulum.audio.codec.Null
+import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.codec.Codec
+import tech.torlando.lxst.codec.Null
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +53,7 @@ class LinkSource(
     // State
     private val shouldRun = AtomicBoolean(false)
     private var debugPacketCount = 0 // TEMP: diagnostic counter
+    private val inboundCount = AtomicInteger(0) // Fast counter for GIL-held path
 
     /**
      * Codec for decoding received frames.
@@ -85,6 +87,7 @@ class LinkSource(
      */
     fun onPacketReceived(packetData: ByteArray) {
         if (!shouldRun.get()) return
+        inboundCount.incrementAndGet()
 
         synchronized(receiveLock) {
             // Drop oldest if full (backpressure)
@@ -112,12 +115,15 @@ class LinkSource(
         if (data.size < 2) return  // Need header + at least 1 byte of frame
         val currentSink = sink ?: return
 
-        // TEMP: Log first 5 packets for diagnostics
+        // Diagnostic logging
         debugPacketCount++
         if (debugPacketCount <= 5) {
             val header = data[0].toInt() and 0xFF
             val preview = data.take(8).joinToString(",") { "0x${(it.toInt() and 0xFF).toString(16).padStart(2, '0')}" }
             Log.w(TAG, "PKT#$debugPacketCount: size=${data.size} hdr=0x${header.toString(16).padStart(2, '0')} preview=[$preview] codec=$codec")
+        } else if (debugPacketCount % 100 == 0) {
+            val received = inboundCount.get()
+            Log.d(TAG, "RX: decoded=$debugPacketCount received=$received dropped=${received - debugPacketCount}")
         }
 
         // Strip codec header byte (first byte), remaining is encoded frame

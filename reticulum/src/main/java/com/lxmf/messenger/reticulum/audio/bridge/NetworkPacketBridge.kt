@@ -7,6 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 /**
@@ -61,6 +63,49 @@ class NetworkPacketBridge private constructor(
     // Dedicated bridge thread for non-blocking Python calls (avoids GIL contention)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // Audio packet channel — serializes Kotlin→Python calls to prevent
+    // concurrent GIL acquisition from multiple IO threads.
+    // DROP_OLDEST provides backpressure: if Python can't keep up, old packets are dropped.
+    private val packetChannel = Channel<ByteArray>(
+        capacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    // TEMP: Diagnostic counter for consumer coroutine
+    @Volatile
+    private var consumerDeliveryCount = 0
+
+    init {
+        // Single consumer drains audio packets to Python sequentially.
+        // This prevents multiple concurrent Chaquopy callAttr() invocations
+        // from the Dispatchers.IO thread pool, which caused GIL contention
+        // and native SIGSEGV crashes in CPython's PyObject_GetItem.
+        scope.launch {
+            for (packet in packetChannel) {
+                try {
+                    val handler = pythonNetworkHandler
+                    if (handler == null) {
+                        if (consumerDeliveryCount < 5) Log.w(TAG, "Consumer: handler null, dropping packet")
+                    } else {
+                        // CRITICAL: .close() releases the returned PyObject (Python None)
+                        // immediately on this thread while the GIL is available.
+                        // Without .close(), discarded PyObjects pile up for Java's finalizer,
+                        // which can't acquire the GIL fast enough — causing
+                        // FinalizerWatchdogDaemon to kill the process after 60s.
+                        handler.callAttr("receive_audio_packet", packet)?.close()
+                        consumerDeliveryCount++
+                        if (consumerDeliveryCount <= 5 || consumerDeliveryCount % 100 == 0) {
+                            Log.w(TAG, "Consumer delivered #$consumerDeliveryCount to Python (${packet.size} bytes)")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Consumer error: ${e.message}")
+                }
+            }
+            Log.e(TAG, "Consumer coroutine exited!")
+        }
+    }
+
     // Python network handler reference (set by PythonWrapperManager)
     // Provides: send_audio_packet(ByteArray), send_signal(Int)
     @Volatile
@@ -87,14 +132,7 @@ class NetworkPacketBridge private constructor(
      * @param encodedFrame Encoded audio data (Opus/Codec2/Null bytes with codec header)
      */
     fun sendPacket(encodedFrame: ByteArray) {
-        scope.launch {
-            try {
-                pythonNetworkHandler?.callAttr("send_audio_packet", encodedFrame)
-            } catch (_: Exception) {
-                // Silent failure - logging would block audio thread
-                // Packet loss is acceptable (fire-and-forget)
-            }
-        }
+        packetChannel.trySend(encodedFrame)
     }
 
     /**
@@ -108,7 +146,7 @@ class NetworkPacketBridge private constructor(
     fun sendSignal(signal: Int) {
         scope.launch {
             try {
-                pythonNetworkHandler?.callAttr("send_signal", signal)
+                pythonNetworkHandler?.callAttr("receive_signal", signal)?.close()
             } catch (_: Exception) {
                 // Silent failure - signalling is fire-and-forget
             }
@@ -217,6 +255,7 @@ class NetworkPacketBridge private constructor(
      */
     fun shutdown() {
         Log.i(TAG, "Shutting down network bridge")
+        packetChannel.close()
         scope.cancel()
         pythonNetworkHandler = null
         onPacketReceived = null

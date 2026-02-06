@@ -1,5 +1,6 @@
 package com.lxmf.messenger.reticulum.audio.lxst
 
+import android.util.Log
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import com.lxmf.messenger.reticulum.audio.codec.Codec
 import com.lxmf.messenger.reticulum.audio.codec.Codec2
@@ -38,6 +39,8 @@ class Packetizer(
 ) : RemoteSink() {
 
     companion object {
+        private const val TAG = "Columba:Packetizer"
+
         // Codec header bytes (match Python LXST Codecs/__init__.py)
         const val CODEC_NULL: Byte = 0xFF.toByte()
         const val CODEC_RAW: Byte = 0x00.toByte()
@@ -46,6 +49,11 @@ class Packetizer(
     }
 
     private val shouldRun = AtomicBoolean(false)
+
+    // TEMP: Diagnostic counters
+    private var debugFrameCount = 0
+    private var debugEncodeErrors = 0
+    private var debugSendCount = 0
 
     /**
      * Codec to use for encoding frames.
@@ -111,13 +119,28 @@ class Packetizer(
         if (!shouldRun.get()) return
 
         // Get codec from property
-        val activeCodec = codec ?: return
+        val activeCodec = codec ?: run {
+            if (debugFrameCount++ < 5) Log.w(TAG, "TX#$debugFrameCount: no codec set!")
+            return
+        }
+
+        debugFrameCount++
+
+        // TEMP: Log first 5 frames for diagnostics
+        if (debugFrameCount <= 5) {
+            val maxAmp = frame.maxOrNull() ?: 0f
+            Log.w(TAG, "TX#$debugFrameCount: frame=${frame.size} samples, maxAmp=$maxAmp, codec=$activeCodec")
+        }
 
         // Encode frame to bytes
         val encodedFrame = try {
             activeCodec.encode(frame)
-        } catch (_: Exception) {
-            // Silent failure in hot path - drop frame
+        } catch (e: Exception) {
+            debugEncodeErrors++
+            // TEMP: Log first 5 encode errors
+            if (debugEncodeErrors <= 5) {
+                Log.e(TAG, "TX encode error #$debugEncodeErrors: ${e.message}, frame=${frame.size} samples")
+            }
             return
         }
 
@@ -129,8 +152,14 @@ class Packetizer(
         // Send to Python via bridge (non-blocking)
         try {
             bridge.sendPacket(packet)
-        } catch (_: Exception) {
+            debugSendCount++
+            // TEMP: Log every 50th send
+            if (debugSendCount <= 5 || debugSendCount % 50 == 0) {
+                Log.w(TAG, "TX sent #$debugSendCount: ${packet.size} bytes, hdr=0x${(packet[0].toInt() and 0xFF).toString(16)}")
+            }
+        } catch (e: Exception) {
             // Mark failure state and invoke callback
+            Log.e(TAG, "TX send error: ${e.message}")
             transmitFailure = true
             failureCallback?.invoke()
         }

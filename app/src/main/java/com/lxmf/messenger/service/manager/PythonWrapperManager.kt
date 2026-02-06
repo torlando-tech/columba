@@ -421,6 +421,13 @@ class PythonWrapperManager(
                     // Store reference to call_manager for Telephone setup
                     callManagerPyObject = wrapper.callAttr("get_call_manager")
 
+                    // Register call_manager as network handler for Kotlin→Python audio packets.
+                    // Without this, Packetizer encodes audio but NetworkPacketBridge's consumer
+                    // loop silently drops all packets (pythonNetworkHandler is null).
+                    callManagerPyObject?.let { cm ->
+                        netBridge.setPythonNetworkHandler(cm)
+                    }
+
                     true
                 } else {
                     val error =

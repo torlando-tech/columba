@@ -6,6 +6,7 @@ import android.media.RingtoneManager
 import android.util.Log
 import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
+import com.lxmf.messenger.reticulum.audio.codec.Opus
 import com.lxmf.messenger.reticulum.audio.lxst.LinkSource
 import com.lxmf.messenger.reticulum.audio.lxst.LineSource
 import com.lxmf.messenger.reticulum.audio.lxst.LineSink
@@ -402,7 +403,14 @@ class Telephone(
      * Handle signal received from remote peer.
      *
      * Parses signal type and updates state machine accordingly.
+     *
+     * IMPORTANT: @Synchronized because Python sends signals from Chaquopy
+     * threads. CONNECTING (0x05) and ESTABLISHED (0x06) can arrive 4ms apart
+     * on different threads. Without synchronization, startPipelines() races
+     * ahead of openPipelines(), leaving pipeline components created but never
+     * started — no audio flows.
      */
+    @Synchronized
     private fun onSignalReceived(signal: Int) {
         Log.d(TAG, "Signal received: 0x${signal.toString(16)} (status=$callStatus)")
 
@@ -426,9 +434,14 @@ class Telephone(
             }
 
             signal == Signalling.STATUS_AVAILABLE -> {
-                Log.d(TAG, "Line available")
-                callStatus = signal
-                // Identification is handled by Python/Reticulum layer
+                // Matches Python __available(): if in active call, treat as hangup
+                if (callStatus > Signalling.STATUS_AVAILABLE) {
+                    Log.d(TAG, "Line available during active call, ending call")
+                    hangup()
+                } else {
+                    Log.d(TAG, "Line available")
+                    callStatus = signal
+                }
             }
 
             signal == Signalling.STATUS_RINGING -> {
@@ -460,7 +473,10 @@ class Telephone(
                 if (!isIncomingCall) {
                     // Outgoing call: remote setup complete
                     Log.d(TAG, "Call established")
+                    timeoutJob?.cancel()
+                    timeoutJob = null
                     disableDialTone()
+                    openPipelines()  // Ensure pipelines created (idempotent)
                     startPipelines()
                     callStatus = signal
                     remoteIdentityHash?.let { callBridge.onCallEstablished(it) }
@@ -571,7 +587,7 @@ class Telephone(
     private fun resetDiallingPipelines() {
         Log.d(TAG, "Resetting dialling pipelines")
 
-        audioOutput?.stop()
+        audioOutput?.release()  // release() prevents auto-restart from stale mixer frames
         dialTone?.stop()
         receiveMixer?.stop()
 
@@ -590,9 +606,6 @@ class Telephone(
      */
     private fun openPipelines() {
         Log.d(TAG, "Opening audio pipelines")
-
-        // Disable Python LXST audio - Kotlin will handle it
-        (networkTransport as? PythonNetworkTransport)?.setKotlinAudioActive(true)
 
         // Ensure dialling pipelines exist
         prepareDiallingPipelines()
@@ -630,10 +643,26 @@ class Telephone(
 
         // Create link source (receive from network)
         if (linkSource == null) {
+            val decodeCodec = activeProfile.createDecodeCodec()
+            val decodeRate = (decodeCodec as? Opus)?.actualDecodeSamplerate
+                ?: decodeCodec.preferredSamplerate ?: 48000
+
             linkSource = LinkSource(
                 bridge = networkPacketBridge,
                 sink = receiveMixerAsSink
-            )
+            ).apply {
+                codec = decodeCodec
+                sampleRate = decodeRate
+            }
+
+            // Reconfigure audio output for decode rate. The dial tone may have
+            // set LineSink to 48kHz; decoded Opus audio may be at a different
+            // rate (e.g. 16kHz due to wuqi-opus buffer cap). Stop and reconfigure
+            // so AudioTrack is created at the correct rate on auto-start.
+            audioOutput?.let { sink ->
+                if (sink.isRunning()) sink.stop()
+                sink.configure(decodeRate, 1)
+            }
         }
 
         // Signal connecting to remote (for incoming calls)
@@ -675,9 +704,6 @@ class Telephone(
         dialTone?.stop()
 
         Log.d(TAG, "Audio pipelines stopped")
-
-        // Re-enable Python LXST audio after Kotlin pipelines closed
-        (networkTransport as? PythonNetworkTransport)?.setKotlinAudioActive(false)
     }
 
     /**
@@ -955,6 +981,19 @@ class Telephone(
 
         activeProfile = profile
         reconfigureTransmitPipeline()
+
+        // Update receive decoder for new profile
+        val decodeCodec = profile.createDecodeCodec()
+        val decodeRate = (decodeCodec as? Opus)?.actualDecodeSamplerate
+            ?: decodeCodec.preferredSamplerate ?: 48000
+        linkSource?.codec = decodeCodec
+        linkSource?.sampleRate = decodeRate
+
+        // Reconfigure audio output for new decode rate
+        audioOutput?.let { sink ->
+            if (sink.isRunning()) sink.stop()
+            sink.configure(decodeRate, 1)
+        }
     }
 
     // ===== Error Handling =====

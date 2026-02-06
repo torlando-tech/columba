@@ -45,6 +45,7 @@ class LineSink(
 
     // Playback state
     private val isRunningFlag = AtomicBoolean(false)
+    private val releasedFlag = AtomicBoolean(false)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Audio configuration (detected from first frame or set explicitly)
@@ -76,6 +77,9 @@ class LineSink(
      * @param source Optional source reference for sample rate detection
      */
     override fun handleFrame(frame: FloatArray, source: Source?) {
+        // Prevent stale frames from auto-restarting a released sink
+        if (releasedFlag.get()) return
+
         // Detect sample rate from source on first frame
         if (sampleRate == 0) {
             sampleRate = source?.sampleRate ?: KotlinAudioBridge.DEFAULT_SAMPLE_RATE
@@ -206,6 +210,7 @@ class LineSink(
      * Release resources.
      */
     fun release() {
+        releasedFlag.set(true)
         stop()
         scope.cancel()
     }

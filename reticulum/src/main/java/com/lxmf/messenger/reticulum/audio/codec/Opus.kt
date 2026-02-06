@@ -86,6 +86,16 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
         fun maxBytesPerFrame(bitrateCeiling: Int, frameDurationMs: Float): Int {
             return ceil((bitrateCeiling / 8.0) * (frameDurationMs / 1000.0)).toInt()
         }
+
+        // WORKAROUND: wuqi-opus (cn.entertech.android:wuqi-opus:1.0.3) hardcodes
+        // a 1024-sample output buffer in native decode() (CodecOpus.cpp):
+        //   opus_int16 *outBuffer = (opus_int16*) malloc(sizeof(opus_int16) * 1024);
+        // If opus_decode() output exceeds 1024 samples, it writes past the buffer,
+        // corrupting the native heap and crashing CPython in the same process.
+        // We cap the decoder sample rate so max frame duration fits in 1024 samples.
+        // TODO: Replace wuqi-opus with libopus-android (caller-allocates pattern)
+        private const val WUQI_OPUS_MAX_DECODE_SAMPLES = 1024
+        private val OPUS_SUPPORTED_DECODE_RATES = listOf(48000, 24000, 16000, 12000, 8000)
     }
 
     private val opusJni = OpusJni()
@@ -95,6 +105,15 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
     private var bitrateCeiling: Int = 0
     private var encoderConfigured = false
     private var decoderConfigured = false
+
+    // Decode rate may differ from encoder rate due to wuqi-opus buffer limit.
+    // Opus decoders resample internally (RFC 6716 §4.3) so this is lossless
+    // up to the capped rate's Nyquist frequency.
+    private var decodeSamplerate: Int = 0
+
+    /** Actual sample rate the decoder outputs at. May be lower than the profile's
+     *  native rate due to wuqi-opus buffer constraint (see companion object). */
+    val actualDecodeSamplerate: Int get() = decodeSamplerate
 
     // Track output statistics (matches Python)
     private var outputBytes = 0L
@@ -118,10 +137,34 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
         this.samplerate = profileSamplerate(profile)
         this.bitrateCeiling = profileBitrateCeiling(profile)
         this.preferredSamplerate = samplerate
+        this.decodeSamplerate = computeSafeDecodeSamplerate()
 
         // Reset configuration flags (will be set on first encode/decode)
         encoderConfigured = false
         decoderConfigured = false
+    }
+
+    /**
+     * Compute the highest Opus-supported decode rate where the max frame
+     * duration (60ms) fits within wuqi-opus's 1024-sample output buffer.
+     *
+     * The buffer holds 1024 total int16 samples (not per-channel), so for
+     * stereo the per-channel limit is 512. opus_decode's frame_size param
+     * is per-channel, so we divide by channels.
+     *
+     * Examples:
+     * - MQ (mono, 60ms): 16kHz → 960 samples/ch ≤ 1024/1
+     * - SHQ (stereo, 60ms): 8kHz → 480 samples/ch ≤ 1024/2
+     * - LL (mono, 20ms): 48kHz → 960 samples/ch ≤ 1024/1 (no cap)
+     */
+    private fun computeSafeDecodeSamplerate(): Int {
+        val maxFrameMs = FRAME_MAX_MS
+        val maxSamplesPerChannel = WUQI_OPUS_MAX_DECODE_SAMPLES / channels
+        val maxSamplesAtNativeRate = (samplerate * maxFrameMs / 1000f).toInt()
+        if (maxSamplesAtNativeRate <= maxSamplesPerChannel) return samplerate
+        return OPUS_SUPPORTED_DECODE_RATES.first {
+            (it * maxFrameMs / 1000f).toInt() <= maxSamplesPerChannel
+        }
     }
 
     /**
@@ -186,9 +229,15 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
             throw CodecError("Cannot encode empty frame")
         }
 
-        // Convert float32 to int16 (Opus encoder expects int16 input)
-        val int16Samples = ShortArray(frame.size) { i ->
-            (frame[i] * 32767f).toInt().coerceIn(-32768, 32767).toShort()
+        // Convert float32 to int16 PCM bytes (little-endian) for byte[] API.
+        // Using the byte[] overload produces wire-compatible Opus packets directly,
+        // avoiding the short[] overload's internal packing format which differs
+        // from standard Opus byte streams.
+        val pcmBytes = ByteArray(frame.size * 2)
+        for (i in frame.indices) {
+            val sample = (frame[i] * 32767f).toInt().coerceIn(-32768, 32767)
+            pcmBytes[i * 2] = (sample and 0xFF).toByte()
+            pcmBytes[i * 2 + 1] = (sample shr 8).toByte()
         }
 
         // Calculate frame duration
@@ -219,14 +268,11 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
         // Update bitrate for this frame
         updateBitrate(frameDurationMs)
 
-        // Encode
+        // Encode using byte[] API — returns wire-compatible Opus packet bytes
         val frameSize = getFrameSizeConstant(frame.size)
 
-        val encoded = opusJni.encode(int16Samples, frameSize)
+        val encodedBytes = opusJni.encode(pcmBytes, frameSize)
             ?: throw CodecError("Opus encode failed")
-
-        // Convert ShortArray to ByteArray for wire compatibility
-        val encodedBytes = ByteArray(encoded.size) { encoded[it].toByte() }
 
         // Track statistics
         outputBytes += encodedBytes.size
@@ -245,9 +291,10 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
      * @return Float32 samples in range [-1.0, 1.0]
      */
     override fun decode(frameBytes: ByteArray): FloatArray {
-        // Configure decoder on first use
+        // Configure decoder on first use — at the safe decode rate, not the
+        // profile's native rate. Opus decoders resample internally (RFC 6716).
         if (!decoderConfigured) {
-            val sampleRate = getSampleRateConstant(samplerate)
+            val sampleRate = getSampleRateConstant(decodeSamplerate)
             val channelConfig = if (channels == 1) Constants.Channels.mono() else Constants.Channels.stereo()
 
             val result = opusJni.decoderInit(sampleRate, channelConfig)
@@ -258,17 +305,31 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
             decoderConfigured = true
         }
 
-        // Convert ByteArray to ShortArray for Opus decoder
-        val frameShorts = ShortArray(frameBytes.size) { frameBytes[it].toShort() }
+        // Decode using byte[] API — frameBytes is a standard Opus packet.
+        // The byte[] overload passes raw bytes directly to opus_decode(),
+        // unlike the short[] overload which uses an internal packing format
+        // incompatible with standard Opus byte streams from other encoders.
+        //
+        // Frame size is capped to fit wuqi-opus's hardcoded 1024-sample buffer.
+        // At decodeSamplerate (e.g. 16kHz for 60ms mono), max frame duration
+        // of 60ms = 960 samples/ch ≤ 1024/1. For stereo, buffer is halved.
+        val maxSamplesPerChannel = minOf(
+            decodeSamplerate * 120 / 1000,
+            WUQI_OPUS_MAX_DECODE_SAMPLES / channels
+        )
+        val decodedBytes = opusJni.decode(
+            frameBytes,
+            Constants.FrameSize._custom(maxSamplesPerChannel),
+            0  // FEC disabled
+        ) ?: throw CodecError("Opus decode failed")
 
-        // Decode (frame size is just a hint, decoder determines actual size from packet)
-        // Use FEC disabled (0) for standard decoding
-        val decoded = opusJni.decode(frameShorts, Constants.FrameSize._960(), 0)
-            ?: throw CodecError("Opus decode failed")
-
-        // Convert int16 to float32
-        return FloatArray(decoded.size) { i ->
-            decoded[i] / 32768f
+        // Convert int16 PCM bytes (little-endian) to float32
+        val sampleCount = decodedBytes.size / 2
+        return FloatArray(sampleCount) { i ->
+            val lo = decodedBytes[i * 2].toInt() and 0xFF
+            val hi = decodedBytes[i * 2 + 1].toInt()
+            val sample = (hi shl 8) or lo
+            sample / 32768f
         }
     }
 
@@ -300,6 +361,7 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
             PROFILE_AUDIO_MAX -> "AUDIO_MAX"
             else -> "UNKNOWN"
         }
-        return "Opus($profileName, ${channels}ch, ${samplerate}Hz, ${bitrateCeiling}bps)"
+        val decodeInfo = if (decodeSamplerate != samplerate) ", decode@${decodeSamplerate}Hz" else ""
+        return "Opus($profileName, ${channels}ch, ${samplerate}Hz, ${bitrateCeiling}bps$decodeInfo)"
     }
 }

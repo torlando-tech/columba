@@ -1306,7 +1306,7 @@ class ReticulumServiceBinder(
         }
         callBridge.setCallStateChangedListener { state, identityHash ->
             // Cancel incoming notification when call becomes active (answered)
-            if (state == "active") {
+            if (state == "established") {
                 callNotificationHelper.cancelIncomingCallNotification()
             }
 

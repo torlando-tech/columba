@@ -777,6 +777,8 @@ fun ColumbaNavigation(
                         currentRoute?.startsWith("voice_call/") == true
                 if (!isOnCallScreen && !isAnsweringCall) {
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
+                    // Dismiss the notification — the user is now looking at the call screen
+                    CallNotificationHelper(context).cancelIncomingCallNotification()
                     navController.navigate("incoming_call/$encodedHash")
                 } else {
                     Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")

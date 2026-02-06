@@ -6,7 +6,6 @@ import android.media.RingtoneManager
 import android.util.Log
 import tech.torlando.lxst.bridge.KotlinAudioBridge
 import tech.torlando.lxst.bridge.NetworkPacketBridge
-import tech.torlando.lxst.codec.Opus
 import tech.torlando.lxst.audio.LinkSource
 import tech.torlando.lxst.audio.LineSource
 import tech.torlando.lxst.audio.LineSink
@@ -644,8 +643,7 @@ class Telephone(
         // Create link source (receive from network)
         if (linkSource == null) {
             val decodeCodec = activeProfile.createDecodeCodec()
-            val decodeRate = (decodeCodec as? Opus)?.actualDecodeSamplerate
-                ?: decodeCodec.preferredSamplerate ?: 48000
+            val decodeRate = decodeCodec.preferredSamplerate ?: 48000
 
             linkSource = LinkSource(
                 bridge = networkPacketBridge,
@@ -657,8 +655,8 @@ class Telephone(
 
             // Reconfigure audio output for decode rate. The dial tone may have
             // set LineSink to 48kHz; decoded Opus audio may be at a different
-            // rate (e.g. 16kHz due to wuqi-opus buffer cap). Stop and reconfigure
-            // so AudioTrack is created at the correct rate on auto-start.
+            // rate. Stop and reconfigure so AudioTrack is created at the correct
+            // rate on auto-start.
             audioOutput?.let { sink ->
                 if (sink.isRunning()) sink.stop()
                 sink.configure(decodeRate, 1)
@@ -984,8 +982,7 @@ class Telephone(
 
         // Update receive decoder for new profile
         val decodeCodec = profile.createDecodeCodec()
-        val decodeRate = (decodeCodec as? Opus)?.actualDecodeSamplerate
-            ?: decodeCodec.preferredSamplerate ?: 48000
+        val decodeRate = decodeCodec.preferredSamplerate ?: 48000
         linkSource?.codec = decodeCodec
         linkSource?.sampleRate = decodeRate
 

@@ -36,8 +36,8 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
-    // Opus codec - for voice/audio encoding
-    implementation("cn.entertech.android:wuqi-opus:1.0.3")
+    // Opus codec - libopus built from source (caller-allocated buffers, no 1024-sample limit)
+    implementation(project(":external:codec2_talkie:libopus-android"))
 
     // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
     implementation(project(":external:codec2_talkie:libcodec2-android"))

@@ -16,7 +16,7 @@ import tech.torlando.lxst.bridge.KotlinAudioBridge
  * Reproduces the exact conditions from a real Sideband ↔ Columba call:
  *
  * Evidence from logs (2026-02-06):
- *   - RX decode rate capped to 16kHz (wuqi-opus 1024-sample buffer limit)
+ *   - RX decode at 16kHz (test uses 16kHz for fast execution; production now 48kHz)
  *   - Frame time: 60ms (960 samples at 16000Hz)
  *   - Sideband sends 60ms Opus frames (not 20ms)
  *   - Reticulum delivers frames in bursts with gaps (network jitter)
@@ -33,10 +33,10 @@ class LineSinkRebufferInstrumentedTest {
     private lateinit var bridge: KotlinAudioBridge
     private lateinit var sink: LineSink
 
-    // Match real Sideband call: 16kHz decode rate, 60ms frames (wuqi-opus cap)
+    // 16kHz / 60ms frames — validates re-buffer logic (rate-independent)
     private val sampleRate = 16000
     private val channels = 1
-    private val frameSize = 960 // 60ms at 16kHz (960 samples ≤ 1024 wuqi-opus limit)
+    private val frameSize = 960 // 60ms at 16kHz
     private val framePeriodMs = 60L
 
     // Warmup: 10 frames = 600ms — AudioTrack buffer fills and stabilizes

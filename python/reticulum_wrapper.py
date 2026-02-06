@@ -755,12 +755,9 @@ class ReticulumWrapper:
             if self._call_manager is None:
                 return {'success': False, 'error': 'CallManager initialization failed'}
 
-            # Set the Python call manager in CallBridge for bidirectional communication
-            self.kotlin_call_bridge.setPythonCallManager(self._call_manager)
-
-            # Register call manager as network handler for Kotlin→Python audio/signal packets
-            if self.kotlin_network_bridge is not None:
-                self.kotlin_network_bridge.setPythonNetworkHandler(self._call_manager)
+            # Note: Kotlin PythonWrapperManager now handles registering the call_manager
+            # as both AudioPacketHandler and PythonCallManagerInterface. This avoids
+            # passing PyObject to :lxst module which has no Chaquopy dependency.
 
             log_info("ReticulumWrapper", "initialize_call_manager", "CallManager initialized successfully")
             return {'success': True}

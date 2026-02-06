@@ -1267,7 +1267,7 @@ class ReticulumServiceBinder(
     /** Register listeners for IPC notification to UI process. */
     private fun registerCallBridgeListeners() {
         val callBridge =
-            com.lxmf.messenger.reticulum.call.bridge.CallBridge
+            tech.torlando.lxst.bridge.CallBridge
                 .getInstance()
         val callNotificationHelper = CallNotificationHelper(context)
 
@@ -1408,10 +1408,10 @@ class ReticulumServiceBinder(
 
                 // Convert profile code to Profile (-1 means default)
                 val profile = if (profileCode == -1) {
-                    com.lxmf.messenger.reticulum.call.telephone.Profile.DEFAULT
+                    tech.torlando.lxst.telephone.Profile.DEFAULT
                 } else {
-                    com.lxmf.messenger.reticulum.call.telephone.Profile.fromId(profileCode)
-                        ?: com.lxmf.messenger.reticulum.call.telephone.Profile.DEFAULT
+                    tech.torlando.lxst.telephone.Profile.fromId(profileCode)
+                        ?: tech.torlando.lxst.telephone.Profile.DEFAULT
                 }
 
                 // Launch call on IO dispatcher (call() is suspend)
@@ -1515,7 +1515,7 @@ class ReticulumServiceBinder(
             Log.d(TAG, "📞 Setting call speaker: $speakerOn")
 
             // Use KotlinAudioBridge directly for speaker routing (Phase 11 - Kotlin LXST)
-            com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
+            tech.torlando.lxst.bridge.KotlinAudioBridge
                 .getInstance(context)
                 .setSpeakerphoneOn(speakerOn)
         } catch (e: Exception) {
@@ -1529,13 +1529,13 @@ class ReticulumServiceBinder(
             val telephone = wrapperManager.getTelephone()
             if (telephone != null) {
                 val status = when (telephone.callStatus) {
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_AVAILABLE -> "available"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_CALLING -> "calling"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_RINGING -> "ringing"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_CONNECTING -> "connecting"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_ESTABLISHED -> "established"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_BUSY -> "busy"
-                    com.lxmf.messenger.reticulum.audio.lxst.Signalling.STATUS_REJECTED -> "rejected"
+                    tech.torlando.lxst.audio.Signalling.STATUS_AVAILABLE -> "available"
+                    tech.torlando.lxst.audio.Signalling.STATUS_CALLING -> "calling"
+                    tech.torlando.lxst.audio.Signalling.STATUS_RINGING -> "ringing"
+                    tech.torlando.lxst.audio.Signalling.STATUS_CONNECTING -> "connecting"
+                    tech.torlando.lxst.audio.Signalling.STATUS_ESTABLISHED -> "established"
+                    tech.torlando.lxst.audio.Signalling.STATUS_BUSY -> "busy"
+                    tech.torlando.lxst.audio.Signalling.STATUS_REJECTED -> "rejected"
                     else -> "unknown"
                 }
                 val isActive = telephone.isCallActive()

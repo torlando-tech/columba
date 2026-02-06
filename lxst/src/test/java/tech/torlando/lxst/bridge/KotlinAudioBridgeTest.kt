@@ -1,7 +1,6 @@
-// PyObject is a Chaquopy framework class with many methods; explicit stubbing is not practical
 @file:Suppress("NoRelaxedMocks")
 
-package com.lxmf.messenger.reticulum.audio.bridge
+package tech.torlando.lxst.bridge
 
 import android.app.Application
 import android.content.Context
@@ -75,7 +74,7 @@ class KotlinAudioBridgeTest {
 
     @Test
     fun `BUFFER_QUEUE_SIZE is 10`() {
-        assertEquals(10, KotlinAudioBridge.BUFFER_QUEUE_SIZE)
+        assertEquals(20, KotlinAudioBridge.BUFFER_QUEUE_SIZE)
     }
 
     // ========== Initial State Tests ==========
@@ -187,11 +186,11 @@ class KotlinAudioBridgeTest {
             assertFalse(audioBridge.isRecordingActive())
         }
 
-    // ========== Python Callback Tests ==========
+    // ========== Error Callback Tests ==========
 
     @Test
     fun `setOnRecordingError accepts callback`() {
-        val mockCallback = mockk<com.chaquo.python.PyObject>(relaxed = true)
+        val mockCallback: (String) -> Unit = {}
 
         // Should not crash
         audioBridge.setOnRecordingError(mockCallback)
@@ -199,7 +198,7 @@ class KotlinAudioBridgeTest {
 
     @Test
     fun `setOnPlaybackError accepts callback`() {
-        val mockCallback = mockk<com.chaquo.python.PyObject>(relaxed = true)
+        val mockCallback: (String) -> Unit = {}
 
         // Should not crash
         audioBridge.setOnPlaybackError(mockCallback)

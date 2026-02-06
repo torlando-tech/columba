@@ -65,8 +65,8 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
+import tech.torlando.lxst.bridge.CallBridge
+import tech.torlando.lxst.bridge.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet

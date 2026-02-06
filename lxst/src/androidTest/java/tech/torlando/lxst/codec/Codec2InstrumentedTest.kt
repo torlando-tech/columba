@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.codec
+package tech.torlando.lxst.codec
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After

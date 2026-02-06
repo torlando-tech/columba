@@ -1,8 +1,7 @@
-package com.lxmf.messenger.reticulum.audio.bridge
+package tech.torlando.lxst.bridge
 
 import android.content.Context
 import android.util.Log
-import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -76,26 +75,20 @@ class NetworkPacketBridge private constructor(
     private var consumerDeliveryCount = 0
 
     init {
-        // Single consumer drains audio packets to Python sequentially.
-        // This prevents multiple concurrent Chaquopy callAttr() invocations
-        // from the Dispatchers.IO thread pool, which caused GIL contention
-        // and native SIGSEGV crashes in CPython's PyObject_GetItem.
+        // Single consumer drains audio packets sequentially.
+        // This prevents multiple concurrent handler invocations
+        // from the Dispatchers.IO thread pool.
         scope.launch {
             for (packet in packetChannel) {
                 try {
-                    val handler = pythonNetworkHandler
+                    val handler = packetHandler
                     if (handler == null) {
                         if (consumerDeliveryCount < 5) Log.w(TAG, "Consumer: handler null, dropping packet")
                     } else {
-                        // CRITICAL: .close() releases the returned PyObject (Python None)
-                        // immediately on this thread while the GIL is available.
-                        // Without .close(), discarded PyObjects pile up for Java's finalizer,
-                        // which can't acquire the GIL fast enough — causing
-                        // FinalizerWatchdogDaemon to kill the process after 60s.
-                        handler.callAttr("receive_audio_packet", packet)?.close()
+                        handler.receiveAudioPacket(packet)
                         consumerDeliveryCount++
                         if (consumerDeliveryCount <= 5 || consumerDeliveryCount % 100 == 0) {
-                            Log.w(TAG, "Consumer delivered #$consumerDeliveryCount to Python (${packet.size} bytes)")
+                            Log.w(TAG, "Consumer delivered #$consumerDeliveryCount (${packet.size} bytes)")
                         }
                     }
                 } catch (e: Exception) {
@@ -106,10 +99,9 @@ class NetworkPacketBridge private constructor(
         }
     }
 
-    // Python network handler reference (set by PythonWrapperManager)
-    // Provides: send_audio_packet(ByteArray), send_signal(Int)
+    // Network packet handler (set by PythonWrapperManager via AudioPacketHandler)
     @Volatile
-    private var pythonNetworkHandler: PyObject? = null
+    private var packetHandler: AudioPacketHandler? = null
 
     // Kotlin callback for incoming packets (set by LinkSource)
     @Volatile
@@ -146,7 +138,7 @@ class NetworkPacketBridge private constructor(
     fun sendSignal(signal: Int) {
         scope.launch {
             try {
-                pythonNetworkHandler?.callAttr("receive_signal", signal)?.close()
+                packetHandler?.receiveSignal(signal)
             } catch (_: Exception) {
                 // Silent failure - signalling is fire-and-forget
             }
@@ -191,18 +183,16 @@ class NetworkPacketBridge private constructor(
     // ===== Setup Methods =====
 
     /**
-     * Set the Python network handler.
+     * Set the network packet handler.
      *
      * Called by PythonWrapperManager after initializing the network handler.
-     * The handler must provide:
-     * - send_audio_packet(bytes): Send encoded audio to remote peer
-     * - send_signal(int): Send signalling to remote peer
+     * The handler sends audio packets and signals to the remote peer.
      *
-     * @param handler Python PyObject with send_audio_packet and send_signal methods
+     * @param handler AudioPacketHandler implementation
      */
-    fun setPythonNetworkHandler(handler: PyObject) {
-        pythonNetworkHandler = handler
-        Log.i(TAG, "Python network handler set")
+    fun setPacketHandler(handler: AudioPacketHandler) {
+        packetHandler = handler
+        Log.i(TAG, "Packet handler set")
     }
 
     /**
@@ -235,7 +225,7 @@ class NetworkPacketBridge private constructor(
     /**
      * Check if Python handler is set.
      */
-    fun isHandlerSet(): Boolean = pythonNetworkHandler != null
+    fun isHandlerSet(): Boolean = packetHandler != null
 
     /**
      * Check if packet callback is registered.
@@ -257,7 +247,7 @@ class NetworkPacketBridge private constructor(
         Log.i(TAG, "Shutting down network bridge")
         packetChannel.close()
         scope.cancel()
-        pythonNetworkHandler = null
+        packetHandler = null
         onPacketReceived = null
         onSignalReceived = null
     }

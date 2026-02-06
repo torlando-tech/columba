@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.codec
+package tech.torlando.lxst.codec
 
 import com.theeasiestway.opus.Constants
 import com.theeasiestway.opus.Opus as OpusJni
@@ -152,10 +152,18 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
      * stereo the per-channel limit is 512. opus_decode's frame_size param
      * is per-channel, so we divide by channels.
      *
+     * NOTE: Sideband sends 60ms frames (not 20ms), so we MUST use FRAME_MAX_MS
+     * here. Using 20ms would allow 48kHz decode, but 2880 samples (48kHz×60ms)
+     * overflows wuqi-opus's 1024-sample buffer, causing "Opus decode failed"
+     * after the native heap is corrupted.
+     *
      * Examples:
-     * - MQ (mono, 60ms): 16kHz → 960 samples/ch ≤ 1024/1
-     * - SHQ (stereo, 60ms): 8kHz → 480 samples/ch ≤ 1024/2
-     * - LL (mono, 20ms): 48kHz → 960 samples/ch ≤ 1024/1 (no cap)
+     * - VOICE_HIGH (mono, 60ms): 48kHz → 2880 samples/ch > 1024 → cap to 16kHz (960)
+     * - VOICE_MEDIUM (mono, 60ms): 24kHz → 1440 samples/ch > 1024 → cap to 16kHz (960)
+     * - VOICE_MAX (stereo, 60ms): 48kHz → 2880 samples/ch > 512 → cap to 8kHz (480)
+     *
+     * TODO: Replace wuqi-opus with libopus-android (caller-allocates pattern)
+     * to decode at native rate without buffer overflow risk.
      */
     private fun computeSafeDecodeSamplerate(): Int {
         val maxFrameMs = FRAME_MAX_MS

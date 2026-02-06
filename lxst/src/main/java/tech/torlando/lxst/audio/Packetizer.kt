@@ -1,11 +1,11 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
-import com.lxmf.messenger.reticulum.audio.codec.Codec
-import com.lxmf.messenger.reticulum.audio.codec.Codec2
-import com.lxmf.messenger.reticulum.audio.codec.Null
-import com.lxmf.messenger.reticulum.audio.codec.Opus
+import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.codec.Codec
+import tech.torlando.lxst.codec.Codec2
+import tech.torlando.lxst.codec.Null
+import tech.torlando.lxst.codec.Opus
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

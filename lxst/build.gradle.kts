@@ -1,25 +1,15 @@
 plugins {
     id("com.android.library")
     kotlin("android")
-    id("com.google.devtools.ksp")
-    kotlin("plugin.parcelize")
-    id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
 }
 
 android {
-    namespace = "tech.torlando.columba.reticulum"
+    namespace = "tech.torlando.lxst"
     compileSdk = 35
 
     defaultConfig {
         minSdk = 24
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        ndk {
-            // Python 3.11 supports 64-bit ABIs
-            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
-            abiFilters += listOf("arm64-v8a")
-        }
     }
 
     compileOptions {
@@ -33,11 +23,6 @@ android {
         }
     }
 
-    buildFeatures {
-        aidl = true
-        buildConfig = false
-    }
-
     testOptions {
         unitTests {
             isReturnDefaultValues = true
@@ -46,33 +31,16 @@ android {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-    }
-}
-
 dependencies {
-    // LXST module (telephony, codecs, audio pipeline)
-    api(project(":lxst"))
-
-    // Hilt
-    implementation(libs.hilt)
-    ksp(libs.hilt.compiler)
-
     // Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
-    // USB Serial for Android (mik3y) - handles FTDI, CP210x, PL2303, CH340, CDC-ACM protocols
-    // Use api() so KotlinUSBBridge types are accessible to app module
-    api("com.github.mik3y:usb-serial-for-android:3.7.0")
+    // Opus codec - for voice/audio encoding
+    implementation("cn.entertech.android:wuqi-opus:1.0.3")
 
-    // MessagePack
-    implementation(libs.msgpack)
-
-    // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
-    implementation("io.sentry:sentry-android:8.29.0")
+    // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
+    implementation(project(":external:codec2_talkie:libcodec2-android"))
 
     // Testing
     testImplementation(libs.junit)
@@ -84,12 +52,9 @@ dependencies {
     testImplementation(libs.test.core)
     testImplementation("org.json:json:20240303")
 
-    // Instrumented Testing (androidTest)
+    // Instrumented testing (androidTest)
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.6.2")
-}
-
-ksp {
-    arg("correctErrorTypes", "true")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

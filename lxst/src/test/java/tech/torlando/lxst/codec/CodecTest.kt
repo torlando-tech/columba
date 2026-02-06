@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.codec
+package tech.torlando.lxst.codec
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals

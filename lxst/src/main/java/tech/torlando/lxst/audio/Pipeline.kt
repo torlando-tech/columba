@@ -1,7 +1,7 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.audio.codec.Codec
+import tech.torlando.lxst.codec.Codec
 
 /**
  * Pipeline - Orchestrates audio component wiring and lifecycle.

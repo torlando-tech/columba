@@ -1,6 +1,6 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
-import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
+import tech.torlando.lxst.bridge.NetworkPacketBridge
 
 /**
  * Signalling constants matching Python LXST Telephony.Signalling (lines 102-112).

@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.call.telephone
+package tech.torlando.lxst.telephone
 
 /**
  * Network transport abstraction for telephony.

@@ -377,6 +377,7 @@ chaquopy {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
+    implementation(project(":lxst"))
     implementation(project(":reticulum"))
 
     // Core
@@ -444,16 +445,6 @@ dependencies {
 
     // MessagePack - for LXMF stamp generation
     implementation("org.msgpack:msgpack-core:0.9.8")
-
-    // Opus codec - for voice/audio encoding in Kotlin LXST
-    // Uses theeasiestway/android-opus-codec library published as wuqi-opus
-    // Provides OpusEncoder/OpusDecoder with JNI bindings to libopus 1.3.1
-    implementation("cn.entertech.android:wuqi-opus:1.0.3")
-
-    // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
-    // Uses sh123/codec2_talkie as git submodule
-    // Provides Codec2 with JNI bindings to codec2 library
-    implementation(project(":external:codec2_talkie:libcodec2-android"))
 
     // MapLibre - for offline-capable maps
     implementation("org.maplibre.gl:android-sdk:11.13.5")

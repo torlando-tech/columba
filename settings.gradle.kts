@@ -20,6 +20,7 @@ rootProject.name = "columba"
 include(":app")
 include(":data")
 include(":domain")
+include(":lxst")
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")

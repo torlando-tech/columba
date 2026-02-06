@@ -53,6 +53,9 @@ chaquopy {
 }
 
 dependencies {
+    // LXST module (telephony, codecs, audio pipeline)
+    api(project(":lxst"))
+
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
@@ -67,12 +70,6 @@ dependencies {
 
     // MessagePack
     implementation(libs.msgpack)
-
-    // Opus codec - for voice/audio encoding in Kotlin LXST
-    implementation("cn.entertech.android:wuqi-opus:1.0.3")
-
-    // Codec2 codec - for ultra-low-bitrate voice encoding (700-3200 bps)
-    implementation(project(":external:codec2_talkie:libcodec2-android"))
 
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
     implementation("io.sentry:sentry-android:8.29.0")

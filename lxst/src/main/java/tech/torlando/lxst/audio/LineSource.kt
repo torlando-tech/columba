@@ -1,8 +1,8 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
-import com.lxmf.messenger.reticulum.audio.codec.Codec
+import tech.torlando.lxst.bridge.KotlinAudioBridge
+import tech.torlando.lxst.codec.Codec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

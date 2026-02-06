@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.bridge
+package tech.torlando.lxst.bridge
 
 import kotlin.math.abs
 import kotlin.math.exp

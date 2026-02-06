@@ -2,7 +2,7 @@
 // NoRelaxedMocks: PythonCallManagerInterface has 5 void methods; explicit stubs not needed
 @file:Suppress("NoVerifyOnlyTests", "NoRelaxedMocks")
 
-package com.lxmf.messenger.reticulum.call.bridge
+package tech.torlando.lxst.bridge
 
 import app.cash.turbine.test
 import io.mockk.clearAllMocks
@@ -49,7 +49,7 @@ class CallBridgeTest {
 
         // Get the singleton instance with test dispatcher and inject mock
         callBridge = CallBridge.getInstance(testDispatcher)
-        callBridge.setCallManagerInterface(mockCallManager)
+        callBridge.setCallManager(mockCallManager)
     }
 
     @After

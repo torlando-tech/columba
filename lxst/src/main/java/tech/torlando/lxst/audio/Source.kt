@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 /**
  * Base Source interface for LXST audio pipeline.

@@ -1,7 +1,7 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
-import com.lxmf.messenger.reticulum.audio.codec.Codec
-import com.lxmf.messenger.reticulum.audio.codec.Null
+import tech.torlando.lxst.codec.Codec
+import tech.torlando.lxst.codec.Null
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

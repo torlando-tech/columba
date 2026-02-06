@@ -5,8 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
+import tech.torlando.lxst.bridge.CallBridge
+import tech.torlando.lxst.bridge.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay

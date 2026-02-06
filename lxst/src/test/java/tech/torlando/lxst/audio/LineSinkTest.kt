@@ -1,6 +1,6 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
-import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
+import tech.torlando.lxst.bridge.KotlinAudioBridge
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -39,9 +39,8 @@ class LineSinkTest {
 
     @Test
     fun `canReceive returns true below threshold`() {
-        // bufferMaxHeight = MAX_FRAMES - 3 = 6 - 3 = 3
-        // Add frames below threshold
-        repeat(2) {
+        // bufferMaxHeight = MAX_FRAMES - 1; add one fewer than that
+        repeat(LineSink.MAX_FRAMES - 2) {
             sink.handleFrame(FloatArray(480))
         }
         assertTrue(sink.canReceive())
@@ -49,9 +48,8 @@ class LineSinkTest {
 
     @Test
     fun `canReceive returns false at threshold`() {
-        // bufferMaxHeight = MAX_FRAMES - 3 = 6 - 3 = 3
-        // Fill to threshold
-        repeat(3) {
+        // bufferMaxHeight = MAX_FRAMES - 1; fill to exactly that
+        repeat(LineSink.MAX_FRAMES - 1) {
             sink.handleFrame(FloatArray(480))
         }
         assertFalse(sink.canReceive())
@@ -123,8 +121,10 @@ class LineSinkTest {
         )
         autoSink.configure(48000, 1)
 
-        // Add AUTOSTART_MIN frames (1)
-        autoSink.handleFrame(FloatArray(480))
+        // Add AUTOSTART_MIN frames to trigger autostart
+        repeat(LineSink.AUTOSTART_MIN) {
+            autoSink.handleFrame(FloatArray(480))
+        }
 
         // Should have auto-started
         assertTrue(autoSink.isRunning())
@@ -143,6 +143,7 @@ class LineSinkTest {
         )
         lowLatencySink.configure(48000, 1)
         lowLatencySink.start()
+        Thread.sleep(50) // Allow async startPlayback coroutine to execute
 
         verify {
             mockBridge.startPlayback(
@@ -160,6 +161,7 @@ class LineSinkTest {
     fun `start calls bridge with configured parameters`() {
         sink.configure(8000, 1)
         sink.start()
+        Thread.sleep(50) // Allow async startPlayback coroutine to execute
 
         verify {
             mockBridge.startPlayback(
@@ -213,6 +215,7 @@ class LineSinkTest {
 
         // Start should use detected sample rate
         sink.start()
+        Thread.sleep(50) // Allow async startPlayback coroutine to execute
 
         verify {
             mockBridge.startPlayback(

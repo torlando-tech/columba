@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

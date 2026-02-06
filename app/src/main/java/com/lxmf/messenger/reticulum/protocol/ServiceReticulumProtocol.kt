@@ -536,7 +536,7 @@ class ServiceReticulumProtocol(
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", "")
                     // Notify CallBridge of incoming call
-                    com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                    tech.torlando.lxst.bridge.CallBridge
                         .getInstance()
                         .onIncomingCall(callerHash)
                 } catch (e: Exception) {
@@ -553,7 +553,7 @@ class ServiceReticulumProtocol(
 
                     // Notify CallBridge of state change
                     val bridge =
-                        com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                        tech.torlando.lxst.bridge.CallBridge
                             .getInstance()
                     when (state) {
                         "ringing" -> bridge.onCallRinging(remoteIdentity ?: "")
@@ -573,7 +573,7 @@ class ServiceReticulumProtocol(
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", null)
                     // Notify CallBridge of call ended
-                    com.lxmf.messenger.reticulum.call.bridge.CallBridge
+                    tech.torlando.lxst.bridge.CallBridge
                         .getInstance()
                         .onCallEnded(callerHash)
                 } catch (e: Exception) {

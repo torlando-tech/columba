@@ -181,28 +181,10 @@ class LineSource(
                 frameSamples
             }
 
-            // Encode with codec
-            val encoded = try {
-                codec.encode(gained)
-            } catch (e: Exception) {
-                Log.e(TAG, "Codec encode error on frame $frameCount", e)
-                continue
-            }
-
-            // Phase 8: Decode back to float32 for local sink (loopback testing)
-            // Phase 9: Remove this decode - send encoded bytes over network
-            val decoded = try {
-                codec.decode(encoded)
-            } catch (e: Exception) {
-                Log.e(TAG, "Codec decode error on frame $frameCount", e)
-                continue
-            }
-
-            // Push decoded float32 to sink with backpressure check (Python LXST Sources.py:260-263)
+            // Push float32 to sink (Mixer → Packetizer handles encoding)
             val currentSink = sink
             if (currentSink != null && currentSink.canReceive(this)) {
-                // Sink.handleFrame() expects float32 decoded audio (not encoded bytes)
-                currentSink.handleFrame(decoded, this)
+                currentSink.handleFrame(gained, this)
             } else if (currentSink != null) {
                 // Sink can't receive - drop frame (backpressure)
                 if (frameCount % 50L == 0L) {

@@ -1,2 +1,2 @@
-# LXST modules for Columba
-# Chaquopy-compatible replacements for LXST's Pyjnius-based Android audio
+# Python network transport modules for Columba
+# Handles Reticulum link lifecycle and packet forwarding via Chaquopy bridge

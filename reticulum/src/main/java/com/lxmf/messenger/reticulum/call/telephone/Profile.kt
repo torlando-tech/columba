@@ -33,6 +33,19 @@ sealed class Profile(
      */
     abstract fun createCodec(): Codec
 
+    /**
+     * Create a codec configured for decoding received audio.
+     *
+     * For Opus profiles, the decoder outputs at 48000 Hz to match the
+     * AudioTrack native output rate, regardless of the encoder's sample rate.
+     * Opus decoders resample internally (RFC 6716 §4.3).
+     *
+     * For Codec2 profiles, uses the native codec rate.
+     *
+     * @return Codec instance configured for decode at the output sample rate
+     */
+    open fun createDecodeCodec(): Codec = createCodec()
+
     // ====== Codec2 Profiles (Low Bandwidth) ======
 
     /** Ultra Low Bandwidth - Codec2 700C (700 bps) */
@@ -55,6 +68,7 @@ sealed class Profile(
     /** Medium Quality - Opus voice medium (8000 bps, 24kHz) */
     data object MQ : Profile(0x40, "Medium Quality", "MQ", 60) {
         override fun createCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_MEDIUM)
+        override fun createDecodeCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_HIGH)
     }
 
     /** High Quality - Opus voice high (16000 bps, 48kHz) */
@@ -72,11 +86,13 @@ sealed class Profile(
     /** Low Latency - Opus voice medium with 20ms frames */
     data object LL : Profile(0x70, "Low Latency", "LL", 20) {
         override fun createCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_MEDIUM)
+        override fun createDecodeCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_HIGH)
     }
 
     /** Ultra Low Latency - Opus voice medium with 10ms frames */
     data object ULL : Profile(0x80, "Ultra Low Latency", "ULL", 10) {
         override fun createCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_MEDIUM)
+        override fun createDecodeCodec(): Codec = Opus(profile = Opus.PROFILE_VOICE_HIGH)
     }
 
     companion object {

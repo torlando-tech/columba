@@ -1,10 +1,9 @@
 package com.lxmf.messenger.reticulum.audio.lxst
 
+import android.util.Log
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
 import com.lxmf.messenger.reticulum.audio.codec.Codec
-import com.lxmf.messenger.reticulum.audio.codec.Codec2
 import com.lxmf.messenger.reticulum.audio.codec.Null
-import com.lxmf.messenger.reticulum.audio.codec.Opus
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,14 +39,10 @@ class LinkSource(
 ) : RemoteSource() {
 
     companion object {
+        private const val TAG = "Columba:LinkSource"
+
         /** Maximum packets in queue before dropping oldest (backpressure) */
         const val MAX_PACKETS = 8
-
-        // Codec header bytes (must match Packetizer and Python LXST Codecs/__init__.py)
-        const val CODEC_NULL: Byte = 0xFF.toByte()
-        const val CODEC_RAW: Byte = 0x00
-        const val CODEC_OPUS: Byte = 0x01
-        const val CODEC_CODEC2: Byte = 0x02
     }
 
     // RemoteSource properties
@@ -56,7 +51,18 @@ class LinkSource(
 
     // State
     private val shouldRun = AtomicBoolean(false)
-    private var codec: Codec = Null()
+    private var debugPacketCount = 0 // TEMP: diagnostic counter
+
+    /**
+     * Codec for decoding received frames.
+     *
+     * Set by Telephone based on the active call profile. This ensures the decoder
+     * uses the correct sample rate and channel configuration to match the remote
+     * encoder. Without this, the decoder defaults to 8000 Hz and can't decode
+     * frames encoded at 24000 Hz or 48000 Hz.
+     */
+    @Volatile
+    var codec: Codec = Null()
     private val packetQueue = ArrayDeque<ByteArray>(MAX_PACKETS)
     private val receiveLock = Any()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -90,48 +96,46 @@ class LinkSource(
     }
 
     /**
-     * Process a single packet: parse header, decode, push to sink.
+     * Process a single packet: strip header, decode, push to sink.
+     *
+     * The codec is pre-configured by Telephone based on the negotiated profile,
+     * ensuring the decoder sample rate matches the encoder. The per-packet codec
+     * header byte (first byte) is stripped but not used for codec selection —
+     * both sides agree on the codec during signalling.
+     *
+     * Decode errors are caught and the frame is dropped. This prevents a single
+     * corrupted packet from crashing the entire service process.
      *
      * @param data Packet data (codec header byte + encoded frame)
      */
     private fun processPacket(data: ByteArray) {
-        if (data.isEmpty()) return
+        if (data.size < 2) return  // Need header + at least 1 byte of frame
         val currentSink = sink ?: return
 
-        // Parse codec header byte (first byte)
-        val codecType = data[0]
-        val frameData = data.copyOfRange(1, data.size)
-
-        // Switch codec if needed (match Python LXST dynamic switching)
-        val newCodec = getCodecForHeader(codecType)
-        if (newCodec::class != codec::class) {
-            codec = newCodec
+        // TEMP: Log first 5 packets for diagnostics
+        debugPacketCount++
+        if (debugPacketCount <= 5) {
+            val header = data[0].toInt() and 0xFF
+            val preview = data.take(8).joinToString(",") { "0x${(it.toInt() and 0xFF).toString(16).padStart(2, '0')}" }
+            Log.w(TAG, "PKT#$debugPacketCount: size=${data.size} hdr=0x${header.toString(16).padStart(2, '0')} preview=[$preview] codec=$codec")
         }
 
-        // Decode frame
-        val decodedFrame = codec.decode(frameData)
+        // Strip codec header byte (first byte), remaining is encoded frame
+        val frameData = data.copyOfRange(1, data.size)
 
-        // Push to sink (Mixer)
-        currentSink.handleFrame(decodedFrame, this)
-    }
-
-    /**
-     * Get codec instance for header byte.
-     *
-     * Creates new codec instance for the specified type.
-     * Note: Codec2 mode header is embedded in its encoded data,
-     * so Codec2 handles mode switching internally.
-     *
-     * @param header Codec type byte
-     * @return Codec instance for decoding
-     */
-    private fun getCodecForHeader(header: Byte): Codec {
-        return when (header) {
-            CODEC_NULL -> Null()
-            CODEC_RAW -> Null()  // RAW maps to Null (raw int16 PCM)
-            CODEC_OPUS -> Opus()
-            CODEC_CODEC2 -> Codec2()
-            else -> Null()  // Fall back to Null for unknown
+        // Decode frame using Telephone-configured codec
+        try {
+            val decodedFrame = codec.decode(frameData)
+            // TEMP: Log decode result for first 5 packets
+            if (debugPacketCount <= 5) {
+                val maxAmp = decodedFrame.maxOrNull() ?: 0f
+                val minAmp = decodedFrame.minOrNull() ?: 0f
+                Log.w(TAG, "DEC#$debugPacketCount: samples=${decodedFrame.size} range=[$minAmp,$maxAmp]")
+            }
+            currentSink.handleFrame(decodedFrame, this)
+        } catch (e: Exception) {
+            // Drop frame on decode error — don't crash the service
+            Log.w(TAG, "Decode error, dropping frame: ${e.message}")
         }
     }
 

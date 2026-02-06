@@ -721,9 +721,9 @@ class ReticulumWrapper:
 
     def initialize_call_manager(self) -> Dict:
         """
-        Initialize the LXST CallManager for voice calls.
+        Initialize the CallManager for voice calls.
 
-        Requires audio_bridge and call_bridge to be set first.
+        Requires call_bridge to be set first.
         Also requires Reticulum to be initialized.
 
         Returns:
@@ -732,9 +732,6 @@ class ReticulumWrapper:
         try:
             if not self.initialized:
                 return {'success': False, 'error': 'Reticulum not initialized'}
-
-            if self.kotlin_audio_bridge is None:
-                return {'success': False, 'error': 'Audio bridge not set'}
 
             if self.kotlin_call_bridge is None:
                 return {'success': False, 'error': 'Call bridge not set'}
@@ -751,7 +748,6 @@ class ReticulumWrapper:
             from lxst_modules.call_manager import initialize_call_manager
             self._call_manager = initialize_call_manager(
                 identity=identity,
-                audio_bridge=self.kotlin_audio_bridge,
                 kotlin_call_bridge=self.kotlin_call_bridge,
                 kotlin_network_bridge=self.kotlin_network_bridge,
             )
@@ -761,6 +757,10 @@ class ReticulumWrapper:
 
             # Set the Python call manager in CallBridge for bidirectional communication
             self.kotlin_call_bridge.setPythonCallManager(self._call_manager)
+
+            # Register call manager as network handler for Kotlin→Python audio/signal packets
+            if self.kotlin_network_bridge is not None:
+                self.kotlin_network_bridge.setPythonNetworkHandler(self._call_manager)
 
             log_info("ReticulumWrapper", "initialize_call_manager", "CallManager initialized successfully")
             return {'success': True}

@@ -347,15 +347,10 @@ chaquopy {
             options("--find-links", file("../wheels/pycodec2").absolutePath)
             install("pycodec2==4.1.1")
 
-            // LXST wheel with pre-compiled Android filterlib .so files
-            // Built as pure Python wheel with .so files as package_data
-            options("--find-links", file("../wheels/lxst").absolutePath)
-            install("lxst==0.4.5")
-
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
-            // Install requirements from requirements.txt (LXST installed above via wheel)
+            // Install requirements from requirements.txt
             install("-r", "../python/requirements.txt")
         }
 
@@ -368,8 +363,8 @@ chaquopy {
 
         // Extract package files so .py sources are accessible at runtime
         // pycodec2 needs to be extracted so libcodec2.so can be loaded at runtime
-        // LXST needs to be extracted so filterlib.*.so can be loaded via cffi.dlopen()
-        extractPackages("ble_reticulum", "ble_modules", "pycodec2", "LXST")
+        // pycodec2 needs libcodec2.so extracted at runtime
+        extractPackages("ble_reticulum", "ble_modules", "pycodec2")
     }
 
     sourceSets {

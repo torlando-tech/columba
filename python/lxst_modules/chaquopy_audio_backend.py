@@ -43,10 +43,6 @@ _bridge_lock = threading.Lock()
 # This is set when KotlinAudioBridge has filtersEnabled=true
 _kotlin_filters_active = True  # Default to True since Kotlin filters are faster
 
-# Flag to completely disable Python/LXST audio when Kotlin LXST handles audio
-# When True, recorder returns silence and player drops frames
-_kotlin_audio_active = False
-
 
 def set_kotlin_audio_bridge(bridge):
     """Set the KotlinAudioBridge instance from Kotlin.
@@ -89,25 +85,6 @@ def set_kotlin_filters_active(active):
     _kotlin_filters_active = active
     RNS.log(f"Kotlin filters active: {active} (Python/LXST filters {'disabled' if active else 'enabled'})", RNS.LOG_INFO)
 
-
-def set_kotlin_audio_active(active):
-    """Enable/disable Python LXST audio pipeline.
-
-    When active=True:
-    - Kotlin LXST handles all audio
-    - Python recorder returns silence
-    - Python player drops frames
-
-    Called by Kotlin Telephone when opening/closing pipelines.
-    """
-    global _kotlin_audio_active
-    _kotlin_audio_active = active
-    RNS.log(f"Kotlin audio active: {active} (Python LXST audio {'disabled' if active else 'enabled'})", RNS.LOG_INFO)
-
-
-def is_kotlin_audio_active():
-    """Check if Kotlin LXST is handling audio."""
-    return _kotlin_audio_active
 
 
 def get_backend():
@@ -300,13 +277,6 @@ class ChaquopyPlayer:
                 RNS.log(f"🔊 Player: NOT STARTED, dropping frame #{ChaquopyPlayer._play_count}", RNS.LOG_WARNING)
             return
 
-        # If Kotlin LXST is handling audio, drop the frame
-        if _kotlin_audio_active:
-            ChaquopyPlayer._play_count += 1
-            if ChaquopyPlayer._play_count % 100 == 1:
-                RNS.log(f"🔊 Player#{ChaquopyPlayer._play_count}: Kotlin audio active, dropping frame", RNS.LOG_DEBUG)
-            return
-
         bridge = get_kotlin_audio_bridge()
         if bridge is None:
             ChaquopyPlayer._play_count += 1
@@ -445,12 +415,6 @@ class ChaquopyRecorder:
     def _record_chunk(self):
         """Read a single chunk from the bridge."""
         ChaquopyRecorder._record_count += 1
-
-        # If Kotlin LXST is handling audio, return silence
-        if _kotlin_audio_active:
-            if ChaquopyRecorder._record_count % 100 == 1:
-                RNS.log(f"🎙️ Rec#{ChaquopyRecorder._record_count}: Kotlin audio active, returning silence", RNS.LOG_DEBUG)
-            return np.zeros((self.samples_per_frame,), dtype="float32")
 
         bridge = get_kotlin_audio_bridge()
         if bridge is None:

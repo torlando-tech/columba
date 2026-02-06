@@ -3,9 +3,7 @@ package com.lxmf.messenger.reticulum.call.telephone
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.lxmf.messenger.reticulum.audio.bridge.NetworkPacketBridge
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -179,22 +177,6 @@ class PythonNetworkTransport(
         linkActive = false
     }
 
-    /**
-     * Enable/disable Python LXST audio when Kotlin LXST handles audio.
-     *
-     * When true, Python recorder returns silence and player drops frames.
-     * This prevents dual audio pipeline conflict.
-     */
-    fun setKotlinAudioActive(active: Boolean) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                callManager.callAttr("set_kotlin_audio_active", active)
-                Log.d(TAG, "Set Kotlin audio active: $active")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error setting Kotlin audio active: ${e.message}")
-            }
-        }
-    }
 }
 
 /**

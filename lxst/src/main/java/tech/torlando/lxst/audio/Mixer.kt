@@ -1,6 +1,6 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
-import com.lxmf.messenger.reticulum.audio.codec.Codec
+import tech.torlando.lxst.codec.Codec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -181,40 +181,37 @@ class Mixer(
         while (shouldRun.get()) {
             val currentSink = sink
             if (currentSink != null && currentSink.canReceive(this)) {
-                var sourceCount = 0
-                var mixedFrame: FloatArray? = null
-
-                // Pull one frame from each source, add together
+                // Pull one frame from each source (fast, inside lock)
+                val pulledFrames: ArrayList<FloatArray>
                 synchronized(insertLock) {
+                    pulledFrames = ArrayList(incomingFrames.size)
                     for ((_, queue) in incomingFrames) {
                         if (queue.isNotEmpty()) {
-                            val nextFrame = queue.removeFirst()
-                            val gain = mixingGain
-                            mixedFrame = if (sourceCount == 0) {
-                                // First frame: multiply by gain
-                                FloatArray(nextFrame.size) { i -> nextFrame[i] * gain }
-                            } else {
-                                // Subsequent frames: add with gain
-                                val mixed = mixedFrame!!
-                                FloatArray(nextFrame.size) { i ->
-                                    mixed[i] + nextFrame[i] * gain
-                                }
-                            }
-                            sourceCount++
+                            pulledFrames.add(queue.removeFirst())
                         }
                     }
                 }
 
-                if (sourceCount > 0 && mixedFrame != null) {
-                    // Clip to prevent overflow
-                    val clipped = FloatArray(mixedFrame!!.size) { i ->
-                        mixedFrame!![i].coerceIn(-1.0f, 1.0f)
+                if (pulledFrames.isNotEmpty()) {
+                    // Mix outside lock — doesn't block handleFrame() from pushing frames
+                    val gain = mixingGain
+                    val mixedFrame = FloatArray(pulledFrames[0].size) { i ->
+                        pulledFrames[0][i] * gain
+                    }
+                    for (f in 1 until pulledFrames.size) {
+                        val frame = pulledFrames[f]
+                        for (i in mixedFrame.indices) {
+                            mixedFrame[i] += frame[i] * gain
+                        }
+                    }
+
+                    // Clip in-place to prevent overflow
+                    for (i in mixedFrame.indices) {
+                        mixedFrame[i] = mixedFrame[i].coerceIn(-1.0f, 1.0f)
                     }
 
                     // Push float32 to sink
-                    // Note: codec property is available for future network integration
-                    // but Kotlin Sink interface only accepts float32 (local playback)
-                    currentSink.handleFrame(clipped, this)
+                    currentSink.handleFrame(mixedFrame, this)
                 } else {
                     // No frames available, sleep briefly
                     delay((targetFrameMs / 10).toLong())

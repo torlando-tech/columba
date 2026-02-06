@@ -1,4 +1,4 @@
-package com.lxmf.messenger.reticulum.audio.bridge
+package tech.torlando.lxst.bridge
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -11,7 +11,6 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
-import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -119,12 +118,12 @@ class KotlinAudioBridge(
     @Volatile
     private var filterChain: KotlinAudioFilters.VoiceFilterChain? = null
 
-    // Python callbacks (set by Python call manager)
+    // Error callbacks (set externally, e.g., by Python call manager via wrapper)
     @Volatile
-    private var onRecordingError: PyObject? = null
+    private var onRecordingError: ((String) -> Unit)? = null
 
     @Volatile
-    private var onPlaybackError: PyObject? = null
+    private var onPlaybackError: ((String) -> Unit)? = null
 
     // ===== Playback Methods (called from Python) =====
 
@@ -169,7 +168,7 @@ class KotlinAudioBridge(
 
         if (bufferSize <= 0) {
             Log.e(TAG, "Invalid buffer size: $bufferSize")
-            onPlaybackError?.callAttr("__call__", "Invalid buffer size: $bufferSize")
+            onPlaybackError?.invoke( "Invalid buffer size: $bufferSize")
             return
         }
 
@@ -191,7 +190,7 @@ class KotlinAudioBridge(
                 AudioTrack.Builder()
                     .setAudioAttributes(attributes)
                     .setAudioFormat(format)
-                    .setBufferSizeInBytes(bufferSize * 2) // Double buffer for smoothness
+                    .setBufferSizeInBytes(maxOf(bufferSize * 2, sampleRate * channels * 2 * 500 / 1000))
                     .setTransferMode(AudioTrack.MODE_STREAM)
 
             // Enable low-latency mode on supported devices
@@ -240,17 +239,15 @@ class KotlinAudioBridge(
             Log.i(TAG, "Playback started successfully, speaker=${audioManager.isSpeakerphoneOn}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start playback", e)
-            onPlaybackError?.callAttr("__call__", e.message ?: "Unknown error")
+            onPlaybackError?.invoke( e.message ?: "Unknown error")
         }
     }
-
-    private var writeAudioCount = 0L
-    private var writeNonZeroCount = 0L
 
     /**
      * Write audio data to the output.
      *
      * Data should be PCM 16-bit samples as a byte array.
+     * CRITICAL: No diagnostic scanning or logging on this hot path.
      *
      * @param audioData Raw PCM 16-bit audio bytes
      */
@@ -262,35 +259,6 @@ class KotlinAudioBridge(
         val track = audioTrack ?: return
 
         try {
-            writeAudioCount++
-            // Check if data has non-zero samples
-            var hasNonZero = false
-            for (i in 0 until audioData.size step 2) {
-                if (i + 1 < audioData.size) {
-                    val sample = (audioData[i].toInt() and 0xFF) or (audioData[i + 1].toInt() shl 8)
-                    if (sample != 0 && sample != -1) {
-                        hasNonZero = true
-                        break
-                    }
-                }
-            }
-            if (hasNonZero) writeNonZeroCount++
-
-            if (writeAudioCount % 25L == 1L) {
-                val trackState = track.playState
-                // Find max amplitude for logging
-                var maxAmp = 0
-                for (i in 0 until audioData.size step 2) {
-                    if (i + 1 < audioData.size) {
-                        val sample = (audioData[i].toInt() and 0xFF) or (audioData[i + 1].toInt() shl 8)
-                        val signedSample = if (sample > 32767) sample - 65536 else sample
-                        val absSample = kotlin.math.abs(signedSample)
-                        if (absSample > maxAmp) maxAmp = absSample
-                    }
-                }
-                Log.d(TAG, "🔊 KWrite#$writeAudioCount: ${audioData.size}b max=$maxAmp nz=$writeNonZeroCount state=$trackState")
-            }
-
             val written =
                 track.write(
                     audioData,
@@ -299,12 +267,7 @@ class KotlinAudioBridge(
                     AudioTrack.WRITE_BLOCKING,
                 )
             if (written < 0) {
-                Log.w(
-                    TAG,
-                    "🔊 AudioTrack write error: $written " +
-                        "(ERROR_INVALID_OPERATION=${AudioTrack.ERROR_INVALID_OPERATION}, " +
-                        "ERROR_BAD_VALUE=${AudioTrack.ERROR_BAD_VALUE})",
-                )
+                Log.w(TAG, "AudioTrack write error: $written")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error writing audio", e)
@@ -380,7 +343,7 @@ class KotlinAudioBridge(
             Log.i(TAG, "Recording started successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording", e)
-            onRecordingError?.callAttr("__call__", e.message ?: "Unknown error")
+            onRecordingError?.invoke( e.message ?: "Unknown error")
         }
     }
 
@@ -392,7 +355,7 @@ class KotlinAudioBridge(
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
         if (bufferSize <= 0) {
             Log.e(TAG, "Invalid buffer size: $bufferSize")
-            onRecordingError?.callAttr("__call__", "Invalid buffer size: $bufferSize")
+            onRecordingError?.invoke( "Invalid buffer size: $bufferSize")
             return null
         }
         return bufferSize
@@ -435,7 +398,7 @@ class KotlinAudioBridge(
 
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord failed to initialize, state=${record.state}")
-            onRecordingError?.callAttr("__call__", "AudioRecord failed to initialize")
+            onRecordingError?.invoke( "AudioRecord failed to initialize")
             record.release()
             return null
         }
@@ -511,7 +474,6 @@ class KotlinAudioBridge(
      * Continuously reads from AudioRecord and queues frames for Python to consume.
      */
     private var recordFrameCount = 0L
-    private var recordNonZeroCount = 0L
 
     @Suppress("LoopWithTooManyJumpStatements", "CyclomaticComplexMethod", "NestedBlockDepth")
     private fun recordingLoop() {
@@ -520,7 +482,6 @@ class KotlinAudioBridge(
         // Reusable ShortArray for filter processing (avoids allocations per frame)
         val shortBuffer = ShortArray(recordFrameSize * recordChannels)
         recordFrameCount = 0
-        recordNonZeroCount = 0
 
         Log.d(TAG, "Recording loop started, frame size: $frameBytes bytes, filters=${filterChain != null}")
 
@@ -557,26 +518,9 @@ class KotlinAudioBridge(
                             }
                         }
 
-                        // Check if frame has any non-zero samples and find max amplitude
-                        var hasNonZero = false
-                        var maxSample = 0
-                        for (i in 0 until bytesRead step 2) {
-                            if (i + 1 < bytesRead) {
-                                // Read as signed int16
-                                val sample = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
-                                val signedSample = if (sample > 32767) sample - 65536 else sample
-                                val absSample = kotlin.math.abs(signedSample)
-                                if (absSample > maxSample) maxSample = absSample
-                                if (absSample > 10) { // Small threshold to ignore noise floor
-                                    hasNonZero = true
-                                }
-                            }
-                        }
-                        if (hasNonZero) recordNonZeroCount++
-
-                        // Log periodically with max amplitude (every 100 frames to reduce overhead)
+                        // Log periodically (every 100 frames to reduce overhead)
                         if (recordFrameCount % 100L == 1L) {
-                            Log.d(TAG, "🎙️ KRec#$recordFrameCount: bytes=$bytesRead maxAmp=$maxSample nz=$recordNonZeroCount q=${recordBuffer.size} flt=${chain != null}")
+                            Log.d(TAG, "🎙️ KRec#$recordFrameCount: bytes=$bytesRead q=${recordBuffer.size} flt=${chain != null}")
                         }
 
                         // Queue frame for Python (non-blocking, drops oldest if full)
@@ -634,22 +578,9 @@ class KotlinAudioBridge(
                 lastMuteState = microphoneMuted
             }
 
-            if (readAudioCount % 25L == 1L || muteStateChanged) {
+            if (readAudioCount % 100L == 1L || muteStateChanged) {
                 val size = data?.size ?: 0
-                val queueSize = recordBuffer.size
-                // Calculate max amplitude if we have data
-                var maxAmp = 0
-                if (data != null && data.size >= 2) {
-                    for (i in 0 until data.size step 2) {
-                        if (i + 1 < data.size) {
-                            val sample = (data[i].toInt() and 0xFF) or (data[i + 1].toInt() shl 8)
-                            val signedSample = if (sample > 32767) sample - 65536 else sample
-                            val absSample = kotlin.math.abs(signedSample)
-                            if (absSample > maxAmp) maxAmp = absSample
-                        }
-                    }
-                }
-                Log.d(TAG, "🎙️ KRead#$readAudioCount: ${if (data != null) "${size}b max=$maxAmp" else "null"} q=$queueSize")
+                Log.d(TAG, "🎙️ KRead#$readAudioCount: ${if (data != null) "${size}b" else "null"} q=${recordBuffer.size}")
             }
 
             // NOTE: We do NOT do software mute here anymore.
@@ -914,19 +845,19 @@ class KotlinAudioBridge(
         )
     }
 
-    // ===== Python Callback Setters =====
+    // ===== Error Callback Setters =====
 
     /**
      * Set callback for recording errors.
      */
-    fun setOnRecordingError(callback: PyObject) {
+    fun setOnRecordingError(callback: (String) -> Unit) {
         onRecordingError = callback
     }
 
     /**
      * Set callback for playback errors.
      */
-    fun setOnPlaybackError(callback: PyObject) {
+    fun setOnPlaybackError(callback: (String) -> Unit) {
         onPlaybackError = callback
     }
 

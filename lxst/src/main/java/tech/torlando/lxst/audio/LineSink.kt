@@ -1,7 +1,7 @@
-package com.lxmf.messenger.reticulum.audio.lxst
+package tech.torlando.lxst.audio
 
 import android.util.Log
-import com.lxmf.messenger.reticulum.audio.bridge.KotlinAudioBridge
+import tech.torlando.lxst.bridge.KotlinAudioBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,14 +34,13 @@ class LineSink(
         private const val TAG = "Columba:LineSink"
 
         // Buffer configuration (matches Python LXST Sinks.py:119-121)
-        const val MAX_FRAMES = 6           // Queue depth
-        const val AUTOSTART_MIN = 1        // Start playback when 1 frame ready
-        const val FRAME_TIMEOUT_FRAMES = 8 // Stop after 8 frame times of underrun
+        const val MAX_FRAMES = 8           // Queue depth (must be > AUTOSTART_MIN + 1)
+        const val AUTOSTART_MIN = 5        // Pre-fill 5 frames (300ms at MQ) before playback
     }
 
     // Frame queue (lock-free, thread-safe)
     private val frameQueue = LinkedBlockingQueue<FloatArray>(MAX_FRAMES)
-    private val bufferMaxHeight = MAX_FRAMES - 3 // Backpressure threshold
+    private val bufferMaxHeight = MAX_FRAMES - 1 // Backpressure: block 1 slot before queue full
 
     // Playback state
     private val isRunningFlag = AtomicBoolean(false)
@@ -113,15 +112,20 @@ class LineSink(
 
         Log.i(TAG, "Starting LineSink: rate=$sampleRate, channels=$channels, lowLatency=$lowLatency")
 
-        // Start bridge playback
-        bridge.startPlayback(
-            sampleRate = sampleRate,
-            channels = channels,
-            lowLatency = lowLatency
-        )
+        // Launch async: AudioTrack setup takes ~500ms and must not block the Mixer thread
+        scope.launch {
+            if (!isRunningFlag.get()) return@launch
 
-        // Launch digest coroutine
-        scope.launch { digestJob() }
+            bridge.startPlayback(
+                sampleRate = sampleRate,
+                channels = channels,
+                lowLatency = lowLatency
+            )
+
+            if (isRunningFlag.get()) {
+                digestJob()
+            }
+        }
     }
 
     /**
@@ -148,7 +152,7 @@ class LineSink(
      * Matches Python LXST Sinks.py:178-217 __digest_job pattern:
      * 1. Poll frame from queue (with timeout)
      * 2. If frame available: convert to bytes, write to bridge, drop if lagging
-     * 3. If no frame: track underrun, stop after timeout
+     * 3. If no frame: track underrun (never stop — call lifecycle handles shutdown)
      */
     private suspend fun digestJob() {
         Log.d(TAG, "Digest job started")
@@ -156,11 +160,15 @@ class LineSink(
         var underrunStartMs: Long? = null
 
         while (isRunningFlag.get()) {
-            // Poll with timeout (10ms to stay responsive)
-            val frame = frameQueue.poll(10, TimeUnit.MILLISECONDS)
+            // Poll with frame-period timeout so we almost always find a frame in steady state
+            val frame = frameQueue.poll(frameTimeMs, TimeUnit.MILLISECONDS)
 
             if (frame != null) {
-                // Clear underrun state
+                // Log underrun recovery
+                if (underrunStartMs != null) {
+                    val underrunMs = System.currentTimeMillis() - underrunStartMs
+                    Log.d(TAG, "Underrun ended after ${underrunMs}ms")
+                }
                 underrunStartMs = null
                 frameCount++
 
@@ -170,11 +178,29 @@ class LineSink(
                     Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples at ${sampleRate}Hz)")
                 }
 
+                // Periodic throughput log
+                if (frameCount % 100L == 0L) {
+                    Log.d(TAG, "Played $frameCount frames, queue=${frameQueue.size}")
+                }
+
                 // Convert float32 to int16 bytes
                 val frameBytes = float32ToBytes(frame)
 
-                // Write to AudioTrack via bridge
+                // Write to AudioTrack via bridge, measuring write duration
+                val writeStartNs = System.nanoTime()
                 bridge.writeAudio(frameBytes)
+                val writeElapsedMs = (System.nanoTime() - writeStartNs) / 1_000_000L
+
+                // Pace output at frame rate to prevent burst-drain oscillation.
+                // When AudioTrack buffer has room (after underrun), writeAudio returns
+                // instantly. Without pacing, we'd drain the entire queue in microseconds,
+                // causing another underrun. Pacing keeps one frame per period, turning
+                // the queue into a proper jitter buffer.
+                // Skip pacing during initial fill (first AUTOSTART_MIN frames) so the
+                // AudioTrack buffer fills quickly.
+                if (frameCount > AUTOSTART_MIN.toLong() && writeElapsedMs < frameTimeMs - 5) {
+                    delay(frameTimeMs - writeElapsedMs - 2) // -2ms safety margin
+                }
 
                 // Drop oldest if buffer is lagging (prevents increasing delay)
                 if (frameQueue.size > bufferMaxHeight) {
@@ -182,23 +208,14 @@ class LineSink(
                     Log.w(TAG, "Buffer lag, dropped oldest frame (height=${frameQueue.size})")
                 }
             } else {
-                // Underrun: no frames available
+                // Underrun: no frames available. Never stop AudioTrack — teardown/rebuild
+                // causes ~880ms gap (480ms timeout + 400ms AudioTrack creation) with
+                // catastrophic frame loss. Keep polling; stop() handles shutdown.
                 if (underrunStartMs == null) {
                     underrunStartMs = System.currentTimeMillis()
                     Log.d(TAG, "Buffer underrun started")
-                } else {
-                    // Check timeout (stop playback after FRAME_TIMEOUT_FRAMES of silence)
-                    val underrunDurationMs = System.currentTimeMillis() - underrunStartMs
-                    val timeoutMs = frameTimeMs * FRAME_TIMEOUT_FRAMES
-
-                    if (underrunDurationMs > timeoutMs) {
-                        Log.i(TAG, "No frames for ${underrunDurationMs}ms, stopping playback")
-                        isRunningFlag.set(false)
-                    } else {
-                        // Brief sleep during underrun (Python LXST Sinks.py:214-215)
-                        delay(frameTimeMs / 10)
-                    }
                 }
+                // poll(frameTimeMs) already provides efficient blocking wait
             }
         }
 

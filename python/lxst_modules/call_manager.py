@@ -398,18 +398,23 @@ class CallManager:
             # Set packet callback for audio/signalling
             link.set_packet_callback(self.__packet_received)
 
-            # Send RINGING to remote
+            # Tell Kotlin Telephone about the incoming call FIRST so the
+            # state machine (isIncomingCall, callStatus) is ready before
+            # any remote signals arrive. This enables answer() to work.
+            self._notify_kotlin("ringing", identity_hash)
+
+            # Send RINGING to remote (Python handles network signalling)
             self._send_signal_to_remote(STATUS_RINGING, link)
 
-            # Notify Kotlin CallBridge
+            # Notify Kotlin CallBridge directly for reliable UI notification.
+            # _notify_kotlin above goes through a callback chain that may fail
+            # silently; direct CallBridge call ensures the incoming call screen
+            # always appears. Duplicate onIncomingCall is idempotent.
             if self._kotlin_call_bridge is not None:
                 try:
                     self._kotlin_call_bridge.onIncomingCall(identity_hash)
                 except Exception as e:
                     RNS.log(f"Error notifying Kotlin of incoming call: {e}", RNS.LOG_ERROR)
-
-            # Send RINGING signal to Kotlin Telephone state machine
-            self._send_signal_to_kotlin(STATUS_RINGING)
 
     def __outgoing_link_established(self, link):
         """Handle outgoing link established (we connected to remote)."""

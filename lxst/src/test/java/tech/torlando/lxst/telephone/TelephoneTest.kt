@@ -335,11 +335,53 @@ class TelephoneTest {
     // ===== Answer =====
 
     @Test
-    fun `answer when not ringing is ignored`() {
-        telephone.answer()
+    fun `answer when not ringing returns false`() {
+        val result = telephone.answer()
 
+        assertFalse(result)
         // Should not send established signal since not in ringing state
         verify(exactly = 0) { mockTransport.sendSignal(Signalling.STATUS_ESTABLISHED) }
+    }
+
+    @Test
+    fun `answer when ringing returns true and establishes call`() = runTest {
+        telephone.onIncomingCall("abcd1234")
+        advanceUntilIdle()
+
+        val result = telephone.answer()
+
+        assertTrue(result)
+        assertEquals(Signalling.STATUS_ESTABLISHED, telephone.callStatus)
+        verify { mockTransport.sendSignal(Signalling.STATUS_ESTABLISHED) }
+        verify { mockCallBridge.onCallEstablished("abcd1234") }
+    }
+
+    // ===== prepareForAnswer (JIT state setup) =====
+
+    @Test
+    fun `prepareForAnswer sets state for answering`() {
+        telephone.prepareForAnswer("abcd1234")
+        // answer() should now succeed
+        val result = telephone.answer()
+        assertTrue(result)
+        assertEquals(Signalling.STATUS_ESTABLISHED, telephone.callStatus)
+    }
+
+    @Test
+    fun `prepareForAnswer does not activate ringtone or notify bridge`() {
+        telephone.prepareForAnswer("abcd1234")
+        // Should NOT trigger callBridge.onIncomingCall (that already happened via Python)
+        verify(exactly = 0) { mockCallBridge.onIncomingCall(any()) }
+    }
+
+    @Test
+    fun `prepareForAnswer when already in call is ignored`() = runTest {
+        telephone.onIncomingCall("first1234")
+        advanceUntilIdle()
+
+        telephone.prepareForAnswer("second5678")
+        // Should still be on first call
+        assertEquals(Signalling.STATUS_RINGING, telephone.callStatus)
     }
 
     // ===== Incoming Call =====
@@ -359,10 +401,12 @@ class TelephoneTest {
     }
 
     @Test
-    fun `onIncomingCall sends RINGING signal to transport`() = runTest {
+    fun `onIncomingCall does not send RINGING to transport (Python handles it)`() = runTest {
         telephone.onIncomingCall("abcd1234")
         advanceUntilIdle()
-        verify { mockTransport.sendSignal(Signalling.STATUS_RINGING) }
+        // Python call_manager sends STATUS_RINGING to remote before calling
+        // Telephone.onIncomingCall(), so Kotlin should not send it again
+        verify(exactly = 0) { mockTransport.sendSignal(Signalling.STATUS_RINGING) }
     }
 
     @Test

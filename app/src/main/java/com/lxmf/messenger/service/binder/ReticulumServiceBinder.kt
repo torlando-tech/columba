@@ -1445,8 +1445,26 @@ class ReticulumServiceBinder(
             // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
             val telephone = wrapperManager.getTelephone()
             if (telephone != null) {
-                telephone.answer()
-                """{"success": true}"""
+                var answered = telephone.answer()
+                if (!answered) {
+                    // Telephone doesn't know about incoming call (_notify_kotlin callback
+                    // from Python doesn't work reliably via Chaquopy). Set up minimal
+                    // state from CallBridge which Python notified directly.
+                    val identity = tech.torlando.lxst.bridge.CallBridge.getInstance()
+                        .remoteIdentity.value
+                    if (identity != null) {
+                        Log.i(TAG, "📞 Telephone missed incoming call setup, " +
+                            "initializing from CallBridge: ${identity.take(16)}...")
+                        telephone.prepareForAnswer(identity)
+                        answered = telephone.answer()
+                    }
+                }
+                if (answered) {
+                    """{"success": true}"""
+                } else {
+                    Log.e(TAG, "📞 Telephone.answer() returned false (not ringing or not incoming)")
+                    """{"success": false, "error": "Call not in ringing state"}"""
+                }
             } else {
                 Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
                 wrapperManager.withWrapper { wrapper ->

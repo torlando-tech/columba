@@ -209,10 +209,11 @@ class Telephone(
      *
      * Matches Python Telephony.py answer() (lines 404-423).
      */
-    fun answer() {
+    fun answer(): Boolean {
         if (!isIncomingCall || callStatus != Signalling.STATUS_RINGING) {
-            Log.w(TAG, "Cannot answer: no incoming call or not ringing (status=$callStatus)")
-            return
+            Log.w(TAG, "Cannot answer: no incoming call or not ringing " +
+                "(isIncoming=$isIncomingCall, status=$callStatus)")
+            return false
         }
 
         Log.i(TAG, "Answering call from ${remoteIdentityHash?.take(16)}...")
@@ -231,6 +232,7 @@ class Telephone(
 
         // Notify UI
         remoteIdentityHash?.let { callBridge.onCallEstablished(it) }
+        return true
     }
 
     /**
@@ -524,8 +526,8 @@ class Telephone(
         // Prepare for ringing
         prepareDiallingPipelines()
 
-        // Signal ringing to remote
-        networkTransport.sendSignal(Signalling.STATUS_RINGING)
+        // Note: Python call_manager already sends STATUS_RINGING to remote
+        // before calling this method. No need to send it again.
 
         // Activate ring tone
         activateRingTone()
@@ -541,6 +543,25 @@ class Telephone(
                 hangup()
             }
         }
+    }
+
+    /**
+     * Set up minimal state so answer() can succeed.
+     *
+     * Used by the service binder as a fallback when the Python callback
+     * (_notify_kotlin) fails to reach onIncomingCall(). Unlike onIncomingCall(),
+     * this does NOT activate ringtone, notify CallBridge, or start the ring
+     * timeout — those have already happened through Python's direct CallBridge call.
+     */
+    fun prepareForAnswer(identityHash: String) {
+        if (isCallActive()) {
+            Log.w(TAG, "Cannot prepareForAnswer: already in call")
+            return
+        }
+        Log.i(TAG, "prepareForAnswer: setting up state for ${identityHash.take(16)}...")
+        isIncomingCall = true
+        remoteIdentityHash = identityHash
+        callStatus = Signalling.STATUS_RINGING
     }
 
     // ===== Pipeline Management (matches Python Telephony.py) =====

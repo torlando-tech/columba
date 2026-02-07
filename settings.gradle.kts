@@ -19,7 +19,11 @@ rootProject.name = "columba"
 include(":app")
 include(":data")
 include(":domain")
-include(":lxst")
+includeBuild("LXST-kt") {
+    dependencySubstitution {
+        substitute(module("tech.torlando:lxst")).using(project(":lxst"))
+    }
+}
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")

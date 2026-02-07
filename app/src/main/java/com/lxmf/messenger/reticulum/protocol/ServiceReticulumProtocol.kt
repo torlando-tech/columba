@@ -535,8 +535,8 @@ class ServiceReticulumProtocol(
                     Log.i(TAG, "📞 Incoming call: $callJson")
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", "")
-                    // Notify CallBridge of incoming call
-                    tech.torlando.lxst.bridge.CallBridge
+                    // Notify CallCoordinator of incoming call
+                    tech.torlando.lxst.core.CallCoordinator
                         .getInstance()
                         .onIncomingCall(callerHash)
                 } catch (e: Exception) {
@@ -551,9 +551,9 @@ class ServiceReticulumProtocol(
                     val state = json.optString("state", "unknown")
                     val remoteIdentity = json.optString("remote_identity", null)
 
-                    // Notify CallBridge of state change
+                    // Notify CallCoordinator of state change
                     val bridge =
-                        tech.torlando.lxst.bridge.CallBridge
+                        tech.torlando.lxst.core.CallCoordinator
                             .getInstance()
                     when (state) {
                         "ringing" -> bridge.onCallRinging(remoteIdentity ?: "")
@@ -572,8 +572,8 @@ class ServiceReticulumProtocol(
                     Log.i(TAG, "📞 Call ended: $callJson")
                     val json = JSONObject(callJson)
                     val callerHash = json.optString("caller_hash", null)
-                    // Notify CallBridge of call ended
-                    tech.torlando.lxst.bridge.CallBridge
+                    // Notify CallCoordinator of call ended
+                    tech.torlando.lxst.core.CallCoordinator
                         .getInstance()
                         .onCallEnded(callerHash)
                 } catch (e: Exception) {

@@ -377,7 +377,7 @@ chaquopy {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
-    implementation(project(":lxst"))
+    implementation("tech.torlando:lxst")
     implementation(project(":reticulum"))
 
     // Core

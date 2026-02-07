@@ -4,7 +4,7 @@ import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import tech.torlando.lxst.bridge.NetworkPacketBridge
+import tech.torlando.lxst.core.PacketRouter
 import tech.torlando.lxst.telephone.NetworkTransport
 
 /**
@@ -16,13 +16,13 @@ import tech.torlando.lxst.telephone.NetworkTransport
  *
  * **Threading Model:**
  * - All Python calls use Dispatchers.IO to avoid blocking audio thread
- * - Callback registration delegates to NetworkPacketBridge (already handles threading)
+ * - Callback registration delegates to PacketRouter (already handles threading)
  *
- * @param bridge NetworkPacketBridge for sending/receiving packets and signals
+ * @param bridge PacketRouter for sending/receiving packets and signals
  * @param callManager Python call_manager PyObject for link establishment/teardown
  */
 class PythonNetworkTransport(
-    private val bridge: NetworkPacketBridge,
+    private val bridge: PacketRouter,
     private val callManager: PyObject
 ) : NetworkTransport {
 
@@ -111,7 +111,7 @@ class PythonNetworkTransport(
     /**
      * Send encoded audio packet to remote peer.
      *
-     * Delegates to NetworkPacketBridge.sendPacket() which:
+     * Delegates to PacketRouter.sendPacket() which:
      * - Uses Dispatchers.IO for non-blocking send
      * - Handles silent failure (packet loss acceptable)
      *
@@ -124,7 +124,7 @@ class PythonNetworkTransport(
     /**
      * Send signalling message to remote peer.
      *
-     * Delegates to NetworkPacketBridge.sendSignal() which:
+     * Delegates to PacketRouter.sendSignal() which:
      * - Uses Dispatchers.IO for non-blocking send
      * - Handles silent failure (fire-and-forget)
      *
@@ -137,7 +137,7 @@ class PythonNetworkTransport(
     /**
      * Register callback for incoming audio packets.
      *
-     * Delegates to NetworkPacketBridge.setPacketCallback().
+     * Delegates to PacketRouter.setPacketCallback().
      * Callback is invoked on IO thread - implementations should not block.
      *
      * @param callback Function receiving encoded audio packets
@@ -149,7 +149,7 @@ class PythonNetworkTransport(
     /**
      * Register callback for incoming signalling messages.
      *
-     * Delegates to NetworkPacketBridge.setSignalCallback().
+     * Delegates to PacketRouter.setSignalCallback().
      * Callback is invoked on IO thread - implementations should not block.
      *
      * @param callback Function receiving signalling codes

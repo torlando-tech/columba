@@ -8,11 +8,11 @@ import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.reticulum.call.telephone.PythonNetworkTransport
-import tech.torlando.lxst.bridge.AudioPacketHandler
-import tech.torlando.lxst.bridge.CallBridge
-import tech.torlando.lxst.bridge.KotlinAudioBridge
-import tech.torlando.lxst.bridge.NetworkPacketBridge
-import tech.torlando.lxst.bridge.PythonCallManagerInterface
+import tech.torlando.lxst.core.AudioPacketHandler
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.AudioDevice
+import tech.torlando.lxst.core.PacketRouter
+import tech.torlando.lxst.core.CallController
 import tech.torlando.lxst.telephone.Telephone
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +48,7 @@ class PythonWrapperManager(
 
     // Network packet bridge for Kotlin-Python audio packet handoff
     @Volatile
-    private var networkPacketBridge: NetworkPacketBridge? = null
+    private var networkPacketBridge: PacketRouter? = null
 
     // Kotlin Telephone for voice calls
     @Volatile
@@ -390,17 +390,17 @@ class PythonWrapperManager(
         withWrapper { wrapper ->
             try {
                 // Get audio bridge singleton
-                val audioBridge = KotlinAudioBridge.getInstance(context)
+                val audioBridge = AudioDevice.getInstance(context)
                 wrapper.callAttr("set_audio_bridge", audioBridge)
                 Log.d(TAG, "Audio bridge set in Python wrapper")
 
                 // Get call bridge singleton
-                val callBridge = CallBridge.getInstance()
+                val callBridge = CallCoordinator.getInstance()
                 wrapper.callAttr("set_call_bridge", callBridge)
                 Log.d(TAG, "Call bridge set in Python wrapper")
 
                 // Get network packet bridge singleton (eager init for Phase 10)
-                val netBridge = NetworkPacketBridge.getInstance(context)
+                val netBridge = PacketRouter.getInstance(context)
                 networkPacketBridge = netBridge
                 wrapper.callAttr("set_network_bridge", netBridge)
                 Log.d(TAG, "Network packet bridge set in Python wrapper")
@@ -425,7 +425,7 @@ class PythonWrapperManager(
 
                     callManagerPyObject?.let { cm ->
                         // Register AudioPacketHandler for Kotlin→Python audio/signal packets.
-                        // Without this, Packetizer encodes audio but NetworkPacketBridge's consumer
+                        // Without this, Packetizer encodes audio but PacketRouter's consumer
                         // loop silently drops all packets (packetHandler is null).
                         netBridge.setPacketHandler(object : AudioPacketHandler {
                             override fun receiveAudioPacket(packet: ByteArray) {
@@ -436,9 +436,9 @@ class PythonWrapperManager(
                             }
                         })
 
-                        // Register PythonCallManagerInterface wrapper for CallBridge.
+                        // Register CallController wrapper for CallCoordinator.
                         // Kotlin wraps the PyObject so :lxst has no Chaquopy dependency.
-                        callBridge.setCallManager(object : PythonCallManagerInterface {
+                        callBridge.setCallManager(object : CallController {
                             override fun call(destinationHash: String) {
                                 cm.callAttr("call", destinationHash)
                             }
@@ -473,7 +473,7 @@ class PythonWrapperManager(
     /**
      * Setup Kotlin Telephone with Python network transport.
      *
-     * Creates PythonNetworkTransport wrapping NetworkPacketBridge and call_manager,
+     * Creates PythonNetworkTransport wrapping PacketRouter and call_manager,
      * then creates Telephone using that transport.
      *
      * Call this after setupCallManager() completes successfully.
@@ -487,13 +487,13 @@ class PythonWrapperManager(
         }
 
         val netBridge = networkPacketBridge ?: run {
-            Log.e(TAG, "Cannot setup Telephone: NetworkPacketBridge not initialized")
+            Log.e(TAG, "Cannot setup Telephone: PacketRouter not initialized")
             return false
         }
 
         return try {
-            val audioBridge = KotlinAudioBridge.getInstance(context)
-            val callBridge = CallBridge.getInstance()
+            val audioBridge = AudioDevice.getInstance(context)
+            val callBridge = CallCoordinator.getInstance()
 
             // Create Python network transport
             val transport = PythonNetworkTransport(netBridge, callManager)

@@ -1247,7 +1247,7 @@ class ReticulumServiceBinder(
             val callManagerInitialized = wrapperManager.setupCallManager()
             if (callManagerInitialized) {
                 Log.i(TAG, "📞 LXST voice call support enabled")
-                registerCallBridgeListeners()
+                registerCallCoordinatorListeners()
 
                 // Initialize Kotlin Telephone (Phase 11 - Kotlin LXST)
                 val telephoneInitialized = wrapperManager.setupTelephone()
@@ -1265,9 +1265,9 @@ class ReticulumServiceBinder(
     }
 
     /** Register listeners for IPC notification to UI process. */
-    private fun registerCallBridgeListeners() {
+    private fun registerCallCoordinatorListeners() {
         val callBridge =
-            tech.torlando.lxst.bridge.CallBridge
+            tech.torlando.lxst.core.CallCoordinator
                 .getInstance()
         val callNotificationHelper = CallNotificationHelper(context)
 
@@ -1449,12 +1449,12 @@ class ReticulumServiceBinder(
                 if (!answered) {
                     // Telephone doesn't know about incoming call (_notify_kotlin callback
                     // from Python doesn't work reliably via Chaquopy). Set up minimal
-                    // state from CallBridge which Python notified directly.
-                    val identity = tech.torlando.lxst.bridge.CallBridge.getInstance()
+                    // state from CallCoordinator which Python notified directly.
+                    val identity = tech.torlando.lxst.core.CallCoordinator.getInstance()
                         .remoteIdentity.value
                     if (identity != null) {
                         Log.i(TAG, "📞 Telephone missed incoming call setup, " +
-                            "initializing from CallBridge: ${identity.take(16)}...")
+                            "initializing from CallCoordinator: ${identity.take(16)}...")
                         telephone.prepareForAnswer(identity)
                         answered = telephone.answer()
                     }
@@ -1532,8 +1532,8 @@ class ReticulumServiceBinder(
         try {
             Log.d(TAG, "📞 Setting call speaker: $speakerOn")
 
-            // Use KotlinAudioBridge directly for speaker routing (Phase 11 - Kotlin LXST)
-            tech.torlando.lxst.bridge.KotlinAudioBridge
+            // Use AudioDevice directly for speaker routing (Phase 11 - Kotlin LXST)
+            tech.torlando.lxst.core.AudioDevice
                 .getInstance(context)
                 .setSpeakerphoneOn(speakerOn)
         } catch (e: Exception) {

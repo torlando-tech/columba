@@ -1,7 +1,6 @@
 package tech.torlando.lxst.codec
 
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.floor
 
 /**
@@ -10,7 +9,7 @@ import kotlin.math.floor
  * Matches Python LXST Codecs/Codec2.py structure for wire compatibility.
  * Provides 7 modes from 700 bps to 3200 bps.
  *
- * Uses sh123/codec2_talkie JNI bindings to codec2 library.
+ * Uses MIT-licensed lxst_codec2_jni wrapper to libcodec2 (LGPL-2.1).
  */
 class Codec2(mode: Int = CODEC2_2400) : Codec() {
     companion object {
@@ -40,16 +39,15 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
 
         val HEADER_MODES = MODE_HEADERS.entries.associate { (k, v) -> v to k }
 
-        // Map our mode constants to library mode constants
-        // Based on com.ustadmobile.codec2.Codec2 constants
+        // Map our mode constants to NativeCodec2 mode constants
         private val MODE_TO_LIBRARY = mapOf(
-            CODEC2_3200 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_3200, // 0
-            CODEC2_2400 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_2400, // 1
-            CODEC2_1600 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_1600, // 2
-            CODEC2_1400 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_1400, // 3
-            CODEC2_1300 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_1300, // 4
-            CODEC2_1200 to com.ustadmobile.codec2.Codec2.CODEC2_MODE_1200, // 5
-            CODEC2_700C to com.ustadmobile.codec2.Codec2.CODEC2_MODE_700C  // 8
+            CODEC2_3200 to NativeCodec2.MODE_3200, // 0
+            CODEC2_2400 to NativeCodec2.MODE_2400, // 1
+            CODEC2_1600 to NativeCodec2.MODE_1600, // 2
+            CODEC2_1400 to NativeCodec2.MODE_1400, // 3
+            CODEC2_1300 to NativeCodec2.MODE_1300, // 4
+            CODEC2_1200 to NativeCodec2.MODE_1200, // 5
+            CODEC2_700C to NativeCodec2.MODE_700C // 8
         )
     }
 
@@ -75,12 +73,12 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
 
         // Destroy old codec instance if exists
         if (codec2Handle != 0L) {
-            com.ustadmobile.codec2.Codec2.destroy(codec2Handle)
+            NativeCodec2.destroy(codec2Handle)
         }
 
         // Create new codec instance
         val libraryMode = MODE_TO_LIBRARY[mode] ?: throw CodecError("No library mode mapping for: $mode")
-        codec2Handle = com.ustadmobile.codec2.Codec2.create(libraryMode)
+        codec2Handle = NativeCodec2.create(libraryMode)
         if (codec2Handle == 0L) {
             throw CodecError("Failed to create Codec2 instance for mode $mode")
         }
@@ -95,10 +93,8 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
         }
 
         // Get codec parameters
-        val samplesPerFrame = com.ustadmobile.codec2.Codec2.getSamplesPerFrame(codec2Handle)
-        // Despite the name, getBitsSize() returns BYTES per frame (confirmed by
-        // codec2_talkie source: "Codec2.getBitsSize(_codec2Con); // returns number of bytes")
-        val bytesPerFrame = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle).toInt()
+        val samplesPerFrame = NativeCodec2.getSamplesPerFrame(codec2Handle)
+        val bytesPerFrame = NativeCodec2.getFrameBytes(codec2Handle)
 
         // Calculate number of frames
         val numFrames = floor(int16Samples.size.toDouble() / samplesPerFrame).toInt()
@@ -114,14 +110,9 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
             val frameEnd = (i + 1) * samplesPerFrame
             val frameSamples = int16Samples.copyOfRange(frameStart, frameEnd)
 
-            // Encode frame — JNI writes packed bytes into CharArray
-            val encodedChars = CharArray(bytesPerFrame)
-            com.ustadmobile.codec2.Codec2.encode(codec2Handle, frameSamples, encodedChars)
-
-            // Convert CharArray to ByteArray (each char holds one packed byte)
-            val encodedBytes = ByteArray(bytesPerFrame) { j ->
-                (encodedChars[j].code and 0xFF).toByte()
-            }
+            // Encode frame — JNI writes packed bytes directly into ByteArray
+            val encodedBytes = ByteArray(bytesPerFrame)
+            NativeCodec2.encode(codec2Handle, frameSamples, encodedBytes)
 
             encodedBuffer.put(encodedBytes)
         }
@@ -144,8 +135,8 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
         }
 
         // Get codec parameters
-        val samplesPerFrame = com.ustadmobile.codec2.Codec2.getSamplesPerFrame(codec2Handle)
-        val bytesPerFrame = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle).toInt()
+        val samplesPerFrame = NativeCodec2.getSamplesPerFrame(codec2Handle)
+        val bytesPerFrame = NativeCodec2.getFrameBytes(codec2Handle)
 
         // Calculate number of frames
         val numFrames = floor(encodedData.size.toDouble() / bytesPerFrame).toInt()
@@ -156,12 +147,11 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
         for (i in 0 until numFrames) {
             val frameStart = i * bytesPerFrame
             val frameEnd = (i + 1) * bytesPerFrame
-            // JNI decode() takes ByteArray of packed bytes directly
             val encodedBytes = encodedData.copyOfRange(frameStart, frameEnd)
 
             // Decode frame
             val frameSamples = ShortArray(samplesPerFrame)
-            com.ustadmobile.codec2.Codec2.decode(codec2Handle, frameSamples, encodedBytes)
+            NativeCodec2.decode(codec2Handle, encodedBytes, frameSamples)
 
             decodedSamples.addAll(frameSamples.toList())
         }
@@ -177,7 +167,7 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
      */
     fun close() {
         if (codec2Handle != 0L) {
-            com.ustadmobile.codec2.Codec2.destroy(codec2Handle)
+            NativeCodec2.destroy(codec2Handle)
             codec2Handle = 0L
         }
     }

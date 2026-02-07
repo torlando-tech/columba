@@ -7,8 +7,7 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    // Changed from FAIL_ON_PROJECT_REPOS to PREFER_SETTINGS to allow codec2_talkie submodule
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
@@ -24,5 +23,3 @@ include(":lxst")
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")
-include(":external:codec2_talkie:libcodec2-android")
-include(":external:codec2_talkie:libopus-android")

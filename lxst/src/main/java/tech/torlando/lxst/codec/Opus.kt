@@ -1,7 +1,7 @@
 package tech.torlando.lxst.codec
 
 import android.util.Log
-import com.radio.opus.Opus as OpusNative
+import tech.torlando.lxst.codec.NativeOpus as OpusNative
 import kotlin.math.ceil
 
 /**

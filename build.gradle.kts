@@ -16,10 +16,6 @@ plugins {
     id("de.aaschmid.cpd") version "3.5"
 }
 
-// Configuration for codec2_talkie submodule (required by libcodec2-android)
-// Only build arm64-v8a to match our Chaquopy Python configuration
-extra["ABI_FILTERS"] = "arm64-v8a"
-
 // Apply JaCoCo, ktlint, and detekt to all subprojects (except detekt-rules)
 subprojects {
     // Skip detekt-rules module - it's a pure JVM module for detekt custom rules

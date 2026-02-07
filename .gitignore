@@ -107,3 +107,7 @@ sentry-wizard
 .claude-flow/
 .planning/
 .swarm/
+.mcp.json
+
+# Accidental pip/dev artifacts
+=*

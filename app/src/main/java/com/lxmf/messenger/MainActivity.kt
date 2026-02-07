@@ -65,8 +65,8 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import tech.torlando.lxst.bridge.CallBridge
-import tech.torlando.lxst.bridge.CallState
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
@@ -762,7 +762,7 @@ fun ColumbaNavigation(
     }
 
     // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
-    val callBridge = remember { CallBridge.getInstance() }
+    val callBridge = remember { CallCoordinator.getInstance() }
     val callState by callBridge.callState.collectAsState()
 
     LaunchedEffect(callState) {

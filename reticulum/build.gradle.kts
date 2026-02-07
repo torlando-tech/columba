@@ -54,7 +54,7 @@ chaquopy {
 
 dependencies {
     // LXST module (telephony, codecs, audio pipeline)
-    api(project(":lxst"))
+    api("tech.torlando:lxst")
 
     // Hilt
     implementation(libs.hilt)

@@ -96,8 +96,9 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
 
         // Get codec parameters
         val samplesPerFrame = com.ustadmobile.codec2.Codec2.getSamplesPerFrame(codec2Handle)
-        val bitsSize = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle)
-        val bytesPerFrame = (bitsSize + 7) / 8  // Round up to nearest byte
+        // Despite the name, getBitsSize() returns BYTES per frame (confirmed by
+        // codec2_talkie source: "Codec2.getBitsSize(_codec2Con); // returns number of bytes")
+        val bytesPerFrame = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle).toInt()
 
         // Calculate number of frames
         val numFrames = floor(int16Samples.size.toDouble() / samplesPerFrame).toInt()
@@ -113,23 +114,13 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
             val frameEnd = (i + 1) * samplesPerFrame
             val frameSamples = int16Samples.copyOfRange(frameStart, frameEnd)
 
-            // Encode frame
-            val encodedBits = CharArray(bitsSize)
-            com.ustadmobile.codec2.Codec2.encode(codec2Handle, frameSamples, encodedBits)
+            // Encode frame — JNI writes packed bytes into CharArray
+            val encodedChars = CharArray(bytesPerFrame)
+            com.ustadmobile.codec2.Codec2.encode(codec2Handle, frameSamples, encodedChars)
 
-            // Convert bits to bytes
-            // The library returns bits as char array, pack into bytes
-            val encodedBytes = ByteArray(bytesPerFrame)
-            for (byteIdx in 0 until bytesPerFrame) {
-                var byte = 0
-                for (bitIdx in 0 until 8) {
-                    val charIdx = byteIdx * 8 + bitIdx
-                    if (charIdx < bitsSize) {
-                        val bit = if (encodedBits[charIdx].code != 0) 1 else 0
-                        byte = byte or (bit shl (7 - bitIdx))
-                    }
-                }
-                encodedBytes[byteIdx] = byte.toByte()
+            // Convert CharArray to ByteArray (each char holds one packed byte)
+            val encodedBytes = ByteArray(bytesPerFrame) { j ->
+                (encodedChars[j].code and 0xFF).toByte()
             }
 
             encodedBuffer.put(encodedBytes)
@@ -154,8 +145,7 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
 
         // Get codec parameters
         val samplesPerFrame = com.ustadmobile.codec2.Codec2.getSamplesPerFrame(codec2Handle)
-        val bitsSize = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle)
-        val bytesPerFrame = (bitsSize + 7) / 8
+        val bytesPerFrame = com.ustadmobile.codec2.Codec2.getBitsSize(codec2Handle).toInt()
 
         // Calculate number of frames
         val numFrames = floor(encodedData.size.toDouble() / bytesPerFrame).toInt()
@@ -166,24 +156,12 @@ class Codec2(mode: Int = CODEC2_2400) : Codec() {
         for (i in 0 until numFrames) {
             val frameStart = i * bytesPerFrame
             val frameEnd = (i + 1) * bytesPerFrame
+            // JNI decode() takes ByteArray of packed bytes directly
             val encodedBytes = encodedData.copyOfRange(frameStart, frameEnd)
-
-            // Convert bytes to bits (char array)
-            val encodedBits = ByteArray(bitsSize)
-            for (byteIdx in encodedBytes.indices) {
-                val byte = encodedBytes[byteIdx].toInt() and 0xFF
-                for (bitIdx in 0 until 8) {
-                    val charIdx = byteIdx * 8 + bitIdx
-                    if (charIdx < bitsSize) {
-                        val bit = (byte shr (7 - bitIdx)) and 1
-                        encodedBits[charIdx] = bit.toByte()
-                    }
-                }
-            }
 
             // Decode frame
             val frameSamples = ShortArray(samplesPerFrame)
-            com.ustadmobile.codec2.Codec2.decode(codec2Handle, frameSamples, encodedBits)
+            com.ustadmobile.codec2.Codec2.decode(codec2Handle, frameSamples, encodedBytes)
 
             decodedSamples.addAll(frameSamples.toList())
         }

@@ -226,6 +226,9 @@ class Telephone(
         stopRingTone()
         disableDialTone()
 
+        // Confirm our profile to caller so both sides agree
+        sendProfilePreference()
+
         // Signal established to remote
         callStatus = Signalling.STATUS_ESTABLISHED
         networkTransport.sendSignal(Signalling.STATUS_ESTABLISHED)
@@ -285,6 +288,7 @@ class Telephone(
         // Reset state
         val previousIdentity = remoteIdentityHash
         callStatus = Signalling.STATUS_AVAILABLE
+        activeProfile = Profile.DEFAULT
         transmitMuted = false
         receiveMuted = false
         isIncomingCall = false

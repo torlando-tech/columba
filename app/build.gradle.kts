@@ -339,14 +339,6 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Pre-built pycodec2 wheels for each ABI live in wheels/pycodec2/.
-            // --find-links lets pip auto-select the matching platform wheel.
-            // Uses pure Python ctypes wrapper (not Cython) to avoid Android linker namespace
-            // symbol resolution issues with Python C API symbols like PyExc_RuntimeError
-            // audioop is built-in on Python 3.11, no external wheel needed
-            options("--find-links", file("../wheels/pycodec2").absolutePath)
-            install("pycodec2==4.1.1")
-
             // Install ble-reticulum from GitHub
             install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
 
@@ -362,9 +354,7 @@ chaquopy {
         }
 
         // Extract package files so .py sources are accessible at runtime
-        // pycodec2 needs to be extracted so libcodec2.so can be loaded at runtime
-        // pycodec2 needs libcodec2.so extracted at runtime
-        extractPackages("ble_reticulum", "ble_modules", "pycodec2")
+        extractPackages("ble_reticulum", "ble_modules")
     }
 
     sourceSets {

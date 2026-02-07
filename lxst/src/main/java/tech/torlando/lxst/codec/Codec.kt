@@ -17,7 +17,9 @@ abstract class Codec {
     var frameQuantaMs: Float? = null
     var frameMaxMs: Float? = null
     var validFrameMs: List<Float>? = null
-    // Note: source/sink omitted for now (Phase 8 will add)
+
+    /** Number of audio channels this codec operates on (1=mono, 2=stereo). */
+    open val codecChannels: Int get() = 1
 
     /**
      * Encode float32 audio samples to compressed bytes.

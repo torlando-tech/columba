@@ -167,6 +167,97 @@ class OpusInstrumentedTest {
         println("VOICE_LOW round-trip: ${testAudio.size} -> ${encoded.size} bytes -> ${decoded.size} samples")
     }
 
+    // ===== MONO→STEREO UPMIX TESTS =====
+    // These test the actual bug scenario: pipeline feeds mono frames to stereo codec.
+    // Before the fix, this threw CodecError("Invalid frame duration: 30.0ms").
+
+    @Test
+    fun voiceMax_monoInput_encodesSuccessfully() {
+        // Simulate pipeline: mic captures mono (2880 samples = 60ms at 48kHz mono)
+        // Codec expects stereo — upmix should handle this transparently
+        opus = Opus(Opus.PROFILE_VOICE_MAX)
+        val sampleRate = Opus.profileSamplerate(Opus.PROFILE_VOICE_MAX) // 48000
+        val monoSamples = (sampleRate * 0.06).toInt() // 2880 mono samples (60ms)
+        val monoFrame = FloatArray(monoSamples) { i ->
+            val phase = (i.toFloat() / sampleRate) * 440f * 2f * Math.PI.toFloat()
+            kotlin.math.sin(phase) * 0.5f
+        }
+
+        val encoded = opus!!.encode(monoFrame)
+        assertTrue("Mono input to stereo codec should encode successfully", encoded.isNotEmpty())
+        println("VOICE_MAX mono→stereo encode: ${monoFrame.size} mono samples → ${encoded.size} bytes")
+    }
+
+    @Test
+    fun voiceMax_monoInput_roundTripProducesStereo() {
+        // Encode mono, decode should produce stereo (5760 interleaved samples)
+        opus = Opus(Opus.PROFILE_VOICE_MAX)
+        val sampleRate = 48000
+        val monoSamples = (sampleRate * 0.06).toInt() // 2880
+        val monoFrame = FloatArray(monoSamples) { i ->
+            val phase = (i.toFloat() / sampleRate) * 440f * 2f * Math.PI.toFloat()
+            kotlin.math.sin(phase) * 0.5f
+        }
+
+        val encoded = opus!!.encode(monoFrame)
+        val decoded = opus!!.decode(encoded)
+
+        // Decode always outputs stereo for VOICE_MAX: 2880 samples/ch × 2ch = 5760
+        assertEquals(
+            "Mono encode → stereo decode should produce 5760 samples",
+            5760, decoded.size
+        )
+        assertTrue("Decoded audio should not be silent", decoded.any { it != 0f })
+        println("VOICE_MAX mono→stereo round-trip: ${monoFrame.size} → ${encoded.size} bytes → ${decoded.size}")
+    }
+
+    @Test
+    fun voiceMax_monoInput_sustained50Frames() {
+        // Pipeline sends 50 consecutive mono frames — simulates a real call
+        opus = Opus(Opus.PROFILE_VOICE_MAX)
+        val sampleRate = 48000
+        val monoFrame = FloatArray((sampleRate * 0.06).toInt()) { i ->
+            kotlin.math.sin((i.toFloat() / sampleRate) * 440f * 2f * Math.PI.toFloat()) * 0.5f
+        }
+
+        var successCount = 0
+        repeat(50) {
+            try {
+                val encoded = opus!!.encode(monoFrame)
+                if (encoded.isNotEmpty()) successCount++
+            } catch (_: Exception) { /* count failures */ }
+        }
+
+        assertEquals("All 50 mono frames should encode to stereo successfully", 50, successCount)
+    }
+
+    @Test
+    fun audioMedium_monoInput_encodesSuccessfully() {
+        // AUDIO_MEDIUM is also stereo (24kHz, 2ch) — verify upmix works there too
+        opus = Opus(Opus.PROFILE_AUDIO_MEDIUM)
+        val sampleRate = Opus.profileSamplerate(Opus.PROFILE_AUDIO_MEDIUM) // 24000
+        val monoSamples = (sampleRate * 0.02).toInt() // 480 mono samples (20ms)
+        val monoFrame = FloatArray(monoSamples) { i ->
+            kotlin.math.sin((i.toFloat() / sampleRate) * 440f * 2f * Math.PI.toFloat()) * 0.5f
+        }
+
+        val encoded = opus!!.encode(monoFrame)
+        assertTrue("AUDIO_MEDIUM mono input should encode successfully", encoded.isNotEmpty())
+        println("AUDIO_MEDIUM mono→stereo encode: ${monoFrame.size} mono → ${encoded.size} bytes")
+    }
+
+    @Test
+    fun codecChannels_returnsCorrectValues() {
+        // Verify the new codecChannels property on actual Opus instances
+        val mono = Opus(Opus.PROFILE_VOICE_HIGH)
+        assertEquals("VOICE_HIGH codecChannels should be 1", 1, mono.codecChannels)
+        mono.release()
+
+        val stereo = Opus(Opus.PROFILE_VOICE_MAX)
+        assertEquals("VOICE_MAX codecChannels should be 2", 2, stereo.codecChannels)
+        stereo.release()
+    }
+
     @Test
     fun allProfiles_encodeWithoutException() {
         val profiles = listOf(

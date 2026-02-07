@@ -162,6 +162,76 @@ class OpusTest {
     }
 
     @Test
+    fun `VOICE_MAX codecChannels returns 2 (stereo)`() {
+        try {
+            val opus = Opus(profile = Opus.PROFILE_VOICE_MAX)
+            assertEquals(2, opus.codecChannels)
+        } catch (_: UnsatisfiedLinkError) {
+            // JNI not available in unit tests — verify via companion method instead
+            assertEquals(2, Opus.profileChannels(Opus.PROFILE_VOICE_MAX))
+        }
+    }
+
+    @Test
+    fun `mono codec codecChannels returns 1`() {
+        try {
+            val opus = Opus(profile = Opus.PROFILE_VOICE_HIGH)
+            assertEquals(1, opus.codecChannels)
+        } catch (_: UnsatisfiedLinkError) {
+            assertEquals(1, Opus.profileChannels(Opus.PROFILE_VOICE_HIGH))
+        }
+    }
+
+    @Test
+    fun `stereo profiles identified correctly`() {
+        // These profiles should be stereo (2 channels)
+        val stereoProfiles = listOf(
+            Opus.PROFILE_VOICE_MAX,
+            Opus.PROFILE_AUDIO_MEDIUM,
+            Opus.PROFILE_AUDIO_HIGH,
+            Opus.PROFILE_AUDIO_MAX
+        )
+        for (p in stereoProfiles) {
+            assertEquals("Profile $p should be stereo", 2, Opus.profileChannels(p))
+        }
+
+        // These profiles should be mono (1 channel)
+        val monoProfiles = listOf(
+            Opus.PROFILE_VOICE_LOW,
+            Opus.PROFILE_VOICE_MEDIUM,
+            Opus.PROFILE_VOICE_HIGH,
+            Opus.PROFILE_AUDIO_MIN,
+            Opus.PROFILE_AUDIO_LOW
+        )
+        for (p in monoProfiles) {
+            assertEquals("Profile $p should be mono", 1, Opus.profileChannels(p))
+        }
+    }
+
+    @Test
+    fun `mono frame for stereo codec would produce valid duration after upmix`() {
+        // SHQ: 48kHz, stereo, 60ms frames
+        // Mono frame: 2880 samples (60ms at 48kHz mono)
+        // As-is duration: 2880 / (48000 * 2) * 1000 = 30ms → INVALID
+        // Mono duration: 2880 / 48000 * 1000 = 60ms → VALID (triggers upmix)
+        // After upmix: 5760 samples, duration = 5760 / (48000 * 2) * 1000 = 60ms → VALID
+        val monoFrameSize = 2880 // 60ms at 48kHz mono
+        val samplerate = 48000
+        val channels = 2
+
+        val asIsDuration = (monoFrameSize.toFloat() / (samplerate * channels)) * 1000f
+        assertFalse("30ms should not be valid", asIsDuration in Opus.VALID_FRAME_MS)
+
+        val monoDuration = (monoFrameSize.toFloat() / samplerate) * 1000f
+        assertTrue("60ms should be valid", monoDuration in Opus.VALID_FRAME_MS)
+
+        // After upmix
+        val stereoFrameSize = monoFrameSize * channels
+        val afterUpmixDuration = (stereoFrameSize.toFloat() / (samplerate * channels)) * 1000f
+        assertTrue("60ms after upmix should be valid", afterUpmixDuration in Opus.VALID_FRAME_MS)
+    }
+
+    @Test
     fun `bitrate ceilings are correctly ordered`() {
         // Verify bitrate ceiling progression
         assertTrue(Opus.profileBitrateCeiling(Opus.PROFILE_VOICE_LOW) <

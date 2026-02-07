@@ -122,6 +122,15 @@ class LineSink(
                 lowLatency = lowLatency
             )
 
+            // Drain excess frames that accumulated during AudioTrack creation (~500ms).
+            // Keep only the most recent AUTOSTART_MIN frames so playback starts with
+            // a reasonable buffer, not 780ms+ of stale audio that causes permanent delay.
+            val excess = frameQueue.size - AUTOSTART_MIN
+            if (excess > 0) {
+                repeat(excess) { frameQueue.poll() }
+                Log.i(TAG, "Drained $excess stale frames after AudioTrack init (kept $AUTOSTART_MIN)")
+            }
+
             if (isRunningFlag.get()) {
                 digestJob()
             }
@@ -200,12 +209,19 @@ class LineSink(
                 }
                 frameCount++
 
-                // Calculate frame time from first frame and initialize monotonic clock
-                if (frameCount == 1L && sampleRate > 0) {
-                    frameTimeMs = ((frame.size.toFloat() / sampleRate) * 1000).toLong()
+                // Calculate frame time from frame size and update pacer.
+                // Divides by (sampleRate * channels) because frame.size includes all channels.
+                // Recalculates on every frame size change to handle mid-call profile switches
+                // (e.g., MQ 60ms → LL 20ms) without stale pacing causing underruns.
+                val currentFrameTimeMs = ((frame.size.toFloat() / (sampleRate * channels)) * 1000).toLong()
+                if (frameCount == 1L || currentFrameTimeMs != frameTimeMs) {
+                    if (frameCount > 1L) {
+                        Log.i(TAG, "Frame size changed: ${frameTimeMs}ms → ${currentFrameTimeMs}ms")
+                    }
+                    frameTimeMs = currentFrameTimeMs
                     framePeriodNs = frameTimeMs * 1_000_000L
                     nextFrameNs = System.nanoTime()
-                    Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples at ${sampleRate}Hz)")
+                    Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples, ${sampleRate}Hz, ${channels}ch)")
                 }
 
                 // Periodic throughput log

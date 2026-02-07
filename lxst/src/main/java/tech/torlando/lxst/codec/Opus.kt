@@ -101,6 +101,8 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
     private var samplerate: Int = 0
     private var bitrateCeiling: Int = 0
 
+    override val codecChannels: Int get() = channels
+
     // Native handle (0 = not initialized). Holds both encoder and decoder.
     private var nativeHandle: Long = 0
 
@@ -169,8 +171,23 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
             throw CodecError("Cannot encode empty frame")
         }
 
+        // Mono→stereo upmix when codec expects stereo (matches Python LXST Opus.py:113-122).
+        // Pipeline always captures mono from mic. When codec requires stereo (channels > 1),
+        // duplicate each mono sample across all channels to create interleaved stereo.
+        val processedFrame = if (channels > 1) {
+            val monoDurationMs = (frame.size.toFloat() / samplerate) * 1000f
+            if (monoDurationMs in VALID_FRAME_MS) {
+                // Input is mono, upmix to interleaved stereo: [s0,s1,...] → [s0,s0,s1,s1,...]
+                FloatArray(frame.size * channels) { i -> frame[i / channels] }
+            } else {
+                frame // Already has correct channel count
+            }
+        } else {
+            frame
+        }
+
         // Calculate frame duration
-        val frameDurationMs = (frame.size.toFloat() / (samplerate * channels)) * 1000f
+        val frameDurationMs = (processedFrame.size.toFloat() / (samplerate * channels)) * 1000f
 
         // Validate frame duration
         if (frameDurationMs !in VALID_FRAME_MS) {
@@ -180,13 +197,13 @@ class Opus(profile: Int = PROFILE_VOICE_LOW) : Codec() {
         ensureInitialized()
 
         // Convert float32 to int16 short array
-        val pcmShorts = ShortArray(frame.size)
-        for (i in frame.indices) {
-            pcmShorts[i] = (frame[i] * 32767f).toInt().coerceIn(-32768, 32767).toShort()
+        val pcmShorts = ShortArray(processedFrame.size)
+        for (i in processedFrame.indices) {
+            pcmShorts[i] = (processedFrame[i] * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
 
         // Encode: frames = samples per channel
-        val framesPerChannel = frame.size / channels
+        val framesPerChannel = processedFrame.size / channels
         val outBuffer = ByteArray(MAX_ENCODED_BYTES)
         val encodedLen = OpusNative.encode(nativeHandle, pcmShorts, framesPerChannel, outBuffer)
 

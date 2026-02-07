@@ -65,12 +65,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,6 +92,9 @@ fun ChatsScreen(
     val syncProgress by viewModel.syncProgress.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -96,9 +102,6 @@ fun ChatsScreen(
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
-
-    // Context for Toast notifications
-    val context = LocalContext.current
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -190,13 +193,19 @@ fun ChatsScreen(
                         val hapticFeedback = LocalHapticFeedback.current
                         var showMenu by remember { mutableStateOf(false) }
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
+                        val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ConversationCard(
                                 conversation = conversation,
                                 isSaved = isSaved,
-                                onClick = { onChatClick(conversation.peerHash, conversation.displayName) },
+                                onClick = {
+                                    if (pendingSharedText != null) {
+                                        sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    }
+                                    onChatClick(conversation.peerHash, conversation.displayName)
+                                },
                                 onLongPress = {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     showMenu = true
@@ -204,20 +213,12 @@ fun ChatsScreen(
                                 onStarClick = {
                                     if (isSaved) {
                                         viewModel.removeFromContacts(conversation.peerHash)
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                "Removed ${conversation.displayName} from Contacts",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                        showMenu = false
+                                        Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
                                     } else {
                                         viewModel.saveToContacts(conversation)
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                "Saved ${conversation.displayName} to Contacts",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                        showMenu = false
+                                        Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                             )

@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
@@ -38,6 +39,8 @@ class Mixer(
 ) : LocalSource() {
 
     companion object {
+        private const val TAG = "Columba:Mixer"
+
         /** Maximum frames per source queue (backpressure threshold) */
         const val MAX_FRAMES = 8
     }
@@ -54,6 +57,9 @@ class Mixer(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val shouldRun = AtomicBoolean(false)
     private val muted = AtomicBoolean(false)
+
+    // TEMP: Diagnostic counter for frames pushed to downstream sink
+    private var mixedFrameCount = 0L
 
     // ===== Sink-like methods (implemented directly, not via inheritance) =====
 
@@ -212,6 +218,10 @@ class Mixer(
 
                     // Push float32 to sink
                     currentSink.handleFrame(mixedFrame, this)
+                    mixedFrameCount++
+                    if (mixedFrameCount % 100L == 0L) {
+                        Log.d(TAG, "Mixed #$mixedFrameCount → sink, sources=${pulledFrames.size}")
+                    }
                 } else {
                     // No frames available, sleep briefly
                     delay((targetFrameMs / 10).toLong())

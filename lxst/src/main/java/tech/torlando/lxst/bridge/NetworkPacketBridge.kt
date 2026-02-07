@@ -147,6 +147,10 @@ class NetworkPacketBridge private constructor(
 
     // ===== Inbound Methods (Python -> Kotlin) =====
 
+    // TEMP: Diagnostic counter for inbound packets from Python
+    @Volatile
+    private var inboundPacketCount = 0
+
     /**
      * Receive encoded packet from Python Reticulum.
      *
@@ -156,11 +160,15 @@ class NetworkPacketBridge private constructor(
      * Simply invokes the registered callback; no processing, no logging.
      * Decoding and mixing happen on the Kotlin audio thread via the callback.
      *
-     * **CRITICAL:** No Log.d() calls in this method - GIL held, blocks Python.
+     * Periodic logging (every 100 packets) for diagnostics — negligible overhead.
      *
      * @param packetData Encoded packet data (codec header byte + encoded frame)
      */
     fun onPythonPacketReceived(packetData: ByteArray) {
+        inboundPacketCount++
+        if (inboundPacketCount <= 5 || inboundPacketCount % 100 == 0) {
+            Log.d(TAG, "Inbound RX #$inboundPacketCount (${packetData.size} bytes) cb=${onPacketReceived != null}")
+        }
         onPacketReceived?.invoke(packetData)
     }
 

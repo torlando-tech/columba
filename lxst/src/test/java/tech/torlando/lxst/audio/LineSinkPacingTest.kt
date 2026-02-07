@@ -6,14 +6,17 @@ import io.mockk.mockk
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Pacing tests for LineSink's monotonic clock pacer.
+ * Tests for LineSink's buffering, underrun recovery, and re-buffer behavior.
  *
- * Uses real wall-clock time with short frame periods (10ms at 16kHz)
- * to verify that the digest loop paces output correctly. MockK stubs
- * writeAudio to capture timestamps without touching real AudioTrack.
+ * Uses real wall-clock time with short frame periods (10ms at 16kHz).
+ * MockK stubs writeAudio to capture timestamps without touching real AudioTrack.
+ *
+ * Pacing note: In production, WRITE_BLOCKING on AudioTrack provides natural
+ * pacing (blocks when buffer is full). With a mock bridge, writes are instant,
+ * so these tests focus on queue management and underrun/rebuffer behavior
+ * rather than write timing.
  *
  * Note: With time-based buffer sizing, effectiveAutostartMin becomes 50
  * for 10ms frames (PREBUFFER_MS/frameTimeMs = 500/10). Tests push frames
@@ -55,33 +58,6 @@ class LineSinkPacingTest {
     }
 
     @Test
-    fun `steady state writes are paced at frame rate`() {
-        val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
-        sink.configure(sampleRate = 16000, channels = 1)
-        val frameSize = 160 // 10ms at 16kHz
-
-        // Push at 5ms (2x faster than consumption) to keep queue full and avoid
-        // re-buffer stalls (effectiveAutostartMin = 50 for 10ms frames).
-        val pusher = pushFrames(sink, count = 80, intervalMs = 5, frameSize = frameSize)
-        pusher.join()
-        Thread.sleep(600) // drain remaining queued frames
-
-        sink.stop(); sink.release()
-
-        // Steady-state intervals (after AUTOSTART_MIN initial fill)
-        val intervals = writeTimestampsNs
-            .zipWithNext { a, b -> (b - a) / 1_000_000L }
-            .drop(LineSink.AUTOSTART_MIN)
-
-        assertTrue("Need >=10 steady-state intervals, got ${intervals.size}", intervals.size >= 10)
-        val avgInterval = intervals.average()
-        assertTrue(
-            "Average interval ${avgInterval}ms should be 7-13ms (target 10ms)",
-            avgInterval in 7.0..13.0
-        )
-    }
-
-    @Test
     fun `startup drain removes excess burst frames`() {
         val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
         sink.configure(16000, 1)
@@ -104,32 +80,6 @@ class LineSinkPacingTest {
                 "(drain removes excess), not ${LineSink.AUTOSTART_MIN + 5}",
             writeTimestampsNs.size <= LineSink.AUTOSTART_MIN + 2
         )
-    }
-
-    @Test
-    fun `no cumulative drift over many frames`() {
-        val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
-        sink.configure(16000, 1)
-        val frameSize = 160 // 10ms at 16kHz
-
-        // Push at 5ms (2x real-time) to prevent underruns
-        val pusher = pushFrames(sink, count = 100, intervalMs = 5, frameSize = frameSize)
-        pusher.join()
-        Thread.sleep(800) // drain
-
-        sink.stop(); sink.release()
-
-        // Compare expected vs actual total playback time
-        val steadyWrites = writeTimestampsNs.drop(LineSink.AUTOSTART_MIN)
-        if (steadyWrites.size >= 2) {
-            val actualSpanMs = (steadyWrites.last() - steadyWrites.first()) / 1_000_000L
-            val expectedSpanMs = (steadyWrites.size - 1) * 10L
-            val driftMs = actualSpanMs - expectedSpanMs
-            assertTrue(
-                "Drift ${driftMs}ms should be within +/-50ms over ${steadyWrites.size} frames",
-                kotlin.math.abs(driftMs) < 50
-            )
-        }
     }
 
     @Test
@@ -160,103 +110,6 @@ class LineSinkPacingTest {
             assertTrue(
                 "Recovery span ${spanMs}ms should be >=15ms (paced, not burst-drained)",
                 spanMs >= 15
-            )
-        }
-    }
-
-    @Test
-    fun `individual intervals stay within jitter bounds`() {
-        val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
-        sink.configure(sampleRate = 16000, channels = 1)
-        val frameSize = 160 // 10ms at 16kHz
-
-        // Push at 5ms (2x real-time) to prevent underruns
-        val pusher = pushFrames(sink, count = 80, intervalMs = 5, frameSize = frameSize)
-        pusher.join()
-        Thread.sleep(600) // drain
-
-        sink.stop(); sink.release()
-
-        // Check individual intervals — a pacer that alternates 2ms/18ms averages
-        // 10ms but sounds choppy. No single interval should exceed 2x frame period.
-        val intervals = writeTimestampsNs
-            .zipWithNext { a, b -> (b - a) / 1_000_000L }
-            .drop(LineSink.AUTOSTART_MIN)
-
-        assertTrue("Need >=10 steady-state intervals", intervals.size >= 10)
-        val outliers = intervals.filter { it > 20 }
-        assertTrue(
-            "At most 10% of intervals should exceed 2x frame period (20ms), " +
-                "got ${outliers.size}/${intervals.size}: $outliers",
-            outliers.size <= intervals.size / 10
-        )
-    }
-
-    @Test
-    fun `fast producer does not cause instant drain`() {
-        // Simulates Reticulum network burst: frames arrive at 2x real-time.
-        // The pacer must still output at ~10ms intervals, not drain at arrival rate.
-        val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
-        sink.configure(sampleRate = 16000, channels = 1)
-        val frameSize = 160 // 10ms at 16kHz
-
-        // Push 20 frames at 5ms intervals (2x faster than real-time)
-        val pusher = pushFrames(sink, count = 20, intervalMs = 5, frameSize = frameSize)
-        pusher.join()
-        Thread.sleep(300) // let digest drain everything
-
-        sink.stop(); sink.release()
-
-        // Steady-state writes should still be paced at ~10ms, not ~5ms
-        val intervals = writeTimestampsNs
-            .zipWithNext { a, b -> (b - a) / 1_000_000L }
-            .drop(LineSink.AUTOSTART_MIN)
-
-        assertTrue("Need >=5 steady-state intervals", intervals.size >= 5)
-        val avgInterval = intervals.average()
-        assertTrue(
-            "Average interval ${avgInterval}ms should be >=7ms (frame-rate paced, not arrival-rate)",
-            avgInterval >= 7.0
-        )
-    }
-
-    @Test
-    fun `variable write latency is compensated by monotonic clock`() {
-        // Simulates AudioTrack back-pressure: writeAudio() blocks for 0-8ms
-        // depending on buffer fullness. The monotonic clock should compensate
-        // so that frame-to-frame intervals stay near 10ms.
-        val writeCount = AtomicLong(0)
-        val variableBridge = mockk<KotlinAudioBridge>(relaxed = true)
-        every { variableBridge.writeAudio(any()) } answers {
-            writeTimestampsNs.add(System.nanoTime())
-            val n = writeCount.incrementAndGet()
-            // Alternate: even frames take 0ms, odd frames take ~6ms
-            if (n % 2 == 1L) Thread.sleep(6)
-        }
-
-        val sink = LineSink(variableBridge, autodigest = true, lowLatency = false)
-        sink.configure(sampleRate = 16000, channels = 1)
-        val frameSize = 160 // 10ms at 16kHz
-
-        // Push at 5ms (2x real-time) to prevent underruns
-        val pusher = pushFrames(sink, count = 80, intervalMs = 5, frameSize = frameSize)
-        pusher.join()
-        Thread.sleep(600) // drain
-
-        sink.stop(); sink.release()
-
-        // Despite variable write latency, overall pacing should stay near 10ms/frame.
-        // The monotonic clock computes delay from absolute target, not from write end,
-        // so a slow write on frame N means less delay after it, self-correcting.
-        val intervals = writeTimestampsNs
-            .zipWithNext { a, b -> (b - a) / 1_000_000L }
-            .drop(LineSink.AUTOSTART_MIN)
-
-        if (intervals.size >= 10) {
-            val avgInterval = intervals.average()
-            assertTrue(
-                "Average interval ${avgInterval}ms should be 7-15ms despite variable write latency",
-                avgInterval in 7.0..15.0
             )
         }
     }

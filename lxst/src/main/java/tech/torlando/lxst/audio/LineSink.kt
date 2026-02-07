@@ -205,20 +205,17 @@ class LineSink(
         Log.d(TAG, "Digest job started")
         var frameCount = 0L
         var underrunStartMs: Long? = null
-        var nextFrameNs = 0L
-        var framePeriodNs = frameTimeMs * 1_000_000L
         var needsRebuffer = false
         var rebufferWaitCount = 0
 
         while (isRunningFlag.get()) {
             // After sustained underrun (> REBUFFER_TRIGGER_MS): wait for queue to reach
             // REBUFFER_FRAMES before resuming. Only triggers for prolonged outages — brief
-            // jitter gaps (< 500ms) resume immediately, letting AudioTrack absorb them.
+            // jitter gaps are absorbed by the AudioTrack's internal buffer.
             if (needsRebuffer) {
                 if (frameQueue.size >= REBUFFER_FRAMES) {
                     needsRebuffer = false
                     rebufferWaitCount = 0
-                    nextFrameNs = System.nanoTime()
                     Log.d(TAG, "Re-buffer complete, queue=${frameQueue.size}, resuming playback")
                 } else {
                     rebufferWaitCount++
@@ -231,14 +228,13 @@ class LineSink(
                 }
             }
 
-            // Poll with frame-period timeout so we almost always find a frame in steady state
+            // Poll with frame-period timeout
             val frame = frameQueue.poll(frameTimeMs, TimeUnit.MILLISECONDS)
 
             if (frame != null) {
-                // Underrun recovery: decide whether to re-buffer or resume immediately.
-                // Brief gaps (< REBUFFER_TRIGGER_MS = 500ms) just reset the clock and
-                // let AudioTrack's internal buffer absorb jitter. Only sustained outages
-                // trigger re-buffer to prevent rapid play/underrun micro-cycles.
+                // Underrun recovery: only re-buffer after sustained outages.
+                // Brief gaps are absorbed by the AudioTrack's internal buffer —
+                // the prebuffer fills it with ~480ms of audio upfront.
                 if (underrunStartMs != null) {
                     val underrunMs = System.currentTimeMillis() - underrunStartMs
                     underrunStartMs = null
@@ -248,24 +244,19 @@ class LineSink(
                         frameQueue.offer(frame) // Put back (queue was empty, order preserved)
                         continue
                     } else {
-                        Log.d(TAG, "Brief underrun ended after ${underrunMs}ms, resuming")
-                        nextFrameNs = System.nanoTime() // Reset clock
+                        Log.d(TAG, "Brief gap ${underrunMs}ms (AudioTrack buffer absorbs)")
                     }
                 }
                 frameCount++
 
-                // Calculate frame time from frame size and update pacer.
-                // Divides by (sampleRate * channels) because frame.size includes all channels.
-                // Recalculates on every frame size change to handle mid-call profile switches
-                // (e.g., MQ 60ms → LL 20ms) without stale pacing causing underruns.
+                // Detect frame time from frame size. Recalculates on change to
+                // handle mid-call profile switches (e.g., MQ 60ms → LL 20ms).
                 val currentFrameTimeMs = ((frame.size.toFloat() / (sampleRate * channels)) * 1000).toLong()
                 if (frameCount == 1L || currentFrameTimeMs != frameTimeMs) {
                     if (frameCount > 1L) {
                         Log.i(TAG, "Frame size changed: ${frameTimeMs}ms → ${currentFrameTimeMs}ms")
                     }
                     frameTimeMs = currentFrameTimeMs
-                    framePeriodNs = frameTimeMs * 1_000_000L
-                    nextFrameNs = System.nanoTime()
                     updateBufferLimits(frameTimeMs)
                     Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples, ${sampleRate}Hz, ${channels}ch)")
                 }
@@ -275,41 +266,24 @@ class LineSink(
                     Log.d(TAG, "Played $frameCount frames, queue=${frameQueue.size}")
                 }
 
-                // Convert float32 to int16 bytes
+                // Convert float32 to int16 bytes and write to AudioTrack.
+                // WRITE_BLOCKING provides natural pacing: it blocks when the AudioTrack's
+                // internal buffer is full, then returns when space is freed by hardware
+                // consumption. This keeps the buffer filled, absorbing network jitter.
+                // No explicit delay is needed — the blocking write IS the pacer.
                 val frameBytes = float32ToBytes(frame)
-
-                // Write to AudioTrack via bridge
                 bridge.writeAudio(frameBytes)
 
-                // Monotonic clock pacing: target absolute time for next frame.
-                // Unlike relative delay(), this self-corrects jitter and has no
-                // cumulative drift from safety margins.
-                nextFrameNs += framePeriodNs
-                val remainingNs = nextFrameNs - System.nanoTime()
-
-                when {
-                    // On schedule or slightly ahead: delay until target
-                    remainingNs > 1_000_000L ->
-                        delay(remainingNs / 1_000_000L)
-                    // Fell behind by >3 frame periods (underrun recovery): reset clock
-                    // instead of trying to catch up (which would drain the burst instantly)
-                    remainingNs < -framePeriodNs * 3 ->
-                        nextFrameNs = System.nanoTime()
-                    // Slightly behind (<3 frames): skip delay, will self-correct
-                }
-
-                // Drop oldest if buffer is lagging (prevents increasing delay)
+                // Safety valve: drop oldest if queue grows excessively
                 if (frameQueue.size > effectiveMaxFrames - 1) {
                     frameQueue.poll()
                     Log.w(TAG, "Buffer lag, dropped oldest frame (height=${frameQueue.size})")
                 }
             } else {
-                // Underrun: no frames available. Never stop AudioTrack — teardown/rebuild
-                // causes ~880ms gap (480ms timeout + 400ms AudioTrack creation) with
-                // catastrophic frame loss. Keep polling; stop() handles shutdown.
+                // Queue empty: AudioTrack continues playing from its internal buffer.
+                // Only track underrun start time for re-buffer decisions.
                 if (underrunStartMs == null) {
                     underrunStartMs = System.currentTimeMillis()
-                    Log.d(TAG, "Buffer underrun started")
                 }
                 // poll(frameTimeMs) already provides efficient blocking wait
             }

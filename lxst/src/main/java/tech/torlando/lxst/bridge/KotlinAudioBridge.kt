@@ -80,6 +80,7 @@ class KotlinAudioBridge(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Playback state
+    @Volatile
     private var audioTrack: AudioTrack? = null
     private val isPlaying = AtomicBoolean(false)
 
@@ -88,6 +89,9 @@ class KotlinAudioBridge(
 
     @Volatile
     private var playbackChannels = DEFAULT_CHANNELS
+
+    @Volatile
+    private var playbackLowLatency = false
 
     // Recording state
     private var audioRecord: AudioRecord? = null
@@ -151,6 +155,7 @@ class KotlinAudioBridge(
 
         playbackSampleRate = sampleRate
         playbackChannels = channels
+        playbackLowLatency = lowLatency
 
         val channelConfig =
             if (channels == 1) {
@@ -683,6 +688,84 @@ class KotlinAudioBridge(
             // Legacy API for older Android versions
             audioManager.isSpeakerphoneOn = enabled
             Log.d(TAG, "📞 Legacy speakerphone set: $enabled")
+        }
+
+        // Recreate AudioTrack to pick up new routing. Many HALs (Samsung Fold3,
+        // some Pixels) don't dynamically re-route an already-playing AudioTrack
+        // when setCommunicationDevice() changes. A fresh AudioTrack inherits the
+        // current routing state from the system at creation time.
+        if (isPlaying.get()) {
+            restartAudioTrack()
+        }
+    }
+
+    /**
+     * Recreate the AudioTrack to pick up changed audio routing.
+     *
+     * Builds a new AudioTrack with the same configuration, swaps it in,
+     * and releases the old one. The brief gap (~50ms) is acceptable for
+     * a user-initiated speaker toggle.
+     */
+    private fun restartAudioTrack() {
+        try {
+            val channelConfig =
+                if (playbackChannels == 1) {
+                    AudioFormat.CHANNEL_OUT_MONO
+                } else {
+                    AudioFormat.CHANNEL_OUT_STEREO
+                }
+
+            val bufferSize =
+                AudioTrack.getMinBufferSize(
+                    playbackSampleRate,
+                    channelConfig,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                )
+
+            if (bufferSize <= 0) {
+                Log.e(TAG, "📞 restartAudioTrack: invalid buffer size $bufferSize")
+                return
+            }
+
+            val attributes =
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+
+            val format =
+                AudioFormat.Builder()
+                    .setSampleRate(playbackSampleRate)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(channelConfig)
+                    .build()
+
+            val trackBuilder =
+                AudioTrack.Builder()
+                    .setAudioAttributes(attributes)
+                    .setAudioFormat(format)
+                    .setBufferSizeInBytes(maxOf(bufferSize * 2, playbackSampleRate * playbackChannels * 2 * 500 / 1000))
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+
+            if (playbackLowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+            }
+
+            val newTrack = trackBuilder.build()
+            newTrack.play()
+
+            // Swap reference — concurrent writeAudio() calls will pick up the new track
+            val oldTrack = audioTrack
+            audioTrack = newTrack
+
+            // Release old track; if a concurrent writeAudio() is mid-write on it,
+            // the try/catch in writeAudio() handles the resulting error gracefully.
+            oldTrack?.stop()
+            oldTrack?.release()
+
+            Log.i(TAG, "📞 AudioTrack restarted for routing change (rate=$playbackSampleRate, ch=$playbackChannels)")
+        } catch (e: Exception) {
+            Log.e(TAG, "📞 Failed to restart AudioTrack for routing change", e)
         }
     }
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * LineSink - Speaker playback for LXST audio pipeline.
@@ -33,19 +34,40 @@ class LineSink(
     companion object {
         private const val TAG = "Columba:LineSink"
 
-        // Buffer configuration (matches Python LXST Sinks.py:119-121)
-        const val MAX_FRAMES = 15          // Queue depth: 900ms at 60ms/frame for network jitter absorption
-        const val AUTOSTART_MIN = 5        // Pre-fill 5 frames (300ms at MQ) before playback
+        // Time-based buffer targets — ensures all profiles get adequate jitter
+        // absorption regardless of frame duration. With MQ (60ms) → 25 frames;
+        // LL (20ms) → 75 frames; ULL (10ms) → 150 frames.
+        const val BUFFER_CAPACITY_MS = 1500L  // Max queue depth in ms
+        const val PREBUFFER_MS = 500L          // Pre-fill before playback in ms
+        const val MAX_QUEUE_SLOTS = 150        // Physical queue capacity (1500ms / 10ms ULL)
+
+        // Re-buffer policy: only sustained outages trigger re-buffer.
+        // Brief jitter gaps (< 500ms) resume immediately — AudioTrack's 500ms
+        // internal buffer absorbs the jitter without audible interruption.
+        const val REBUFFER_TRIGGER_MS = 500L  // Underrun must last this long to trigger re-buffer
+        const val REBUFFER_FRAMES = 5         // Frames needed to exit re-buffer state
+
+        // Legacy constants for test backward compatibility and initial defaults.
+        // Effective limits are recomputed from frame time in updateBufferLimits().
+        const val MAX_FRAMES = 15
+        const val AUTOSTART_MIN = 5
     }
 
-    // Frame queue (lock-free, thread-safe)
-    private val frameQueue = LinkedBlockingQueue<FloatArray>(MAX_FRAMES)
-    private val bufferMaxHeight = MAX_FRAMES - 1 // Backpressure: block 1 slot before queue full
+    // Frame queue — generous physical capacity; effective limits enforce real depth.
+    private val frameQueue = LinkedBlockingQueue<FloatArray>(MAX_QUEUE_SLOTS)
+
+    // Effective limits recomputed when frame time is known (see updateBufferLimits).
+    // Start with legacy values for backward compatibility with initial autostart.
+    @Volatile private var effectiveMaxFrames: Int = MAX_FRAMES
+    @Volatile private var effectiveAutostartMin: Int = AUTOSTART_MIN
 
     // Playback state
     private val isRunningFlag = AtomicBoolean(false)
     private val releasedFlag = AtomicBoolean(false)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Diagnostic counter for handleFrame calls (visible to digestJob for frame rate tracking)
+    private val handleFrameCount = AtomicLong(0)
 
     // Audio configuration (detected from first frame or set explicitly)
     private var sampleRate: Int = 0
@@ -62,7 +84,7 @@ class LineSink(
      * @return true if queue has room, false if backpressure active
      */
     override fun canReceive(fromSource: Source?): Boolean {
-        return frameQueue.size < bufferMaxHeight
+        return frameQueue.size < effectiveMaxFrames - 1
     }
 
     /**
@@ -93,8 +115,14 @@ class LineSink(
             Log.w(TAG, "Buffer overflow, dropped oldest frame")
         }
 
+        // Diagnostic: log incoming frame rate (every 100 frames)
+        val hfCount = handleFrameCount.incrementAndGet()
+        if (hfCount % 100L == 0L) {
+            Log.d(TAG, "handleFrame #$hfCount, queue=${frameQueue.size}, running=${isRunningFlag.get()}")
+        }
+
         // Auto-start playback when buffer has minimum frames
-        if (autodigest && !isRunningFlag.get() && frameQueue.size >= AUTOSTART_MIN) {
+        if (autodigest && !isRunningFlag.get() && frameQueue.size >= effectiveAutostartMin) {
             start()
         }
     }
@@ -114,25 +142,35 @@ class LineSink(
 
         // Launch async: AudioTrack setup takes ~500ms and must not block the Mixer thread
         scope.launch {
-            if (!isRunningFlag.get()) return@launch
+            try {
+                if (!isRunningFlag.get()) return@launch
 
-            bridge.startPlayback(
-                sampleRate = sampleRate,
-                channels = channels,
-                lowLatency = lowLatency
-            )
+                bridge.startPlayback(
+                    sampleRate = sampleRate,
+                    channels = channels,
+                    lowLatency = lowLatency
+                )
 
-            // Drain excess frames that accumulated during AudioTrack creation (~500ms).
-            // Keep only the most recent AUTOSTART_MIN frames so playback starts with
-            // a reasonable buffer, not 780ms+ of stale audio that causes permanent delay.
-            val excess = frameQueue.size - AUTOSTART_MIN
-            if (excess > 0) {
-                repeat(excess) { frameQueue.poll() }
-                Log.i(TAG, "Drained $excess stale frames after AudioTrack init (kept $AUTOSTART_MIN)")
-            }
+                // Drain excess frames that accumulated during AudioTrack creation (~500ms).
+                // Keep only the most recent effectiveAutostartMin frames so playback starts
+                // with a reasonable buffer, not 780ms+ of stale audio that causes permanent delay.
+                val excess = frameQueue.size - effectiveAutostartMin
+                if (excess > 0) {
+                    repeat(excess) { frameQueue.poll() }
+                    Log.i(TAG, "Drained $excess stale frames after AudioTrack init (kept $effectiveAutostartMin)")
+                }
 
-            if (isRunningFlag.get()) {
-                digestJob()
+                if (isRunningFlag.get()) {
+                    digestJob()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Playback coroutine crashed: ${e.message}", e)
+            } finally {
+                // CRITICAL: Reset isRunningFlag so autostart can recover from crashes.
+                // Without this, a crashed digestJob leaves isRunningFlag=true permanently,
+                // preventing handleFrame()'s autostart from ever restarting playback.
+                isRunningFlag.set(false)
+                Log.w(TAG, "Playback coroutine exited, isRunning=false (autostart can recover)")
             }
         }
     }
@@ -170,17 +208,24 @@ class LineSink(
         var nextFrameNs = 0L
         var framePeriodNs = frameTimeMs * 1_000_000L
         var needsRebuffer = false
+        var rebufferWaitCount = 0
 
         while (isRunningFlag.get()) {
-            // After underrun: wait for queue to reach AUTOSTART_MIN before resuming.
-            // This prevents rapid underrun/recovery micro-cycles (12-18ms) that cause
-            // audible pops. A deliberate re-buffer silence is less noticeable.
+            // After sustained underrun (> REBUFFER_TRIGGER_MS): wait for queue to reach
+            // REBUFFER_FRAMES before resuming. Only triggers for prolonged outages — brief
+            // jitter gaps (< 500ms) resume immediately, letting AudioTrack absorb them.
             if (needsRebuffer) {
-                if (frameQueue.size >= AUTOSTART_MIN) {
+                if (frameQueue.size >= REBUFFER_FRAMES) {
                     needsRebuffer = false
+                    rebufferWaitCount = 0
                     nextFrameNs = System.nanoTime()
                     Log.d(TAG, "Re-buffer complete, queue=${frameQueue.size}, resuming playback")
                 } else {
+                    rebufferWaitCount++
+                    if (rebufferWaitCount % 50 == 1) {
+                        Log.d(TAG, "Re-buffering: queue=${frameQueue.size}/$REBUFFER_FRAMES, " +
+                            "waited ${rebufferWaitCount * frameTimeMs}ms, hfCount=${handleFrameCount.get()}")
+                    }
                     delay(frameTimeMs)
                     continue
                 }
@@ -191,14 +236,14 @@ class LineSink(
 
             if (frame != null) {
                 // Underrun recovery: decide whether to re-buffer or resume immediately.
-                // Brief glitches (<2 frame periods) just reset the clock — re-buffering
-                // would cause a 300-1000ms silence for a minor hiccup. Sustained gaps
-                // (>=2 frame periods) need re-buffering to absorb continued jitter.
+                // Brief gaps (< REBUFFER_TRIGGER_MS = 500ms) just reset the clock and
+                // let AudioTrack's internal buffer absorb jitter. Only sustained outages
+                // trigger re-buffer to prevent rapid play/underrun micro-cycles.
                 if (underrunStartMs != null) {
                     val underrunMs = System.currentTimeMillis() - underrunStartMs
                     underrunStartMs = null
-                    if (underrunMs >= frameTimeMs * 2) {
-                        Log.d(TAG, "Underrun after ${underrunMs}ms, re-buffering to $AUTOSTART_MIN frames")
+                    if (underrunMs >= REBUFFER_TRIGGER_MS) {
+                        Log.d(TAG, "Underrun after ${underrunMs}ms, re-buffering to $REBUFFER_FRAMES frames")
                         needsRebuffer = true
                         frameQueue.offer(frame) // Put back (queue was empty, order preserved)
                         continue
@@ -221,6 +266,7 @@ class LineSink(
                     frameTimeMs = currentFrameTimeMs
                     framePeriodNs = frameTimeMs * 1_000_000L
                     nextFrameNs = System.nanoTime()
+                    updateBufferLimits(frameTimeMs)
                     Log.d(TAG, "Frame time: ${frameTimeMs}ms (${frame.size} samples, ${sampleRate}Hz, ${channels}ch)")
                 }
 
@@ -253,7 +299,7 @@ class LineSink(
                 }
 
                 // Drop oldest if buffer is lagging (prevents increasing delay)
-                if (frameQueue.size > bufferMaxHeight) {
+                if (frameQueue.size > effectiveMaxFrames - 1) {
                     frameQueue.poll()
                     Log.w(TAG, "Buffer lag, dropped oldest frame (height=${frameQueue.size})")
                 }
@@ -271,6 +317,26 @@ class LineSink(
 
         Log.d(TAG, "Digest job ended, played $frameCount frames")
         bridge.stopPlayback()
+    }
+
+    /**
+     * Recompute effective buffer limits from detected frame time.
+     *
+     * Converts the time-based constants (BUFFER_CAPACITY_MS, PREBUFFER_MS)
+     * into frame counts for the current profile's frame duration.
+     *
+     * Examples:
+     *   MQ  (60ms): maxFrames=25, autostartMin=8  → 1500ms/480ms
+     *   LL  (20ms): maxFrames=75, autostartMin=25 → 1500ms/500ms
+     *   ULL (10ms): maxFrames=150, autostartMin=50 → 1500ms/500ms
+     */
+    private fun updateBufferLimits(detectedFrameTimeMs: Long) {
+        effectiveMaxFrames = (BUFFER_CAPACITY_MS / detectedFrameTimeMs).toInt()
+            .coerceIn(MAX_FRAMES, MAX_QUEUE_SLOTS)
+        effectiveAutostartMin = (PREBUFFER_MS / detectedFrameTimeMs).toInt()
+            .coerceIn(AUTOSTART_MIN, effectiveMaxFrames / 2)
+        Log.i(TAG, "Buffer limits: max=$effectiveMaxFrames, prebuffer=$effectiveAutostartMin " +
+            "(${effectiveMaxFrames * detectedFrameTimeMs}ms/${effectiveAutostartMin * detectedFrameTimeMs}ms)")
     }
 
     /**

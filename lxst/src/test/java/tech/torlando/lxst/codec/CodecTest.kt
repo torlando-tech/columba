@@ -76,6 +76,14 @@ class CodecTest {
         assertEquals(1f, decoded[1], 0.0001f)
     }
 
+    // ===== codecChannels Tests =====
+
+    @Test
+    fun `null codec codecChannels returns 1 (mono default)`() {
+        val codec = Null()
+        assertEquals(1, codec.codecChannels)
+    }
+
     // ===== Resample Tests =====
 
     @Test

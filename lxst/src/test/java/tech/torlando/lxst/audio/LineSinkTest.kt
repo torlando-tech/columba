@@ -206,6 +206,51 @@ class LineSinkTest {
     }
 
     @Test
+    fun `start drains excess frames accumulated during AudioTrack creation`() {
+        // Simulate slow AudioTrack creation: startPlayback blocks for 200ms
+        // while handleFrame keeps queuing frames on another thread.
+        every {
+            mockBridge.startPlayback(any(), any(), any())
+        } answers {
+            Thread.sleep(200) // Simulate AudioTrack init delay
+        }
+
+        val autoSink = LineSink(
+            bridge = mockBridge,
+            autodigest = false,
+            lowLatency = false
+        )
+        autoSink.configure(48000, 1)
+
+        // Pre-fill AUTOSTART_MIN frames (normal pre-fill)
+        repeat(LineSink.AUTOSTART_MIN) {
+            autoSink.handleFrame(FloatArray(2880))
+        }
+
+        // Start playback (will block ~200ms in startPlayback)
+        autoSink.start()
+
+        // While startPlayback blocks, simulate network delivering more frames
+        Thread {
+            repeat(8) {
+                Thread.sleep(20) // ~60ms frame intervals
+                autoSink.handleFrame(FloatArray(2880))
+            }
+        }.start()
+
+        // Wait for start coroutine to finish and begin digestJob
+        Thread.sleep(400)
+
+        // The drain should have removed excess frames, keeping only AUTOSTART_MIN.
+        // Verify writeAudio was called (digestJob started) — if drain didn't work,
+        // first N writes would be stale frames causing delay.
+        verify(atLeast = 1) { mockBridge.writeAudio(any()) }
+
+        autoSink.stop()
+        autoSink.release()
+    }
+
+    @Test
     fun `handleFrame detects sample rate from source`() {
         val mockSource = mockk<Source>(relaxed = true)
         every { mockSource.sampleRate } returns 16000

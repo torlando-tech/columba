@@ -665,6 +665,7 @@ class Telephone(
         if (linkSource == null) {
             val decodeCodec = activeProfile.createDecodeCodec()
             val decodeRate = decodeCodec.preferredSamplerate ?: 48000
+            val decodeChannels = decodeCodec.codecChannels
 
             linkSource = LinkSource(
                 bridge = networkPacketBridge,
@@ -672,15 +673,16 @@ class Telephone(
             ).apply {
                 codec = decodeCodec
                 sampleRate = decodeRate
+                channels = decodeChannels
             }
 
-            // Reconfigure audio output for decode rate. The dial tone may have
-            // set LineSink to 48kHz; decoded Opus audio may be at a different
-            // rate. Stop and reconfigure so AudioTrack is created at the correct
-            // rate on auto-start.
+            // Reconfigure audio output for decode rate and channels. The dial tone
+            // may have set LineSink to 48kHz mono; decoded Opus audio may be at a
+            // different rate or stereo (e.g., SHQ profile). Stop and reconfigure so
+            // AudioTrack is created with the correct config on auto-start.
             audioOutput?.let { sink ->
                 if (sink.isRunning()) sink.stop()
-                sink.configure(decodeRate, 1)
+                sink.configure(decodeRate, decodeChannels)
             }
         }
 

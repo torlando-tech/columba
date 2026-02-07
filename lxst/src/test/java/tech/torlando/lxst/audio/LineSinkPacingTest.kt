@@ -75,26 +75,27 @@ class LineSinkPacingTest {
     }
 
     @Test
-    fun `burst frames are paced not drained instantly`() {
+    fun `startup drain removes excess burst frames`() {
         val sink = LineSink(mockBridge, autodigest = true, lowLatency = false)
         sink.configure(16000, 1)
         val frameSize = 160 // 10ms at 16kHz
 
-        // Push burst: AUTOSTART_MIN + 3 frames instantly
-        repeat(LineSink.AUTOSTART_MIN + 3) {
+        // Push burst: AUTOSTART_MIN + 5 frames instantly (simulates frames
+        // accumulating during slow AudioTrack creation)
+        repeat(LineSink.AUTOSTART_MIN + 5) {
             sink.handleFrame(FloatArray(frameSize))
         }
         Thread.sleep(200) // let digest process
 
         sink.stop(); sink.release()
 
-        // The last 3 writes (after initial fill) should be spaced ~10ms apart
-        val postFillTimestamps = writeTimestampsNs.drop(LineSink.AUTOSTART_MIN)
-        assertTrue("Need >=3 post-fill writes, got ${postFillTimestamps.size}", postFillTimestamps.size >= 3)
-        val totalSpanMs = (postFillTimestamps.last() - postFillTimestamps.first()) / 1_000_000L
+        // Drain should have removed excess, so total writes should be
+        // close to AUTOSTART_MIN (not AUTOSTART_MIN + 5). Allow some
+        // tolerance for race between handleFrame and drain.
         assertTrue(
-            "Post-fill span ${totalSpanMs}ms should be >=15ms (not instant drain)",
-            totalSpanMs >= 15
+            "Writes (${writeTimestampsNs.size}) should be <= AUTOSTART_MIN + 2 " +
+                "(drain removes excess), not ${LineSink.AUTOSTART_MIN + 5}",
+            writeTimestampsNs.size <= LineSink.AUTOSTART_MIN + 2
         )
     }
 

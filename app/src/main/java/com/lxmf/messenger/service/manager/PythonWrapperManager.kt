@@ -389,11 +389,6 @@ class PythonWrapperManager(
     fun setupCallManager(): Boolean =
         withWrapper { wrapper ->
             try {
-                // Get audio bridge singleton
-                val audioBridge = AudioDevice.getInstance(context)
-                wrapper.callAttr("set_audio_bridge", audioBridge)
-                Log.d(TAG, "Audio bridge set in Python wrapper")
-
                 // Get call bridge singleton
                 val callBridge = CallCoordinator.getInstance()
                 wrapper.callAttr("set_call_bridge", callBridge)

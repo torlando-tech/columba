@@ -403,7 +403,6 @@ class ReticulumWrapper:
         self.kotlin_reticulum_bridge = None  # KotlinReticulumBridge instance (passed from Kotlin)
 
         # Voice call support (LXST Telephony integration)
-        self.kotlin_audio_bridge = None  # KotlinAudioBridge instance (passed from Kotlin)
         self.kotlin_call_bridge = None  # CallBridge instance (passed from Kotlin)
         self.kotlin_network_bridge = None  # NetworkPacketBridge instance (passed from Kotlin)
         self._call_manager = None  # LXST CallManager instance (initialized when bridges are set)
@@ -520,17 +519,6 @@ class ReticulumWrapper:
         import usb_bridge
         usb_bridge.set_usb_bridge(bridge)
         log_info("ReticulumWrapper", "set_usb_bridge", "KotlinUSBBridge instance set")
-
-    def set_audio_bridge(self, bridge):
-        """
-        Set the KotlinAudioBridge instance for voice call audio operations.
-        Should be called from Kotlin before initialize_call_manager().
-
-        Args:
-            bridge: KotlinAudioBridge instance from Kotlin
-        """
-        self.kotlin_audio_bridge = bridge
-        log_info("ReticulumWrapper", "set_audio_bridge", "KotlinAudioBridge instance set")
 
     def set_call_bridge(self, bridge):
         """

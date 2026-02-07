@@ -465,7 +465,7 @@ class CallManager:
                 for frame in frames:
                     if self._kotlin_network_bridge is not None:
                         try:
-                            self._kotlin_network_bridge.onPythonPacketReceived(bytes(frame))
+                            self._kotlin_network_bridge.onInboundPacket(bytes(frame))
                         except Exception as e:
                             RNS.log(f"Error forwarding frame to Kotlin: {e}", RNS.LOG_ERROR)
 
@@ -506,7 +506,7 @@ class CallManager:
         """
         if self._kotlin_network_bridge is not None:
             try:
-                self._kotlin_network_bridge.onPythonPacketReceived(packet_data)
+                self._kotlin_network_bridge.onInboundPacket(packet_data)
             except Exception as e:
                 RNS.log(f"Failed to send packet to Kotlin: {e}", RNS.LOG_ERROR)
 
@@ -611,7 +611,7 @@ class CallManager:
         """Send signal to Kotlin Telephone via NetworkPacketBridge."""
         if self._kotlin_network_bridge is not None:
             try:
-                self._kotlin_network_bridge.onPythonSignalReceived(signal)
+                self._kotlin_network_bridge.onInboundSignal(signal)
             except Exception as e:
                 RNS.log(f"Failed to send signal to Kotlin: {e}", RNS.LOG_ERROR)
 

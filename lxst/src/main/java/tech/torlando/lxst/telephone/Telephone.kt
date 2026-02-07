@@ -727,6 +727,7 @@ class Telephone(
         linkSource?.stop()
         packetizer?.stop()
         dialTone?.stop()
+        audioOutput?.stop()
 
         Log.d(TAG, "Audio pipelines stopped")
     }
@@ -901,6 +902,7 @@ class Telephone(
         ringToneJob = null
         ringTone?.stop()
         ringerMixer?.stop()
+        ringerSink?.stop()
     }
 
     /**

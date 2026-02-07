@@ -12,6 +12,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.unmockkAll
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -264,11 +265,16 @@ class TelephoneTest {
     fun `call method accepts profile parameter`() = runTest {
         val destHash = ByteArray(32) { 0x00 }
 
-        coEvery { mockTransport.establishLink(any()) } returns false
+        coEvery { mockTransport.establishLink(any()) } coAnswers {
+            // Profile should be set during call setup
+            assertEquals(Profile.HQ, telephone.activeProfile)
+            true
+        }
 
         telephone.call(destHash, Profile.HQ)
+        advanceUntilIdle()
 
-        // Profile should be set even if link fails
+        // Profile persists after successful link establishment
         assertEquals(Profile.HQ, telephone.activeProfile)
     }
 
@@ -332,6 +338,19 @@ class TelephoneTest {
         assertFalse(telephone.isTransmitMuted())
     }
 
+    @Test
+    fun `hangup resets activeProfile to DEFAULT`() = runTest {
+        // Start a call with non-default profile (link succeeds so call stays active)
+        coEvery { mockTransport.establishLink(any()) } returns true
+        telephone.call(ByteArray(32), Profile.SHQ)
+        advanceUntilIdle()
+        assertEquals(Profile.SHQ, telephone.activeProfile)
+
+        telephone.hangup()
+
+        assertEquals(Profile.DEFAULT, telephone.activeProfile)
+    }
+
     // ===== Answer =====
 
     @Test
@@ -354,6 +373,21 @@ class TelephoneTest {
         assertEquals(Signalling.STATUS_ESTABLISHED, telephone.callStatus)
         verify { mockTransport.sendSignal(Signalling.STATUS_ESTABLISHED) }
         verify { mockCallBridge.onCallEstablished("abcd1234") }
+    }
+
+    @Test
+    fun `answer sends profile preference before established`() = runTest {
+        telephone.onIncomingCall("abcd1234")
+        advanceUntilIdle()
+
+        telephone.answer()
+
+        // Profile preference should be sent BEFORE STATUS_ESTABLISHED
+        val expectedProfileSignal = Signalling.PREFERRED_PROFILE + Profile.DEFAULT.id
+        verifyOrder {
+            mockTransport.sendSignal(expectedProfileSignal)
+            mockTransport.sendSignal(Signalling.STATUS_ESTABLISHED)
+        }
     }
 
     // ===== prepareForAnswer (JIT state setup) =====

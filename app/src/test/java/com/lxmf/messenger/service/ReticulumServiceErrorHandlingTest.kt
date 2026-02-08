@@ -45,6 +45,7 @@ class ReticulumServiceErrorHandlingTest {
     private lateinit var mockWifiLock: WifiManager.WifiLock
     private lateinit var mockMulticastLock: WifiManager.MulticastLock
 
+    @Suppress("NoRelaxedMocks") // Android framework classes require relaxed mocking
     @Before
     fun setup() {
         mockContext = mockk<Context>(relaxed = true)
@@ -399,7 +400,8 @@ class ReticulumServiceErrorHandlingTest {
             val startTime = System.currentTimeMillis()
 
             try {
-                withTimeout(1000) { // 1 second timeout
+                withTimeout(1000) {
+                    // 1 second timeout
                     shutdownHangs()
                 }
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -430,7 +432,8 @@ class ReticulumServiceErrorHandlingTest {
             var completed = false
 
             try {
-                withTimeout(10000) { // 10 second timeout
+                withTimeout(10000) {
+                    // 10 second timeout
                     shutdownSucceeds()
                     completed = true
                 }
@@ -448,8 +451,8 @@ class ReticulumServiceErrorHandlingTest {
     /**
      * Helper function to sanitize error messages (matches implementation).
      */
-    private fun sanitizeErrorMessage(error: String): String {
-        return when {
+    private fun sanitizeErrorMessage(error: String): String =
+        when {
             error.contains("NoneType") -> "Network initialization failed"
             error.contains("AttributeError") -> "Configuration error"
             error.contains("ImportError") || error.contains("ModuleNotFoundError") -> "Missing network components"
@@ -460,7 +463,6 @@ class ReticulumServiceErrorHandlingTest {
             error.length > 100 -> "Network initialization error"
             else -> error
         }
-    }
 
     // ========== Edge Cases ==========
 
@@ -473,10 +475,18 @@ class ReticulumServiceErrorHandlingTest {
         every { mockWifiLock.isHeld } returns true andThen false
 
         // When: Release multiple times
-        if (mockWifiLock.isHeld) mockWifiLock.release()
-        if (mockWifiLock.isHeld) mockWifiLock.release() // Should not release
+        var releaseCount = 0
+        if (mockWifiLock.isHeld) {
+            mockWifiLock.release()
+            releaseCount++
+        }
+        if (mockWifiLock.isHeld) {
+            mockWifiLock.release()
+            releaseCount++
+        }
 
         // Then: Only released once
+        assertEquals(1, releaseCount)
         verify(exactly = 1) { mockWifiLock.release() }
     }
 

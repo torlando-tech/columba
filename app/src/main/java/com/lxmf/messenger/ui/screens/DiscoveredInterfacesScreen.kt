@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,12 +68,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.lucide.Antenna
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TreePine
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
+import com.lxmf.messenger.ui.components.SortModeSelector
 import com.lxmf.messenger.ui.theme.MaterialDesignIcons
 import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
 import java.text.SimpleDateFormat
@@ -103,6 +110,33 @@ fun DiscoveredInterfacesScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    // Fetch user location for proximity sorting (if permission granted)
+    LaunchedEffect(Unit) {
+        val hasCoarsePermission =
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasFinePermission =
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (hasCoarsePermission || hasFinePermission) {
+            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedClient
+                .getCurrentLocation(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    CancellationTokenSource().token,
+                ).addOnSuccessListener { location ->
+                    location?.let {
+                        viewModel.setUserLocation(it.latitude, it.longitude)
+                    }
+                }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -153,6 +187,7 @@ fun DiscoveredInterfacesScreen(
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
+                                onAutoconnectCountChange = { viewModel.setAutoconnectCount(it) },
                             )
                         }
 
@@ -166,6 +201,15 @@ fun DiscoveredInterfacesScreen(
                                     staleCount = state.staleCount,
                                 )
                             }
+
+                            // Sort mode selector
+                            item {
+                                SortModeSelector(
+                                    currentMode = state.sortMode,
+                                    hasUserLocation = state.userLatitude != null && state.userLongitude != null,
+                                    onModeSelected = { viewModel.setSortMode(it) },
+                                )
+                            }
                         }
 
                         // Show empty state or interfaces
@@ -174,7 +218,13 @@ fun DiscoveredInterfacesScreen(
                                 EmptyDiscoveredCard()
                             }
                         } else {
-                            items(state.interfaces, key = { "${it.transportId ?: ""}:${it.name}:${it.type}" }) { iface ->
+                            items(
+                                state.interfaces,
+                                key = { iface ->
+                                    // networkId + endpoint + lastHeard timestamp for stable uniqueness across sorts
+                                    "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:${iface.lastHeard}"
+                                },
+                            ) { iface ->
                                 val reachableHost = iface.reachableOn
                                 DiscoveredInterfaceCard(
                                     iface = iface,
@@ -188,11 +238,12 @@ fun DiscoveredInterfacesScreen(
                                                 iface.name,
                                             )
                                         } else {
-                                            Toast.makeText(
-                                                context,
-                                                "Only TCP interfaces can be added currently",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    "Only TCP interfaces can be added currently",
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
                                         }
                                     },
                                     onOpenLocation = {
@@ -222,11 +273,12 @@ fun DiscoveredInterfacesScreen(
                                     onCopyLoraParams = {
                                         val params = formatLoraParamsForClipboard(iface)
                                         clipboardManager.setText(AnnotatedString(params))
-                                        Toast.makeText(
-                                            context,
-                                            "LoRa parameters copied",
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "LoRa parameters copied",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
                                     },
                                     onUseForNewRNode = {
                                         onNavigateToRNodeWizardWithParams(
@@ -253,10 +305,11 @@ fun DiscoveredInterfacesScreen(
 internal fun DiscoverySettingsCard(
     isRuntimeEnabled: Boolean,
     isSettingEnabled: Boolean,
-    autoconnectCount: Int = 5,
+    autoconnectCount: Int = 0,
     bootstrapInterfaceNames: List<String> = emptyList(),
     isRestarting: Boolean = false,
     onToggleDiscovery: () -> Unit = {},
+    onAutoconnectCountChange: (Int) -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -387,7 +440,11 @@ internal fun DiscoverySettingsCard(
                 Text(
                     text =
                         if (isSettingEnabled) {
-                            "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                            if (autoconnectCount > 0) {
+                                "RNS will discover and auto-connect up to $autoconnectCount interfaces from the network."
+                            } else {
+                                "Discovery is active but auto-connect is disabled. Useful for debugging."
+                            }
                         } else {
                             "Enable to automatically discover and connect to interfaces announced by other RNS nodes."
                         },
@@ -399,6 +456,51 @@ internal fun DiscoverySettingsCard(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         },
                 )
+            }
+
+            // Autoconnect count slider (only shown when discovery is enabled)
+            if (isSettingEnabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Auto-connect limit",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            text = if (autoconnectCount == 0) "Off" else "$autoconnectCount",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    // Use a separate state to track slider changes and only commit on release
+                    var sliderValue by remember { mutableStateOf(autoconnectCount.toFloat()) }
+                    // Update local state when external state changes
+                    LaunchedEffect(autoconnectCount) {
+                        sliderValue = autoconnectCount.toFloat()
+                    }
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        onValueChangeFinished = {
+                            val newCount = sliderValue.toInt()
+                            if (newCount != autoconnectCount) {
+                                onAutoconnectCountChange(newCount)
+                            }
+                        },
+                        valueRange = 0f..10f,
+                        steps = 9,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isRestarting,
+                    )
+                }
             }
 
             // Bootstrap interfaces section
@@ -1097,8 +1199,8 @@ internal fun InterfaceTypeIcon(
 /**
  * Format interface type for display.
  */
-internal fun formatInterfaceType(type: String): String {
-    return when (type) {
+internal fun formatInterfaceType(type: String): String =
+    when (type) {
         "TCPServerInterface" -> "TCP Server"
         "TCPClientInterface" -> "TCP Client"
         "BackboneInterface" -> "Backbone (TCP)"
@@ -1108,7 +1210,6 @@ internal fun formatInterfaceType(type: String): String {
         "KISSInterface" -> "KISS"
         else -> type
     }
-}
 
 /**
  * Format last heard timestamp as relative time.
@@ -1134,8 +1235,8 @@ internal fun formatLastHeard(timestamp: Long): String {
 /**
  * Format LoRa parameters for clipboard.
  */
-internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
-    return buildString {
+internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String =
+    buildString {
         appendLine("LoRa Parameters from: ${iface.name}")
         appendLine("---")
         iface.frequency?.let { freq ->
@@ -1154,4 +1255,3 @@ internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String {
             appendLine("Modulation: $mod")
         }
     }.trim()
-}

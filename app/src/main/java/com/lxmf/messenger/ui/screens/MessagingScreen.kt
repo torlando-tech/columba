@@ -2,6 +2,9 @@ package com.lxmf.messenger.ui.screens
 
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.os.SystemClock
+import android.util.Log
+import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,7 +26,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
@@ -123,9 +129,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -172,6 +183,107 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val URL_ANNOTATION_TAG = "url"
+
+@Composable
+private fun LinkifiedMessageText(
+    text: String,
+    isFromMe: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val viewConfiguration = LocalViewConfiguration.current
+
+    val textColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val linkColor = MaterialTheme.colorScheme.primary
+
+    val annotatedText =
+        remember(text, linkColor) {
+            val matches = Patterns.WEB_URL.matcher(text)
+            buildAnnotatedString {
+                var currentIndex = 0
+                while (matches.find()) {
+                    val start = matches.start()
+                    val end = matches.end()
+                    if (start > currentIndex) {
+                        append(text.substring(currentIndex, start))
+                    }
+
+                    val urlText = text.substring(start, end)
+                    val linkStart = length
+                    append(urlText)
+                    val linkEnd = length
+                    addStyle(
+                        style =
+                            SpanStyle(
+                                color = linkColor,
+                                textDecoration = TextDecoration.Underline,
+                            ),
+                        start = linkStart,
+                        end = linkEnd,
+                    )
+                    addStringAnnotation(
+                        tag = URL_ANNOTATION_TAG,
+                        annotation = urlText,
+                        start = linkStart,
+                        end = linkEnd,
+                    )
+                    currentIndex = end
+                }
+
+                if (currentIndex < text.length) {
+                    append(text.substring(currentIndex))
+                }
+            }
+        }
+
+    var layoutResult: TextLayoutResult? by remember { mutableStateOf(null) }
+
+    Text(
+        text = annotatedText,
+        style = MaterialTheme.typography.bodyLarge,
+        color = textColor,
+        onTextLayout = { layoutResult = it },
+        modifier =
+            modifier.pointerInput(annotatedText, viewConfiguration.longPressTimeoutMillis) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val downTime = SystemClock.uptimeMillis()
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    val upTime = SystemClock.uptimeMillis()
+
+                    if (upTime - downTime >= viewConfiguration.longPressTimeoutMillis) {
+                        return@awaitEachGesture
+                    }
+
+                    val result = layoutResult ?: return@awaitEachGesture
+                    val offset = result.getOffsetForPosition(up.position)
+                    val url =
+                        annotatedText
+                            .getStringAnnotations(URL_ANNOTATION_TAG, offset, offset)
+                            .firstOrNull()
+                            ?.item
+                            ?: return@awaitEachGesture
+
+                    down.consume()
+                    up.consume()
+
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(url)))
+                    } catch (e: Exception) {
+                        Log.w("MessagingScreen", "Unable to open link: $url", e)
+                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -328,18 +440,20 @@ fun MessagingScreen(
                             is FileUtils.FileReadResult.FileTooLarge -> {
                                 val maxSizeKb = result.maxSize / 1024
                                 val actualSizeKb = result.actualSize / 1024
-                                Toast.makeText(
-                                    context,
-                                    "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
-                                    Toast.LENGTH_LONG,
-                                ).show()
+                                Toast
+                                    .makeText(
+                                        context,
+                                        "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
                             }
                             is FileUtils.FileReadResult.Error -> {
-                                Toast.makeText(
-                                    context,
-                                    "Failed to attach file: ${result.message}",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+                                Toast
+                                    .makeText(
+                                        context,
+                                        "Failed to attach file: ${result.message}",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
                             }
                         }
                         viewModel.setProcessingFile(false)
@@ -518,23 +632,25 @@ fun MessagingScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Online status indicator - considers active link OR recent announce
-                        val lastSeen = announceInfo?.lastSeenTimestamp
+                        // Online status indicator - combines link activity, delivery proofs, and announces
+                        val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
+                        val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
+                        val lastActivity = maxOf(lastSeenFromAnnounce, lastActivityFromLink)
                         val hasActiveLink = conversationLinkState?.isActive == true
                         val isEstablishing = conversationLinkState?.isEstablishing == true
-                        val hasRecentAnnounce =
-                            lastSeen != null &&
-                                System.currentTimeMillis() - lastSeen < (5 * 60 * 1000L) // 5 minutes
-                        val isOnline = hasActiveLink || hasRecentAnnounce
+                        val hasRecentActivity =
+                            lastActivity > 0 &&
+                                System.currentTimeMillis() - lastActivity < (5 * 60 * 1000L) // 5 minutes
+                        val isOnline = hasActiveLink || hasRecentActivity
 
                         // Debug logging
                         android.util.Log.d(
                             "MessagingScreen",
                             "Online indicator: hasActiveLink=$hasActiveLink, isEstablishing=$isEstablishing, " +
-                                "hasRecentAnnounce=$hasRecentAnnounce, linkState=$conversationLinkState",
+                                "hasRecentActivity=$hasRecentActivity, lastActivity=$lastActivity, linkState=$conversationLinkState",
                         )
 
-                        if (lastSeen != null || hasActiveLink || isEstablishing) {
+                        if (lastActivity > 0 || hasActiveLink || isEstablishing) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -573,8 +689,8 @@ fun MessagingScreen(
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        hasRecentAnnounce -> "Online"
-                                        lastSeen != null -> formatRelativeTime(lastSeen)
+                                        hasRecentActivity -> "Online"
+                                        lastActivity > 0 -> formatRelativeTime(lastActivity)
                                         else -> ""
                                     }
                                 Text(
@@ -784,7 +900,8 @@ fun MessagingScreen(
                                     val cachedImage =
                                         decodedResult?.bitmap
                                             ?: if (message.decodedImage == null && loadedImageIds.contains(message.id)) {
-                                                com.lxmf.messenger.ui.model.ImageCache.get(message.id)
+                                                com.lxmf.messenger.ui.model.ImageCache
+                                                    .get(message.id)
                                             } else {
                                                 message.decodedImage
                                             }
@@ -943,7 +1060,10 @@ fun MessagingScreen(
                             pagingItems.itemSnapshotList
                                 .find { it?.id == state.messageId }
                         message?.let {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it.content))
+                            clipboardManager.setText(
+                                androidx.compose.ui.text
+                                    .AnnotatedString(it.content),
+                            )
                         }
                     },
                     onViewDetails = { onViewMessageDetails(state.messageId) },
@@ -1266,19 +1386,21 @@ fun MessageBubble(
                             val width = this.size.width.toInt()
                             val height = this.size.height.toInt()
                             onDrawWithContent {
-                                graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                graphicsLayer.record(
+                                    size =
+                                        androidx.compose.ui.unit
+                                            .IntSize(width, height),
+                                ) {
                                     this@onDrawWithContent.drawContent()
                                 }
                                 drawContent()
                             }
-                        }
-                        .onGloballyPositioned { coordinates ->
+                        }.onGloballyPositioned { coordinates ->
                             bubbleX = coordinates.positionInRoot().x
                             bubbleY = coordinates.positionInRoot().y
                             bubbleWidth = coordinates.size.width
                             bubbleHeight = coordinates.size.height
-                        }
-                        .scale(scale)
+                        }.scale(scale)
                         .combinedClickable(
                             onClick = { showFullscreenImage = true },
                             onLongClick = {
@@ -1295,7 +1417,8 @@ fun MessageBubble(
                 // Large GIF without bubble background
                 AsyncImage(
                     model =
-                        ImageRequest.Builder(context)
+                        ImageRequest
+                            .Builder(context)
                             .data(message.imageData)
                             .crossfade(true)
                             .build(),
@@ -1317,8 +1440,7 @@ fun MessageBubble(
                             .background(
                                 color = Color.Black.copy(alpha = 0.5f),
                                 shape = RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ).padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1376,19 +1498,21 @@ fun MessageBubble(
                                 val width = this.size.width.toInt()
                                 val height = this.size.height.toInt()
                                 onDrawWithContent {
-                                    graphicsLayer.record(size = androidx.compose.ui.unit.IntSize(width, height)) {
+                                    graphicsLayer.record(
+                                        size =
+                                            androidx.compose.ui.unit
+                                                .IntSize(width, height),
+                                    ) {
                                         this@onDrawWithContent.drawContent()
                                     }
                                     drawContent()
                                 }
-                            }
-                            .onGloballyPositioned { coordinates ->
+                            }.onGloballyPositioned { coordinates ->
                                 bubbleX = coordinates.positionInRoot().x
                                 bubbleY = coordinates.positionInRoot().y
                                 bubbleWidth = coordinates.size.width
                                 bubbleHeight = coordinates.size.height
-                            }
-                            .scale(scale) // Apply scale animation after bitmap capture
+                            }.scale(scale) // Apply scale animation after bitmap capture
                             .combinedClickable(
                                 onClick = {},
                                 onLongClick = {
@@ -1432,7 +1556,8 @@ fun MessageBubble(
                             // Animated GIF - use Coil for animated rendering
                             AsyncImage(
                                 model =
-                                    ImageRequest.Builder(context)
+                                    ImageRequest
+                                        .Builder(context)
                                         .data(imageData)
                                         .crossfade(true)
                                         .build(),
@@ -1571,15 +1696,9 @@ fun MessageBubble(
                             }
                         }
 
-                        Text(
+                        LinkifiedMessageText(
                             text = message.content,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color =
-                                if (isFromMe) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
+                            isFromMe = isFromMe,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
@@ -1764,7 +1883,8 @@ fun MessageInputBar(
                         // Animated GIF - use Coil for preview
                         AsyncImage(
                             model =
-                                ImageRequest.Builder(context)
+                                ImageRequest
+                                    .Builder(context)
                                     .data(selectedImageData)
                                     .crossfade(true)
                                     .build(),
@@ -1780,7 +1900,8 @@ fun MessageInputBar(
                         // Static image - use decoded bitmap
                         val bitmap =
                             remember(selectedImageData) {
-                                BitmapFactory.decodeByteArray(selectedImageData, 0, selectedImageData.size)
+                                BitmapFactory
+                                    .decodeByteArray(selectedImageData, 0, selectedImageData.size)
                                     ?.asImageBitmap()
                             }
                         bitmap?.let { imageBitmap ->
@@ -1856,8 +1977,7 @@ fun MessageInputBar(
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainerHighest,
                                 RoundedCornerShape(24.dp),
-                            )
-                            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+                            ).border(1.dp, borderColor, RoundedCornerShape(24.dp))
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                     BasicTextField(
@@ -2060,7 +2180,9 @@ private fun FullscreenImageDialog(
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        properties =
+            androidx.compose.ui.window
+                .DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
             modifier =
@@ -2132,7 +2254,9 @@ private fun FullscreenAnimatedImageDialog(
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        properties =
+            androidx.compose.ui.window
+                .DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
             modifier =
@@ -2156,7 +2280,8 @@ private fun FullscreenAnimatedImageDialog(
         ) {
             AsyncImage(
                 model =
-                    ImageRequest.Builder(context)
+                    ImageRequest
+                        .Builder(context)
                         .data(imageData)
                         .crossfade(true)
                         .build(),
@@ -2324,14 +2449,13 @@ private fun getSyncStatusText(syncProgress: SyncProgress): String =
 /**
  * Format file size in human-readable format.
  */
-private fun formatFileSize(bytes: Long): String {
-    return when {
+private fun formatFileSize(bytes: Long): String =
+    when {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         bytes < 1024 * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
         else -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
     }
-}
 
 /**
  * Get the status icon character for a message status.
@@ -2344,12 +2468,11 @@ private fun formatFileSize(bytes: Long): String {
  *   - "!" (exclamation) for failed - delivery failed
  *   - "" (empty) for unknown status
  */
-internal fun getMessageStatusIcon(status: String): String {
-    return when (status) {
+internal fun getMessageStatusIcon(status: String): String =
+    when (status) {
         "pending" -> "○"
         "sent", "retrying_propagated", "propagated" -> "✓"
         "delivered" -> "✓✓"
         "failed" -> "!"
         else -> ""
     }
-}

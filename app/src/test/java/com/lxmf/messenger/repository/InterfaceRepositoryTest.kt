@@ -33,7 +33,12 @@ class InterfaceRepositoryTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockDao = mockk(relaxed = true)
+        // Each test stubs the specific methods needed
+        mockDao = mockk()
+        // Default stubs for interface count flows - tests don't use these directly
+        every { mockDao.getEnabledInterfaceCount() } returns flowOf(0)
+        every { mockDao.getTotalInterfaceCount() } returns flowOf(0)
+        every { mockDao.hasEnabledBluetoothInterface() } returns flowOf(false)
     }
 
     @After

@@ -230,8 +230,9 @@ interface IReticulumService {
     /**
      * Force service process to exit (for clean restart).
      * This shutdowns RNS and exits the process immediately.
+     * Fire-and-forget (oneway) - caller doesn't wait for process termination.
      */
-    void forceExit();
+    oneway void forceExit();
 
     /**
      * Register a callback to be notified when the service is ready.
@@ -248,9 +249,12 @@ interface IReticulumService {
      * When a conversation is active, message polling uses a faster 1-second interval
      * for lower latency. When inactive, standard adaptive polling (2-30s) is used.
      *
+     * This is a fire-and-forget call (oneway) to prevent ANRs when called during
+     * ViewModel cleanup on the main thread. See: COLUMBA-1E
+     *
      * @param active true if a conversation screen is currently open and active
      */
-    void setConversationActive(boolean active);
+    oneway void setConversationActive(boolean active);
 
     /**
      * Get BLE connection details for all currently connected peers.
@@ -281,8 +285,9 @@ interface IReticulumService {
      * Reconnect to the RNode interface.
      * Called when CompanionDeviceManager detects the RNode has reappeared
      * after going out of BLE range.
+     * Fire-and-forget (oneway) - prevents ANR if reconnection takes time.
      */
-    void reconnectRNodeInterface();
+    oneway void reconnectRNodeInterface();
 
     /**
      * Check if a shared Reticulum instance is available.
@@ -406,10 +411,11 @@ interface IReticulumService {
      * Set the incoming message size limit.
      * This controls the maximum size of LXMF messages that can be received.
      * Messages exceeding this limit will be rejected by the LXMF router.
+     * Fire-and-forget (oneway) - simple config setting, no return value needed.
      *
      * @param limitKb Size limit in KB (e.g., 1024 for 1MB, 131072 for 128MB "unlimited")
      */
-    void setIncomingMessageSizeLimit(int limitKb);
+    oneway void setIncomingMessageSizeLimit(int limitKb);
 
     // ==================== LOCATION TELEMETRY ====================
 
@@ -560,20 +566,23 @@ interface IReticulumService {
 
     /**
      * End the current voice call (hangup).
+     * Fire-and-forget (oneway) to prevent ANR during call teardown.
      */
-    void hangupCall();
+    oneway void hangupCall();
 
     /**
      * Set microphone mute state during a call.
+     * Fire-and-forget (oneway) since UI already updates locally; prevents ANR.
      * @param muted true to mute, false to unmute
      */
-    void setCallMuted(boolean muted);
+    oneway void setCallMuted(boolean muted);
 
     /**
      * Set speaker/earpiece mode during a call.
+     * Fire-and-forget (oneway) since UI already updates locally; prevents ANR.
      * @param speakerOn true for speaker, false for earpiece
      */
-    void setCallSpeaker(boolean speakerOn);
+    oneway void setCallSpeaker(boolean speakerOn);
 
     /**
      * Get current call state.

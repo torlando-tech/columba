@@ -8,6 +8,7 @@ import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
+import com.lxmf.messenger.service.manager.MemoryProfilerManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -27,6 +28,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
@@ -53,6 +55,7 @@ class ReticulumServiceBinderTest {
     private lateinit var lockManager: LockManager
     private lateinit var maintenanceManager: MaintenanceManager
     private lateinit var healthCheckManager: HealthCheckManager
+    private lateinit var memoryProfilerManager: MemoryProfilerManager
     private lateinit var networkChangeManager: NetworkChangeManager
     private lateinit var notificationManager: ServiceNotificationManager
     private lateinit var bleCoordinator: BleCoordinator
@@ -62,33 +65,54 @@ class ReticulumServiceBinderTest {
     private lateinit var binder: ReticulumServiceBinder
     private var onShutdownCalled = false
 
+    @Suppress("NoRelaxedMocks") // Context is an Android framework class
     @Before
     fun setup() {
         testScope = TestScope(testDispatcher)
         onShutdownCalled = false
 
         context = mockk(relaxed = true)
-        state = mockk(relaxed = true)
-        wrapperManager = mockk(relaxed = true)
-        identityManager = mockk(relaxed = true)
-        routingManager = mockk(relaxed = true)
-        messagingManager = mockk(relaxed = true)
-        eventHandler = mockk(relaxed = true)
-        broadcaster = mockk(relaxed = true)
-        lockManager = mockk(relaxed = true)
-        maintenanceManager = mockk(relaxed = true)
-        healthCheckManager = mockk(relaxed = true)
-        networkChangeManager = mockk(relaxed = true)
-        notificationManager = mockk(relaxed = true)
-        bleCoordinator = mockk(relaxed = true)
-        persistenceManager = mockk(relaxed = true)
+        state = mockk()
+        wrapperManager = mockk()
+        identityManager = mockk()
+        routingManager = mockk()
+        messagingManager = mockk()
+        eventHandler = mockk()
+        broadcaster = mockk()
+        lockManager = mockk()
+        maintenanceManager = mockk()
+        healthCheckManager = mockk()
+        memoryProfilerManager = mockk()
+        networkChangeManager = mockk()
+        notificationManager = mockk()
+        bleCoordinator = mockk()
+        persistenceManager = mockk()
 
         // Setup networkStatus as a real AtomicReference for verification
-        networkStatusMock = mockk(relaxed = true)
+        networkStatusMock = mockk()
         every { state.networkStatus } returns networkStatusMock
-        every { state.initializationGeneration } returns mockk(relaxed = true)
+        every { state.initializationGeneration } returns
+            java.util.concurrent.atomic
+                .AtomicInteger(0)
         every { state.isCurrentGeneration(any()) } returns true
         coEvery { wrapperManager.shutdown(any()) } just Runs
+
+        // Default stubs for commonly called methods during shutdown
+        every { networkChangeManager.stop() } just Runs
+        every { healthCheckManager.stop() } just Runs
+        every { memoryProfilerManager.stopProfiling() } just Runs
+        every { maintenanceManager.stop() } just Runs
+        every { eventHandler.stopAll() } just Runs
+        every { lockManager.releaseAll() } just Runs
+        every { networkStatusMock.set(any()) } just Runs
+        every { networkStatusMock.get() } returns "READY"
+        every { broadcaster.broadcastStatusChange(any()) } just Runs
+        every { notificationManager.updateNotification(any()) } just Runs
+
+        // Stubs for callback registration
+        every { broadcaster.register(any()) } just Runs
+        every { broadcaster.unregister(any()) } just Runs
+        every { eventHandler.setConversationActive(any()) } just Runs
 
         binder =
             ReticulumServiceBinder(
@@ -103,6 +127,7 @@ class ReticulumServiceBinderTest {
                 lockManager = lockManager,
                 maintenanceManager = maintenanceManager,
                 healthCheckManager = healthCheckManager,
+                memoryProfilerManager = memoryProfilerManager,
                 networkChangeManager = networkChangeManager,
                 notificationManager = notificationManager,
                 bleCoordinator = bleCoordinator,
@@ -123,15 +148,17 @@ class ReticulumServiceBinderTest {
 
     @Test
     fun `shutdown calls maintenanceManager stop`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verify(exactly = 1) { maintenanceManager.stop() }
     }
 
     @Test
     fun `shutdown stops maintenance before releasing locks`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verifyOrder {
             maintenanceManager.stop()
             eventHandler.stopAll()
@@ -141,29 +168,33 @@ class ReticulumServiceBinderTest {
 
     @Test
     fun `shutdown calls eventHandler stopAll`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verify(exactly = 1) { eventHandler.stopAll() }
     }
 
     @Test
     fun `shutdown calls lockManager releaseAll`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verify(exactly = 1) { lockManager.releaseAll() }
     }
 
     @Test
     fun `shutdown updates state to RESTARTING`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verify { networkStatusMock.set("RESTARTING") }
     }
 
     @Test
     fun `shutdown broadcasts RESTARTING status`() {
-        binder.shutdown()
+        val result = runCatching { binder.shutdown() }
 
+        assertTrue("shutdown should complete successfully", result.isSuccess)
         verify { broadcaster.broadcastStatusChange("RESTARTING") }
     }
 
@@ -182,8 +213,9 @@ class ReticulumServiceBinderTest {
 
     @Test
     fun `forceExit calls shutdown first`() {
-        binder.forceExit()
+        val result = runCatching { binder.forceExit() }
 
+        assertTrue("forceExit should complete successfully", result.isSuccess)
         verify { maintenanceManager.stop() }
         verify { eventHandler.stopAll() }
         verify { lockManager.releaseAll() }
@@ -355,26 +387,29 @@ class ReticulumServiceBinderTest {
 
     @Test
     fun `registerCallback delegates to broadcaster`() {
-        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>(relaxed = true)
+        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>()
 
-        binder.registerCallback(callback)
+        val result = runCatching { binder.registerCallback(callback) }
 
+        assertTrue("registerCallback should complete successfully", result.isSuccess)
         verify { broadcaster.register(callback) }
     }
 
     @Test
     fun `unregisterCallback delegates to broadcaster`() {
-        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>(relaxed = true)
+        val callback = mockk<com.lxmf.messenger.IReticulumServiceCallback>()
 
-        binder.unregisterCallback(callback)
+        val result = runCatching { binder.unregisterCallback(callback) }
 
+        assertTrue("unregisterCallback should complete successfully", result.isSuccess)
         verify { broadcaster.unregister(callback) }
     }
 
     @Test
     fun `setConversationActive delegates to eventHandler`() {
-        binder.setConversationActive(true)
+        val result = runCatching { binder.setConversationActive(true) }
 
+        assertTrue("setConversationActive should complete successfully", result.isSuccess)
         verify { eventHandler.setConversationActive(true) }
     }
 

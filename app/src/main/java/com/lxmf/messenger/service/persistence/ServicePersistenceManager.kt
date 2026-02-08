@@ -7,11 +7,13 @@ import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
+import com.lxmf.messenger.data.util.HashUtils
+import com.lxmf.messenger.data.util.TextSanitizer
 import com.lxmf.messenger.service.di.ServiceDatabaseProvider
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.security.MessageDigest
 
 /**
  * Manages database persistence from the service process.
@@ -120,7 +122,7 @@ class ServicePersistenceManager(
                     )
 
                 announceDao.upsertAnnounce(entity)
-                Log.d(TAG, "Service persisted announce: $peerName ($destinationHash)")
+                Log.d(TAG, "Service persisted announce: ${destinationHash.take(16)}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
             }
@@ -207,16 +209,35 @@ class ServicePersistenceManager(
                     activeIdentity.identityHash,
                 )
 
-            // Get peer name from existing conversation or use formatted hash
-            val peerName =
-                existingConversation?.peerName
-                    ?: "Peer ${sourceHash.take(8).uppercase()}"
+            // Sanitize content to remove control characters and normalize whitespace
+            val sanitizedContent = TextSanitizer.sanitizeMessage(content)
+            val sanitizedPreview = TextSanitizer.sanitizePreview(content)
+
+            // Get peer name using centralized resolver, then sanitize
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = sourceHash,
+                    cachedName = existingConversation?.peerName,
+                    contactNicknameLookup = {
+                        activeIdentity?.let {
+                            contactDao.getContact(sourceHash, it.identityHash)?.customNickname
+                        }
+                    },
+                    announcePeerNameLookup = {
+                        announceDao.getAnnounce(sourceHash)?.peerName
+                    },
+                )
+            val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
             // Insert/update conversation
             if (existingConversation != null) {
+                // Update peerName if we resolved a better name (nickname or announce)
+                val updatedPeerName =
+                    if (PeerNameResolver.isValidPeerName(resolvedName)) peerName else existingConversation.peerName
                 val updated =
                     existingConversation.copy(
-                        lastMessage = content.take(100),
+                        peerName = updatedPeerName,
+                        lastMessage = sanitizedPreview,
                         lastMessageTimestamp = timestamp,
                         unreadCount = existingConversation.unreadCount + 1,
                         peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
@@ -229,7 +250,7 @@ class ServicePersistenceManager(
                         identityHash = activeIdentity.identityHash,
                         peerName = peerName,
                         peerPublicKey = publicKey,
-                        lastMessage = content.take(100),
+                        lastMessage = sanitizedPreview,
                         lastMessageTimestamp = timestamp,
                         unreadCount = 1,
                         lastSeenTimestamp = 0,
@@ -243,7 +264,7 @@ class ServicePersistenceManager(
                     id = messageHash,
                     conversationHash = sourceHash,
                     identityHash = activeIdentity.identityHash,
-                    content = content,
+                    content = sanitizedContent,
                     timestamp = timestamp,
                     isFromMe = false,
                     status = "delivered",
@@ -273,7 +294,7 @@ class ServicePersistenceManager(
                 persistPeerIdentity(sourceHash, publicKey)
             }
 
-            Log.d(TAG, "Service persisted message from $sourceHash: ${content.take(30)}...")
+            Log.d(TAG, "Service persisted message from ${sourceHash.take(16)}")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Error persisting message in service from $sourceHash", e)
@@ -284,14 +305,13 @@ class ServicePersistenceManager(
     /**
      * Check if an announce exists (for de-duplication in app process).
      */
-    suspend fun announceExists(destinationHash: String): Boolean {
-        return try {
+    suspend fun announceExists(destinationHash: String): Boolean =
+        try {
             announceDao.announceExists(destinationHash)
         } catch (e: Exception) {
             Log.e(TAG, "Error checking announce existence: $destinationHash", e)
             false
         }
-    }
 
     /**
      * Check if a message exists (for de-duplication in app process).
@@ -389,9 +409,11 @@ class ServicePersistenceManager(
      * Look up display name for a peer with priority:
      * 1. Contact's custom nickname (user-set)
      * 2. Announce peer name (from network)
-     * 3. null (caller should use formatted hash as fallback)
+     * 3. Announce peer name by identity hash (for LXST calls)
+     * 4. null (caller should use formatted hash as fallback)
+     *
+     * Uses PeerNameResolver for standard lookups, with additional identity hash fallback.
      */
-    @Suppress("ReturnCount") // Cascading lookup with early returns is clearer than alternatives
     suspend fun lookupDisplayName(destinationHash: String): String? {
         return try {
             Log.d(TAG, "Looking up display name for: $destinationHash")
@@ -400,20 +422,23 @@ class ServicePersistenceManager(
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
 
-            // Check contact for custom nickname first (by destination hash)
-            if (activeIdentity != null) {
-                val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash)
-                Log.d(TAG, "Contact lookup: ${contact?.customNickname ?: "not found"}")
-                if (!contact?.customNickname.isNullOrBlank()) {
-                    return contact!!.customNickname
-                }
-            }
+            // Use centralized resolver for standard lookups
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = destinationHash,
+                    contactNicknameLookup = {
+                        activeIdentity?.let {
+                            contactDao.getContact(destinationHash, it.identityHash)?.customNickname
+                        }
+                    },
+                    announcePeerNameLookup = {
+                        announceDao.getAnnounce(destinationHash)?.peerName
+                    },
+                )
 
-            // Check announce for peer name (by destination hash)
-            val announce = announceDao.getAnnounce(destinationHash)
-            Log.d(TAG, "Announce lookup: ${announce?.peerName ?: "not found"}")
-            if (!announce?.peerName.isNullOrBlank()) {
-                return announce!!.peerName
+            // If resolver found a valid name (not fallback), return it
+            if (PeerNameResolver.isValidPeerName(resolvedName)) {
+                return resolvedName
             }
 
             // For LXST calls, the hash might be the identity hash, not the destination hash.
@@ -421,7 +446,7 @@ class ServicePersistenceManager(
             Log.d(TAG, "Trying identity hash lookup...")
             val announceByIdentity = findAnnounceByIdentityHash(destinationHash)
             if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
-                Log.d(TAG, "Found by identity hash: ${announceByIdentity.peerName}")
+                Log.d(TAG, "Found by identity hash")
                 return announceByIdentity.peerName
             }
 
@@ -443,8 +468,11 @@ class ServicePersistenceManager(
             val allAnnounces = announceDao.getAllAnnouncesSync()
             Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
             for (announce in allAnnounces) {
-                val computedHash = computeIdentityHash(announce.publicKey)
-                Log.d(TAG, "  Announce ${announce.peerName}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}")
+                val computedHash = HashUtils.computeIdentityHash(announce.publicKey)
+                Log.d(
+                    TAG,
+                    "  Announce ${announce.destinationHash.take(16)}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}",
+                )
                 if (computedHash.equals(identityHash, ignoreCase = true)) {
                     Log.d(TAG, "  -> MATCHED!")
                     return announce
@@ -456,17 +484,6 @@ class ServicePersistenceManager(
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
-    }
-
-    /**
-     * Compute identity hash from public key.
-     * In Reticulum: identity_hash = first 16 bytes of SHA256(public_key) as hex.
-     */
-    private fun computeIdentityHash(publicKey: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest(publicKey)
-        // Take first 16 bytes and convert to hex
-        return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
     /**

@@ -38,10 +38,15 @@ import javax.inject.Singleton
  */
 sealed class SyncResult {
     /** Sync completed successfully */
-    data class Success(val messagesReceived: Int) : SyncResult()
+    data class Success(
+        val messagesReceived: Int,
+    ) : SyncResult()
 
     /** Sync failed with an error */
-    data class Error(val message: String, val errorCode: Int? = null) : SyncResult()
+    data class Error(
+        val message: String,
+        val errorCode: Int? = null,
+    ) : SyncResult()
 
     /** No relay is configured */
     data object NoRelay : SyncResult()
@@ -58,7 +63,10 @@ sealed class SyncProgress {
 
     data object Starting : SyncProgress()
 
-    data class InProgress(val stateName: String, val progress: Float) : SyncProgress()
+    data class InProgress(
+        val stateName: String,
+        val progress: Float,
+    ) : SyncProgress()
 
     data object Complete : SyncProgress()
 }
@@ -83,7 +91,9 @@ sealed class RelayLoadState {
     data object Loading : RelayLoadState()
 
     /** Relay state has been loaded from database */
-    data class Loaded(val relay: RelayInfo?) : RelayLoadState()
+    data class Loaded(
+        val relay: RelayInfo?,
+    ) : RelayLoadState()
 }
 
 /**
@@ -95,7 +105,9 @@ sealed class AvailableRelaysState {
     data object Loading : AvailableRelaysState()
 
     /** Relays have been loaded from database */
-    data class Loaded(val relays: List<RelayInfo>) : AvailableRelaysState()
+    data class Loaded(
+        val relays: List<RelayInfo>,
+    ) : AvailableRelaysState()
 }
 
 /**
@@ -198,11 +210,11 @@ class PropagationNodeManager
          * This allows distinguishing "loading" from "no relay configured".
          */
         val currentRelayState: StateFlow<RelayLoadState> =
-            contactRepository.getMyRelayFlow()
+            contactRepository
+                .getMyRelayFlow()
                 .combine(settingsRepository.autoSelectPropagationNodeFlow) { contact, isAutoSelect ->
                     RelayLoadState.Loaded(buildRelayInfo(contact, isAutoSelect))
-                }
-                .stateIn(scope, SharingStarted.Eagerly, RelayLoadState.Loading)
+                }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), RelayLoadState.Loading)
 
         /**
          * Current relay derived from database (single source of truth).
@@ -212,7 +224,7 @@ class PropagationNodeManager
         val currentRelay: StateFlow<RelayInfo?> =
             currentRelayState
                 .map { state -> (state as? RelayLoadState.Loaded)?.relay }
-                .stateIn(scope, SharingStarted.Eagerly, null)
+                .stateIn(scope, SharingStarted.WhileSubscribed(5000L), null)
 
         /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
@@ -221,7 +233,8 @@ class PropagationNodeManager
          * Uses optimized SQL query with LIMIT to fetch only 10 rows.
          */
         val availableRelaysState: StateFlow<AvailableRelaysState> =
-            announceRepository.getTopPropagationNodes(limit = 10)
+            announceRepository
+                .getTopPropagationNodes(limit = 10)
                 .map { announces ->
                     Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
                     val relays =
@@ -235,8 +248,7 @@ class PropagationNodeManager
                             )
                         }
                     AvailableRelaysState.Loaded(relays)
-                }
-                .stateIn(scope, SharingStarted.Eagerly, AvailableRelaysState.Loading)
+                }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -519,7 +531,6 @@ class PropagationNodeManager
          */
         suspend fun onPropagationNodeAnnounce(
             destinationHash: String,
-            displayName: String,
             hops: Int,
             publicKey: ByteArray,
         ) {
@@ -528,7 +539,7 @@ class PropagationNodeManager
 
             // If user has manually selected a node, don't auto-switch
             if (!isAutoSelect && manualNode != null) {
-                Log.d(TAG, "Manual relay selected, ignoring announce from $displayName")
+                Log.d(TAG, "Manual relay selected, ignoring announce from ${destinationHash.take(16)}")
                 return
             }
 
@@ -545,7 +556,7 @@ class PropagationNodeManager
                 }
 
             if (shouldSwitch) {
-                Log.i(TAG, "Switching to relay $displayName ($destinationHash) at $hops hops")
+                Log.i(TAG, "Switching to relay ${destinationHash.take(16)} at $hops hops")
 
                 // Auto-add to contacts if not already present
                 val contactExists = contactRepository.hasContact(destinationHash)
@@ -571,10 +582,7 @@ class PropagationNodeManager
          * Note: This method only updates settings and database. The currentRelay Flow
          * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
-        suspend fun setManualRelay(
-            destinationHash: String,
-            displayName: String,
-        ) {
+        suspend fun setManualRelay(destinationHash: String) {
             // Cancel any ongoing auto-selection - user action takes precedence
             if (_selectionState.value != RelaySelectionState.IDLE) {
                 Log.i(TAG, "User manual selection - cancelling auto-select (state was ${_selectionState.value})")
@@ -584,7 +592,7 @@ class PropagationNodeManager
             _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
             excludedRelayHash = null // Clear exclusion - user made explicit choice
 
-            Log.i(TAG, "User manually selected relay: $displayName")
+            Log.i(TAG, "User manually selected relay: ${destinationHash.take(16)}")
 
             // Disable auto-select and save manual selection
             settingsRepository.saveAutoSelectPropagationNode(false)
@@ -623,7 +631,6 @@ class PropagationNodeManager
             if (nearest != null) {
                 onPropagationNodeAnnounce(
                     nearest.destinationHash,
-                    nearest.peerName,
                     nearest.hops,
                     nearest.publicKey,
                 )
@@ -693,11 +700,12 @@ class PropagationNodeManager
             // - If no announce, creates pending contact
             if (!contactRepository.hasContact(destinationHash)) {
                 val result = contactRepository.addPendingContact(destinationHash, nickname)
-                result.onSuccess { addResult ->
-                    Log.d(TAG, "Added contact for manual relay: $addResult")
-                }.onFailure { error ->
-                    Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
-                }
+                result
+                    .onSuccess { addResult ->
+                        Log.d(TAG, "Added contact for manual relay: $addResult")
+                    }.onFailure { error ->
+                        Log.e(TAG, "Failed to add contact for manual relay: ${error.message}")
+                    }
             }
 
             // This updates the database, which triggers currentRelay Flow,
@@ -746,10 +754,9 @@ class PropagationNodeManager
             val nearest = candidates.minByOrNull { it.hops }
 
             if (nearest != null) {
-                Log.i(TAG, "Auto-selecting new relay: ${nearest.peerName} at ${nearest.hops} hops")
+                Log.i(TAG, "Auto-selecting new relay: ${nearest.destinationHash.take(16)} at ${nearest.hops} hops")
                 onPropagationNodeAnnounce(
                     nearest.destinationHash,
-                    nearest.peerName,
                     nearest.hops,
                     nearest.publicKey,
                 )
@@ -891,7 +898,8 @@ class PropagationNodeManager
          * Observe propagation node announces for auto-selection.
          */
         private suspend fun observePropagationNodeAnnounces() {
-            announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+            announceRepository
+                .getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
                 .debounce(1000) // Batch rapid Room invalidation triggers (per research)
                 .collect { propagationNodes ->
                     // CRITICAL: Don't trigger selection if already selecting or in cooldown
@@ -928,12 +936,11 @@ class PropagationNodeManager
                         if (nearest != null) {
                             Log.i(
                                 TAG,
-                                "Auto-selecting nearest relay: ${nearest.peerName} " +
-                                    "(${nearest.destinationHash.take(12)}...) at ${nearest.hops} hops",
+                                "Auto-selecting nearest relay: " +
+                                    "${nearest.destinationHash.take(12)}... at ${nearest.hops} hops",
                             )
                             onPropagationNodeAnnounce(
                                 nearest.destinationHash,
-                                nearest.peerName,
                                 nearest.hops,
                                 nearest.publicKey,
                             )
@@ -977,9 +984,7 @@ class PropagationNodeManager
         /**
          * Convert hex string to ByteArray.
          */
-        private fun String.hexToByteArray(): ByteArray {
-            return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        }
+        private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
         // ==================== PROPAGATION NODE SYNC ====================
 
@@ -1040,7 +1045,7 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.displayName}")
+            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
             _isSyncing.value = true
             _syncProgress.value = SyncProgress.Starting
 
@@ -1056,15 +1061,16 @@ class PropagationNodeManager
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
-                result.onSuccess { state ->
-                    Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
-                    // Don't emit result or update timestamp here - let the observer handle it
-                }.onFailure { error ->
-                    Log.w(TAG, "Periodic sync request failed: ${error.message}")
-                    timeoutJob.cancel()
-                    _isSyncing.value = false
-                    _syncProgress.value = SyncProgress.Idle
-                }
+                result
+                    .onSuccess { state ->
+                        Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
+                        // Don't emit result or update timestamp here - let the observer handle it
+                    }.onFailure { error ->
+                        Log.w(TAG, "Periodic sync request failed: ${error.message}")
+                        timeoutJob.cancel()
+                        _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
+                    }
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting messages from propagation node", e)
                 timeoutJob.cancel()
@@ -1107,7 +1113,7 @@ class PropagationNodeManager
                 return
             }
 
-            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.displayName} (silent=$silent)")
+            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
             _isSyncing.value = true
             _isManualSync = !silent // Track for toast display on completion
             _syncProgress.value = SyncProgress.Starting
@@ -1129,23 +1135,24 @@ class PropagationNodeManager
 
             try {
                 val result = reticulumProtocol.requestMessagesFromPropagationNode()
-                result.onSuccess { propState ->
-                    Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
-                    // Don't emit success here - wait for propagation state observer
-                    // to see PR_COMPLETE state (unless keepSyncingState is true,
-                    // in which case caller manages the state via timeout)
-                }.onFailure { error ->
-                    Log.w(TAG, "Manual sync request failed: ${error.message}")
-                    timeoutJob.cancel()
-                    if (!keepSyncingState) {
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
+                result
+                    .onSuccess { propState ->
+                        Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
+                        // Don't emit success here - wait for propagation state observer
+                        // to see PR_COMPLETE state (unless keepSyncingState is true,
+                        // in which case caller manages the state via timeout)
+                    }.onFailure { error ->
+                        Log.w(TAG, "Manual sync request failed: ${error.message}")
+                        timeoutJob.cancel()
+                        if (!keepSyncingState) {
+                            _isSyncing.value = false
+                            _syncProgress.value = SyncProgress.Idle
+                        }
+                        if (_isManualSync) {
+                            _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
+                            _isManualSync = false
+                        }
                     }
-                    if (_isManualSync) {
-                        _manualSyncResult.emit(SyncResult.Error(error.message ?: "Unknown error"))
-                        _isManualSync = false
-                    }
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during manual sync", e)
                 timeoutJob.cancel()

@@ -36,7 +36,9 @@ import kotlin.coroutines.resume
 sealed class TelemetrySendResult {
     data object Success : TelemetrySendResult()
 
-    data class Error(val message: String) : TelemetrySendResult()
+    data class Error(
+        val message: String,
+    ) : TelemetrySendResult()
 
     data object NoCollectorConfigured : TelemetrySendResult()
 
@@ -51,7 +53,9 @@ sealed class TelemetrySendResult {
 sealed class TelemetryRequestResult {
     data object Success : TelemetryRequestResult()
 
-    data class Error(val message: String) : TelemetryRequestResult()
+    data class Error(
+        val message: String,
+    ) : TelemetryRequestResult()
 
     data object NoCollectorConfigured : TelemetryRequestResult()
 
@@ -450,9 +454,7 @@ class TelemetryCollectorManager
             periodicSendJob =
                 scope.launch {
                     // Wait for any in-progress send to complete before starting new schedule
-                    while (_isSending.value) {
-                        delay(100)
-                    }
+                    _isSending.first { !it }
 
                     // Wait for network to be ready before starting periodic sends
                     reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
@@ -510,9 +512,7 @@ class TelemetryCollectorManager
             periodicRequestJob =
                 scope.launch {
                     // Wait for any in-progress request to complete before starting new schedule
-                    while (_isRequesting.value) {
-                        delay(100)
-                    }
+                    _isRequesting.first { !it }
 
                     // Wait for network to be ready before starting periodic requests
                     reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
@@ -690,8 +690,8 @@ class TelemetryCollectorManager
          * Get the current device location.
          */
         @Suppress("MissingPermission") // Permission checked at higher level
-        private suspend fun getCurrentLocation(): Location? {
-            return suspendCancellableCoroutine { continuation ->
+        private suspend fun getCurrentLocation(): Location? =
+            suspendCancellableCoroutine { continuation ->
                 val cancellationTokenSource = CancellationTokenSource()
 
                 continuation.invokeOnCancellation {
@@ -701,19 +701,20 @@ class TelemetryCollectorManager
                 // Check if already cancelled before making the request
                 if (continuation.isActive) {
                     try {
-                        fusedLocationClient.getCurrentLocation(
-                            Priority.PRIORITY_HIGH_ACCURACY,
-                            cancellationTokenSource.token,
-                        ).addOnSuccessListener { location ->
-                            if (continuation.isActive) {
-                                continuation.resume(location)
+                        fusedLocationClient
+                            .getCurrentLocation(
+                                Priority.PRIORITY_HIGH_ACCURACY,
+                                cancellationTokenSource.token,
+                            ).addOnSuccessListener { location ->
+                                if (continuation.isActive) {
+                                    continuation.resume(location)
+                                }
+                            }.addOnFailureListener { exception ->
+                                Log.e(TAG, "Failed to get location", exception)
+                                if (continuation.isActive) {
+                                    continuation.resume(null)
+                                }
                             }
-                        }.addOnFailureListener { exception ->
-                            Log.e(TAG, "Failed to get location", exception)
-                            if (continuation.isActive) {
-                                continuation.resume(null)
-                            }
-                        }
                     } catch (e: IllegalArgumentException) {
                         // CancellationToken was already cancelled - this can happen in race conditions
                         Log.w(TAG, "Location request cancelled before it could start", e)
@@ -723,12 +724,9 @@ class TelemetryCollectorManager
                     }
                 }
             }
-        }
 
         /**
          * Convert hex string to ByteArray.
          */
-        private fun String.hexToByteArray(): ByteArray {
-            return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        }
+        private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }

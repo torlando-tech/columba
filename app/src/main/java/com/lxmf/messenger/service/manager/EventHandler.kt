@@ -9,6 +9,7 @@ import com.lxmf.messenger.reticulum.util.AppDataParser
 import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDictValue
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
 import com.lxmf.messenger.service.state.ServiceState
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -40,31 +41,27 @@ class EventHandler(
         /**
          * Helper to convert ByteArray to Base64 string.
          */
-        private fun ByteArray?.toBase64(): String? {
-            return this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-        }
+        private fun ByteArray?.toBase64(): String? = this?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
 
         /**
          * Safely parse PyObject to Int, handling Python None and parse errors.
          * Returns null if the value is None, not a number, or cannot be parsed.
          */
-        private fun PyObject?.toIntOrNull(): Int? {
-            return this?.let {
+        private fun PyObject?.toIntOrNull(): Int? =
+            this?.let {
                 val str = it.toString()
                 if (str == "None") null else str.toIntOrNull()
             }
-        }
 
         /**
          * Safely parse PyObject to Float, handling Python None and parse errors.
          * Returns null if the value is None, not a number, or cannot be parsed.
          */
-        private fun PyObject?.toFloatOrNull(): Float? {
-            return this?.let {
+        private fun PyObject?.toFloatOrNull(): Float? =
+            this?.let {
                 val str = it.toString()
                 if (str == "None") null else str.toFloatOrNull()
             }
-        }
     }
 
     /**
@@ -191,7 +188,7 @@ class EventHandler(
      */
     fun handleMessageReceivedEvent(messageJson: String) {
         try {
-            Log.d(TAG, "Message received event: ${messageJson.take(200)}...")
+            Log.d(TAG, "Message received event")
 
             scope.launch {
                 try {
@@ -351,12 +348,12 @@ class EventHandler(
                 when {
                     !displayName.isNullOrBlank() -> displayName
                     nodeType == NodeType.PROPAGATION_NODE -> {
-                        propagationMetadata?.name ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                        propagationMetadata?.name ?: PeerNameResolver.formatHashAsFallback(destinationHashHex)
                     }
                     else -> {
                         appData?.let {
                             String(it, Charsets.UTF_8).takeIf { s -> s.isNotBlank() && s.length < 128 }
-                        } ?: "Peer ${destinationHashHex.take(8).uppercase()}"
+                        } ?: PeerNameResolver.formatHashAsFallback(destinationHashHex)
                     }
                 }
 
@@ -384,7 +381,7 @@ class EventHandler(
 
                 // Also persist peer identity (public key)
                 persistenceManager.persistPeerIdentity(destinationHashHex, publicKey)
-                Log.d(TAG, "Announce persisted to database: $peerName ($destinationHashHex)")
+                Log.d(TAG, "Announce persisted to database: ${destinationHashHex.take(16)}")
             }
 
             // Broadcast to app process for UI updates (may be dead, that's OK)

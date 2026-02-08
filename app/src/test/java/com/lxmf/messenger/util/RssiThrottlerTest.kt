@@ -1,3 +1,5 @@
+@file:Suppress("VarCouldBeVal")
+
 package com.lxmf.messenger.util
 
 import org.junit.Assert.assertEquals

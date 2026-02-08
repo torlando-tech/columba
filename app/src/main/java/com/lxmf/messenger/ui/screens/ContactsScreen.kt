@@ -137,8 +137,9 @@ fun ContactsScreen(
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
-    // Tab selection state
-    var selectedTab by remember { mutableStateOf(ContactsTab.MY_CONTACTS) }
+    // Tab selection state - use rememberSaveable to preserve across navigation
+    var selectedTab by androidx.compose.runtime.saveable
+        .rememberSaveable { mutableStateOf(ContactsTab.MY_CONTACTS) }
 
     // Network tab state
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
@@ -422,8 +423,14 @@ fun ContactsScreen(
         when (selectedTab) {
             ContactsTab.MY_CONTACTS -> {
                 // My Contacts tab content
+                // Only show loading spinner when loading AND list is empty
+                // This prevents flickering when data updates while content is displayed
+                val hasContacts =
+                    contactsState.groupedContacts.relay != null ||
+                        contactsState.groupedContacts.pinned.isNotEmpty() ||
+                        contactsState.groupedContacts.all.isNotEmpty()
                 when {
-                    contactsState.isLoading -> {
+                    contactsState.isLoading && !hasContacts -> {
                         LoadingContactsState(
                             modifier =
                                 Modifier
@@ -431,11 +438,7 @@ fun ContactsScreen(
                                     .padding(paddingValues),
                         )
                     }
-                    contactsState.groupedContacts.relay == null &&
-                        contactsState.groupedContacts.pinned
-                            .isEmpty() &&
-                        contactsState.groupedContacts.all
-                            .isEmpty() -> {
+                    !contactsState.isLoading && !hasContacts -> {
                         EmptyContactsState(
                             modifier =
                                 Modifier
@@ -456,10 +459,10 @@ fun ContactsScreen(
                             // My Relay section (shown at top, separate from pinned)
                             android.util.Log.d(
                                 "ContactsScreen",
-                                "LazyColumn composing, relay=${contactsState.groupedContacts.relay?.displayName}",
+                                "LazyColumn composing, hasRelay=${contactsState.groupedContacts.relay != null}",
                             )
                             contactsState.groupedContacts.relay?.let { relay ->
-                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section for: ${relay.displayName}")
+                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section")
                                 item {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,

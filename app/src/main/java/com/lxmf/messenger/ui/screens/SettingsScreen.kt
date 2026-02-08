@@ -336,8 +336,8 @@ fun SettingsScreen(
                     onAddManualRelay = { hash, nickname ->
                         viewModel.addManualPropagationNode(hash, nickname)
                     },
-                    onSelectRelay = { hash, name ->
-                        viewModel.selectRelay(hash, name)
+                    onSelectRelay = { hash, _ ->
+                        viewModel.selectRelay(hash)
                     },
                     // Retrieval settings
                     autoRetrieveEnabled = state.autoRetrieveEnabled,

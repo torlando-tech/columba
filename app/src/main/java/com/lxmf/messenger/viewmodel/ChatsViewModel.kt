@@ -76,11 +76,7 @@ class ChatsViewModel
                     emit(ChatsState(isLoading = true))
                 }.stateIn(
                     scope = viewModelScope,
-                    started =
-                        SharingStarted.WhileSubscribed(
-                            stopTimeoutMillis = 0,
-                            replayExpirationMillis = 0,
-                        ),
+                    started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = ChatsState(isLoading = true),
                 )
 
@@ -128,7 +124,7 @@ class ChatsViewModel
                         destinationHash = conversation.peerHash,
                         publicKey = publicKey,
                     )
-                    Log.d(TAG, "Saved ${conversation.peerName} to contacts")
+                    Log.d(TAG, "Saved ${conversation.peerHash.take(16)} to contacts")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving to contacts", e)
                 }

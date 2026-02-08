@@ -19,11 +19,24 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
+ * Sort mode for discovered interfaces list.
+ */
+enum class DiscoveredInterfacesSortMode {
+    /** Sort by availability status and stamp quality (default from RNS) */
+    AVAILABILITY_AND_QUALITY,
+
+    /** Sort by proximity to user (nearest first). Requires user location. */
+    PROXIMITY,
+}
+
+/**
  * State for the discovered interfaces screen.
  */
 @androidx.compose.runtime.Immutable
 data class DiscoveredInterfacesState(
     val interfaces: List<DiscoveredInterface> = emptyList(),
+    // Original list from Python, sorted by availability/quality - used to restore when switching back
+    val originalInterfaces: List<DiscoveredInterface> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     val availableCount: Int = 0,
@@ -32,6 +45,8 @@ data class DiscoveredInterfacesState(
     // User's location for distance calculation (nullable)
     val userLatitude: Double? = null,
     val userLongitude: Double? = null,
+    // Sort mode for the interface list
+    val sortMode: DiscoveredInterfacesSortMode = DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY,
     // Discovery settings (from DataStore - user preference)
     val discoverInterfacesEnabled: Boolean = false,
     val autoconnectCount: Int = 0,
@@ -87,9 +102,28 @@ class DiscoveredInterfacesViewModel
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
 
-                    _state.update {
-                        it.copy(
-                            interfaces = discovered,
+                    _state.update { currentState ->
+                        // Reset to QUALITY mode if in PROXIMITY but location unavailable
+                        val effectiveSortMode =
+                            if (currentState.sortMode == DiscoveredInterfacesSortMode.PROXIMITY &&
+                                (currentState.userLatitude == null || currentState.userLongitude == null)
+                            ) {
+                                DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY
+                            } else {
+                                currentState.sortMode
+                            }
+
+                        val sortedInterfaces =
+                            sortInterfaces(
+                                discovered,
+                                effectiveSortMode,
+                                currentState.userLatitude,
+                                currentState.userLongitude,
+                            )
+                        currentState.copy(
+                            interfaces = sortedInterfaces,
+                            originalInterfaces = discovered, // Store original Python-sorted list
+                            sortMode = effectiveSortMode,
                             isLoading = false,
                             availableCount = availableCount,
                             unknownCount = unknownCount,
@@ -118,8 +152,12 @@ class DiscoveredInterfacesViewModel
             viewModelScope.launch(ioDispatcher) {
                 try {
                     val discoverEnabled = settingsRepository.getDiscoverInterfacesEnabled()
-                    val autoconnectCount = settingsRepository.getAutoconnectDiscoveredCount()
+                    val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
                     val bootstrapNames = interfaceRepository.bootstrapInterfaceNames.first()
+
+                    // Coerce -1 (never configured) to 0 for UI display
+                    // The actual default of 3 is applied in toggleDiscovery() when enabling
+                    val autoconnectCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
 
                     _state.update {
                         it.copy(
@@ -128,7 +166,10 @@ class DiscoveredInterfacesViewModel
                             bootstrapInterfaceNames = bootstrapNames,
                         )
                     }
-                    Log.d(TAG, "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount, bootstrap=$bootstrapNames")
+                    Log.d(
+                        TAG,
+                        "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount (saved=$savedAutoconnect), bootstrap=$bootstrapNames",
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovery settings", e)
                 }
@@ -137,7 +178,7 @@ class DiscoveredInterfacesViewModel
 
         /**
          * Toggle interface discovery on/off.
-         * When enabled, sets autoconnect count to 3 (reasonable default).
+         * When enabled, preserves current autoconnect count (or defaults to 3 if 0).
          * When disabled, sets autoconnect count to 0.
          * Automatically restarts the Reticulum service to apply changes.
          */
@@ -146,7 +187,16 @@ class DiscoveredInterfacesViewModel
                 try {
                     val currentEnabled = _state.value.discoverInterfacesEnabled
                     val newEnabled = !currentEnabled
-                    val newAutoconnect = if (newEnabled) 3 else 0
+                    // When enabling: restore user's saved preference from repository (or default to 3)
+                    // savedCount of -1 means "never configured", 0+ means user explicitly chose that value
+                    // When disabling: set to 0 for UI (but don't persist, to preserve preference)
+                    val newAutoconnect =
+                        if (newEnabled) {
+                            val savedCount = settingsRepository.getAutoconnectDiscoveredCount()
+                            if (savedCount >= 0) savedCount else 3
+                        } else {
+                            0
+                        }
 
                     // Update UI immediately to show restarting state
                     _state.update {
@@ -159,19 +209,22 @@ class DiscoveredInterfacesViewModel
 
                     // Save settings to DataStore
                     settingsRepository.saveDiscoverInterfacesEnabled(newEnabled)
-                    settingsRepository.saveAutoconnectDiscoveredCount(newAutoconnect)
+                    // Only save autoconnect count when enabling (to preserve user's preference when disabling)
+                    if (newEnabled) {
+                        settingsRepository.saveAutoconnectDiscoveredCount(newAutoconnect)
+                    }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
                     // Restart the Reticulum service to apply changes
                     Log.d(TAG, "Restarting Reticulum service to apply discovery settings...")
-                    interfaceConfigManager.applyInterfaceChanges()
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
                         .onSuccess {
                             Log.d(TAG, "Reticulum service restarted successfully")
                             // Reload discovered interfaces after restart
                             loadDiscoveredInterfaces()
                             _state.update { it.copy(isRestarting = false) }
-                        }
-                        .onFailure { error ->
+                        }.onFailure { error ->
                             Log.e(TAG, "Failed to restart Reticulum service", error)
                             _state.update {
                                 it.copy(
@@ -193,14 +246,81 @@ class DiscoveredInterfacesViewModel
         }
 
         /**
+         * Set the number of discovered interfaces to auto-connect.
+         * This allows users to configure how many interfaces RNS will automatically
+         * connect to when discovery is enabled. Set to 0 to disable auto-connect
+         * while keeping discovery active (useful for debugging).
+         *
+         * Automatically restarts the Reticulum service to apply changes.
+         */
+        fun setAutoconnectCount(count: Int) {
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    val clampedCount = count.coerceIn(0, 10)
+
+                    // Update UI immediately to show restarting state
+                    _state.update {
+                        it.copy(
+                            autoconnectCount = clampedCount,
+                            isRestarting = true,
+                        )
+                    }
+
+                    // Save settings to DataStore
+                    settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
+                    Log.d(TAG, "Autoconnect count saved: $clampedCount")
+
+                    // Restart the Reticulum service to apply changes
+                    Log.d(TAG, "Restarting Reticulum service to apply autoconnect count...")
+                    interfaceConfigManager
+                        .applyInterfaceChanges()
+                        .onSuccess {
+                            Log.d(TAG, "Reticulum service restarted successfully")
+                            // Reload discovered interfaces after restart
+                            loadDiscoveredInterfaces()
+                            _state.update { it.copy(isRestarting = false) }
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to restart Reticulum service", error)
+                            _state.update {
+                                it.copy(
+                                    isRestarting = false,
+                                    errorMessage = "Failed to restart service: ${error.message}",
+                                )
+                            }
+                        }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set autoconnect count", e)
+                    _state.update {
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to update autoconnect count: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
          * Set user's location for distance calculation.
+         * Re-sorts the interface list if currently in PROXIMITY sort mode.
          */
         fun setUserLocation(
             latitude: Double,
             longitude: Double,
         ) {
-            _state.update {
-                it.copy(userLatitude = latitude, userLongitude = longitude)
+            _state.update { currentState ->
+                // Re-sort if in proximity mode with the new location
+                val sortedInterfaces =
+                    if (currentState.sortMode == DiscoveredInterfacesSortMode.PROXIMITY) {
+                        sortInterfaces(currentState.interfaces, currentState.sortMode, latitude, longitude)
+                    } else {
+                        currentState.interfaces
+                    }
+                currentState.copy(
+                    userLatitude = latitude,
+                    userLongitude = longitude,
+                    interfaces = sortedInterfaces,
+                )
             }
         }
 
@@ -209,6 +329,80 @@ class DiscoveredInterfacesViewModel
          */
         fun clearError() {
             _state.update { it.copy(errorMessage = null) }
+        }
+
+        /**
+         * Set the sort mode and re-sort the interfaces list.
+         * PROXIMITY mode requires user location; if unavailable, the request is ignored.
+         */
+        fun setSortMode(mode: DiscoveredInterfacesSortMode) {
+            _state.update { currentState ->
+                // Guard: can't switch to PROXIMITY without user location
+                if (mode == DiscoveredInterfacesSortMode.PROXIMITY &&
+                    (currentState.userLatitude == null || currentState.userLongitude == null)
+                ) {
+                    return@update currentState
+                }
+                // Use originalInterfaces for QUALITY mode to restore Python's sort order
+                val sourceList =
+                    if (mode == DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY) {
+                        currentState.originalInterfaces
+                    } else {
+                        currentState.interfaces
+                    }
+                val sortedInterfaces =
+                    sortInterfaces(
+                        sourceList,
+                        mode,
+                        currentState.userLatitude,
+                        currentState.userLongitude,
+                    )
+                currentState.copy(
+                    sortMode = mode,
+                    interfaces = sortedInterfaces,
+                )
+            }
+        }
+
+        /**
+         * Sort interfaces based on the selected sort mode.
+         *
+         * - AVAILABILITY_AND_QUALITY: Returns list as-is (already sorted by Python)
+         * - PROXIMITY: Sorts by distance (nearest first), interfaces without location at end
+         */
+        private fun sortInterfaces(
+            interfaces: List<DiscoveredInterface>,
+            sortMode: DiscoveredInterfacesSortMode,
+            userLat: Double?,
+            userLon: Double?,
+        ): List<DiscoveredInterface> {
+            return when (sortMode) {
+                DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY -> {
+                    // Already sorted by Python (status_code desc, stamp_value desc)
+                    interfaces
+                }
+                DiscoveredInterfacesSortMode.PROXIMITY -> {
+                    // If no user location, can't sort by proximity - return as-is
+                    if (userLat == null || userLon == null) {
+                        return interfaces
+                    }
+
+                    // Partition: interfaces with location vs without
+                    val (withLocation, withoutLocation) =
+                        interfaces.partition {
+                            it.latitude != null && it.longitude != null
+                        }
+
+                    // Sort those with location by distance (nearest first)
+                    val sortedWithLocation =
+                        withLocation.sortedBy { iface ->
+                            haversineDistance(userLat, userLon, iface.latitude!!, iface.longitude!!)
+                        }
+
+                    // Combine: distance-sorted first, then non-located (in original order)
+                    sortedWithLocation + withoutLocation
+                }
+            }
         }
 
         /**
@@ -238,7 +432,9 @@ class DiscoveredInterfacesViewModel
             val port = iface.port
 
             // TCP-based interfaces have reachable_on and port; check if endpoint is in set
-            return endpoints.isNotEmpty() && host != null && port != null &&
+            return endpoints.isNotEmpty() &&
+                host != null &&
+                port != null &&
                 endpoints.contains("$host:$port")
         }
 

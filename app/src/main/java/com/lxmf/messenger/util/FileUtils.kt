@@ -40,11 +40,18 @@ object FileUtils {
      * Result of attempting to read a file attachment.
      */
     sealed class FileReadResult {
-        data class Success(val attachment: FileAttachment) : FileReadResult()
+        data class Success(
+            val attachment: FileAttachment,
+        ) : FileReadResult()
 
-        data class FileTooLarge(val actualSize: Long, val maxSize: Int) : FileReadResult()
+        data class FileTooLarge(
+            val actualSize: Long,
+            val maxSize: Int,
+        ) : FileReadResult()
 
-        data class Error(val message: String) : FileReadResult()
+        data class Error(
+            val message: String,
+        ) : FileReadResult()
     }
 
     /**
@@ -53,8 +60,8 @@ object FileUtils {
     fun getFileSize(
         context: Context,
         uri: Uri,
-    ): Long {
-        return try {
+    ): Long =
+        try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 pfd.statSize
             } ?: -1
@@ -62,7 +69,6 @@ object FileUtils {
             Log.w(TAG, "Could not determine file size for: $uri", e)
             -1
         }
-    }
 
     /**
      * Read file data from a content URI with detailed result.
@@ -128,8 +134,8 @@ object FileUtils {
     fun readFileFromUri(
         context: Context,
         uri: Uri,
-    ): FileAttachment? {
-        return try {
+    ): FileAttachment? =
+        try {
             val contentResolver = context.contentResolver
 
             // Get filename
@@ -153,7 +159,6 @@ object FileUtils {
             Log.e(TAG, "Failed to read file from URI: $uri", e)
             null
         }
-    }
 
     /**
      * Extract filename from a content URI.
@@ -168,8 +173,8 @@ object FileUtils {
     fun getFilename(
         context: Context,
         uri: Uri,
-    ): String? {
-        return try {
+    ): String? =
+        try {
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -186,7 +191,6 @@ object FileUtils {
             Log.e(TAG, "Failed to get filename from URI", e)
             uri.lastPathSegment
         }
-    }
 
     /**
      * Get the appropriate Material icon for a MIME type.
@@ -194,8 +198,8 @@ object FileUtils {
      * @param mimeType The MIME type to get an icon for
      * @return An ImageVector icon appropriate for the file type
      */
-    fun getFileIconForMimeType(mimeType: String): ImageVector {
-        return when {
+    fun getFileIconForMimeType(mimeType: String): ImageVector =
+        when {
             mimeType.startsWith("application/pdf") -> Icons.Default.PictureAsPdf
             mimeType.startsWith("text/") -> Icons.Default.Description
             mimeType.startsWith("audio/") -> Icons.Default.AudioFile
@@ -207,7 +211,6 @@ object FileUtils {
                 mimeType.contains("gzip") -> Icons.Default.FolderZip
             else -> Icons.Default.InsertDriveFile
         }
-    }
 
     /**
      * Format file size in human-readable format.
@@ -215,13 +218,12 @@ object FileUtils {
      * @param bytes The file size in bytes
      * @return A formatted string like "1.5 KB" or "512 B"
      */
-    fun formatFileSize(bytes: Int): String {
-        return when {
+    fun formatFileSize(bytes: Int): String =
+        when {
             bytes < 1024 -> "$bytes B"
             bytes < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
             else -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
         }
-    }
 
     /**
      * Map of file extensions to MIME types.
@@ -294,9 +296,7 @@ object FileUtils {
     fun wouldExceedSizeLimit(
         currentTotal: Int,
         newFileSize: Int,
-    ): Boolean {
-        return (currentTotal + newFileSize) > MAX_TOTAL_ATTACHMENT_SIZE
-    }
+    ): Boolean = (currentTotal + newFileSize) > MAX_TOTAL_ATTACHMENT_SIZE
 
     /**
      * Threshold for file-based transfer via temp files.
@@ -306,6 +306,7 @@ object FileUtils {
     const val FILE_TRANSFER_THRESHOLD = 500 * 1024 // 500KB
 
     private const val TEMP_ATTACHMENTS_DIR = "attachments"
+    private const val SHARE_IMAGES_DIR = "share_images"
 
     /**
      * Write file data to a temporary file for large file transfer.
@@ -359,5 +360,62 @@ object FileUtils {
                 }
             }
         }
+    }
+
+    /**
+     * Clean up all temporary cache directories used for attachments and sharing.
+     *
+     * This includes:
+     * - attachments/ - temp files for viewing received attachments
+     * - share_images/ - temp files for sharing images to other apps
+     *
+     * Call this on app startup to prevent unbounded cache growth.
+     * Uses file.lastModified() for age-based cleanup, independent of filename format.
+     *
+     * @param context Android context for accessing cache directory
+     * @param maxAgeMs Maximum age in milliseconds before files are deleted (default: 1 hour)
+     * @return Number of files cleaned up
+     */
+    fun cleanupAllTempFiles(
+        context: Context,
+        maxAgeMs: Long = 60 * 60 * 1000,
+    ): Int {
+        val cutoffTime = System.currentTimeMillis() - maxAgeMs
+        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR)
+
+        val cleanedCount =
+            dirsToClean.sumOf { dirName ->
+                cleanupDirectory(File(context.cacheDir, dirName), cutoffTime, dirName)
+            }
+
+        if (cleanedCount > 0) {
+            Log.d(TAG, "Cleaned up $cleanedCount old temp file(s)")
+        }
+        return cleanedCount
+    }
+
+    /**
+     * Clean up old files in a single directory.
+     *
+     * @param dir The directory to clean
+     * @param cutoffTime Files modified before this time will be deleted
+     * @param dirNameForLog Directory name for logging
+     * @return Number of files deleted
+     */
+    private fun cleanupDirectory(
+        dir: File,
+        cutoffTime: Long,
+        dirNameForLog: String,
+    ): Int {
+        if (!dir.exists()) return 0
+
+        return dir
+            .listFiles()
+            ?.filter { it.lastModified() < cutoffTime }
+            ?.count { file ->
+                file.delete().also { deleted ->
+                    if (deleted) Log.d(TAG, "Cleaned up old temp file: $dirNameForLog/${file.name}")
+                }
+            } ?: 0
     }
 }

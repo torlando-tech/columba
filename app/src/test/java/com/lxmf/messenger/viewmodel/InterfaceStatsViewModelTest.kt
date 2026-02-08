@@ -12,7 +12,6 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +81,7 @@ class InterfaceStatsViewModelTest {
             displayOrder = 2,
         )
 
+    @Suppress("NoRelaxedMocks") // Android Context/UsbManager and protocols with many unused methods
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -362,21 +362,33 @@ class InterfaceStatsViewModelTest {
     @Test
     fun `toggleEnabled updates interface enabled state`() =
         runTest {
+            var toggleEnabledCalled = false
+            var toggledId: Long? = null
+            var toggledEnabled: Boolean? = null
             coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } returns testRNodeEntity
             coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
-            coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } returns Unit
+            coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } answers {
+                toggleEnabledCalled = true
+                toggledId = firstArg()
+                toggledEnabled = secondArg()
+            }
 
             val viewModel = createViewModel(1L)
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
             // Verify initial state
-            assertTrue(viewModel.state.value.interfaceEntity?.enabled == true)
+            assertTrue(
+                viewModel.state.value.interfaceEntity
+                    ?.enabled == true,
+            )
 
             // Toggle to disabled
             viewModel.toggleEnabled()
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
-            coVerify { interfaceRepository.toggleInterfaceEnabled(1L, false) }
+            assertTrue("toggleInterfaceEnabled should be called", toggleEnabledCalled)
+            assertEquals(1L, toggledId)
+            assertEquals(false, toggledEnabled)
 
             viewModel.state.test {
                 val state = awaitItem()
@@ -387,8 +399,12 @@ class InterfaceStatsViewModelTest {
     @Test
     fun `toggleEnabled does nothing if no interface entity`() =
         runTest {
+            var toggleEnabledCalled = false
             coEvery { interfaceRepository.getInterfaceByIdOnce(99L) } returns null
             coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
+            coEvery { interfaceRepository.toggleInterfaceEnabled(any(), any()) } answers {
+                toggleEnabledCalled = true
+            }
 
             val viewModel = createViewModel(99L)
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
@@ -397,7 +413,7 @@ class InterfaceStatsViewModelTest {
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
             // Should not call repository
-            coVerify(exactly = 0) { interfaceRepository.toggleInterfaceEnabled(any(), any()) }
+            assertFalse("toggleInterfaceEnabled should not be called", toggleEnabledCalled)
         }
 
     // ========== Signal Reconnecting Tests ==========
@@ -492,12 +508,16 @@ class InterfaceStatsViewModelTest {
     @Test
     fun `requestUsbPermission does nothing without usbDeviceId`() =
         runTest {
+            var requestPermissionCalled = false
             val entityWithoutUsbId =
                 testUsbRNodeEntity.copy(
                     configJson = """{"connection_mode":"usb","frequency":915000000}""",
                 )
             coEvery { interfaceRepository.getInterfaceByIdOnce(3L) } returns entityWithoutUsbId
             coEvery { reticulumProtocol.getInterfaceStats(any()) } returns null
+            every { usbManager.requestPermission(any<UsbDevice>(), any()) } answers {
+                requestPermissionCalled = true
+            }
 
             val viewModel = createViewModel(3L)
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
@@ -506,7 +526,7 @@ class InterfaceStatsViewModelTest {
             advanceTimeBy(1100) // Allow one poll cycle (1000ms + buffer)
 
             // Should not interact with USB manager for permission
-            io.mockk.verify(exactly = 0) { usbManager.requestPermission(any<UsbDevice>(), any()) }
+            assertFalse("requestPermission should not be called without usbDeviceId", requestPermissionCalled)
         }
 
     // ========== TCPServer Config Parsing Test ==========

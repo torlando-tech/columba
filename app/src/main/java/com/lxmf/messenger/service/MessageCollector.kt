@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,7 @@ class MessageCollector
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
         private val peerIconDao: PeerIconDao,
+        private val conversationLinkManager: ConversationLinkManager,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
@@ -99,7 +101,7 @@ class MessageCollector
                             // Even though message is persisted, we may still need to show notification
                             // and save icon appearance (service process can't do these)
                             val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
-                            val peerName = peerNames[sourceHash] ?: "Peer ${sourceHash.take(8).uppercase()}"
+                            val peerName = getPeerNameWithFallback(sourceHash)
 
                             // Save icon appearance even for already-persisted messages
                             // (ServicePersistenceManager doesn't have access to icon data)
@@ -140,10 +142,15 @@ class MessageCollector
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
-                                Log.d(TAG, "Posted notification for already-persisted message from $peerName")
+                                Log.d(TAG, "Posted notification for already-persisted message")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post notification for already-persisted message", e)
                             }
+
+                            // Record peer activity for "last seen" status
+                            // Receiving a message proves the peer was recently online
+                            conversationLinkManager.recordPeerActivity(sourceHash)
+
                             return@collect
                         }
 
@@ -233,7 +240,11 @@ class MessageCollector
                             }
 
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
-                            Log.d(TAG, "Message saved to database for peer: $peerName ($sourceHash) (hasPublicKey=${publicKey != null})")
+                            Log.d(TAG, "Message saved to database for peer ${sourceHash.take(16)} (hasPublicKey=${publicKey != null})")
+
+                            // Record peer activity for "last seen" status
+                            // Receiving a message proves the peer was recently online
+                            conversationLinkManager.recordPeerActivity(sourceHash)
 
                             // Check if sender is a saved peer (favorite)
                             val isFavorite =
@@ -253,7 +264,7 @@ class MessageCollector
                                     messagePreview = receivedMessage.content.take(100),
                                     isFavorite = isFavorite,
                                 )
-                                Log.d(TAG, "Posted notification for message from $peerName (favorite: $isFavorite)")
+                                Log.d(TAG, "Posted notification for message (favorite: $isFavorite)")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post message notification", e)
                             }
@@ -309,9 +320,9 @@ class MessageCollector
                             )
 
                         // Cache and update peer name if successfully extracted
-                        if (peerName != "Peer ${peerHash.take(8).uppercase()}" && peerName != "Unknown Peer") {
+                        if (PeerNameResolver.isValidPeerName(peerName)) {
                             peerNames[peerHash] = peerName
-                            Log.d(TAG, "Learned peer name: $peerName for $peerHash")
+                            Log.d(TAG, "Learned peer name for ${peerHash.take(16)}")
 
                             // Update existing conversation with the new name
                             conversationRepository.updatePeerName(peerHash, peerName)
@@ -348,7 +359,7 @@ class MessageCollector
                                 existingAnnounce.lastSeenTimestamp > fiveSecondsAgo &&
                                 !needsTransferLimitUpdate
                             ) {
-                                Log.d(TAG, "Announce already persisted by service: $peerName ($peerHash)")
+                                Log.d(TAG, "Announce already persisted by service: ${peerHash.take(16)}")
                             } else {
                                 announceRepository.saveAnnounce(
                                     destinationHash = peerHash,
@@ -368,7 +379,7 @@ class MessageCollector
                                 )
                                 Log.d(
                                     TAG,
-                                    "Persisted announce to database (fallback): $peerName ($peerHash)" +
+                                    "Persisted announce to database (fallback): ${peerHash.take(16)}" +
                                         if (propagationTransferLimitKb != null) " (transfer limit: ${propagationTransferLimitKb}KB)" else "",
                                 )
                             }
@@ -399,7 +410,7 @@ class MessageCollector
                                     peerName = peerName,
                                     appData = appDataString,
                                 )
-                                Log.d(TAG, "Posted notification for announce from $peerName")
+                                Log.d(TAG, "Posted notification for announce")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to post announce notification", e)
                             }
@@ -421,47 +432,34 @@ class MessageCollector
             peerNames[peerHash]?.let { return it }
 
             // Format the hash as a short, readable identifier
-            return if (peerHash.length >= 8) {
-                "Peer ${peerHash.take(8).uppercase()}"
-            } else {
-                "Unknown Peer"
-            }
+            return PeerNameResolver.formatHashAsFallback(peerHash)
         }
 
         /**
-         * Get peer name with fallback - checks cache, database, then uses formatted hash
+         * Get peer name with fallback - uses PeerNameResolver for consistent lookup across the app
          */
         private suspend fun getPeerNameWithFallback(peerHash: String): String {
-            // First check our in-memory cache from announces
-            peerNames[peerHash]?.let {
-                Log.d(TAG, "Found peer name in cache: $it")
-                return it
+            val resolvedName =
+                PeerNameResolver.resolve(
+                    peerHash = peerHash,
+                    cachedName = peerNames[peerHash],
+                    contactNicknameLookup = {
+                        contactRepository.getContact(peerHash)?.customNickname
+                    },
+                    announcePeerNameLookup = {
+                        announceRepository.getAnnounce(peerHash)?.peerName
+                    },
+                    conversationPeerNameLookup = {
+                        conversationRepository.getConversation(peerHash)?.peerName
+                    },
+                )
+
+            // Cache the resolved name if it's valid
+            if (PeerNameResolver.isValidPeerName(resolvedName)) {
+                peerNames[peerHash] = resolvedName
             }
 
-            // Check if we have an existing conversation with this peer
-            try {
-                val existingConversation = conversationRepository.getConversation(peerHash)
-                if (existingConversation != null && existingConversation.peerName != "Unknown" &&
-                    !existingConversation.peerName.startsWith("Peer ")
-                ) {
-                    // Cache it for future use
-                    peerNames[peerHash] = existingConversation.peerName
-                    Log.d(TAG, "Found peer name in database: ${existingConversation.peerName}")
-                    return existingConversation.peerName
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error checking database for peer name", e)
-            }
-
-            // Fall back to formatted hash
-            val fallbackName =
-                if (peerHash.length >= 8) {
-                    "Peer ${peerHash.take(8).uppercase()}"
-                } else {
-                    "Unknown Peer"
-                }
-            Log.d(TAG, "Using fallback name for peer: $fallbackName")
-            return fallbackName
+            return resolvedName
         }
 
         /**
@@ -473,7 +471,7 @@ class MessageCollector
         ) {
             if (name.isNotBlank()) {
                 peerNames[peerHash] = name
-                Log.d(TAG, "Updated peer name: $name for $peerHash")
+                Log.d(TAG, "Updated peer name for ${peerHash.take(16)}")
 
                 // Update in database too
                 scope.launch {
@@ -501,7 +499,5 @@ class MessageCollector
         /**
          * Get statistics about collected messages
          */
-        fun getStats(): String {
-            return "Messages collected: ${_messagesCollected.value}, Known peers: ${peerNames.size}"
-        }
+        fun getStats(): String = "Messages collected: ${_messagesCollected.value}, Known peers: ${peerNames.size}"
     }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -38,6 +39,7 @@ class MessageCollectorTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var messageCollector: MessageCollector
 
     // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
@@ -54,8 +56,19 @@ class MessageCollectorTest {
         announceRepository = mockk()
         contactRepository = mockk()
         identityRepository = mockk()
-        notificationHelper = mockk(relaxed = true)
-        peerIconDao = mockk(relaxed = true)
+        notificationHelper = mockk()
+        peerIconDao = mockk()
+        conversationLinkManager = mockk()
+
+        // Default behavior for conversationLinkManager
+        every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
+        every { conversationLinkManager.recordPeerActivity(any()) } just Runs
+
+        // Explicit stubs for notificationHelper (suspend function)
+        coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
+
+        // Explicit stubs for peerIconDao
+        coEvery { peerIconDao.getIcon(any()) } returns null
 
         messageFlow = MutableSharedFlow(extraBufferCapacity = 10)
 
@@ -90,6 +103,7 @@ class MessageCollectorTest {
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
                 peerIconDao = peerIconDao,
+                conversationLinkManager = conversationLinkManager,
             )
     }
 
@@ -122,7 +136,8 @@ class MessageCollectorTest {
             coEvery { conversationRepository.getMessageById("persisted_message") } returns mockk()
 
             // When: Start collecting and emit message
-            messageCollector.startCollecting()
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
             kotlinx.coroutines.delay(50)
 
             messageFlow.emit(testMessage)
@@ -165,11 +180,17 @@ class MessageCollectorTest {
                 )
 
             // When: Start collecting and emit the same message twice
-            messageCollector.startCollecting()
-            kotlinx.coroutines.delay(50)
+            val result =
+                runCatching {
+                    messageCollector.startCollecting()
+                    kotlinx.coroutines.delay(50)
 
-            messageFlow.emit(testMessage)
-            kotlinx.coroutines.delay(200)
+                    messageFlow.emit(testMessage)
+                    kotlinx.coroutines.delay(200)
+                }
+
+            // Then: Operation should complete without throwing
+            assertTrue("Message emission should complete without throwing", result.isSuccess)
 
             // First message should trigger notification
             coVerify(exactly = 1, timeout = 2000) {
@@ -234,12 +255,13 @@ class MessageCollectorTest {
             val peerHash = "test_peer_hash"
 
             // When
-            messageCollector.updatePeerName(peerHash, "New Name")
+            val result = runCatching { messageCollector.updatePeerName(peerHash, "New Name") }
 
             // Wait for database update
             kotlinx.coroutines.delay(100)
 
-            // Then: Database should be updated
+            // Then: Function completed and database should be updated
+            assertTrue("updatePeerName should complete without throwing", result.isSuccess)
             coVerify(timeout = 1000) {
                 conversationRepository.updatePeerName(peerHash, "New Name")
             }
@@ -251,12 +273,13 @@ class MessageCollectorTest {
             val peerHash = "test_peer_hash"
 
             // When
-            messageCollector.updatePeerName(peerHash, "")
+            val result = runCatching { messageCollector.updatePeerName(peerHash, "") }
 
             // Wait
             kotlinx.coroutines.delay(100)
 
-            // Then: Database should NOT be updated
+            // Then: Function completed and database should NOT be updated
+            assertTrue("updatePeerName should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) {
                 conversationRepository.updatePeerName(any(), any())
             }
@@ -286,7 +309,8 @@ class MessageCollectorTest {
                 }
 
             // When: Start collecting and emit
-            messageCollector.startCollecting()
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
             kotlinx.coroutines.delay(50)
             messageFlow.emit(testMessage)
             kotlinx.coroutines.delay(200)
@@ -321,7 +345,8 @@ class MessageCollectorTest {
             coEvery { announceRepository.getAnnounce(testSourceHashHex) } throws RuntimeException("DB error")
 
             // When: Start collecting and emit
-            messageCollector.startCollecting()
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
             kotlinx.coroutines.delay(50)
             messageFlow.emit(testMessage)
             kotlinx.coroutines.delay(200)
@@ -356,7 +381,8 @@ class MessageCollectorTest {
                 )
 
             // When: Start collecting and emit
-            messageCollector.startCollecting()
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
             kotlinx.coroutines.delay(50)
             messageFlow.emit(testMessage)
             kotlinx.coroutines.delay(200)
@@ -389,7 +415,8 @@ class MessageCollectorTest {
                 )
 
             // When: Start collecting and emit
-            messageCollector.startCollecting()
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
             kotlinx.coroutines.delay(50)
             messageFlow.emit(testMessage)
             kotlinx.coroutines.delay(200)

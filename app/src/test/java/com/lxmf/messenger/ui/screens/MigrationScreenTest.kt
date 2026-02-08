@@ -38,6 +38,7 @@ class MigrationScreenTest {
     private lateinit var mockViewModel: MigrationViewModel
     private val includeAttachmentsFlow = MutableStateFlow(true)
 
+    @Suppress("NoRelaxedMocks") // MigrationViewModel is a complex ViewModel with many properties; explicit stubbing for all would be excessive
     @Before
     fun setup() {
         mockViewModel = mockk(relaxed = true)
@@ -78,7 +79,8 @@ class MigrationScreenTest {
         }
 
         // Helper text should NOT be displayed when checked
-        composeTestRule.onNodeWithText("Images and files won't be included in export")
+        composeTestRule
+            .onNodeWithText("Images and files won't be included in export")
             .assertDoesNotExist()
     }
 
@@ -93,7 +95,8 @@ class MigrationScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Images and files won't be included in export")
+        composeTestRule
+            .onNodeWithText("Images and files won't be included in export")
             .assertIsDisplayed()
     }
 
@@ -107,6 +110,9 @@ class MigrationScreenTest {
                 viewModel = mockViewModel,
             )
         }
+
+        // Then - checkbox label is displayed
+        composeTestRule.onNodeWithText("Include file attachments").assertIsDisplayed()
 
         // Click on the label text (entire row is clickable)
         composeTestRule.onNodeWithText("Include file attachments").performClick()
@@ -125,6 +131,12 @@ class MigrationScreenTest {
                 viewModel = mockViewModel,
             )
         }
+
+        // Then - checkbox label and helper text are displayed
+        composeTestRule.onNodeWithText("Include file attachments").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Images and files won't be included in export")
+            .assertIsDisplayed()
 
         // Click on the label text
         composeTestRule.onNodeWithText("Include file attachments").performClick()

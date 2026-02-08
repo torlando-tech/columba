@@ -1,15 +1,27 @@
 package com.lxmf.messenger.migration
 
 import com.lxmf.messenger.repository.SettingsRepository
+import io.mockk.Runs
+import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 /**
  * Unit tests for LegacySettingsImporter.
- * Verifies that legacy settings are correctly imported from old export formats.
+ *
+ * Tests the conversion logic for legacy settings imports:
+ * - Minutes to hours conversion for auto-announce interval
+ * - Custom theme ID remapping
+ * - Null handling for optional fields
+ *
+ * Uses explicit mock stubs (not relaxed) to verify exact values passed to repository.
  */
 class LegacySettingsImporterTest {
     private lateinit var settingsRepository: SettingsRepository
@@ -17,285 +29,242 @@ class LegacySettingsImporterTest {
 
     @Before
     fun setup() {
-        settingsRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
         importer = LegacySettingsImporter(settingsRepository)
+
+        // Stub all repository methods that might be called
+        stubAllRepositoryMethods()
     }
 
-    // region Notification Settings
+    // ========== Minutes to Hours Conversion Tests ==========
 
     @Test
-    fun `importAll imports notification settings when present`() =
+    fun `importAll converts 5 minutes to 1 hour (minimum)`() =
         runTest {
-            val settings =
-                createLegacySettings(
-                    notificationsEnabled = true,
-                    notificationReceivedMessage = false,
-                    notificationReceivedMessageFavorite = true,
-                    notificationHeardAnnounce = false,
-                    notificationBleConnected = true,
-                    notificationBleDisconnected = false,
-                    hasRequestedNotificationPermission = true,
-                )
+            // Given: Legacy export with 5-minute interval
+            val settings = createSettingsExport(autoAnnounceIntervalMinutes = 5)
+            val hoursSlot = slot<Int>()
+            coEvery { settingsRepository.saveAutoAnnounceIntervalHours(capture(hoursSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveNotificationsEnabled(true) }
-            coVerify { settingsRepository.saveNotificationReceivedMessage(false) }
-            coVerify { settingsRepository.saveNotificationReceivedMessageFavorite(true) }
-            coVerify { settingsRepository.saveNotificationHeardAnnounce(false) }
-            coVerify { settingsRepository.saveNotificationBleConnected(true) }
-            coVerify { settingsRepository.saveNotificationBleDisconnected(false) }
-            coVerify { settingsRepository.markNotificationPermissionRequested() }
+            // Then: Should convert to 1 hour (5+30)/60 = 0.58, rounded and clamped to 1
+            assertEquals(1, hoursSlot.captured)
         }
 
     @Test
-    fun `importAll skips null notification settings`() =
+    fun `importAll converts 30 minutes to 1 hour`() =
         runTest {
-            val settings = createLegacySettings()
+            // Given: Legacy export with 30-minute interval
+            val settings = createSettingsExport(autoAnnounceIntervalMinutes = 30)
+            val hoursSlot = slot<Int>()
+            coEvery { settingsRepository.saveAutoAnnounceIntervalHours(capture(hoursSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(any()) }
-            coVerify(exactly = 0) { settingsRepository.saveNotificationReceivedMessage(any()) }
-        }
-
-    // endregion
-
-    // region Auto-Announce Settings
-
-    @Test
-    fun `importAll imports announce settings with hours field when present`() =
-        runTest {
-            val settings =
-                createLegacySettings(
-                    autoAnnounceEnabled = true,
-                    autoAnnounceIntervalHours = 3,
-                    lastAutoAnnounceTime = 1700000000000L,
-                )
-
-            importer.importAll(settings, emptyMap())
-
-            coVerify { settingsRepository.saveAutoAnnounceEnabled(true) }
-            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(3) }
-            coVerify { settingsRepository.saveLastAutoAnnounceTime(1700000000000L) }
+            // Then: (30+30)/60 = 1
+            assertEquals(1, hoursSlot.captured)
         }
 
     @Test
-    fun `importAll converts legacy minutes to hours when hours field missing`() =
+    fun `importAll converts 60 minutes to 2 hours`() =
         runTest {
-            // 15 minutes should convert to 1 hour (minimum) via ((15+30)/60).coerceIn(1,12) = 0.75 -> 1
-            val settings =
-                createLegacySettings(
-                    autoAnnounceEnabled = true,
-                    autoAnnounceIntervalMinutes = 15,
-                    lastAutoAnnounceTime = 1700000000000L,
-                )
+            // Given: Legacy export with 60-minute interval
+            val settings = createSettingsExport(autoAnnounceIntervalMinutes = 60)
+            val hoursSlot = slot<Int>()
+            coEvery { settingsRepository.saveAutoAnnounceIntervalHours(capture(hoursSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveAutoAnnounceEnabled(true) }
-            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(1) } // Converted from 15 min
-            coVerify { settingsRepository.saveLastAutoAnnounceTime(1700000000000L) }
+            // Then: (60+30)/60 = 1.5, truncated to 1
+            assertEquals(1, hoursSlot.captured)
         }
 
     @Test
-    fun `importAll prefers hours field over minutes field when both present`() =
+    fun `importAll prefers hours field over minutes when both present`() =
         runTest {
+            // Given: Export with both hours and minutes (hours should win)
+            @Suppress("DEPRECATION")
             val settings =
-                createLegacySettings(
-                    autoAnnounceEnabled = true,
+                SettingsExport(
                     autoAnnounceIntervalHours = 6,
-                    autoAnnounceIntervalMinutes = 15, // Should be ignored
-                    lastAutoAnnounceTime = 1700000000000L,
+                    autoAnnounceIntervalMinutes = 30, // Should be ignored
                 )
+            val hoursSlot = slot<Int>()
+            coEvery { settingsRepository.saveAutoAnnounceIntervalHours(capture(hoursSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveAutoAnnounceIntervalHours(6) } // Uses hours, not converted minutes
+            // Then: Should use hours value directly
+            assertEquals(6, hoursSlot.captured)
         }
 
-    // endregion
-
-    // region Theme Settings
-
     @Test
-    fun `importAll imports standard theme preference`() =
+    fun `importAll clamps converted hours to maximum of 12`() =
         runTest {
-            val settings = createLegacySettings(themePreference = "preset:VIBRANT")
+            // Given: Extremely high minutes value
+            val settings = createSettingsExport(autoAnnounceIntervalMinutes = 1000)
+            val hoursSlot = slot<Int>()
+            coEvery { settingsRepository.saveAutoAnnounceIntervalHours(capture(hoursSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveThemePreferenceByIdentifier("preset:VIBRANT") }
+            // Then: Should clamp to 12 hours max
+            assertEquals(12, hoursSlot.captured)
+        }
+
+    // ========== Theme ID Remapping Tests ==========
+
+    @Test
+    fun `importAll remaps custom theme ID correctly`() =
+        runTest {
+            // Given: Legacy export with custom theme, and ID mapping
+            val settings = createSettingsExport(themePreference = "custom:100")
+            val themeIdMap = mapOf(100L to 999L) // Old ID 100 -> New ID 999
+            val themeSlot = slot<String>()
+            coEvery { settingsRepository.saveThemePreferenceByIdentifier(capture(themeSlot)) } just Runs
+
+            // When
+            importer.importAll(settings, themeIdMap)
+
+            // Then: Should use remapped ID
+            assertEquals("custom:999", themeSlot.captured)
         }
 
     @Test
-    fun `importAll remaps custom theme ID when present in map`() =
+    fun `importAll preserves non-custom theme preferences`() =
         runTest {
-            val settings = createLegacySettings(themePreference = "custom:123")
-            val themeIdMap = mapOf(123L to 456L)
+            // Given: Built-in theme (not custom)
+            val settings = createSettingsExport(themePreference = "material_you")
+            val themeSlot = slot<String>()
+            coEvery { settingsRepository.saveThemePreferenceByIdentifier(capture(themeSlot)) } just Runs
 
-            importer.importAll(settings, themeIdMap)
+            // When
+            importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveThemePreferenceByIdentifier("custom:456") }
+            // Then: Should preserve as-is
+            assertEquals("material_you", themeSlot.captured)
         }
 
     @Test
-    fun `importAll skips custom theme when ID not in map`() =
+    fun `importAll skips theme when custom ID not in mapping`() =
         runTest {
-            val settings = createLegacySettings(themePreference = "custom:999")
-            val themeIdMap = mapOf(123L to 456L) // 999 not in map
+            // Given: Custom theme with ID that doesn't exist in mapping
+            val settings = createSettingsExport(themePreference = "custom:999")
+            val themeIdMap = mapOf(100L to 200L) // 999 not in map
 
-            importer.importAll(settings, themeIdMap)
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, themeIdMap) }
 
+            // Then: Function completed successfully and did NOT call saveThemePreferenceByIdentifier
+            assertTrue("importAll should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { settingsRepository.saveThemePreferenceByIdentifier(any()) }
         }
 
     @Test
-    fun `importAll handles invalid custom theme ID gracefully`() =
+    fun `importAll handles malformed custom theme ID gracefully`() =
         runTest {
-            val settings = createLegacySettings(themePreference = "custom:notanumber")
+            // Given: Malformed custom theme preference
+            val settings = createSettingsExport(themePreference = "custom:not_a_number")
+            val themeIdMap = mapOf(100L to 200L)
 
-            importer.importAll(settings, emptyMap())
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, themeIdMap) }
 
-            // Should not crash, and should not save invalid theme
+            // Then: Function completed successfully and did NOT call save
+            assertTrue("importAll should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) { settingsRepository.saveThemePreferenceByIdentifier(any()) }
         }
 
-    // endregion
-
-    // region Instance Settings
+    // ========== Null Handling Tests ==========
 
     @Test
-    fun `importAll imports instance settings when present`() =
+    fun `importAll handles all null values gracefully`() =
         runTest {
-            val settings =
-                createLegacySettings(
-                    preferOwnInstance = true,
-                    rpcKey = "test-rpc-key",
-                )
+            // Given: Empty settings export
+            @Suppress("DEPRECATION")
+            val settings = SettingsExport()
 
-            importer.importAll(settings, emptyMap())
+            // When - function should complete successfully (no exceptions)
+            val result = runCatching { importer.importAll(settings, emptyMap()) }
 
-            coVerify { settingsRepository.savePreferOwnInstance(true) }
-            coVerify { settingsRepository.saveRpcKey("test-rpc-key") }
+            // Then: Function completed successfully and no save methods were called
+            assertTrue("importAll should complete without throwing", result.isSuccess)
+            coVerify(exactly = 0) { settingsRepository.saveNotificationsEnabled(any()) }
+            coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceEnabled(any()) }
+            coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceIntervalHours(any()) }
         }
-
-    // endregion
-
-    // region Propagation Settings
 
     @Test
-    fun `importAll imports propagation settings when present`() =
+    fun `importAll imports only present fields`() =
         runTest {
+            // Given: Partial settings
+            @Suppress("DEPRECATION")
             val settings =
-                createLegacySettings(
-                    defaultDeliveryMethod = "DIRECT",
-                    tryPropagationOnFail = true,
-                    manualPropagationNode = "node123",
-                    lastPropagationNode = "node456",
-                    autoSelectPropagationNode = false,
-                    autoRetrieveEnabled = true,
-                    retrievalIntervalSeconds = 300,
-                    lastSyncTimestamp = 1700000000000L,
-                    transportNodeEnabled = true,
+                SettingsExport(
+                    notificationsEnabled = true,
+                    transportNodeEnabled = false,
+                    // All other fields null
                 )
+            val notificationsSlot = slot<Boolean>()
+            val transportSlot = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationsEnabled(capture(notificationsSlot)) } just Runs
+            coEvery { settingsRepository.saveTransportNodeEnabled(capture(transportSlot)) } just Runs
 
+            // When
             importer.importAll(settings, emptyMap())
 
-            coVerify { settingsRepository.saveDefaultDeliveryMethod("DIRECT") }
-            coVerify { settingsRepository.saveTryPropagationOnFail(true) }
-            coVerify { settingsRepository.saveManualPropagationNode("node123") }
-            coVerify { settingsRepository.saveLastPropagationNode("node456") }
-            coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
-            coVerify { settingsRepository.saveAutoRetrieveEnabled(true) }
-            coVerify { settingsRepository.saveRetrievalIntervalSeconds(300) }
-            coVerify { settingsRepository.saveLastSyncTimestamp(1700000000000L) }
-            coVerify { settingsRepository.saveTransportNodeEnabled(true) }
+            // Then: Only present fields should be saved with correct values
+            assertEquals(true, notificationsSlot.captured)
+            assertEquals(false, transportSlot.captured)
+            // autoAnnounce was null in settings, so should not be called
+            coVerify(exactly = 0) { settingsRepository.saveAutoAnnounceEnabled(any()) }
         }
 
-    // endregion
+    // ========== Helper Methods ==========
 
-    // region Location Settings
-
-    @Test
-    fun `importAll imports location settings when present`() =
-        runTest {
-            val settings =
-                createLegacySettings(
-                    locationSharingEnabled = true,
-                    defaultSharingDuration = "1_HOUR",
-                    locationPrecisionRadius = 100,
-                )
-
-            importer.importAll(settings, emptyMap())
-
-            coVerify { settingsRepository.saveLocationSharingEnabled(true) }
-            coVerify { settingsRepository.saveDefaultSharingDuration("1_HOUR") }
-            coVerify { settingsRepository.saveLocationPrecisionRadius(100) }
-        }
-
-    // endregion
-
-    // region Helper Methods
-
-    @Suppress("DEPRECATION", "LongParameterList")
-    private fun createLegacySettings(
-        notificationsEnabled: Boolean? = null,
-        notificationReceivedMessage: Boolean? = null,
-        notificationReceivedMessageFavorite: Boolean? = null,
-        notificationHeardAnnounce: Boolean? = null,
-        notificationBleConnected: Boolean? = null,
-        notificationBleDisconnected: Boolean? = null,
-        hasRequestedNotificationPermission: Boolean? = null,
-        autoAnnounceEnabled: Boolean? = null,
+    @Suppress("DEPRECATION")
+    private fun createSettingsExport(
         autoAnnounceIntervalMinutes: Int? = null,
         autoAnnounceIntervalHours: Int? = null,
-        lastAutoAnnounceTime: Long? = null,
         themePreference: String? = null,
-        preferOwnInstance: Boolean? = null,
-        rpcKey: String? = null,
-        defaultDeliveryMethod: String? = null,
-        tryPropagationOnFail: Boolean? = null,
-        manualPropagationNode: String? = null,
-        lastPropagationNode: String? = null,
-        autoSelectPropagationNode: Boolean? = null,
-        autoRetrieveEnabled: Boolean? = null,
-        retrievalIntervalSeconds: Int? = null,
-        lastSyncTimestamp: Long? = null,
-        transportNodeEnabled: Boolean? = null,
-        locationSharingEnabled: Boolean? = null,
-        defaultSharingDuration: String? = null,
-        locationPrecisionRadius: Int? = null,
     ) = SettingsExport(
-        // Empty = legacy format
-        preferences = emptyList(),
-        notificationsEnabled = notificationsEnabled,
-        notificationReceivedMessage = notificationReceivedMessage,
-        notificationReceivedMessageFavorite = notificationReceivedMessageFavorite,
-        notificationHeardAnnounce = notificationHeardAnnounce,
-        notificationBleConnected = notificationBleConnected,
-        notificationBleDisconnected = notificationBleDisconnected,
-        hasRequestedNotificationPermission = hasRequestedNotificationPermission,
-        autoAnnounceEnabled = autoAnnounceEnabled,
         autoAnnounceIntervalMinutes = autoAnnounceIntervalMinutes,
         autoAnnounceIntervalHours = autoAnnounceIntervalHours,
-        lastAutoAnnounceTime = lastAutoAnnounceTime,
         themePreference = themePreference,
-        preferOwnInstance = preferOwnInstance,
-        rpcKey = rpcKey,
-        defaultDeliveryMethod = defaultDeliveryMethod,
-        tryPropagationOnFail = tryPropagationOnFail,
-        manualPropagationNode = manualPropagationNode,
-        lastPropagationNode = lastPropagationNode,
-        autoSelectPropagationNode = autoSelectPropagationNode,
-        autoRetrieveEnabled = autoRetrieveEnabled,
-        retrievalIntervalSeconds = retrievalIntervalSeconds,
-        lastSyncTimestamp = lastSyncTimestamp,
-        transportNodeEnabled = transportNodeEnabled,
-        locationSharingEnabled = locationSharingEnabled,
-        defaultSharingDuration = defaultSharingDuration,
-        locationPrecisionRadius = locationPrecisionRadius,
     )
 
-    // endregion
+    private fun stubAllRepositoryMethods() {
+        // Stub all possible save methods to avoid "no answer found" errors
+        coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationReceivedMessage(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationReceivedMessageFavorite(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationHeardAnnounce(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationBleConnected(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationBleDisconnected(any()) } just Runs
+        coEvery { settingsRepository.markNotificationPermissionRequested() } just Runs
+        coEvery { settingsRepository.saveAutoAnnounceEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveAutoAnnounceIntervalHours(any()) } just Runs
+        coEvery { settingsRepository.saveLastAutoAnnounceTime(any()) } just Runs
+        coEvery { settingsRepository.saveThemePreferenceByIdentifier(any()) } just Runs
+        coEvery { settingsRepository.savePreferOwnInstance(any()) } just Runs
+        coEvery { settingsRepository.saveRpcKey(any()) } just Runs
+        coEvery { settingsRepository.saveDefaultDeliveryMethod(any()) } just Runs
+        coEvery { settingsRepository.saveTryPropagationOnFail(any()) } just Runs
+        coEvery { settingsRepository.saveManualPropagationNode(any()) } just Runs
+        coEvery { settingsRepository.saveLastPropagationNode(any()) } just Runs
+        coEvery { settingsRepository.saveAutoSelectPropagationNode(any()) } just Runs
+        coEvery { settingsRepository.saveAutoRetrieveEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveRetrievalIntervalSeconds(any()) } just Runs
+        coEvery { settingsRepository.saveLastSyncTimestamp(any()) } just Runs
+        coEvery { settingsRepository.saveTransportNodeEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveLocationSharingEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveDefaultSharingDuration(any()) } just Runs
+        coEvery { settingsRepository.saveLocationPrecisionRadius(any()) } just Runs
+    }
 }

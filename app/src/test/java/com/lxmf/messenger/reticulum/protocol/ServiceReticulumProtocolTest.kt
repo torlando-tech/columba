@@ -72,9 +72,12 @@ class ServiceReticulumProtocolTest {
         }
 
         // Create mocks
+        // Android framework classes need relaxed mocks as they have many internal methods
+        @Suppress("NoRelaxedMocks") // Context is an Android framework class with complex internals
         context = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        rmspServerRepository = mockk(relaxed = true)
+        settingsRepository = mockk()
+        rmspServerRepository = mockk()
+        @Suppress("NoRelaxedMocks") // IReticulumService is an Android AIDL interface
         mockService = mockk(relaxed = true)
 
         // Default settings repository behavior
@@ -1105,5 +1108,119 @@ class ServiceReticulumProtocolTest {
         assertEquals(0xdb.toByte(), result.sourceHash[0])
         assertEquals(0x3f.toByte(), result.sourceHash[1])
         assertEquals(0xfd.toByte(), result.sourceHash[2])
+    }
+
+    // ===========================================
+    // Oneway AIDL Fire-and-Forget Method Tests
+    // ===========================================
+    // These methods are declared as 'oneway' in the AIDL interface,
+    // meaning they are fire-and-forget and must handle null service gracefully
+    // without throwing exceptions.
+
+    @Test
+    fun `hangupCall handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.hangupCall() }
+
+            assertTrue(
+                "hangupCall must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallMuted handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallMuted(true) }
+
+            assertTrue(
+                "setCallMuted must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallMuted with false handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallMuted(false) }
+
+            assertTrue(
+                "setCallMuted(false) must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallSpeaker handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallSpeaker(true) }
+
+            assertTrue(
+                "setCallSpeaker must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallSpeaker with false handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallSpeaker(false) }
+
+            assertTrue(
+                "setCallSpeaker(false) must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `reconnectRNodeInterface handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            // Note: reconnectRNodeInterface waits for service binding with a 10-second timeout
+            // when service is null, so it will just return after the internal timeout logic
+            val result = runCatching { protocol.reconnectRNodeInterface() }
+
+            assertTrue(
+                "reconnectRNodeInterface must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.setIncomingMessageSizeLimit(1024) }
+
+        assertTrue(
+            "setIncomingMessageSizeLimit must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
+        )
+    }
+
+    @Test
+    fun `setIncomingMessageSizeLimit with zero handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.setIncomingMessageSizeLimit(0) }
+
+        assertTrue(
+            "setIncomingMessageSizeLimit(0) must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
+        )
+    }
+
+    @Test
+    fun `forceExit handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.forceExit() }
+
+        assertTrue(
+            "forceExit must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
+        )
     }
 }

@@ -38,7 +38,10 @@ class CallActionReceiverTest {
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
-        mockPendingResult = mockk(relaxed = true)
+        // BroadcastReceiver.PendingResult is an Android system type - relaxed mock is appropriate
+        // The only method called is finish() which returns void
+        mockPendingResult = mockk()
+        every { mockPendingResult.finish() } returns Unit
         // Use a spy so we can mock goAsync() while keeping real onReceive behavior
         receiver = spyk(CallActionReceiver())
         every { receiver.goAsync() } returns mockPendingResult
@@ -159,7 +162,8 @@ class CallActionReceiverTest {
         // No activity should be started for decline action
         assertTrue(
             "Decline action should not start MainActivity",
-            startedIntent == null || startedIntent.component?.className != MainActivity::class.java.name ||
+            startedIntent == null ||
+                startedIntent.component?.className != MainActivity::class.java.name ||
                 startedIntent.action != CallNotificationHelper.ACTION_ANSWER_CALL,
         )
     }
@@ -171,8 +175,10 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
 
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
         // Verify goAsync was called for async hangup
         verify { receiver.goAsync() }
     }
@@ -184,7 +190,9 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
 
         // In test env without ColumbaApplication, it should still finish the pending result
         // Give coroutine a moment to run
@@ -217,8 +225,10 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
 
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
         // Verify goAsync was called for async hangup
         verify { receiver.goAsync() }
     }
@@ -230,7 +240,9 @@ class CallActionReceiverTest {
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, "abc123")
             }
 
-        receiver.onReceive(context, intent)
+        // onReceive should complete successfully
+        val result = runCatching { receiver.onReceive(context, intent) }
+        assertTrue("onReceive should complete without throwing", result.isSuccess)
 
         // In test env without ColumbaApplication, it should still finish the pending result
         // Give coroutine a moment to run

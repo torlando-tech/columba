@@ -18,6 +18,7 @@ import com.lxmf.messenger.service.manager.HealthCheckManager
 import com.lxmf.messenger.service.manager.IdentityManager
 import com.lxmf.messenger.service.manager.LockManager
 import com.lxmf.messenger.service.manager.MaintenanceManager
+import com.lxmf.messenger.service.manager.MemoryProfilerManager
 import com.lxmf.messenger.service.manager.MessagingManager
 import com.lxmf.messenger.service.manager.NetworkChangeManager
 import com.lxmf.messenger.service.manager.PythonWrapperManager
@@ -56,6 +57,7 @@ class ReticulumServiceBinder(
     private val lockManager: LockManager,
     private val maintenanceManager: MaintenanceManager,
     private val healthCheckManager: HealthCheckManager,
+    private val memoryProfilerManager: MemoryProfilerManager,
     private val networkChangeManager: NetworkChangeManager,
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
@@ -117,6 +119,10 @@ class ReticulumServiceBinder(
                             // Reacquires locks when network changes and triggers announce
                             networkChangeManager.start()
 
+                            // Start memory profiling (debug builds only)
+                            // Zero overhead in release builds (early-returns if disabled)
+                            memoryProfilerManager.startProfiling()
+
                             // Start announce polling and drain any pending messages
                             eventHandler.startEventHandling()
                             eventHandler.drainPendingMessages()
@@ -126,10 +132,11 @@ class ReticulumServiceBinder(
 
                             // Notify success with shared instance status
                             callback.onInitializationComplete(
-                                JSONObject().apply {
-                                    put("success", true)
-                                    put("is_shared_instance", isSharedInstance)
-                                }.toString(),
+                                JSONObject()
+                                    .apply {
+                                        put("success", true)
+                                        put("is_shared_instance", isSharedInstance)
+                                    }.toString(),
                             )
 
                             // Update status
@@ -278,7 +285,12 @@ class ReticulumServiceBinder(
 
     override fun shutdown() {
         try {
-            val stackTrace = Thread.currentThread().stackTrace.take(10).joinToString("\n  ")
+            val stackTrace =
+                Thread
+                    .currentThread()
+                    .stackTrace
+                    .take(10)
+                    .joinToString("\n  ")
             Log.i(TAG, "shutdown() called from:\n  $stackTrace")
             Log.d(TAG, "Shutting down Reticulum (async)")
 
@@ -287,6 +299,9 @@ class ReticulumServiceBinder(
 
             // Stop health check monitoring
             healthCheckManager.stop()
+
+            // Stop memory profiling
+            memoryProfilerManager.stopProfiling()
 
             // Stop maintenance job
             maintenanceManager.stop()
@@ -355,9 +370,7 @@ class ReticulumServiceBinder(
         path: String,
     ): String = identityManager.saveIdentity(privateKey, path)
 
-    override fun createIdentityWithName(displayName: String): String {
-        return identityManager.createIdentityWithName(displayName)
-    }
+    override fun createIdentityWithName(displayName: String): String = identityManager.createIdentityWithName(displayName)
 
     override fun deleteIdentityFile(identityHash: String): String = identityManager.deleteIdentityFile(identityHash)
 
@@ -438,13 +451,9 @@ class ReticulumServiceBinder(
         appData: ByteArray?,
     ): String = messagingManager.announceDestination(destHash, appData)
 
-    override fun restorePeerIdentities(peerIdentitiesJson: String): String {
-        return messagingManager.restorePeerIdentities(peerIdentitiesJson)
-    }
+    override fun restorePeerIdentities(peerIdentitiesJson: String): String = messagingManager.restorePeerIdentities(peerIdentitiesJson)
 
-    override fun restoreAnnounceIdentities(announcesJson: String): String {
-        return messagingManager.restoreAnnounceIdentities(announcesJson)
-    }
+    override fun restoreAnnounceIdentities(announcesJson: String): String = messagingManager.restoreAnnounceIdentities(announcesJson)
 
     // ===========================================
     // Callback Methods
@@ -524,9 +533,10 @@ class ReticulumServiceBinder(
             debugInfo.toString()
         } catch (e: Exception) {
             Log.e(TAG, "Error getting debug info", e)
-            JSONObject().apply {
-                put("error", e.message)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("error", e.message)
+                }.toString()
         }
     }
 
@@ -547,28 +557,32 @@ class ReticulumServiceBinder(
                 if (found) {
                     val publicKey = result.getDictValue("public_key")?.toString().orEmpty()
                     Log.d(TAG, "Identity found for ${destHashHex.take(16)}...")
-                    JSONObject().apply {
-                        put("found", true)
-                        put("public_key", publicKey)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("found", true)
+                            put("public_key", publicKey)
+                        }.toString()
                 } else {
                     Log.d(TAG, "No identity found for ${destHashHex.take(16)}...")
-                    JSONObject().apply {
-                        put("found", false)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("found", false)
+                        }.toString()
                 }
             } else {
                 Log.d(TAG, "Wrapper returned null for recall_identity")
-                JSONObject().apply {
-                    put("found", false)
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("found", false)
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error recalling identity", e)
-            JSONObject().apply {
-                put("found", false)
-                put("error", e.message)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("found", false)
+                    put("error", e.message)
+                }.toString()
         }
 
     override fun getRNodeRssi(): Int {
@@ -588,12 +602,27 @@ class ReticulumServiceBinder(
 
                     @Suppress("UNCHECKED_CAST")
                     val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
-                    val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                    val success =
+                        resultDict
+                            ?.entries
+                            ?.find { it.key.toString() == "success" }
+                            ?.value
+                            ?.toBoolean() ?: false
                     if (success) {
-                        val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                        val message =
+                            resultDict
+                                ?.entries
+                                ?.find { it.key.toString() == "message" }
+                                ?.value
+                                ?.toString()
                         Log.d(TAG, "████ RECONNECT RNODE SUCCESS ████ ${message ?: "success"}")
                     } else {
-                        val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                        val error =
+                            resultDict
+                                ?.entries
+                                ?.find { it.key.toString() == "error" }
+                                ?.value
+                                ?.toString() ?: "Unknown error"
                         Log.w(TAG, "████ RECONNECT RNODE FAILED ████ $error")
                     }
                 }
@@ -603,8 +632,8 @@ class ReticulumServiceBinder(
         }
     }
 
-    override fun isSharedInstanceAvailable(): Boolean {
-        return try {
+    override fun isSharedInstanceAvailable(): Boolean =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("check_shared_instance_available")?.toBoolean() ?: false
             } ?: false
@@ -612,10 +641,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error checking shared instance availability", e)
             false
         }
-    }
 
-    override fun getFailedInterfaces(): String {
-        return try {
+    override fun getFailedInterfaces(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("get_failed_interfaces")?.toString() ?: "[]"
             } ?: "[]"
@@ -623,10 +651,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting failed interfaces", e)
             "[]"
         }
-    }
 
-    override fun getInterfaceStats(interfaceName: String): String? {
-        return try {
+    override fun getInterfaceStats(interfaceName: String): String? =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("get_interface_stats", interfaceName)?.toString()
             }
@@ -634,14 +661,13 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting interface stats", e)
             null
         }
-    }
 
     // ===========================================
     // RNS 1.1.x Interface Discovery
     // ===========================================
 
-    override fun getDiscoveredInterfaces(): String {
-        return try {
+    override fun getDiscoveredInterfaces(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("get_discovered_interfaces")?.toString() ?: "[]"
             } ?: "[]"
@@ -649,10 +675,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting discovered interfaces", e)
             "[]"
         }
-    }
 
-    override fun isDiscoveryEnabled(): Boolean {
-        return try {
+    override fun isDiscoveryEnabled(): Boolean =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("is_discovery_enabled")?.toBoolean() ?: false
             } ?: false
@@ -660,10 +685,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error checking discovery enabled status", e)
             false
         }
-    }
 
-    override fun getAutoconnectedInterfaceEndpoints(): String {
-        return try {
+    override fun getAutoconnectedInterfaceEndpoints(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("get_autoconnected_interface_endpoints")?.toString() ?: "[]"
             } ?: "[]"
@@ -671,14 +695,13 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting auto-connected interface endpoints", e)
             "[]"
         }
-    }
 
     // ===========================================
     // Propagation Node Support
     // ===========================================
 
-    override fun setOutboundPropagationNode(destHash: ByteArray?): String {
-        return try {
+    override fun setOutboundPropagationNode(destHash: ByteArray?): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("set_outbound_propagation_node", destHash)
                 result?.toString() ?: """{"success": false, "error": "No result"}"""
@@ -687,10 +710,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error setting propagation node", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun getOutboundPropagationNode(): String {
-        return try {
+    override fun getOutboundPropagationNode(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("get_outbound_propagation_node")
                 result?.toString() ?: """{"success": false, "error": "No result"}"""
@@ -699,13 +721,12 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting propagation node", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     override fun requestMessagesFromPropagationNode(
         identityPrivateKey: ByteArray?,
         maxMessages: Int,
-    ): String {
-        return try {
+    ): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result =
                     wrapper.callAttr(
@@ -719,10 +740,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error requesting messages from propagation node", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun getPropagationState(): String {
-        return try {
+    override fun getPropagationState(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("get_propagation_state")
                 result?.toString() ?: """{"success": false, "error": "No result"}"""
@@ -731,7 +751,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting propagation state", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     override fun sendLxmfMessageWithMethod(
         destHash: ByteArray,
@@ -748,8 +767,8 @@ class ReticulumServiceBinder(
         iconName: String?,
         iconFgColor: String?,
         iconBgColor: String?,
-    ): String {
-        return try {
+    ): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 // Convert Map<String, ByteArray> to List of (filename, bytes) pairs for Python
                 val fileAttachmentsList =
@@ -790,7 +809,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error sending LXMF message with method", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     override fun provideAlternativeRelay(relayHash: ByteArray?) {
         try {
@@ -827,8 +845,8 @@ class ReticulumServiceBinder(
         destHash: ByteArray,
         locationJson: String,
         sourceIdentityPrivateKey: ByteArray,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "📍 Sending location telemetry to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
             wrapperManager.withWrapper { wrapper ->
                 val result =
@@ -844,15 +862,14 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error sending location telemetry", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     override fun sendTelemetryRequest(
         destHash: ByteArray,
         sourceIdentityPrivateKey: ByteArray,
         timebaseMs: Long,
         isCollectorRequest: Boolean,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "📡 Sending telemetry request to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
             wrapperManager.withWrapper { wrapper ->
                 // Convert timebaseMs to seconds for Python, or null if -1 (request all)
@@ -871,10 +888,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error sending telemetry request", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun setTelemetryCollectorMode(enabled: Boolean): String {
-        return try {
+    override fun setTelemetryCollectorMode(enabled: Boolean): String =
+        try {
             Log.d(TAG, "📡 Setting telemetry collector mode: $enabled")
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("set_telemetry_collector_enabled", enabled)
@@ -884,10 +900,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error setting telemetry collector mode", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun setTelemetryAllowedRequesters(allowedHashesJson: String): String {
-        return try {
+    override fun setTelemetryAllowedRequesters(allowedHashesJson: String): String =
+        try {
             val jsonArray = JSONArray(allowedHashesJson)
             val allowedList = mutableListOf<String>()
             for (i in 0 until jsonArray.length()) {
@@ -897,8 +912,10 @@ class ReticulumServiceBinder(
             wrapperManager.withWrapper { wrapper ->
                 // Convert to Python list (Java ArrayList doesn't serialize properly to Python)
                 val pyList =
-                    com.chaquo.python.Python.getInstance()
-                        .builtins.callAttr("list", allowedList.toTypedArray())
+                    com.chaquo.python.Python
+                        .getInstance()
+                        .builtins
+                        .callAttr("list", allowedList.toTypedArray())
                 val result = wrapper.callAttr("set_telemetry_allowed_requesters", pyList)
                 result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
             } ?: """{"success": false, "error": "Wrapper not available"}"""
@@ -906,7 +923,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error setting telemetry allowed requesters", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     // ===========================================
     // Emoji Reactions
@@ -917,8 +933,8 @@ class ReticulumServiceBinder(
         targetMessageId: String,
         emoji: String,
         sourceIdentityPrivateKey: ByteArray,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "📬 Sending reaction $emoji to message ${targetMessageId.take(16)}...")
             wrapperManager.withWrapper { wrapper ->
                 val result =
@@ -935,7 +951,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error sending reaction", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     // ===========================================
     // Conversation Link Management
@@ -944,8 +959,8 @@ class ReticulumServiceBinder(
     override fun establishLink(
         destHash: ByteArray,
         timeoutSeconds: Float,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "🔗 Establishing link to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("establish_link", destHash, timeoutSeconds)
@@ -955,10 +970,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error establishing link", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun closeLink(destHash: ByteArray): String {
-        return try {
+    override fun closeLink(destHash: ByteArray): String =
+        try {
             Log.d(TAG, "🔗 Closing link to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("close_link", destHash)
@@ -968,10 +982,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error closing link", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun getLinkStatus(destHash: ByteArray): String {
-        return try {
+    override fun getLinkStatus(destHash: ByteArray): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("get_link_status", destHash)
                 result?.toString() ?: """{"active": false, "error": "No result from Python"}"""
@@ -980,14 +993,13 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting link status", e)
             """{"active": false, "error": "${e.message}"}"""
         }
-    }
 
     // ===========================================
     // RMSP Map Service Methods
     // ===========================================
 
-    override fun getRmspServers(): String {
-        return try {
+    override fun getRmspServers(): String =
+        try {
             wrapperManager.withWrapper { wrapper ->
                 val result = wrapper.callAttr("get_rmsp_servers")
                 result?.toString() ?: "[]"
@@ -996,7 +1008,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting RMSP servers", e)
             "[]"
         }
-    }
 
     override fun fetchRmspTiles(
         destinationHashHex: String,
@@ -1005,15 +1016,17 @@ class ReticulumServiceBinder(
         zoomMin: Int,
         zoomMax: Int,
         timeoutMs: Long,
-    ): ByteArray? {
-        return try {
+    ): ByteArray? =
+        try {
             Log.d(TAG, "🗺️ Fetching RMSP tiles: geohash=$geohash, zoom=$zoomMin-$zoomMax")
             val timeoutSec = timeoutMs / 1000.0f
             wrapperManager.withWrapper { wrapper ->
                 // Create Python list for zoom_range (Java ArrayList doesn't serialize properly)
                 val pyList =
-                    com.chaquo.python.Python.getInstance()
-                        .builtins.callAttr("list", arrayOf(zoomMin, zoomMax))
+                    com.chaquo.python.Python
+                        .getInstance()
+                        .builtins
+                        .callAttr("list", arrayOf(zoomMin, zoomMax))
 
                 val result =
                     wrapper.callAttr(
@@ -1032,7 +1045,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error fetching RMSP tiles", e)
             null
         }
-    }
 
     // ===========================================
     // Event Broadcasting Helpers
@@ -1062,15 +1074,16 @@ class ReticulumServiceBinder(
             val interfacesList = result?.getDictValue("interfaces")?.asList()
 
             val statusMap = JSONObject()
-            interfacesList?.mapNotNull { ifaceObj ->
-                (ifaceObj as? com.chaquo.python.PyObject)?.let { iface ->
-                    val name = iface.getDictValue("name")?.toString()
-                    val online = iface.getDictValue("online")?.toBoolean() ?: false
-                    name?.let { Pair(it, online) }
+            interfacesList
+                ?.mapNotNull { ifaceObj ->
+                    (ifaceObj as? com.chaquo.python.PyObject)?.let { iface ->
+                        val name = iface.getDictValue("name")?.toString()
+                        val online = iface.getDictValue("online")?.toBoolean() ?: false
+                        name?.let { Pair(it, online) }
+                    }
+                }?.forEach { (name, online) ->
+                    statusMap.put(name, online)
                 }
-            }?.forEach { (name, online) ->
-                statusMap.put(name, online)
-            }
 
             broadcaster.broadcastInterfaceStatusChange(statusMap.toString())
             Log.d(TAG, "Interface status broadcast sent: $statusMap")
@@ -1087,6 +1100,11 @@ class ReticulumServiceBinder(
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
 
+        // CallManager/Telephone first — no dependency on other bridges, and users
+        // may attempt calls shortly after the app starts (the retry window in
+        // CallViewModel is limited).
+        setupLxstCallManager()
+
         setupBleCoordinator()
         initializeRNodeInterface()
         setupReticulumBridgeCallback()
@@ -1099,7 +1117,6 @@ class ReticulumServiceBinder(
         setupPropagationStateCallback()
         // Note: Native stamp generator is registered in setupPreInitializationBridges()
         // to ensure it's available before any stamp generation can occur
-        setupLxstCallManager()
     }
 
     /** Wire up BLE coordinator to broadcast connection changes via IPC. */
@@ -1119,16 +1136,31 @@ class ReticulumServiceBinder(
 
                 @Suppress("UNCHECKED_CAST")
                 val resultDict = result?.asMap() as? Map<com.chaquo.python.PyObject, com.chaquo.python.PyObject>
-                val success = resultDict?.entries?.find { it.key.toString() == "success" }?.value?.toBoolean() ?: false
+                val success =
+                    resultDict
+                        ?.entries
+                        ?.find { it.key.toString() == "success" }
+                        ?.value
+                        ?.toBoolean() ?: false
                 if (success) {
-                    val message = resultDict?.entries?.find { it.key.toString() == "message" }?.value?.toString()
+                    val message =
+                        resultDict
+                            ?.entries
+                            ?.find { it.key.toString() == "message" }
+                            ?.value
+                            ?.toString()
                     if (message != null) {
                         Log.d(TAG, "RNode interface: $message")
                     } else {
                         Log.i(TAG, "RNode interface initialized successfully")
                     }
                 } else {
-                    val error = resultDict?.entries?.find { it.key.toString() == "error" }?.value?.toString() ?: "Unknown error"
+                    val error =
+                        resultDict
+                            ?.entries
+                            ?.find { it.key.toString() == "error" }
+                            ?.value
+                            ?.toString() ?: "Unknown error"
                     Log.e(TAG, "Failed to initialize RNode interface: $error")
                 }
             }
@@ -1218,10 +1250,8 @@ class ReticulumServiceBinder(
         try {
             val callManagerInitialized = wrapperManager.setupCallManager()
             if (callManagerInitialized) {
-                Log.i(TAG, "📞 LXST voice call support enabled")
-                registerCallBridgeListeners()
-            } else {
-                Log.w(TAG, "📞 LXST voice call support not available")
+                registerCallCoordinatorListeners()
+                wrapperManager.setupTelephone()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
@@ -1229,8 +1259,10 @@ class ReticulumServiceBinder(
     }
 
     /** Register listeners for IPC notification to UI process. */
-    private fun registerCallBridgeListeners() {
-        val callBridge = com.lxmf.messenger.reticulum.call.bridge.CallBridge.getInstance()
+    private fun registerCallCoordinatorListeners() {
+        val callBridge =
+            tech.torlando.lxst.core.CallCoordinator
+                .getInstance()
         val callNotificationHelper = CallNotificationHelper(context)
 
         callBridge.setIncomingCallListener { identityHash ->
@@ -1246,9 +1278,11 @@ class ReticulumServiceBinder(
 
                 // Also broadcast to UI process
                 val callJson =
-                    org.json.JSONObject().apply {
-                        put("caller_hash", identityHash)
-                    }.toString()
+                    org.json
+                        .JSONObject()
+                        .apply {
+                            put("caller_hash", identityHash)
+                        }.toString()
                 broadcaster.broadcastIncomingCall(callJson)
             }
         }
@@ -1257,22 +1291,26 @@ class ReticulumServiceBinder(
             callNotificationHelper.cancelIncomingCallNotification()
 
             val callJson =
-                org.json.JSONObject().apply {
-                    put("caller_hash", identityHash ?: "")
-                }.toString()
+                org.json
+                    .JSONObject()
+                    .apply {
+                        put("caller_hash", identityHash ?: "")
+                    }.toString()
             broadcaster.broadcastCallEnded(callJson)
         }
         callBridge.setCallStateChangedListener { state, identityHash ->
             // Cancel incoming notification when call becomes active (answered)
-            if (state == "active") {
+            if (state == "established") {
                 callNotificationHelper.cancelIncomingCallNotification()
             }
 
             val stateJson =
-                org.json.JSONObject().apply {
-                    put("state", state)
-                    put("remote_identity", identityHash ?: "")
-                }.toString()
+                org.json
+                    .JSONObject()
+                    .apply {
+                        put("state", state)
+                        put("remote_identity", identityHash ?: "")
+                    }.toString()
             broadcaster.broadcastCallStateChanged(stateJson)
         }
         Log.d(TAG, "📞 Call IPC listeners registered")
@@ -1309,8 +1347,8 @@ class ReticulumServiceBinder(
 
     // ==================== PROTOCOL VERSION INFORMATION ====================
 
-    override fun getReticulumVersion(): String? {
-        return try {
+    override fun getReticulumVersion(): String? =
+        try {
             val result =
                 wrapperManager.withWrapper { wrapper ->
                     wrapper.callAttr("get_reticulum_version")?.toString()
@@ -1320,10 +1358,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Failed to get Reticulum version", e)
             null
         }
-    }
 
-    override fun getLxmfVersion(): String? {
-        return try {
+    override fun getLxmfVersion(): String? =
+        try {
             val result =
                 wrapperManager.withWrapper { wrapper ->
                     wrapper.callAttr("get_lxmf_version")?.toString()
@@ -1333,10 +1370,9 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Failed to get LXMF version", e)
             null
         }
-    }
 
-    override fun getBleReticulumVersion(): String? {
-        return try {
+    override fun getBleReticulumVersion(): String? =
+        try {
             val result =
                 wrapperManager.withWrapper { wrapper ->
                     wrapper.callAttr("get_ble_reticulum_version")?.toString()
@@ -1346,7 +1382,6 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Failed to get BLE-Reticulum version", e)
             null
         }
-    }
 
     // ===========================================
     // Voice Call Methods (LXST)
@@ -1355,51 +1390,98 @@ class ReticulumServiceBinder(
     override fun initiateCall(
         destHash: String,
         profileCode: Int,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.i(TAG, "📞 Initiating call to ${destHash.take(16)} with profile=${if (profileCode == -1) "default" else "0x${profileCode.toString(16)}"}...")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"success": false, "error": "CallManager not initialized"}"""
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                // Validate hex string before decoding (IPC boundary input)
+                val isValidHex = destHash.length % 2 == 0 && destHash.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                if (!isValidHex) {
+                    """{"success": false, "error": "Invalid destination hash"}"""
+                } else if (telephone.isCallActive()) {
+                    """{"success": false, "error": "Already in call"}"""
                 } else {
-                    // Pass profile to Python: -1 means use default (pass null to Python)
-                    val profile: Any? = if (profileCode == -1) null else profileCode
-                    val result = callManager.callAttr("call", destHash, profile)
-                    result?.toString() ?: """{"success": false, "error": "No result"}"""
+                    val destHashBytes = destHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+                    // Convert profile code to Profile (-1 means default)
+                    val profile =
+                        if (profileCode == -1) {
+                            tech.torlando.lxst.telephone.Profile.DEFAULT
+                        } else {
+                            tech.torlando.lxst.telephone.Profile
+                                .fromId(profileCode)
+                                ?: tech.torlando.lxst.telephone.Profile.DEFAULT
+                        }
+
+                    // Launch call on IO dispatcher (call() is suspend)
+                    scope.launch(Dispatchers.IO) {
+                        telephone.call(destHashBytes, profile)
+                    }
+                    """{"success": true}"""
                 }
-            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+            } else {
+                Log.e(TAG, "📞 Telephone not initialized — cannot initiate call")
+                """{"success": false, "error": "Telephone not initialized"}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error initiating call", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
-    override fun answerCall(): String {
-        return try {
+    override fun answerCall(): String =
+        try {
             Log.i(TAG, "📞 Answering call")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"success": false, "error": "CallManager not initialized"}"""
-                } else {
-                    val result = callManager.callAttr("answer")
-                    val success = result?.toBoolean() ?: false
-                    """{"success": $success}"""
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                var answered = telephone.answer()
+                if (!answered) {
+                    // Telephone doesn't know about incoming call (_notify_kotlin callback
+                    // from Python doesn't work reliably via Chaquopy). Set up minimal
+                    // state from CallCoordinator which Python notified directly.
+                    val identity =
+                        tech.torlando.lxst.core.CallCoordinator
+                            .getInstance()
+                            .remoteIdentity.value
+                    if (identity != null) {
+                        Log.i(
+                            TAG,
+                            "📞 Telephone missed incoming call setup, " +
+                                "initializing from CallCoordinator: ${identity.take(16)}...",
+                        )
+                        telephone.prepareForAnswer(identity)
+                        answered = telephone.answer()
+                    }
                 }
-            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+                if (answered) {
+                    """{"success": true}"""
+                } else {
+                    Log.e(TAG, "📞 Telephone.answer() returned false (not ringing or not incoming)")
+                    """{"success": false, "error": "Call not in ringing state"}"""
+                }
+            } else {
+                Log.e(TAG, "📞 Telephone not initialized — cannot answer call")
+                """{"success": false, "error": "Telephone not initialized"}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error answering call", e)
             """{"success": false, "error": "${e.message}"}"""
         }
-    }
 
     override fun hangupCall() {
         try {
             Log.i(TAG, "📞 Hanging up call")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                callManager?.callAttr("hangup")
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                telephone.hangup()
+            } else {
+                Log.w(TAG, "📞 Telephone not initialized — ignoring hangup")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error hanging up call", e)
@@ -1408,15 +1490,22 @@ class ReticulumServiceBinder(
 
     override fun setCallMuted(muted: Boolean) {
         try {
-            Log.i(TAG, "📞 setCallMuted($muted) - calling Python mute_microphone")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager != null) {
-                    Log.i(TAG, "📞 Calling callManager.mute_microphone($muted)")
-                    callManager.callAttr("mute_microphone", muted)
-                    Log.i(TAG, "📞 mute_microphone call completed")
-                } else {
-                    Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+            Log.i(TAG, "📞 setCallMuted($muted)")
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                telephone.muteTransmit(muted)
+                Log.i(TAG, "📞 Kotlin Telephone muteTransmit($muted) called")
+            } else {
+                Log.w(TAG, "📞 Telephone not initialized, mute request ignored")
+                wrapperManager.withWrapper { wrapper ->
+                    val callManager = wrapper.callAttr("get_call_manager")
+                    if (callManager != null) {
+                        callManager.callAttr("mute_microphone", muted)
+                    } else {
+                        Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -1427,29 +1516,48 @@ class ReticulumServiceBinder(
     override fun setCallSpeaker(speakerOn: Boolean) {
         try {
             Log.d(TAG, "📞 Setting call speaker: $speakerOn")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                callManager?.callAttr("set_speaker", speakerOn)
-            }
+
+            // Use AudioDevice directly for speaker routing (Phase 11 - Kotlin LXST)
+            tech.torlando.lxst.core.AudioDevice
+                .getInstance(context)
+                .setSpeakerphoneOn(speakerOn)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting call speaker", e)
         }
     }
 
-    override fun getCallState(): String {
-        return try {
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"status": "unavailable", "is_active": false, "is_muted": false}"""
-                } else {
-                    val result = callManager.callAttr("get_call_state")
-                    result?.toString() ?: """{"status": "unknown", "is_active": false, "is_muted": false}"""
-                }
-            } ?: """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+    override fun getCallState(): String =
+        try {
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                val status =
+                    when (telephone.callStatus) {
+                        tech.torlando.lxst.audio.Signalling.STATUS_AVAILABLE -> "available"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CALLING -> "calling"
+                        tech.torlando.lxst.audio.Signalling.STATUS_RINGING -> "ringing"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CONNECTING -> "connecting"
+                        tech.torlando.lxst.audio.Signalling.STATUS_ESTABLISHED -> "established"
+                        tech.torlando.lxst.audio.Signalling.STATUS_BUSY -> "busy"
+                        tech.torlando.lxst.audio.Signalling.STATUS_REJECTED -> "rejected"
+                        else -> "unknown"
+                    }
+                val isActive = telephone.isCallActive()
+                val isMuted = telephone.isTransmitMuted()
+                """{"status": "$status", "is_active": $isActive, "is_muted": $isMuted}"""
+            } else {
+                wrapperManager.withWrapper { wrapper ->
+                    val callManager = wrapper.callAttr("get_call_manager")
+                    if (callManager == null) {
+                        """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+                    } else {
+                        val result = callManager.callAttr("get_call_state")
+                        result?.toString() ?: """{"status": "unknown", "is_active": false, "is_muted": false}"""
+                    }
+                } ?: """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting call state", e)
             """{"status": "error", "is_active": false, "is_muted": false, "error": "${e.message}"}"""
         }
-    }
 }

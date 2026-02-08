@@ -206,7 +206,7 @@ class InterfaceConfigManager
                         null
                     }
                 val displayName = activeIdentity?.displayName
-                Log.d(TAG, "Active identity: ${activeIdentity?.displayName ?: "none"}, verified path: $identityPath")
+                Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set" else "none"}, verified path: $identityPath")
 
                 // Load shared instance preferences
                 val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
@@ -224,8 +224,13 @@ class InterfaceConfigManager
 
                 // Load discovery settings
                 val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
-                val autoconnectDiscoveredCount = settingsRepository.getAutoconnectDiscoveredCount()
-                Log.d(TAG, "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount")
+                val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
+                // Coerce -1 (never configured sentinel) to 0 for Python layer
+                val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
+                Log.d(
+                    TAG,
+                    "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount (saved=$savedAutoconnect)",
+                )
 
                 val config =
                     ReticulumConfig(

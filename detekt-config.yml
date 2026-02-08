@@ -125,6 +125,12 @@ columba:
   active: true
   BleLoggingTag:
     active: true
+  NoRelaxedMocks:
+    active: true
+  NoVerifyOnlyTests:
+    active: true
+  StateFlowPollingLoop:
+    active: true
 
 style:
   active: true

@@ -65,8 +65,6 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
@@ -105,6 +103,8 @@ import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import javax.inject.Inject
 
 /**
@@ -564,6 +564,11 @@ fun ColumbaNavigation(
     // Track if we're currently navigating to answer a call (prevents race with callState observer)
     var isAnsweringCall by remember { mutableStateOf(false) }
 
+    // Track if the Map screen's location permission UI has been dismissed this session.
+    // Managed here (at MainActivity level) so it survives tab switches. Issue #342.
+    var mapPermissionSheetDismissed by remember { mutableStateOf(false) }
+    var mapPermissionCardDismissed by remember { mutableStateOf(false) }
+
     // Access SettingsViewModel to get theme preference
     val settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel =
         androidx.hilt.navigation.compose
@@ -811,7 +816,7 @@ fun ColumbaNavigation(
     }
 
     // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
-    val callBridge = remember { CallBridge.getInstance() }
+    val callBridge = remember { CallCoordinator.getInstance() }
     val callState by callBridge.callState.collectAsState()
 
     LaunchedEffect(callState) {
@@ -826,6 +831,8 @@ fun ColumbaNavigation(
                         currentRoute?.startsWith("voice_call/") == true
                 if (!isOnCallScreen && !isAnsweringCall) {
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
+                    // Dismiss the notification — the user is now looking at the call screen
+                    CallNotificationHelper(context).cancelIncomingCallNotification()
                     navController.navigate("incoming_call/$encodedHash")
                 } else {
                     Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")
@@ -1022,6 +1029,10 @@ fun ColumbaNavigation(
                                         "&loraCr=${cr ?: -1}",
                                 )
                             },
+                            permissionSheetDismissed = mapPermissionSheetDismissed,
+                            onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                            permissionCardDismissed = mapPermissionCardDismissed,
+                            onPermissionCardDismissed = { mapPermissionCardDismissed = true },
                         )
                     }
 
@@ -1151,6 +1162,10 @@ fun ColumbaNavigation(
                             focusLongitude = if (lon != 0.0) lon else null,
                             focusLabel = label?.ifEmpty { null },
                             focusInterfaceDetails = focusDetails,
+                            permissionSheetDismissed = mapPermissionSheetDismissed,
+                            onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                            permissionCardDismissed = mapPermissionCardDismissed,
+                            onPermissionCardDismissed = { mapPermissionCardDismissed = true },
                         )
                     }
 

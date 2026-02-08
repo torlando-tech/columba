@@ -21,22 +21,20 @@ from pathlib import Path
 
 # Patterns to find bridge method calls in Python code
 # These cover all the ways Python code calls into Kotlin bridges
+# Generic patterns match any variable containing 'kotlin' or 'bridge' with a method call
 BRIDGE_CALL_PATTERNS = [
-    # Direct bridge variable calls (e.g., self.kotlin_bridge.methodName())
-    r'\.kotlin_bridge\.(\w+)\s*\(',
-    # Named bridge calls (e.g., self.kotlin_reticulum_bridge.methodName())
-    r'\.kotlin_reticulum_bridge\.(\w+)\s*\(',
-    r'\.kotlin_rnode_bridge\.(\w+)\s*\(',
-    r'\.kotlin_ble_bridge\.(\w+)\s*\(',
+    # Any self.*kotlin*.method() - catches kotlin_ble_bridge, kotlin_rnode_bridge, etc.
+    r'self\.\w*kotlin\w*\.(\w+)\s*\(',
+    # Any self._*kotlin*.method() - catches _kotlin_call_bridge (private var convention)
+    r'self\._\w*kotlin\w*\.(\w+)\s*\(',
+    # Any self.*_bridge.method() - catches kotlin_call_bridge, audio_bridge, etc.
+    r'self\.\w*_bridge\.(\w+)\s*\(',
 ]
 
-# Known bridge classes that must be preserved
-# Maps from bridge variable patterns to their Kotlin class names
-BRIDGE_CLASSES = [
-    'KotlinReticulumBridge',
-    'KotlinBLEBridge',
-    'KotlinRNodeBridge',
-]
+# Bridge classes are detected dynamically from the codebase
+# Any class ending in "Bridge" in the messenger package should be preserved
+# This matches the ProGuard rule: -keep class com.lxmf.messenger.**.*Bridge { *; }
+BRIDGE_CLASS_PATTERN = r'(\w+Bridge)'
 
 
 def extract_methods_from_python(python_dir: Path) -> set[str]:
@@ -55,6 +53,34 @@ def extract_methods_from_python(python_dir: Path) -> set[str]:
             methods.update(found)
 
     return methods
+
+
+def extract_bridge_classes_from_kotlin(kotlin_dir: Path) -> set[str]:
+    """Extract all *Bridge class names from Kotlin source code.
+
+    This matches the ProGuard rule: -keep class com.lxmf.messenger.**.*Bridge { *; }
+    Any class ending in 'Bridge' is considered a Python-callable bridge.
+    """
+    classes = set()
+
+    for kt_file in kotlin_dir.glob('**/*.kt'):
+        # Only look at main source, not test files
+        if '/test/' in str(kt_file) or '/androidTest/' in str(kt_file):
+            continue
+
+        try:
+            content = kt_file.read_text(encoding='utf-8')
+        except Exception as e:
+            print(f"  Warning: Could not read {kt_file}: {e}")
+            continue
+
+        # Find class declarations ending in "Bridge"
+        # Matches: class FooBridge, object BarBridge, etc.
+        class_pattern = r'\b(?:class|object)\s+(\w+Bridge)\b'
+        found = re.findall(class_pattern, content)
+        classes.update(found)
+
+    return classes
 
 
 def extract_dex_content(apk_path: Path) -> bytes:
@@ -96,12 +122,23 @@ def main():
         print(f"ERROR: APK not found: {apk_path}")
         sys.exit(2)
 
-    # Find python directory relative to script location
+    # Find source directories relative to script location
     script_dir = Path(__file__).parent.resolve()
-    python_dir = script_dir.parent / 'python'
+    project_dir = script_dir.parent
+    python_dir = project_dir / 'python'
+    kotlin_dirs = [
+        project_dir / 'reticulum' / 'src' / 'main' / 'java',
+        project_dir / 'LXST-kt' / 'lxst' / 'src' / 'main' / 'java',
+    ]
 
     if not python_dir.exists():
         print(f"ERROR: Python directory not found: {python_dir}")
+        sys.exit(2)
+
+    # At least one Kotlin source dir must exist
+    existing_kotlin_dirs = [d for d in kotlin_dirs if d.exists()]
+    if not existing_kotlin_dirs:
+        print(f"ERROR: No Kotlin directories found: {kotlin_dirs}")
         sys.exit(2)
 
     print("=" * 60)
@@ -109,25 +146,33 @@ def main():
     print("=" * 60)
     print()
 
-    # Step 1: Extract methods from Python source
+    # Step 1: Extract bridge classes from Kotlin source (dynamic discovery)
+    bridge_classes = set()
+    for kotlin_dir in existing_kotlin_dirs:
+        print(f"Scanning Kotlin source for *Bridge classes: {kotlin_dir}")
+        bridge_classes.update(extract_bridge_classes_from_kotlin(kotlin_dir))
+    print(f"Found {len(bridge_classes)} bridge classes: {', '.join(sorted(bridge_classes))}")
+    print()
+
+    # Step 2: Extract methods from Python source
     print(f"Scanning Python source: {python_dir}")
     methods = extract_methods_from_python(python_dir)
     print(f"Found {len(methods)} unique bridge method calls in Python code")
     print()
 
-    # Step 2: Extract DEX content from APK
+    # Step 3: Extract DEX content from APK
     print(f"Extracting DEX from: {apk_path}")
     dex_content = extract_dex_content(apk_path)
     print(f"DEX content size: {len(dex_content):,} bytes")
     print()
 
-    # Step 3: Verify methods exist in DEX
+    # Step 4: Verify methods exist in DEX
     print("Verifying methods...")
     methods_found, methods_missing = verify_in_dex(methods, dex_content, "method")
 
-    # Step 4: Verify bridge classes exist in DEX
+    # Step 5: Verify bridge classes exist in DEX
     print("Verifying bridge classes...")
-    classes_found, classes_missing = verify_in_dex(set(BRIDGE_CLASSES), dex_content, "class")
+    classes_found, classes_missing = verify_in_dex(bridge_classes, dex_content, "class")
 
     # Report results
     print()
@@ -147,7 +192,7 @@ def main():
             print(f"  ✗ {m}")
 
     # Classes
-    print(f"\nBridge Classes: {len(classes_found)}/{len(BRIDGE_CLASSES)} verified")
+    print(f"\nBridge Classes: {len(classes_found)}/{len(bridge_classes)} verified")
     if classes_found:
         for c in sorted(classes_found):
             print(f"  ✓ {c}")

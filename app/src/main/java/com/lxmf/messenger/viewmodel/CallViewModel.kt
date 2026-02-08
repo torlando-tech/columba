@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -15,17 +13,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * ViewModel for voice call screens.
  *
- * Observes CallBridge state and provides UI-friendly state for
+ * Observes CallCoordinator state and provides UI-friendly state for
  * VoiceCallScreen and IncomingCallScreen.
  *
  * Uses ReticulumProtocol for call actions (IPC to service process)
- * and CallBridge for local state management.
+ * and CallCoordinator for local state management.
  */
 @HiltViewModel
 class CallViewModel
@@ -39,7 +39,7 @@ class CallViewModel
             private const val TAG = "CallViewModel"
         }
 
-        private val callBridge = CallBridge.getInstance()
+        private val callBridge = CallCoordinator.getInstance()
 
         // Expose call state from bridge
         val callState: StateFlow<CallState> = callBridge.callState
@@ -59,6 +59,9 @@ class CallViewModel
         private val _isConnecting = MutableStateFlow(false)
         val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
+        // Track duration timer job to prevent multiple concurrent timers
+        private var durationTimerJob: kotlinx.coroutines.Job? = null
+
         init {
             // Track call duration when active
             viewModelScope.launch {
@@ -68,6 +71,8 @@ class CallViewModel
                             startDurationTimer()
                         }
                         is CallState.Ended, CallState.Idle -> {
+                            durationTimerJob?.cancel()
+                            durationTimerJob = null
                             _callDuration.value = 0L
                             _isConnecting.value = false
                         }
@@ -90,13 +95,20 @@ class CallViewModel
         }
 
         private fun startDurationTimer() {
-            viewModelScope.launch {
-                _callDuration.value = 0L
-                while (callState.value is CallState.Active) {
-                    delay(1000)
-                    _callDuration.value += 1
+            // Cancel any existing timer to prevent multiple concurrent timers
+            // This handles ViewModel recreation, multiple collectors, etc.
+            durationTimerJob?.cancel()
+
+            durationTimerJob =
+                viewModelScope.launch {
+                    // Reset duration at start of call
+                    _callDuration.value = 0L
+                    // Increment every second while this job is active
+                    while (true) {
+                        delay(1000)
+                        _callDuration.value += 1
+                    }
                 }
-            }
         }
 
         /**
@@ -139,13 +151,12 @@ class CallViewModel
             }
         }
 
-        private fun formatIdentityHash(hash: String): String {
-            return if (hash.length > 12) {
+        private fun formatIdentityHash(hash: String): String =
+            if (hash.length > 12) {
                 "${hash.take(6)}...${hash.takeLast(6)}"
             } else {
                 hash
             }
-        }
 
         /**
          * Initiate an outgoing call.
@@ -283,8 +294,8 @@ class CallViewModel
         /**
          * Get call status text for UI display.
          */
-        fun getStatusText(state: CallState): String {
-            return when (state) {
+        fun getStatusText(state: CallState): String =
+            when (state) {
                 is CallState.Idle -> ""
                 is CallState.Connecting -> "Connecting..."
                 is CallState.Ringing -> "Ringing..."
@@ -294,5 +305,4 @@ class CallViewModel
                 is CallState.Rejected -> "Call Rejected"
                 is CallState.Ended -> "Call Ended"
             }
-        }
     }

@@ -1,3 +1,6 @@
+// Context, BluetoothManager, BluetoothAdapter, PyObject are framework classes with many methods
+@file:Suppress("NoRelaxedMocks")
+
 package com.lxmf.messenger.reticulum.ble.bridge
 
 import android.bluetooth.BluetoothAdapter
@@ -499,8 +502,8 @@ class KotlinBLEBridgeTest {
         address: String,
         name: String?,
         rssi: Int,
-    ): BleDevice {
-        return BleDevice(
+    ): BleDevice =
+        BleDevice(
             address = address,
             name = name,
             rssi = rssi,
@@ -509,7 +512,6 @@ class KotlinBLEBridgeTest {
             firstSeen = System.currentTimeMillis(),
             lastSeen = System.currentTimeMillis(),
         )
-    }
 
     /**
      * Create a KotlinBLEBridge instance with mocked scanner.

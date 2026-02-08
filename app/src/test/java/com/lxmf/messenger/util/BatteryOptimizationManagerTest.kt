@@ -77,12 +77,14 @@ class BatteryOptimizationManagerTest {
         val exemptionIntent = BatteryOptimizationManager.createRequestExemptionIntent(activity)
 
         // Register an activity that can handle the exemption intent
-        val resolveInfo = ResolveInfo().apply {
-            activityInfo = ActivityInfo().apply {
-                packageName = "com.android.settings"
-                name = "BatteryOptimizationActivity"
+        val resolveInfo =
+            ResolveInfo().apply {
+                activityInfo =
+                    ActivityInfo().apply {
+                        packageName = "com.android.settings"
+                        name = "BatteryOptimizationActivity"
+                    }
             }
-        }
         shadowPackageManager.addResolveInfoForIntent(exemptionIntent, resolveInfo)
 
         // When
@@ -108,12 +110,14 @@ class BatteryOptimizationManagerTest {
         // But register the fallback settings intent
         val shadowPackageManager = shadowOf(activity.packageManager)
         val settingsIntent = BatteryOptimizationManager.createBatterySettingsIntent()
-        val resolveInfo = ResolveInfo().apply {
-            activityInfo = ActivityInfo().apply {
-                packageName = "com.android.settings"
-                name = "BatterySettingsActivity"
+        val resolveInfo =
+            ResolveInfo().apply {
+                activityInfo =
+                    ActivityInfo().apply {
+                        packageName = "com.android.settings"
+                        name = "BatterySettingsActivity"
+                    }
             }
-        }
         shadowPackageManager.addResolveInfoForIntent(settingsIntent, resolveInfo)
 
         // When
@@ -138,22 +142,26 @@ class BatteryOptimizationManagerTest {
 
         // Register direct exemption handler
         val exemptionIntent = BatteryOptimizationManager.createRequestExemptionIntent(activity)
-        val exemptionResolveInfo = ResolveInfo().apply {
-            activityInfo = ActivityInfo().apply {
-                packageName = "com.android.settings"
-                name = "BatteryExemptionDialog"
+        val exemptionResolveInfo =
+            ResolveInfo().apply {
+                activityInfo =
+                    ActivityInfo().apply {
+                        packageName = "com.android.settings"
+                        name = "BatteryExemptionDialog"
+                    }
             }
-        }
         shadowPackageManager.addResolveInfoForIntent(exemptionIntent, exemptionResolveInfo)
 
         // Also register settings handler
         val settingsIntent = BatteryOptimizationManager.createBatterySettingsIntent()
-        val settingsResolveInfo = ResolveInfo().apply {
-            activityInfo = ActivityInfo().apply {
-                packageName = "com.android.settings"
-                name = "BatterySettingsActivity"
+        val settingsResolveInfo =
+            ResolveInfo().apply {
+                activityInfo =
+                    ActivityInfo().apply {
+                        packageName = "com.android.settings"
+                        name = "BatterySettingsActivity"
+                    }
             }
-        }
         shadowPackageManager.addResolveInfoForIntent(settingsIntent, settingsResolveInfo)
 
         // When

@@ -298,12 +298,13 @@ val abiVersionCodes = mapOf("arm64-v8a" to 1, "x86_64" to 2)
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
-            val abiFilter = output.filters.find {
-                it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
-            }
+            val abiFilter =
+                output.filters.find {
+                    it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+                }
             if (abiFilter != null) {
                 output.versionCode.set(
-                    (abiVersionCodes[abiFilter.identifier] ?: 0) * 1000 + versionCodeValue
+                    (abiVersionCodes[abiFilter.identifier] ?: 0) * 1000 + versionCodeValue,
                 )
             }
         }

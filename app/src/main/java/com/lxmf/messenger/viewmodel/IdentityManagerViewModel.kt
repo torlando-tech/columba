@@ -622,72 +622,7 @@ class IdentityManagerViewModel
          * Sideband backup tars use `arcname="Sideband Backup"`, so the identity
          * file is at path `Sideband Backup/primary_identity`.
          */
-        private fun extractIdentityFromTar(inputStream: java.io.InputStream): ByteArray {
-            // Simple tar parser: read 512-byte headers, look for primary_identity
-            val headerBuffer = ByteArray(512)
-            while (true) {
-                val bytesRead = inputStream.readFully(headerBuffer, 0, 512)
-                check(bytesRead == 512) { "Identity not found in backup (unexpected end of archive)" }
-
-                // Check for zero block (end of archive)
-                check(!headerBuffer.all { it == 0.toByte() }) { "Identity not found in backup" }
-
-                // Extract filename from header (bytes 0-99, null-terminated)
-                val nameEnd =
-                    headerBuffer
-                        .indexOf(0)
-                        .let { if (it < 0 || it > 100) 100 else it }
-                val fileName = String(headerBuffer, 0, nameEnd).trim()
-
-                // Extract file size from header (bytes 124-135, octal ASCII)
-                val sizeStr = String(headerBuffer, 124, 11).trim()
-                val fileSize = sizeStr.toLongOrNull(8) ?: 0L
-
-                // Calculate padded size (tar entries are padded to 512-byte boundaries)
-                val paddedSize = ((fileSize + 511) / 512) * 512
-
-                if (fileName.endsWith("primary_identity") || fileName.endsWith("/identity")) {
-                    // Found it - read the file data
-                    val data = ByteArray(fileSize.toInt())
-                    val dataRead = inputStream.readFully(data, 0, fileSize.toInt())
-                    check(dataRead == fileSize.toInt()) { "Truncated identity file in backup" }
-                    return data
-                } else {
-                    // Skip this entry's data
-                    inputStream.skipFully(paddedSize)
-                }
-            }
-        }
-
-        /** Read exactly [len] bytes into [buf] at [off]. Returns bytes read (< len only at EOF). */
-        private fun java.io.InputStream.readFully(
-            buf: ByteArray,
-            off: Int,
-            len: Int,
-        ): Int {
-            var totalRead = 0
-            while (totalRead < len) {
-                val n = read(buf, off + totalRead, len - totalRead)
-                if (n < 0) break
-                totalRead += n
-            }
-            return totalRead
-        }
-
-        /** Skip exactly [n] bytes, looping since InputStream.skip() may skip fewer. */
-        private fun java.io.InputStream.skipFully(n: Long) {
-            var remaining = n
-            while (remaining > 0) {
-                val skipped = skip(remaining)
-                if (skipped == 0L) {
-                    // skip() returned 0 — read and discard a byte to make progress
-                    if (read() < 0) break
-                    remaining--
-                } else {
-                    remaining -= skipped
-                }
-            }
-        }
+        private fun extractIdentityFromTar(inputStream: java.io.InputStream): ByteArray = TarIdentityExtractor.extract(inputStream)
 
         /**
          * Get statistics for an identity (for the delete confirmation dialog).

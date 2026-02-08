@@ -108,6 +108,3 @@ sentry-wizard
 .planning/
 .swarm/
 .mcp.json
-
-# Accidental pip/dev artifacts
-=*

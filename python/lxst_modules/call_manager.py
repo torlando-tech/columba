@@ -306,8 +306,10 @@ class CallManager:
             self._busy = True
 
         try:
+            RNS.log(f"call() entered for {destination_hash_hex[:16]}...", RNS.LOG_DEBUG)
             identity_hash = bytes.fromhex(destination_hash_hex)
             identity = RNS.Identity.recall(identity_hash)
+            RNS.log(f"Identity.recall() returned: {identity is not None}", RNS.LOG_DEBUG)
 
             # If identity not known locally, query the network (same pattern as LXMF messaging)
             if identity is None:
@@ -336,10 +338,13 @@ class CallManager:
                 identity, RNS.Destination.OUT, RNS.Destination.SINGLE,
                 APP_NAME, PRIMITIVE_NAME
             )
+            RNS.log(f"Destination hash: {RNS.prettyhexrep(call_destination.hash)}", RNS.LOG_DEBUG)
 
             # Path discovery with timeout
             outgoing_call_timeout = time.time() + 70  # Match LXST wait_time
-            if not RNS.Transport.has_path(call_destination.hash):
+            has_path = RNS.Transport.has_path(call_destination.hash)
+            RNS.log(f"has_path={has_path}", RNS.LOG_DEBUG)
+            if not has_path:
                 RNS.log(f"No path known, requesting path...", RNS.LOG_DEBUG)
                 RNS.Transport.request_path(call_destination.hash)
                 while not RNS.Transport.has_path(call_destination.hash) and time.time() < outgoing_call_timeout:

@@ -1246,18 +1246,8 @@ class ReticulumServiceBinder(
         try {
             val callManagerInitialized = wrapperManager.setupCallManager()
             if (callManagerInitialized) {
-                Log.i(TAG, "📞 LXST voice call support enabled")
                 registerCallCoordinatorListeners()
-
-                // Initialize Kotlin Telephone (Phase 11 - Kotlin LXST)
-                val telephoneInitialized = wrapperManager.setupTelephone()
-                if (telephoneInitialized) {
-                    Log.i(TAG, "📞 Kotlin Telephone initialized - using Kotlin LXST audio pipeline")
-                } else {
-                    Log.w(TAG, "📞 Kotlin Telephone init failed - falling back to Python LXST")
-                }
-            } else {
-                Log.w(TAG, "📞 LXST voice call support not available")
+                wrapperManager.setupTelephone()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
@@ -1429,18 +1419,8 @@ class ReticulumServiceBinder(
                     """{"success": true}"""
                 }
             } else {
-                Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
-                // Fallback to Python call_manager
-                wrapperManager.withWrapper { wrapper ->
-                    val callManager = wrapper.callAttr("get_call_manager")
-                    if (callManager == null) {
-                        """{"success": false, "error": "CallManager not initialized"}"""
-                    } else {
-                        val profile: Any? = if (profileCode == -1) null else profileCode
-                        val result = callManager.callAttr("call", destHash, profile)
-                        result?.toString() ?: """{"success": false, "error": "No result"}"""
-                    }
-                } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+                Log.e(TAG, "📞 Telephone not initialized — cannot initiate call")
+                """{"success": false, "error": "Telephone not initialized"}"""
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error initiating call", e)
@@ -1480,17 +1460,8 @@ class ReticulumServiceBinder(
                     """{"success": false, "error": "Call not in ringing state"}"""
                 }
             } else {
-                Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
-                wrapperManager.withWrapper { wrapper ->
-                    val callManager = wrapper.callAttr("get_call_manager")
-                    if (callManager == null) {
-                        """{"success": false, "error": "CallManager not initialized"}"""
-                    } else {
-                        val result = callManager.callAttr("answer")
-                        val success = result?.toBoolean() ?: false
-                        """{"success": $success}"""
-                    }
-                } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+                Log.e(TAG, "📞 Telephone not initialized — cannot answer call")
+                """{"success": false, "error": "Telephone not initialized"}"""
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error answering call", e)
@@ -1506,11 +1477,7 @@ class ReticulumServiceBinder(
             if (telephone != null) {
                 telephone.hangup()
             } else {
-                Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
-                wrapperManager.withWrapper { wrapper ->
-                    val callManager = wrapper.callAttr("get_call_manager")
-                    callManager?.callAttr("hangup")
-                }
+                Log.w(TAG, "📞 Telephone not initialized — ignoring hangup")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error hanging up call", e)
@@ -1527,7 +1494,7 @@ class ReticulumServiceBinder(
                 telephone.muteTransmit(muted)
                 Log.i(TAG, "📞 Kotlin Telephone muteTransmit($muted) called")
             } else {
-                Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
+                Log.w(TAG, "📞 Telephone not initialized, mute request ignored")
                 wrapperManager.withWrapper { wrapper ->
                     val callManager = wrapper.callAttr("get_call_manager")
                     if (callManager != null) {

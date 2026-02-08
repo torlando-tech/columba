@@ -196,6 +196,7 @@ class CallManager:
         self._active_call_identity = None
         self._call_start_time = None
         self._call_handler_lock = threading.Lock()
+        self._cancel_event = threading.Event()
         self._last_announce = 0  # Epoch 0 → first announce fires immediately
 
     def initialize(self, kotlin_call_bridge=None, kotlin_network_bridge=None):
@@ -306,6 +307,7 @@ class CallManager:
             self._busy = True
 
         try:
+            self._cancel_event.clear()
             RNS.log(f"call() entered for {destination_hash_hex[:16]}...", RNS.LOG_DEBUG)
             identity_hash = bytes.fromhex(destination_hash_hex)
             identity = RNS.Identity.recall(identity_hash)
@@ -321,6 +323,8 @@ class CallManager:
 
                 # Wait up to 5 seconds for path response to resolve identity
                 for attempt in range(10):
+                    if self._cancel_event.is_set():
+                        return {"success": False, "error": "Call cancelled"}
                     time.sleep(0.5)
                     identity = RNS.Identity.recall(identity_hash)
                     if identity:
@@ -348,6 +352,8 @@ class CallManager:
                 RNS.log(f"No path known, requesting path...", RNS.LOG_DEBUG)
                 RNS.Transport.request_path(call_destination.hash)
                 while not RNS.Transport.has_path(call_destination.hash) and time.time() < outgoing_call_timeout:
+                    if self._cancel_event.is_set():
+                        return {"success": False, "error": "Call cancelled"}
                     time.sleep(0.2)
 
             if not RNS.Transport.has_path(call_destination.hash):
@@ -406,6 +412,7 @@ class CallManager:
     def hangup(self):
         """End the current call."""
         RNS.log("hangup() called", RNS.LOG_INFO)
+        self._cancel_event.set()
 
         with self._call_handler_lock:
             if self.active_call is not None:

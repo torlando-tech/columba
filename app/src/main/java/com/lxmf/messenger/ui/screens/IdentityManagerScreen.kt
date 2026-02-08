@@ -22,14 +22,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -57,13 +59,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -75,11 +79,16 @@ import java.util.Locale
 
 /**
  * Identity Manager screen for creating, managing, and switching identities.
+ *
+ * @param prefilledBase32Key Optional Base32-encoded identity key from a share intent
+ *        (e.g., Sideband "Send key to other app"). When provided, the paste key dialog
+ *        is shown immediately with the key pre-populated.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IdentityManagerScreen(
     onNavigateBack: () -> Unit,
+    prefilledBase32Key: String? = null,
     viewModel: IdentityManagerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -94,8 +103,14 @@ fun IdentityManagerScreen(
     var showRenameDialog by remember { mutableStateOf<LocalIdentityEntity?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var selectedImportUri by remember { mutableStateOf<Uri?>(null) }
+    var showPasteKeyDialog by remember { mutableStateOf(false) }
+    var pasteKeyInitialValue by remember { mutableStateOf("") }
+    var showExportTextDialog by remember { mutableStateOf<String?>(null) }
+    var showImportTypeDialog by remember { mutableStateOf(false) }
+    var showBackupImportDialog by remember { mutableStateOf(false) }
+    var selectedBackupUri by remember { mutableStateOf<Uri?>(null) }
 
-    // File picker for import
+    // File picker for raw identity import
     val importLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
@@ -105,6 +120,25 @@ fun IdentityManagerScreen(
                 showImportDialog = true
             }
         }
+
+    // File picker for Sideband backup import
+    val backupImportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let {
+                selectedBackupUri = it
+                showBackupImportDialog = true
+            }
+        }
+
+    // Auto-show paste dialog when navigated with a pre-filled key
+    LaunchedEffect(prefilledBase32Key) {
+        if (prefilledBase32Key != null) {
+            pasteKeyInitialValue = prefilledBase32Key
+            showPasteKeyDialog = true
+        }
+    }
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -122,10 +156,9 @@ fun IdentityManagerScreen(
             }
             is IdentityManagerUiState.RequiresRestart -> {
                 // No longer used - identity switch now restarts service without app restart
-                // Kept for backwards compatibility, but should not be reached
             }
             is IdentityManagerUiState.ExportReady -> {
-                // Launch share sheet
+                // Launch share sheet for binary export
                 val shareIntent =
                     Intent(Intent.ACTION_SEND).apply {
                         type = "application/octet-stream"
@@ -133,6 +166,11 @@ fun IdentityManagerScreen(
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                 context.startActivity(Intent.createChooser(shareIntent, "Export Identity"))
+                viewModel.resetUiState()
+            }
+            is IdentityManagerUiState.ExportTextReady -> {
+                // Show the Base32 text export dialog
+                showExportTextDialog = state.base32String
                 viewModel.resetUiState()
             }
             else -> {}
@@ -149,8 +187,15 @@ fun IdentityManagerScreen(
                     }
                 },
                 actions = {
+                    // Paste key button
+                    IconButton(onClick = {
+                        pasteKeyInitialValue = ""
+                        showPasteKeyDialog = true
+                    }) {
+                        Icon(Icons.Default.ContentPaste, "Paste key")
+                    }
                     // Import identity button
-                    IconButton(onClick = { importLauncher.launch("*/*") }) {
+                    IconButton(onClick = { showImportTypeDialog = true }) {
                         Icon(Icons.Default.Download, "Import identity")
                     }
                 },
@@ -174,7 +219,11 @@ fun IdentityManagerScreen(
             if (identities.isEmpty()) {
                 EmptyState(
                     onCreateClick = { showCreateDialog = true },
-                    onImportClick = { importLauncher.launch("*/*") },
+                    onImportClick = { showImportTypeDialog = true },
+                    onPasteKeyClick = {
+                        pasteKeyInitialValue = ""
+                        showPasteKeyDialog = true
+                    },
                 )
             } else {
                 IdentityList(
@@ -182,7 +231,10 @@ fun IdentityManagerScreen(
                     activeIdentity = activeIdentity,
                     onSwitchClick = { showSwitchDialog = it },
                     onRenameClick = { showRenameDialog = it },
-                    onExportClick = { viewModel.exportIdentity(it.identityHash, it.filePath) },
+                    onExportFileClick = { viewModel.exportIdentity(it.identityHash, it.filePath) },
+                    onExportTextClick = {
+                        viewModel.exportIdentityAsText(it.identityHash, it.filePath)
+                    },
                     onDeleteClick = { showDeleteDialog = it },
                 )
             }
@@ -267,6 +319,65 @@ fun IdentityManagerScreen(
             },
         )
     }
+
+    if (showPasteKeyDialog) {
+        PasteKeyDialog(
+            initialKey = pasteKeyInitialValue,
+            onDismiss = {
+                showPasteKeyDialog = false
+                pasteKeyInitialValue = ""
+            },
+            onImport = { base32Text, displayName ->
+                viewModel.importIdentityFromBase32(base32Text, displayName)
+                showPasteKeyDialog = false
+                pasteKeyInitialValue = ""
+            },
+        )
+    }
+
+    showExportTextDialog?.let { base32String ->
+        ExportTextDialog(
+            base32String = base32String,
+            onDismiss = { showExportTextDialog = null },
+        )
+    }
+
+    if (showImportTypeDialog) {
+        ImportTypeDialog(
+            onDismiss = { showImportTypeDialog = false },
+            onImportFromFile = {
+                showImportTypeDialog = false
+                importLauncher.launch("*/*")
+            },
+            onImportFromBackup = {
+                showImportTypeDialog = false
+                backupImportLauncher.launch("*/*")
+            },
+            onPasteKey = {
+                showImportTypeDialog = false
+                pasteKeyInitialValue = ""
+                showPasteKeyDialog = true
+            },
+        )
+    }
+
+    if (showBackupImportDialog && selectedBackupUri != null) {
+        ImportIdentityDialog(
+            title = "Import from Sideband Backup",
+            description = "Enter a display name for the identity extracted from the Sideband backup.",
+            onDismiss = {
+                showBackupImportDialog = false
+                selectedBackupUri = null
+            },
+            onImport = { displayName ->
+                selectedBackupUri?.let { uri ->
+                    viewModel.importIdentityFromBackup(uri, displayName)
+                }
+                showBackupImportDialog = false
+                selectedBackupUri = null
+            },
+        )
+    }
 }
 
 /**
@@ -306,6 +417,7 @@ private fun ApplyingChangesDialog(message: String) {
 private fun EmptyState(
     onCreateClick: () -> Unit,
     onImportClick: () -> Unit,
+    onPasteKeyClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -342,6 +454,11 @@ private fun EmptyState(
                 Spacer(Modifier.width(8.dp))
                 Text("Import from File")
             }
+            OutlinedButton(onClick = onPasteKeyClick) {
+                Icon(Icons.Default.ContentPaste, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Paste Key")
+            }
         }
     }
 }
@@ -352,7 +469,8 @@ private fun IdentityList(
     activeIdentity: LocalIdentityEntity?,
     onSwitchClick: (LocalIdentityEntity) -> Unit,
     onRenameClick: (LocalIdentityEntity) -> Unit,
-    onExportClick: (LocalIdentityEntity) -> Unit,
+    onExportFileClick: (LocalIdentityEntity) -> Unit,
+    onExportTextClick: (LocalIdentityEntity) -> Unit,
     onDeleteClick: (LocalIdentityEntity) -> Unit,
 ) {
     LazyColumn(
@@ -372,7 +490,8 @@ private fun IdentityList(
                 isActive = identity.identityHash == activeIdentity?.identityHash,
                 onSwitchClick = { onSwitchClick(identity) },
                 onRenameClick = { onRenameClick(identity) },
-                onExportClick = { onExportClick(identity) },
+                onExportFileClick = { onExportFileClick(identity) },
+                onExportTextClick = { onExportTextClick(identity) },
                 onDeleteClick = { onDeleteClick(identity) },
             )
         }
@@ -386,7 +505,8 @@ private fun IdentityCard(
     isActive: Boolean,
     onSwitchClick: () -> Unit,
     onRenameClick: () -> Unit,
-    onExportClick: () -> Unit,
+    onExportFileClick: () -> Unit,
+    onExportTextClick: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -469,12 +589,20 @@ private fun IdentityCard(
                         leadingIcon = { Icon(Icons.Default.Edit, null) },
                     )
                     DropdownMenuItem(
-                        text = { Text("Export") },
+                        text = { Text("Export as File") },
                         onClick = {
                             showMenu = false
-                            onExportClick()
+                            onExportFileClick()
                         },
                         leadingIcon = { Icon(Icons.Default.Upload, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy Key as Text") },
+                        onClick = {
+                            showMenu = false
+                            onExportTextClick()
+                        },
+                        leadingIcon = { Icon(Icons.Default.TextSnippet, null) },
                     )
                     if (!isActive) {
                         DropdownMenuItem(
@@ -533,6 +661,8 @@ private fun CreateIdentityDialog(
 
 @Composable
 private fun ImportIdentityDialog(
+    title: String = "Import Identity",
+    description: String = "This will restore the identity from the backup file you selected.",
     onDismiss: () -> Unit,
     onImport: (String) -> Unit,
 ) {
@@ -541,12 +671,12 @@ private fun ImportIdentityDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.Download, null) },
-        title = { Text("Import Identity") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Enter a display name for the imported identity.")
                 Text(
-                    "This will restore the identity from the backup file you selected.",
+                    description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -568,6 +698,202 @@ private fun ImportIdentityDialog(
                 Text("IMPORT")
             }
         },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL")
+            }
+        },
+    )
+}
+
+/**
+ * Dialog for importing an identity by pasting a Base32-encoded key.
+ *
+ * Used for:
+ * - Manual paste from clipboard
+ * - Auto-populated from Sideband share intent
+ */
+@Composable
+private fun PasteKeyDialog(
+    initialKey: String,
+    onDismiss: () -> Unit,
+    onImport: (base32Text: String, displayName: String) -> Unit,
+) {
+    var keyText by remember { mutableStateOf(initialKey) }
+    var displayName by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.ContentPaste, null) },
+        title = { Text("Import Key from Text") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Paste a Base32-encoded identity key (e.g., from Sideband).")
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it },
+                    label = { Text("Base32 Key") },
+                    placeholder = { Text("Paste identity key here...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 4,
+                    textStyle =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                )
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    label = { Text("Display Name") },
+                    placeholder = { Text("e.g., Sideband Identity") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onImport(keyText, displayName) },
+                enabled = keyText.isNotBlank() && displayName.isNotBlank(),
+            ) {
+                Text("IMPORT")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL")
+            }
+        },
+    )
+}
+
+/**
+ * Dialog showing a Base32-encoded identity key with copy and share options.
+ */
+@Composable
+private fun ExportTextDialog(
+    base32String: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Key, null) },
+        title = { Text("Identity Key") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "This key can be imported in Sideband or another Columba instance.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = base32String,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 4,
+                    textStyle =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(base32String))
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Copy")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val shareIntent =
+                                Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, base32String)
+                                }
+                            context.startActivity(
+                                Intent.createChooser(shareIntent, "Share Identity Key"),
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Share")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("DONE")
+            }
+        },
+    )
+}
+
+/**
+ * Dialog to choose import type: raw identity file, Sideband backup, or paste key.
+ */
+@Composable
+private fun ImportTypeDialog(
+    onDismiss: () -> Unit,
+    onImportFromFile: () -> Unit,
+    onImportFromBackup: () -> Unit,
+    onPasteKey: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Download, null) },
+        title = { Text("Import Identity") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Choose how to import your identity:")
+                Button(
+                    onClick = onImportFromFile,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("From Identity File")
+                }
+                Button(
+                    onClick = onImportFromBackup,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("From Sideband Backup")
+                }
+                Button(
+                    onClick = onPasteKey,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Paste Base32 Key")
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("CANCEL")
@@ -621,12 +947,12 @@ private fun DeleteIdentityDialog(
         title = { Text("Delete Identity?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("⚠️ This action cannot be undone", style = MaterialTheme.typography.titleSmall)
+                Text("This action cannot be undone", style = MaterialTheme.typography.titleSmall)
                 Text("Deleting \"${identity.displayName}\" will permanently remove:")
-                Text("• Identity keys")
-                Text("• All conversations")
-                Text("• All contacts")
-                Text("• All messages")
+                Text("- Identity keys")
+                Text("- All conversations")
+                Text("- All contacts")
+                Text("- All messages")
                 Spacer(Modifier.height(8.dp))
                 Text("Export this identity first if you want to back it up.", style = MaterialTheme.typography.bodySmall)
             }

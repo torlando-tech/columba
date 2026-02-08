@@ -2,7 +2,9 @@ package com.lxmf.messenger.reticulum.call.telephone
 
 import android.util.Log
 import com.chaquo.python.PyObject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tech.torlando.lxst.core.PacketRouter
 import tech.torlando.lxst.telephone.NetworkTransport
@@ -23,9 +25,9 @@ import tech.torlando.lxst.telephone.NetworkTransport
  */
 class PythonNetworkTransport(
     private val bridge: PacketRouter,
-    private val callManager: PyObject
+    private val callManager: PyObject,
+    private val scope: CoroutineScope,
 ) : NetworkTransport {
-
     companion object {
         private const val TAG = "Columba:PyNetTransport"
     }
@@ -47,8 +49,8 @@ class PythonNetworkTransport(
      * @param destinationHash 16-byte Reticulum destination hash
      * @return true if call initiated successfully, false otherwise
      */
-    override suspend fun establishLink(destinationHash: ByteArray): Boolean {
-        return withContext(Dispatchers.IO) {
+    override suspend fun establishLink(destinationHash: ByteArray): Boolean =
+        withContext(Dispatchers.IO) {
             try {
                 val destinationHashHex = destinationHash.toHexString()
                 Log.i(TAG, "Establishing link to ${destinationHashHex.take(16)}...")
@@ -60,21 +62,23 @@ class PythonNetworkTransport(
                 // Parse Python dict result using asMap() (Chaquopy pattern)
                 @Suppress("UNCHECKED_CAST")
                 val resultDict = result?.asMap() as? Map<PyObject, PyObject>
-                val success = resultDict
-                    ?.entries
-                    ?.find { it.key.toString() == "success" }
-                    ?.value
-                    ?.toBoolean() ?: false
+                val success =
+                    resultDict
+                        ?.entries
+                        ?.find { it.key.toString() == "success" }
+                        ?.value
+                        ?.toBoolean() ?: false
 
                 if (success) {
                     linkActive = true
                     Log.i(TAG, "Call initiated to ${destinationHashHex.take(16)}...")
                 } else {
-                    val error = resultDict
-                        ?.entries
-                        ?.find { it.key.toString() == "error" }
-                        ?.value
-                        ?.toString() ?: "Unknown error"
+                    val error =
+                        resultDict
+                            ?.entries
+                            ?.find { it.key.toString() == "error" }
+                            ?.value
+                            ?.toString() ?: "Unknown error"
                     Log.w(TAG, "Call initiation failed: $error")
                 }
 
@@ -84,7 +88,6 @@ class PythonNetworkTransport(
                 false
             }
         }
-    }
 
     /**
      * Tear down the active link.
@@ -92,19 +95,18 @@ class PythonNetworkTransport(
      * Delegates to Python call_manager.hangup().
      * Safe to call if no link active (Python handles gracefully).
      *
-     * Non-blocking: launches on Dispatchers.IO via bridge pattern.
+     * Non-blocking: launches on Dispatchers.IO to avoid blocking Binder thread on GIL.
      */
     override fun teardownLink() {
         Log.i(TAG, "Tearing down link")
         linkActive = false
 
-        // Use runCatching to handle any Python errors silently
-        runCatching {
-            // Note: This is synchronous but call_manager.hangup() is fast
-            // and we're typically on a coroutine scope already
-            callManager.callAttr("hangup")
-        }.onFailure { e ->
-            Log.e(TAG, "Error tearing down link", e)
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                callManager.callAttr("hangup")
+            }.onFailure { e ->
+                Log.e(TAG, "Error tearing down link", e)
+            }
         }
     }
 
@@ -177,7 +179,6 @@ class PythonNetworkTransport(
     internal fun markLinkInactive() {
         linkActive = false
     }
-
 }
 
 /**
@@ -185,6 +186,4 @@ class PythonNetworkTransport(
  *
  * Used for destination hash conversion to Python API format.
  */
-private fun ByteArray.toHexString(): String {
-    return joinToString("") { "%02x".format(it) }
-}
+private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }

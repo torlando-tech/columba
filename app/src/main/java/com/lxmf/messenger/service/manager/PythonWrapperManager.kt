@@ -8,12 +8,6 @@ import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.reticulum.call.telephone.PythonNetworkTransport
-import tech.torlando.lxst.core.AudioPacketHandler
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.AudioDevice
-import tech.torlando.lxst.core.PacketRouter
-import tech.torlando.lxst.core.CallController
-import tech.torlando.lxst.telephone.Telephone
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +17,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import tech.torlando.lxst.core.AudioDevice
+import tech.torlando.lxst.core.AudioPacketHandler
+import tech.torlando.lxst.core.CallController
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.PacketRouter
+import tech.torlando.lxst.telephone.Telephone
 
 /**
  * Manages the Python/Chaquopy Reticulum wrapper lifecycle.
@@ -422,30 +422,43 @@ class PythonWrapperManager(
                         // Register AudioPacketHandler for Kotlin→Python audio/signal packets.
                         // Without this, Packetizer encodes audio but PacketRouter's consumer
                         // loop silently drops all packets (packetHandler is null).
-                        netBridge.setPacketHandler(object : AudioPacketHandler {
-                            override fun receiveAudioPacket(packet: ByteArray) {
-                                cm.callAttr("receive_audio_packet", packet)?.close()
-                            }
-                            override fun receiveSignal(signal: Int) {
-                                cm.callAttr("receive_signal", signal)?.close()
-                            }
-                        })
+                        netBridge.setPacketHandler(
+                            object : AudioPacketHandler {
+                                override fun receiveAudioPacket(packet: ByteArray) {
+                                    cm.callAttr("receive_audio_packet", packet)?.close()
+                                }
+
+                                override fun receiveSignal(signal: Int) {
+                                    cm.callAttr("receive_signal", signal)?.close()
+                                }
+                            },
+                        )
 
                         // Register CallController wrapper for CallCoordinator.
                         // Kotlin wraps the PyObject so :lxst has no Chaquopy dependency.
-                        callBridge.setCallManager(object : CallController {
-                            override fun call(destinationHash: String) {
-                                cm.callAttr("call", destinationHash)
-                            }
-                            override fun answer() { cm.callAttr("answer") }
-                            override fun hangup() { cm.callAttr("hangup") }
-                            override fun muteMicrophone(muted: Boolean) {
-                                cm.callAttr("mute_microphone", muted)
-                            }
-                            override fun setSpeaker(enabled: Boolean) {
-                                cm.callAttr("set_speaker", enabled)
-                            }
-                        })
+                        callBridge.setCallManager(
+                            object : CallController {
+                                override fun call(destinationHash: String) {
+                                    cm.callAttr("call", destinationHash)
+                                }
+
+                                override fun answer() {
+                                    cm.callAttr("answer")
+                                }
+
+                                override fun hangup() {
+                                    cm.callAttr("hangup")
+                                }
+
+                                override fun muteMicrophone(muted: Boolean) {
+                                    cm.callAttr("mute_microphone", muted)
+                                }
+
+                                override fun setSpeaker(enabled: Boolean) {
+                                    cm.callAttr("set_speaker", enabled)
+                                }
+                            },
+                        )
                     }
 
                     true
@@ -476,31 +489,34 @@ class PythonWrapperManager(
      * @return true if Telephone was initialized successfully
      */
     fun setupTelephone(): Boolean {
-        val callManager = callManagerPyObject ?: run {
-            Log.e(TAG, "Cannot setup Telephone: call_manager not initialized")
-            return false
-        }
+        val callManager =
+            callManagerPyObject ?: run {
+                Log.e(TAG, "Cannot setup Telephone: call_manager not initialized")
+                return false
+            }
 
-        val netBridge = networkPacketBridge ?: run {
-            Log.e(TAG, "Cannot setup Telephone: PacketRouter not initialized")
-            return false
-        }
+        val netBridge =
+            networkPacketBridge ?: run {
+                Log.e(TAG, "Cannot setup Telephone: PacketRouter not initialized")
+                return false
+            }
 
         return try {
             val audioBridge = AudioDevice.getInstance(context)
             val callBridge = CallCoordinator.getInstance()
 
             // Create Python network transport
-            val transport = PythonNetworkTransport(netBridge, callManager)
+            val transport = PythonNetworkTransport(netBridge, callManager, scope)
 
             // Create Telephone
-            telephone = Telephone(
-                context = context,
-                networkTransport = transport,
-                audioBridge = audioBridge,
-                networkPacketBridge = netBridge,
-                callBridge = callBridge
-            )
+            telephone =
+                Telephone(
+                    context = context,
+                    networkTransport = transport,
+                    audioBridge = audioBridge,
+                    networkPacketBridge = netBridge,
+                    callBridge = callBridge,
+                )
 
             // Set up Python -> Kotlin callback for state events
             try {

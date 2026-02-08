@@ -25,15 +25,13 @@ internal object TarIdentityExtractor {
             check(!headerBuffer.all { it == 0.toByte() }) { "Identity not found in backup" }
 
             // Extract filename from header (bytes 0-99, null-terminated)
-            val nameEnd =
-                headerBuffer
-                    .indexOf(0)
-                    .let { if (it < 0 || it > 100) 100 else it }
+            val nameEnd = headerBuffer.indexOfFirst(0, 100) { it == 0.toByte() }
             val fileName = String(headerBuffer, 0, nameEnd).trim()
 
             // Extract file size from header (bytes 124-135, octal ASCII)
             val sizeStr = String(headerBuffer, 124, 11).trim()
-            val fileSize = sizeStr.toLongOrNull(8) ?: 0L
+            val fileSize = sizeStr.toLongOrNull(8)
+            check(fileSize != null && fileSize >= 0) { "Malformed tar entry size: \"$sizeStr\"" }
 
             // Calculate padded size (tar entries are padded to 512-byte boundaries)
             val paddedSize = ((fileSize + 511) / 512) * 512
@@ -76,5 +74,17 @@ internal object TarIdentityExtractor {
                 remaining -= skipped
             }
         }
+    }
+
+    /** Find first index where [predicate] is true, searching only bytes 0 until [limit]. */
+    private fun ByteArray.indexOfFirst(
+        from: Int,
+        limit: Int,
+        predicate: (Byte) -> Boolean,
+    ): Int {
+        for (i in from until limit) {
+            if (predicate(this[i])) return i
+        }
+        return limit
     }
 }

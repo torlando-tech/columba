@@ -128,6 +128,35 @@ class TarIdentityExtractorTest {
         TarIdentityExtractor.extract(ByteArrayInputStream(header))
     }
 
+    @Test(expected = IllegalStateException::class)
+    fun `extract throws on malformed octal size`() {
+        val header = ByteArray(512)
+        "not_a_file".toByteArray().copyInto(header)
+        // Write non-octal garbage into size field (bytes 124-135)
+        "ZZZZZZZZZZZ".toByteArray(Charsets.US_ASCII).copyInto(header, 124)
+        header[156] = '0'.code.toByte()
+        // Append end-of-archive so it doesn't loop forever
+        val tar = header + ByteArray(1024)
+        TarIdentityExtractor.extract(ByteArrayInputStream(tar))
+    }
+
+    @Test
+    fun `extract parses name correctly when zero byte appears in later header field`() {
+        // Craft a header where a zero byte exists at position 50 (inside the
+        // name field) AND at position 10 in some other field. The name field
+        // is 0-99 so only the null within 0-99 should terminate the name.
+        val identityData = ByteArray(64) { it.toByte() }
+        val header = makeTarHeader("Sideband Backup/primary_identity", 64)
+        // Verify name is parsed correctly even though other header fields
+        // (e.g., bytes 100-511) contain zeros — the bounded search should
+        // only look at bytes 0-99
+        val result =
+            TarIdentityExtractor.extract(
+                ByteArrayInputStream(header + identityData + ByteArray(512 - 64) + ByteArray(1024)),
+            )
+        assertArrayEquals(identityData, result)
+    }
+
     // -- readFully tests --
 
     @Test

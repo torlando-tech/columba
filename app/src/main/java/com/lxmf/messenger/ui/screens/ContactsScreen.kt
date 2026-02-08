@@ -84,7 +84,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,6 +100,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
@@ -113,6 +114,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import kotlinx.coroutines.launch
 
 private const val TAG = "ContactsScreen"
@@ -131,6 +133,10 @@ fun ContactsScreen(
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
+    val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+    val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsState()
+    val effectivePendingSharedText = sharedTextFromViewModel?.text
+
     val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -174,6 +180,7 @@ fun ContactsScreen(
                 "all=${groups.all.size}, isLoading=${contactsState.isLoading}",
         )
     }
+
     var showAddContactSheet by remember { mutableStateOf(false) }
     var showManualEntryDialog by remember { mutableStateOf(false) }
 
@@ -542,7 +549,12 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
+                                                if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    onStartChat(contact.destinationHash, contact.displayName)
+                                                } else {
+                                                    onContactClick(contact.destinationHash, contact.displayName)
+                                                }
                                             }
                                         },
                                         onPinToggle = { viewModel.togglePin(contact.destinationHash) },
@@ -582,7 +594,12 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                onContactClick(contact.destinationHash, contact.displayName)
+                                                if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    onStartChat(contact.destinationHash, contact.displayName)
+                                                } else {
+                                                    onContactClick(contact.destinationHash, contact.displayName)
+                                                }
                                             }
                                         },
                                         onPinToggle = { viewModel.togglePin(contact.destinationHash) },
@@ -605,7 +622,12 @@ fun ContactsScreen(
                 // Network tab - show announces/discovered nodes
                 AnnounceStreamContent(
                     onPeerClick = { destinationHash, _ -> onViewPeerDetails(destinationHash) },
-                    onStartChat = onStartChat,
+                    onStartChat = { destinationHash, displayName ->
+                        if (!effectivePendingSharedText.isNullOrBlank()) {
+                            sharedTextViewModel.assignToDestination(destinationHash)
+                        }
+                        onStartChat(destinationHash, displayName)
+                    },
                     modifier =
                         Modifier
                             .fillMaxSize()

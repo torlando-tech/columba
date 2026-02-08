@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -142,6 +143,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
@@ -177,6 +179,7 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -300,10 +303,37 @@ fun MessagingScreen(
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+
     var messageText by remember { mutableStateOf("") }
 
-    // Image selection state
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
+    val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
+
+    LaunchedEffect(destinationHash, sharedTextFromViewModel) {
+        val pending = sharedTextViewModel.consumeForDestination(destinationHash)
+        if (!pending.isNullOrBlank()) {
+            val trimmed = pending.trim()
+            messageText =
+                if (messageText.isBlank()) {
+                    trimmed
+                } else {
+                    val alreadyPresentAsExactLine =
+                        messageText
+                            .lineSequence()
+                            .any { it.trim() == trimmed }
+
+                    if (alreadyPresentAsExactLine) {
+                        messageText
+                    } else {
+                        messageText.trimEnd() + "\n" + trimmed
+                    }
+                }
+        }
+    }
+
+    // Image selection state
     val selectedImageData by viewModel.selectedImageData.collectAsStateWithLifecycle()
     val selectedImageFormat by viewModel.selectedImageFormat.collectAsStateWithLifecycle()
     val selectedImageIsAnimated by viewModel.selectedImageIsAnimated.collectAsStateWithLifecycle()

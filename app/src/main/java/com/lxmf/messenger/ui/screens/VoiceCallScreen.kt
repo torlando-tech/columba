@@ -46,8 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.viewmodel.CallViewModel
+import tech.torlando.lxst.core.CallState
 
 /**
  * Voice call screen for active/outgoing calls.
@@ -101,9 +101,9 @@ fun VoiceCallScreen(
         android.util.Log.w("VoiceCallScreen", "📞 VoiceCallScreen opened! destHash=${destinationHash.take(16)}..., autoAnswer=$autoAnswer")
         android.util.Log.w("VoiceCallScreen", "📞 Current callState=$callState, hasAudioPermission=$hasAudioPermission")
 
-        // Auto-answer incoming call from notification
-        if (autoAnswer && (callState is CallState.Incoming || callState is CallState.Ringing)) {
-            android.util.Log.w("VoiceCallScreen", "📞 Auto-answering incoming call...")
+        // Auto-answer incoming call from notification or IncomingCallScreen
+        if (autoAnswer && callState is CallState.Incoming) {
+            android.util.Log.w("VoiceCallScreen", "📞 Auto-answering incoming call (callState=$callState)...")
             viewModel.answerCall()
             return@LaunchedEffect
         }
@@ -321,10 +321,9 @@ private fun CallControlButton(
     }
 }
 
-private fun formatHash(hash: String): String {
-    return if (hash.length > 12) {
+private fun formatHash(hash: String): String =
+    if (hash.length > 12) {
         "${hash.take(6)}...${hash.takeLast(6)}"
     } else {
         hash
     }
-}

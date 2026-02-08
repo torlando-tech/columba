@@ -65,8 +65,8 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
@@ -762,7 +762,7 @@ fun ColumbaNavigation(
     }
 
     // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
-    val callBridge = remember { CallBridge.getInstance() }
+    val callBridge = remember { CallCoordinator.getInstance() }
     val callState by callBridge.callState.collectAsState()
 
     LaunchedEffect(callState) {
@@ -777,6 +777,8 @@ fun ColumbaNavigation(
                         currentRoute?.startsWith("voice_call/") == true
                 if (!isOnCallScreen && !isAnsweringCall) {
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
+                    // Dismiss the notification — the user is now looking at the call screen
+                    CallNotificationHelper(context).cancelIncomingCallNotification()
                     navController.navigate("incoming_call/$encodedHash")
                 } else {
                     Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")

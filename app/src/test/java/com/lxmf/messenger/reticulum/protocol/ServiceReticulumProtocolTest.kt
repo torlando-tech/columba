@@ -1110,36 +1110,117 @@ class ServiceReticulumProtocolTest {
         assertEquals(0xfd.toByte(), result.sourceHash[2])
     }
 
-    // ========== setConversationActive() Tests ==========
-    // Documents fire-and-forget behavior after COLUMBA-1E fix.
-    // Note: Full service binding tests are in instrumented tests.
-    // The AIDL 'oneway' modifier makes this call non-blocking at Binder level.
+    // ===========================================
+    // Oneway AIDL Fire-and-Forget Method Tests
+    // ===========================================
+    // These methods are declared as 'oneway' in the AIDL interface,
+    // meaning they are fire-and-forget and must handle null service gracefully
+    // without throwing exceptions.
 
     @Test
-    fun `setConversationActive handles null service gracefully - COLUMBA-1E`() {
-        // Arrange: Service not bound (protocol created but not connected)
-        // This is the state during app startup or after service disconnect
+    fun `hangupCall handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.hangupCall() }
 
-        // Act & Assert: Should not throw when service is null
-        // This is critical for ViewModel.onCleared() - must not crash during cleanup
-        val result = runCatching { protocol.setConversationActive(false) }
+            assertTrue(
+                "hangupCall must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallMuted handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallMuted(true) }
+
+            assertTrue(
+                "setCallMuted must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallMuted with false handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallMuted(false) }
+
+            assertTrue(
+                "setCallMuted(false) must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallSpeaker handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallSpeaker(true) }
+
+            assertTrue(
+                "setCallSpeaker must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setCallSpeaker with false handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            val result = runCatching { protocol.setCallSpeaker(false) }
+
+            assertTrue(
+                "setCallSpeaker(false) must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `reconnectRNodeInterface handles null service gracefully`() =
+        runTest {
+            // Service not bound - should not throw
+            // Note: reconnectRNodeInterface waits for service binding with a 10-second timeout
+            // when service is null, so it will just return after the internal timeout logic
+            val result = runCatching { protocol.reconnectRNodeInterface() }
+
+            assertTrue(
+                "reconnectRNodeInterface must handle null service gracefully (oneway AIDL method)",
+                result.isSuccess,
+            )
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.setIncomingMessageSizeLimit(1024) }
 
         assertTrue(
-            "setConversationActive must handle null service gracefully. " +
-                "Called during ViewModel.onCleared() which runs on main thread. " +
-                "See: COLUMBA-1E (ANR fix - made AIDL method 'oneway')",
-            result.isSuccess
+            "setIncomingMessageSizeLimit must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
         )
     }
 
     @Test
-    fun `setConversationActive with true handles null service gracefully`() {
-        // Act & Assert: Both true and false values should be safe with null service
-        val result = runCatching { protocol.setConversationActive(true) }
+    fun `setIncomingMessageSizeLimit with zero handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.setIncomingMessageSizeLimit(0) }
 
         assertTrue(
-            "setConversationActive(true) must handle null service gracefully",
-            result.isSuccess
+            "setIncomingMessageSizeLimit(0) must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
+        )
+    }
+
+    @Test
+    fun `forceExit handles null service gracefully`() {
+        // Service not bound - should not throw
+        val result = runCatching { protocol.forceExit() }
+
+        assertTrue(
+            "forceExit must handle null service gracefully (oneway AIDL method)",
+            result.isSuccess,
         )
     }
 }

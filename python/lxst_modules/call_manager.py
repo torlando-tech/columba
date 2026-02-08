@@ -179,6 +179,11 @@ class CallManager:
     All audio processing happens in Kotlin; Python is the network layer.
     """
 
+    # Announce intervals (match reference LXST Telephony implementation)
+    JOB_INTERVAL = 5            # Check every 5 seconds
+    ANNOUNCE_INTERVAL = 60*60*3  # Re-announce every 3 hours
+    ANNOUNCE_INTERVAL_MIN = 60*5 # Minimum 5 minutes between announces
+
     def __init__(self, identity):
         self.identity = identity
         self.active_call = None  # RNS.Link instance
@@ -191,6 +196,7 @@ class CallManager:
         self._active_call_identity = None
         self._call_start_time = None
         self._call_handler_lock = threading.Lock()
+        self._last_announce = 0  # Epoch 0 → first announce fires immediately
 
     def initialize(self, kotlin_call_bridge=None, kotlin_network_bridge=None):
         """Initialize Reticulum destination for incoming calls.
@@ -215,6 +221,15 @@ class CallManager:
             self.destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
             self.destination.set_link_established_callback(self.__incoming_link_established)
 
+            # Announce destination so remote peers can discover our path
+            # (required for has_path() / request_path() to resolve on caller side)
+            self.destination.announce()
+            self._last_announce = time.time()
+            RNS.log(f"CallManager announced on {RNS.prettyhexrep(self.destination.hash)}", RNS.LOG_DEBUG)
+
+            # Start background jobs thread for periodic re-announcing
+            threading.Thread(target=self.__jobs, daemon=True).start()
+
             self._initialized = True
             RNS.log("CallManager initialized with raw Reticulum transport", RNS.LOG_INFO)
 
@@ -231,8 +246,28 @@ class CallManager:
             except Exception as e:
                 RNS.log(f"Error tearing down active call: {e}", RNS.LOG_ERROR)
             self.active_call = None
+        # Setting destination to None stops the __jobs thread loop
+        self.destination = None
         self._initialized = False
         RNS.log("CallManager torn down", RNS.LOG_INFO)
+
+    def __jobs(self):
+        """Background thread for periodic re-announcing.
+
+        Matches reference LXST Telephony.__jobs pattern:
+        - Runs while destination exists
+        - Re-announces every ANNOUNCE_INTERVAL (3 hours)
+        """
+        while self.destination is not None:
+            time.sleep(self.JOB_INTERVAL)
+            if time.time() > self._last_announce + self.ANNOUNCE_INTERVAL:
+                if self.destination is not None:
+                    try:
+                        self.destination.announce()
+                        self._last_announce = time.time()
+                        RNS.log("CallManager re-announced", RNS.LOG_DEBUG)
+                    except Exception as e:
+                        RNS.log(f"Error re-announcing: {e}", RNS.LOG_WARNING)
 
     # ===== Bridge Setup =====
 
@@ -273,6 +308,23 @@ class CallManager:
         try:
             identity_hash = bytes.fromhex(destination_hash_hex)
             identity = RNS.Identity.recall(identity_hash)
+
+            # If identity not known locally, query the network (same pattern as LXMF messaging)
+            if identity is None:
+                RNS.log(f"Identity not found, requesting path to {destination_hash_hex[:16]}...", RNS.LOG_DEBUG)
+                try:
+                    RNS.Transport.request_path(identity_hash)
+                except Exception as e:
+                    RNS.log(f"Error requesting path: {e}", RNS.LOG_WARNING)
+
+                # Wait up to 5 seconds for path response to resolve identity
+                for attempt in range(10):
+                    time.sleep(0.5)
+                    identity = RNS.Identity.recall(identity_hash)
+                    if identity:
+                        RNS.log(f"Identity resolved after path request (attempt {attempt + 1})", RNS.LOG_DEBUG)
+                        break
+
             if identity is None:
                 RNS.log(f"Unknown identity: {destination_hash_hex[:16]}...", RNS.LOG_WARNING)
                 return {"success": False, "error": "Unknown identity"}

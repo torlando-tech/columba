@@ -1100,6 +1100,11 @@ class ReticulumServiceBinder(
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
 
+        // CallManager/Telephone first — no dependency on other bridges, and users
+        // may attempt calls shortly after the app starts (the retry window in
+        // CallViewModel is limited).
+        setupLxstCallManager()
+
         setupBleCoordinator()
         initializeRNodeInterface()
         setupReticulumBridgeCallback()
@@ -1112,7 +1117,6 @@ class ReticulumServiceBinder(
         setupPropagationStateCallback()
         // Note: Native stamp generator is registered in setupPreInitializationBridges()
         // to ensure it's available before any stamp generation can occur
-        setupLxstCallManager()
     }
 
     /** Wire up BLE coordinator to broadcast connection changes via IPC. */

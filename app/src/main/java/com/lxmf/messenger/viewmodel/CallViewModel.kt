@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -15,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import java.util.Locale
 import javax.inject.Inject
 

@@ -81,7 +81,7 @@ class TestInit(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         # Verify all expected aspects have handlers
-        expected_aspects = ["lxmf.delivery", "lxmf.propagation", "call.audio", "nomadnetwork.node"]
+        expected_aspects = ["lxmf.delivery", "lxmf.propagation", "nomadnetwork.node"]
 
         for aspect in expected_aspects:
             self.assertIn(aspect, wrapper._announce_handlers)

@@ -312,48 +312,50 @@ class CallManager:
         Returns:
             bool indicating success
         """
-        if not self._initialized or self.active_call is None:
-            RNS.log("Cannot answer: no active incoming call", RNS.LOG_WARNING)
-            return False
-
-        try:
-            remote_identity = self.active_call.get_remote_identity()
-            if remote_identity is None:
-                RNS.log("Cannot answer: unknown remote identity", RNS.LOG_ERROR)
+        with self._call_handler_lock:
+            if not self._initialized or self.active_call is None:
+                RNS.log("Cannot answer: no active incoming call", RNS.LOG_WARNING)
                 return False
 
-            self._active_call_identity = remote_identity.hash.hex()
+            try:
+                remote_identity = self.active_call.get_remote_identity()
+                if remote_identity is None:
+                    RNS.log("Cannot answer: unknown remote identity", RNS.LOG_ERROR)
+                    return False
 
-            # Kotlin Telephone handles answer — signals are sent by Kotlin
-            # via receive_signal() which calls _send_signal_to_remote()
-            RNS.log(f"Answered call from {self._active_call_identity[:16]}...", RNS.LOG_INFO)
-            return True
+                self._active_call_identity = remote_identity.hash.hex()
 
-        except Exception as e:
-            RNS.log(f"Error answering call: {e}", RNS.LOG_ERROR)
-            return False
+                # Kotlin Telephone handles answer — signals are sent by Kotlin
+                # via receive_signal() which calls _send_signal_to_remote()
+                RNS.log(f"Answered call from {self._active_call_identity[:16]}...", RNS.LOG_INFO)
+                return True
+
+            except Exception as e:
+                RNS.log(f"Error answering call: {e}", RNS.LOG_ERROR)
+                return False
 
     def hangup(self):
         """End the current call."""
         RNS.log("hangup() called", RNS.LOG_INFO)
 
-        if self.active_call is not None:
-            try:
-                if hasattr(self.active_call, 'status') and self.active_call.status == RNS.Link.ACTIVE:
-                    self.active_call.teardown()
-            except Exception as e:
-                RNS.log(f"Error during hangup teardown: {e}", RNS.LOG_ERROR)
-            self.active_call = None
+        with self._call_handler_lock:
+            if self.active_call is not None:
+                try:
+                    if hasattr(self.active_call, 'status') and self.active_call.status == RNS.Link.ACTIVE:
+                        self.active_call.teardown()
+                except Exception as e:
+                    RNS.log(f"Error during hangup teardown: {e}", RNS.LOG_ERROR)
+                self.active_call = None
 
-        # Notify Kotlin that call ended
-        if self._kotlin_call_bridge is not None:
-            try:
-                self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
-            except Exception as e:
-                RNS.log(f"Error notifying Kotlin of hangup: {e}", RNS.LOG_ERROR)
+            # Notify Kotlin that call ended
+            if self._kotlin_call_bridge is not None:
+                try:
+                    self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
+                except Exception as e:
+                    RNS.log(f"Error notifying Kotlin of hangup: {e}", RNS.LOG_ERROR)
 
-        self._active_call_identity = None
-        self._call_start_time = None
+            self._active_call_identity = None
+            self._call_start_time = None
 
     # ===== Reticulum Link Callbacks =====
 
@@ -429,21 +431,22 @@ class CallManager:
 
     def __link_closed(self, link):
         """Handle link closed (remote hung up or link failure)."""
-        if link == self.active_call:
-            RNS.log("Link closed, call ended", RNS.LOG_DEBUG)
-            self.active_call = None
+        with self._call_handler_lock:
+            if link == self.active_call:
+                RNS.log("Link closed, call ended", RNS.LOG_DEBUG)
+                self.active_call = None
 
-            # Notify Kotlin
-            self._send_signal_to_kotlin(STATUS_AVAILABLE)
+                # Notify Kotlin
+                self._send_signal_to_kotlin(STATUS_AVAILABLE)
 
-            if self._kotlin_call_bridge is not None:
-                try:
-                    self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
-                except Exception as e:
-                    RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
+                if self._kotlin_call_bridge is not None:
+                    try:
+                        self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
+                    except Exception as e:
+                        RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
 
-            self._active_call_identity = None
-            self._call_start_time = None
+                self._active_call_identity = None
+                self._call_start_time = None
 
     # ===== Packet Handling =====
 

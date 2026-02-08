@@ -31,7 +31,7 @@ import time
 try:
     import RNS
     from RNS.vendor import umsgpack
-except ImportError:
+except ImportError:  # pragma: no cover
     class RNS:
         LOG_DEBUG = 0
         LOG_INFO = 1

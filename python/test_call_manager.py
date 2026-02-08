@@ -24,9 +24,11 @@ from lxst_modules.call_manager import (
     STATUS_AVAILABLE,
     STATUS_RINGING,
     STATUS_ESTABLISHED,
+    STATUS_CONNECTING,
     FIELD_SIGNALLING,
     FIELD_FRAMES,
     RNS,
+    umsgpack,
 )
 
 
@@ -515,3 +517,550 @@ class TestModuleLevelFunctions:
         assert result._kotlin_call_bridge == mock_bridge
         assert result._kotlin_network_bridge == mock_net_bridge
         shutdown_call_manager()
+
+
+# ===== Helpers for callback tests =====
+
+def _make_initialized_manager(**kwargs):
+    """Create an initialized CallManager with optional bridges."""
+    mock_identity = MagicMock()
+    manager = CallManager(mock_identity)
+    manager.initialize(
+        kotlin_call_bridge=kwargs.get("call_bridge"),
+        kotlin_network_bridge=kwargs.get("network_bridge"),
+    )
+    if "telephone_callback" in kwargs:
+        manager.set_kotlin_telephone_callback(kwargs["telephone_callback"])
+    return manager
+
+
+def _make_active_link():
+    """Create a mock RNS.Link that reports ACTIVE status."""
+    link = MagicMock()
+    link.status = RNS.Link.ACTIVE
+    return link
+
+
+# ===== Reticulum Callback Tests =====
+
+class TestIncomingLinkEstablished:
+    """Test __incoming_link_established callback."""
+
+    def test_accepts_incoming_link_when_idle(self):
+        """Should set callbacks on the link and send STATUS_AVAILABLE."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+
+        # Access private method via name mangling
+        manager._CallManager__incoming_link_established(link)
+
+        link.set_remote_identified_callback.assert_called_once()
+        link.set_link_closed_callback.assert_called_once()
+
+    def test_rejects_incoming_link_when_busy(self):
+        """Should send STATUS_BUSY and teardown if already in a call."""
+        manager = _make_initialized_manager()
+        manager.active_call = _make_active_link()  # already in call
+
+        new_link = _make_active_link()
+        manager._CallManager__incoming_link_established(new_link)
+
+        new_link.teardown.assert_called_once()
+
+    def test_rejects_incoming_link_when_busy_flag_set(self):
+        """Should reject if _busy flag is set."""
+        manager = _make_initialized_manager()
+        manager._busy = True
+
+        link = _make_active_link()
+        manager._CallManager__incoming_link_established(link)
+
+        link.teardown.assert_called_once()
+
+
+class TestCallerIdentified:
+    """Test __caller_identified callback."""
+
+    def test_accepts_identified_caller(self):
+        """Should accept call and notify Kotlin when caller is identified."""
+        mock_call_bridge = MagicMock()
+        mock_callback = MagicMock()
+        manager = _make_initialized_manager(
+            call_bridge=mock_call_bridge,
+            telephone_callback=mock_callback,
+        )
+
+        link = _make_active_link()
+        identity = MagicMock()
+        identity.hash.hex.return_value = "abcd1234deadbeef"
+
+        manager._CallManager__caller_identified(link, identity)
+
+        assert manager.active_call == link
+        assert manager._active_call_identity == "abcd1234deadbeef"
+        link.set_packet_callback.assert_called_once()
+        mock_call_bridge.onIncomingCall.assert_called_once_with("abcd1234deadbeef")
+
+    def test_rejects_caller_when_busy(self):
+        """Should reject if already in a call."""
+        manager = _make_initialized_manager()
+        manager.active_call = _make_active_link()
+
+        link = _make_active_link()
+        identity = MagicMock()
+
+        manager._CallManager__caller_identified(link, identity)
+
+        link.teardown.assert_called_once()
+
+    def test_rejects_caller_when_busy_flag(self):
+        """Should reject if _busy flag is set."""
+        manager = _make_initialized_manager()
+        manager._busy = True
+
+        link = _make_active_link()
+        identity = MagicMock()
+
+        manager._CallManager__caller_identified(link, identity)
+
+        link.teardown.assert_called_once()
+
+    def test_notifies_kotlin_callback_on_ringing(self):
+        """Should notify Kotlin telephone callback with 'ringing' event."""
+        mock_callback = MagicMock()
+        manager = _make_initialized_manager(telephone_callback=mock_callback)
+
+        link = _make_active_link()
+        identity = MagicMock()
+        identity.hash.hex.return_value = "abcd1234"
+
+        manager._CallManager__caller_identified(link, identity)
+
+        mock_callback.assert_called_once()
+        args = mock_callback.call_args[0]
+        assert args[0] == "ringing"
+        assert args[1]["identity"] == "abcd1234"
+
+    def test_handles_kotlin_bridge_exception(self):
+        """Should not crash if Kotlin bridge raises."""
+        mock_bridge = MagicMock()
+        mock_bridge.onIncomingCall.side_effect = RuntimeError("bridge error")
+        manager = _make_initialized_manager(call_bridge=mock_bridge)
+
+        link = _make_active_link()
+        identity = MagicMock()
+        identity.hash.hex.return_value = "abcd1234"
+
+        manager._CallManager__caller_identified(link, identity)
+        # Should not raise — error is caught internally
+
+
+class TestOutgoingLinkEstablished:
+    """Test __outgoing_link_established callback."""
+
+    def test_sets_packet_and_close_callbacks(self):
+        """Should configure packet and close callbacks on the link."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+
+        manager._CallManager__outgoing_link_established(link)
+
+        link.set_packet_callback.assert_called_once()
+        link.set_link_closed_callback.assert_called_once()
+
+
+class TestLinkClosed:
+    """Test __link_closed callback."""
+
+    def test_clears_active_call_when_matching(self):
+        """Should clear active_call when closed link matches."""
+        mock_bridge = MagicMock()
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(
+            call_bridge=mock_bridge, network_bridge=mock_net_bridge,
+        )
+        link = _make_active_link()
+        manager.active_call = link
+        manager._active_call_identity = "abc123"
+
+        manager._CallManager__link_closed(link)
+
+        assert manager.active_call is None
+        assert manager._active_call_identity is None
+        mock_bridge.onCallEnded.assert_called_once_with("abc123")
+
+    def test_ignores_non_matching_link(self):
+        """Should ignore close if link doesn't match active_call."""
+        manager = _make_initialized_manager()
+        active = _make_active_link()
+        other = _make_active_link()
+        manager.active_call = active
+
+        manager._CallManager__link_closed(other)
+
+        assert manager.active_call is active  # not cleared
+
+    def test_sends_available_signal_to_kotlin(self):
+        """Should forward STATUS_AVAILABLE to Kotlin on link close."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+        link = _make_active_link()
+        manager.active_call = link
+
+        manager._CallManager__link_closed(link)
+
+        mock_net_bridge.onInboundSignal.assert_called_once_with(STATUS_AVAILABLE)
+
+    def test_handles_bridge_exception(self):
+        """Should not crash if Kotlin bridge raises on close."""
+        mock_bridge = MagicMock()
+        mock_bridge.onCallEnded.side_effect = RuntimeError("boom")
+        manager = _make_initialized_manager(call_bridge=mock_bridge)
+        link = _make_active_link()
+        manager.active_call = link
+
+        manager._CallManager__link_closed(link)  # should not raise
+        assert manager.active_call is None
+
+
+class TestPacketReceived:
+    """Test __packet_received callback (msgpack unpacking + routing).
+
+    Note: umsgpack is a MagicMock (conftest replaces sys.modules['RNS']),
+    so we patch unpackb to return real dicts for these tests.
+    """
+
+    def test_forwards_audio_frame_to_kotlin(self):
+        """Should unpack frames and forward to kotlin_network_bridge."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        frame_data = b'\x40\x00\x01\x02'
+        payload = {FIELD_FRAMES: frame_data}
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = payload
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+
+        mock_net_bridge.onInboundPacket.assert_called_once_with(bytes(frame_data))
+
+    def test_forwards_multiple_frames(self):
+        """Should forward each frame in a frame list."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        frames = [b'\x40\x01', b'\x40\x02']
+        payload = {FIELD_FRAMES: frames}
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = payload
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+
+        assert mock_net_bridge.onInboundPacket.call_count == 2
+
+    def test_forwards_signal_to_kotlin(self):
+        """Should unpack signalling and forward to Kotlin."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        payload = {FIELD_SIGNALLING: [STATUS_RINGING]}
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = payload
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+
+        mock_net_bridge.onInboundSignal.assert_called_once_with(STATUS_RINGING)
+
+    def test_handles_combined_audio_and_signal(self):
+        """Should handle packet with both frames and signalling."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        payload = {
+            FIELD_FRAMES: b'\x40\x01',
+            FIELD_SIGNALLING: STATUS_ESTABLISHED,
+        }
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = payload
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+
+        mock_net_bridge.onInboundPacket.assert_called_once()
+        mock_net_bridge.onInboundSignal.assert_called_once_with(STATUS_ESTABLISHED)
+
+    def test_ignores_non_dict_packet(self):
+        """Should silently ignore non-dict msgpack payloads."""
+        manager = _make_initialized_manager()
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = [1, 2, 3]  # list, not dict
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+        # Should not raise
+
+    def test_handles_unpack_exception(self):
+        """Should not crash on malformed data."""
+        manager = _make_initialized_manager()
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.side_effect = ValueError("bad data")
+            manager._CallManager__packet_received(b'\xff\xfe', MagicMock())
+        # Should not raise
+
+    def test_handles_bridge_exception_on_frame(self):
+        """Should not crash if Kotlin bridge raises on frame forward."""
+        mock_net_bridge = MagicMock()
+        mock_net_bridge.onInboundPacket.side_effect = RuntimeError("boom")
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        payload = {FIELD_FRAMES: b'\x40\x01'}
+
+        with patch('lxst_modules.call_manager.umsgpack') as mock_msgpack:
+            mock_msgpack.unpackb.return_value = payload
+            manager._CallManager__packet_received(b'dummy', MagicMock())
+        # Should not raise
+
+
+class TestHandleRemoteSignal:
+    """Test _handle_remote_signal (signal routing logic)."""
+
+    def test_available_signal_triggers_identify(self):
+        """STATUS_AVAILABLE from remote should trigger link.identify()."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        manager._handle_remote_signal(STATUS_AVAILABLE)
+
+        link.identify.assert_called_once_with(manager.identity)
+
+    def test_available_signal_ignored_without_active_call(self):
+        """STATUS_AVAILABLE should not crash when no active call."""
+        manager = _make_initialized_manager()
+        manager.active_call = None
+
+        manager._handle_remote_signal(STATUS_AVAILABLE)
+        # Should not raise
+
+    def test_all_signals_forwarded_to_kotlin(self):
+        """Every signal should be forwarded to Kotlin via network bridge."""
+        mock_net_bridge = MagicMock()
+        manager = _make_initialized_manager(network_bridge=mock_net_bridge)
+
+        manager._handle_remote_signal(STATUS_RINGING)
+
+        mock_net_bridge.onInboundSignal.assert_called_once_with(STATUS_RINGING)
+
+    def test_non_available_signal_does_not_identify(self):
+        """Signals other than AVAILABLE should not trigger identify."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        manager._handle_remote_signal(STATUS_ESTABLISHED)
+
+        link.identify.assert_not_called()
+
+
+class TestSendSignalToRemote:
+    """Test _send_signal_to_remote (wire format)."""
+
+    def test_sends_signal_over_active_link(self):
+        """Should send msgpack-wrapped signal via RNS.Packet."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            manager._send_signal_to_remote(STATUS_RINGING, link)
+            mock_rns.Packet.assert_called_once()
+
+    def test_skips_inactive_link(self):
+        """Should not send if link is not ACTIVE."""
+        manager = _make_initialized_manager()
+        link = MagicMock()
+        link.status = MagicMock()  # not equal to RNS.Link.ACTIVE
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            manager._send_signal_to_remote(STATUS_RINGING, link)
+            mock_rns.Packet.assert_not_called()
+
+    def test_handles_send_exception(self):
+        """Should not crash on send failure."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            mock_rns.Packet.side_effect = RuntimeError("send error")
+            manager._send_signal_to_remote(STATUS_RINGING, link)
+            # Should not raise
+
+
+class TestReceiveAudioPacketFull:
+    """Test receive_audio_packet with active link (wire format)."""
+
+    def test_sends_msgpack_wrapped_audio(self):
+        """Should wrap audio in LXST wire format and send via RNS.Packet."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            manager.receive_audio_packet(b'\x40\x00\x01')
+
+            mock_rns.Packet.assert_called_once()
+            call_args = mock_rns.Packet.call_args
+            assert call_args[0][0] == link  # link is first arg
+
+    def test_drops_when_link_not_active(self):
+        """Should drop packet when link is not ACTIVE."""
+        manager = _make_initialized_manager()
+        link = MagicMock()
+        link.status = MagicMock()  # not ACTIVE
+        manager.active_call = link
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            manager.receive_audio_packet(b'\x40\x00\x01')
+            mock_rns.Packet.assert_not_called()
+
+    def test_converts_non_bytes_to_bytes(self):
+        """Should handle non-bytes input (Chaquopy jarray)."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            # Pass a list (simulates jarray)
+            manager.receive_audio_packet([0x40, 0x00, 0x01])
+            mock_rns.Packet.assert_called_once()
+
+    def test_handles_send_exception(self):
+        """Should not crash on send failure."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            mock_rns.Packet.side_effect = RuntimeError("send error")
+            manager.receive_audio_packet(b'\x40\x00\x01')
+            # Should not raise
+
+
+class TestReceiveSignalFull:
+    """Test receive_signal with active link."""
+
+    def test_sends_signal_to_remote(self):
+        """Should send signal to remote via _send_signal_to_remote."""
+        manager = _make_initialized_manager()
+        link = _make_active_link()
+        manager.active_call = link
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
+            manager.receive_signal(STATUS_ESTABLISHED)
+            mock_rns.Packet.assert_called_once()
+
+
+class TestNotifyKotlin:
+    """Test _notify_kotlin helper."""
+
+    def test_calls_callback_with_event_and_identity(self):
+        """Should invoke callback with event name and identity dict."""
+        mock_callback = MagicMock()
+        manager = _make_initialized_manager(telephone_callback=mock_callback)
+
+        manager._notify_kotlin("ringing", "abc123")
+
+        mock_callback.assert_called_once_with("ringing", {"identity": "abc123"})
+
+    def test_includes_extra_data(self):
+        """Should merge extra data into callback payload."""
+        mock_callback = MagicMock()
+        manager = _make_initialized_manager(telephone_callback=mock_callback)
+
+        manager._notify_kotlin("established", "abc123", extra={"profile": 0x40})
+
+        args = mock_callback.call_args[0]
+        assert args[1]["identity"] == "abc123"
+        assert args[1]["profile"] == 0x40
+
+    def test_does_nothing_without_callback(self):
+        """Should not crash when no callback is set."""
+        manager = _make_initialized_manager()
+        manager._notify_kotlin("ringing", "abc123")
+        # Should not raise
+
+    def test_handles_callback_exception(self):
+        """Should not crash if callback raises."""
+        mock_callback = MagicMock()
+        mock_callback.side_effect = RuntimeError("callback error")
+        manager = _make_initialized_manager(telephone_callback=mock_callback)
+
+        manager._notify_kotlin("ringing", "abc123")
+        # Should not raise
+
+
+class TestIsAllowed:
+    """Test _is_allowed (caller filtering)."""
+
+    def test_allows_any_caller(self):
+        """Current implementation allows all callers."""
+        manager = _make_initialized_manager()
+        identity = MagicMock()
+        identity.hash.hex.return_value = "abc123"
+
+        assert manager._is_allowed(identity) is True
+
+
+class TestInitializeExceptionHandling:
+    """Test initialize() error handling."""
+
+    def test_initialize_handles_destination_exception(self):
+        """Should handle exception during destination creation."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Destination.side_effect = RuntimeError("init error")
+            mock_rns.LOG_ERROR = 3
+            mock_rns.LOG_INFO = 1
+            mock_rns.LOG_WARNING = 2
+            manager.initialize()
+
+        assert manager._initialized is False
+
+
+class TestAnswerExceptionHandling:
+    """Test answer() exception path."""
+
+    def test_answer_handles_identity_exception(self):
+        """Should return False if get_remote_identity raises."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager._initialized = True
+        mock_link = MagicMock()
+        mock_link.get_remote_identity.side_effect = RuntimeError("ident error")
+        manager.active_call = mock_link
+
+        assert manager.answer() is False
+
+
+class TestCallPathDiscovery:
+    """Test call() path discovery edge cases."""
+
+    def test_call_handles_general_exception(self):
+        """call() should catch and report unexpected exceptions."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager._initialized = True
+
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Identity.recall.side_effect = RuntimeError("unexpected")
+            result = manager.call("abc123def456789012345678901234567890")
+
+        assert result["success"] is False

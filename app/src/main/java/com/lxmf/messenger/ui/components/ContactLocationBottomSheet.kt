@@ -263,17 +263,23 @@ internal fun openDirectionsInMaps(
     lat: Double,
     lng: Double,
 ) {
-    // Try Google Maps navigation first (walking mode)
-    val googleMapsUri = Uri.parse("google.navigation:q=$lat,$lng&mode=w")
-    val googleIntent = Intent(Intent.ACTION_VIEW, googleMapsUri)
+    try {
+        // Try Google Maps navigation first (walking mode)
+        val googleMapsUri = Uri.parse("google.navigation:q=$lat,$lng&mode=w")
+        val googleIntent = Intent(Intent.ACTION_VIEW, googleMapsUri)
 
-    if (googleIntent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(googleIntent)
-    } else {
-        // Fallback to generic geo URI
-        val geoUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
-        val geoIntent = Intent(Intent.ACTION_VIEW, geoUri)
-        context.startActivity(geoIntent)
+        if (googleIntent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(googleIntent)
+        } else {
+            // Fallback to generic geo URI
+            val geoUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
+            val geoIntent = Intent(Intent.ACTION_VIEW, geoUri)
+            context.startActivity(geoIntent)
+        }
+    } catch (_: android.content.ActivityNotFoundException) {
+        android.widget.Toast
+            .makeText(context, "No maps application found", android.widget.Toast.LENGTH_SHORT)
+            .show()
     }
 }
 

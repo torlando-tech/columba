@@ -117,7 +117,7 @@ class TestAnnounceHandler(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         # Verify each handler has the correct aspect filter
-        expected_aspects = ["lxmf.delivery", "lxmf.propagation", "call.audio", "nomadnetwork.node"]
+        expected_aspects = ["lxmf.delivery", "lxmf.propagation", "nomadnetwork.node"]
 
         for aspect in expected_aspects:
             handler = wrapper._announce_handlers[aspect]

@@ -76,7 +76,7 @@ class BleScanner(
     val discoveredDevices: StateFlow<Map<String, BleDevice>> = _discoveredDevices.asStateFlow()
 
     private val devicesMutex = Mutex()
-    private val devices = mutableMapOf<String, BleDevice>()
+    private val devices = java.util.concurrent.ConcurrentHashMap<String, BleDevice>()
 
     // Smart polling state
     private var scanJob: Job? = null
@@ -213,13 +213,15 @@ class BleScanner(
 
                 // Create scan filter for Reticulum service UUID
                 val scanFilter =
-                    ScanFilter.Builder()
+                    ScanFilter
+                        .Builder()
                         .setServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
                         .build()
 
                 // Configure scan settings
                 val scanSettings =
-                    ScanSettings.Builder()
+                    ScanSettings
+                        .Builder()
                         .setScanMode(determineScanMode())
                         .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                         .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
@@ -351,19 +353,18 @@ class BleScanner(
      * - BALANCED: Normal mode
      * - LOW_POWER: When idle (saves battery)
      */
-    private fun determineScanMode(): Int {
-        return when {
+    private fun determineScanMode(): Int =
+        when {
             newDevicesInLastScan > NEW_DEVICE_THRESHOLD -> ScanSettings.SCAN_MODE_LOW_LATENCY
             scansWithoutNewDevices < IDLE_SCANS_THRESHOLD -> ScanSettings.SCAN_MODE_BALANCED
             else -> ScanSettings.SCAN_MODE_LOW_POWER
         }
-    }
 
     /**
      * Check if required Bluetooth permissions are granted.
      */
-    private fun hasRequiredPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasRequiredPermissions(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+
             ContextCompat.checkSelfPermission(
                 context,
@@ -376,23 +377,19 @@ class BleScanner(
                 Manifest.permission.ACCESS_FINE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED
         }
-    }
 
     /**
      * Get discovered device by address.
      */
-    suspend fun getDevice(address: String): BleDevice? {
-        return devicesMutex.withLock { devices[address] }
-    }
+    suspend fun getDevice(address: String): BleDevice? = devicesMutex.withLock { devices[address] }
 
     /**
      * Get all discovered devices sorted by priority score.
      */
-    suspend fun getDevicesSortedByPriority(): List<BleDevice> {
-        return devicesMutex.withLock {
+    suspend fun getDevicesSortedByPriority(): List<BleDevice> =
+        devicesMutex.withLock {
             devices.values.sortedByDescending { it.calculatePriorityScore() }
         }
-    }
 
     /**
      * Get a snapshot of discovered devices as a map (address -> device).
@@ -401,10 +398,7 @@ class BleScanner(
      * Note: This creates a copy of the devices map. For best performance,
      * prefer getDevicesSortedByPriority() in coroutine contexts.
      */
-    @Synchronized
-    fun getDevicesSnapshot(): Map<String, BleDevice> {
-        return devices.toMap()
-    }
+    fun getDevicesSnapshot(): Map<String, BleDevice> = devices.toMap()
 
     /**
      * Clear discovered devices.

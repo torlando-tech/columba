@@ -58,31 +58,34 @@ class PythonNetworkTransport(
                 // Call Python call_manager.call(destination_hash_hex)
                 // Returns dict with "success" and optional "error" keys
                 val result = callManager.callAttr("call", destinationHashHex)
-
-                // Parse Python dict result using asMap() (Chaquopy pattern)
-                @Suppress("UNCHECKED_CAST")
-                val resultDict = result?.asMap() as? Map<PyObject, PyObject>
-                val success =
-                    resultDict
-                        ?.entries
-                        ?.find { it.key.toString() == "success" }
-                        ?.value
-                        ?.toBoolean() ?: false
-
-                if (success) {
-                    linkActive = true
-                    Log.i(TAG, "Call initiated to ${destinationHashHex.take(16)}...")
-                } else {
-                    val error =
+                try {
+                    // Parse Python dict result using asMap() (Chaquopy pattern)
+                    @Suppress("UNCHECKED_CAST")
+                    val resultDict = result?.asMap() as? Map<PyObject, PyObject>
+                    val success =
                         resultDict
                             ?.entries
-                            ?.find { it.key.toString() == "error" }
+                            ?.find { it.key.toString() == "success" }
                             ?.value
-                            ?.toString() ?: "Unknown error"
-                    Log.w(TAG, "Call initiation failed: $error")
-                }
+                            ?.toBoolean() ?: false
 
-                success
+                    if (success) {
+                        linkActive = true
+                        Log.i(TAG, "Call initiated to ${destinationHashHex.take(16)}...")
+                    } else {
+                        val error =
+                            resultDict
+                                ?.entries
+                                ?.find { it.key.toString() == "error" }
+                                ?.value
+                                ?.toString() ?: "Unknown error"
+                        Log.w(TAG, "Call initiation failed: $error")
+                    }
+
+                    success
+                } finally {
+                    result?.close()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error establishing link", e)
                 false
@@ -103,7 +106,7 @@ class PythonNetworkTransport(
 
         scope.launch(Dispatchers.IO) {
             runCatching {
-                callManager.callAttr("hangup")
+                callManager.callAttr("hangup")?.close()
             }.onFailure { e ->
                 Log.e(TAG, "Error tearing down link", e)
             }

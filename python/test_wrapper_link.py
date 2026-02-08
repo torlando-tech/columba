@@ -285,6 +285,7 @@ class TestEstablishLink(unittest.TestCase):
         mock_dest.hash = dest_hash
         mock_rns.Destination.return_value = mock_dest
         mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.active_links = []  # Prevent TypeError from iterating Mock
 
         # Use explicit sentinel values for link status constants to avoid
         # flaky failures from mock object identity comparisons
@@ -299,8 +300,14 @@ class TestEstablishLink(unittest.TestCase):
         mock_link.status = LINK_PENDING
         mock_rns.Link.return_value = mock_link
 
-        # Mock time to simulate timeout
-        mock_time.time.side_effect = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        # Mock time with a counter that never exhausts (avoids StopIteration
+        # if production code calls time.time() more times than list length)
+        call_count = [0]
+        def fake_time():
+            val = call_count[0]
+            call_count[0] += 1
+            return float(val)
+        mock_time.time.side_effect = fake_time
         mock_time.sleep = Mock()
 
         result = wrapper.establish_link(dest_hash, timeout_seconds=5)

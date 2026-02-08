@@ -1407,6 +1407,8 @@ class ReticulumServiceBinder(
                 val isValidHex = destHash.length % 2 == 0 && destHash.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
                 if (!isValidHex) {
                     """{"success": false, "error": "Invalid destination hash"}"""
+                } else if (telephone.isCallActive()) {
+                    """{"success": false, "error": "Already in call"}"""
                 } else {
                     val destHashBytes = destHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 

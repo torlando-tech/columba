@@ -100,7 +100,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
@@ -583,7 +582,7 @@ fun ContactsScreen(
                                 }
                                 items(
                                     contactsState.groupedContacts.all,
-                                    key = { contact -> contact.destinationHash },
+                                    key = { contact -> "all_${contact.destinationHash}" },
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,

@@ -12,12 +12,14 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.Base32
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 
@@ -545,15 +547,17 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Extracting backup...")
 
-                    // Read and extract identity from tar.gz
+                    // Read and extract identity from tar.gz (I/O off main thread)
                     val fileData =
-                        checkNotNull(
-                            context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
-                                GZIPInputStream(inputStream).use { gzipStream ->
-                                    extractIdentityFromTar(gzipStream)
-                                }
-                            },
-                        ) { "Failed to open backup file" }
+                        withContext(Dispatchers.IO) {
+                            checkNotNull(
+                                context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
+                                    GZIPInputStream(inputStream).use { gzipStream ->
+                                        extractIdentityFromTar(gzipStream)
+                                    }
+                                },
+                            ) { "Failed to open backup file" }
+                        }
 
                     require(fileData.size == 64) {
                         "Invalid identity in backup: expected 64 bytes, got ${fileData.size}"

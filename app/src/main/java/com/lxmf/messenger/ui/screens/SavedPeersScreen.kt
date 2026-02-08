@@ -85,7 +85,7 @@ fun SavedPeersScreen(
             ) {
                 items(
                     savedPeers,
-                    key = { announce -> announce.destinationHash },
+                    key = { announce -> "saved_${announce.destinationHash}" },
                 ) { announce ->
                     Box {
                         SavedPeerCard(

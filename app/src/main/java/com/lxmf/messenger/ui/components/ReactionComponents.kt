@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -86,43 +87,165 @@ val REACTION_EMOJIS =
 val EXTENDED_EMOJIS =
     listOf(
         // Smileys & People: 😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😚😙🤗🤔🤨😐😑😶😏😒🙄😬😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😪🤤😴😷🤒🤕🤢🤮🤧🥵🥶😵🤯🤠🥳😎🤓🧐😕😟🙁☹️😤😡😠🤬
-        "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06",
-        "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23", "\uD83D\uDE0A", "\uD83D\uDE07",
-        "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D",
-        "\uD83E\uDD70", "\uD83D\uDE18", "\uD83D\uDE17", "\uD83D\uDE1A", "\uD83D\uDE19",
-        "\uD83E\uDD17", "\uD83E\uDD14", "\uD83E\uDD28", "\uD83D\uDE10", "\uD83D\uDE11",
-        "\uD83D\uDE36", "\uD83D\uDE0F", "\uD83D\uDE12", "\uD83D\uDE44", "\uD83D\uDE2C",
-        "\uD83D\uDE2E", "\uD83D\uDE2F", "\uD83D\uDE32", "\uD83D\uDE33", "\uD83E\uDD7A",
-        "\uD83D\uDE26", "\uD83D\uDE27", "\uD83D\uDE28", "\uD83D\uDE30", "\uD83D\uDE25",
-        "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE31", "\uD83D\uDE16", "\uD83D\uDE23",
-        "\uD83D\uDE1E", "\uD83D\uDE13", "\uD83D\uDE29", "\uD83D\uDE2A", "\uD83E\uDD24",
-        "\uD83D\uDE34", "\uD83D\uDE37", "\uD83E\uDD12", "\uD83E\uDD15", "\uD83E\uDD22",
-        "\uD83E\uDD2E", "\uD83E\uDD27", "\uD83E\uDD75", "\uD83E\uDD76", "\uD83D\uDE35",
-        "\uD83E\uDD2F", "\uD83E\uDD20", "\uD83E\uDD73", "\uD83D\uDE0E", "\uD83E\uDD13",
-        "\uD83E\uDDD0", "\uD83D\uDE15", "\uD83D\uDE1F", "\uD83D\uDE41", "\uD83D\uDE2E",
-        "\uD83D\uDE24", "\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2C",
+        "\uD83D\uDE00",
+        "\uD83D\uDE03",
+        "\uD83D\uDE04",
+        "\uD83D\uDE01",
+        "\uD83D\uDE06",
+        "\uD83D\uDE05",
+        "\uD83D\uDE02",
+        "\uD83E\uDD23",
+        "\uD83D\uDE0A",
+        "\uD83D\uDE07",
+        "\uD83D\uDE42",
+        "\uD83D\uDE43",
+        "\uD83D\uDE09",
+        "\uD83D\uDE0C",
+        "\uD83D\uDE0D",
+        "\uD83E\uDD70",
+        "\uD83D\uDE18",
+        "\uD83D\uDE17",
+        "\uD83D\uDE1A",
+        "\uD83D\uDE19",
+        "\uD83E\uDD17",
+        "\uD83E\uDD14",
+        "\uD83E\uDD28",
+        "\uD83D\uDE10",
+        "\uD83D\uDE11",
+        "\uD83D\uDE36",
+        "\uD83D\uDE0F",
+        "\uD83D\uDE12",
+        "\uD83D\uDE44",
+        "\uD83D\uDE2C",
+        "\uD83D\uDE2E",
+        "\uD83D\uDE2F",
+        "\uD83D\uDE32",
+        "\uD83D\uDE33",
+        "\uD83E\uDD7A",
+        "\uD83D\uDE26",
+        "\uD83D\uDE27",
+        "\uD83D\uDE28",
+        "\uD83D\uDE30",
+        "\uD83D\uDE25",
+        "\uD83D\uDE22",
+        "\uD83D\uDE2D",
+        "\uD83D\uDE31",
+        "\uD83D\uDE16",
+        "\uD83D\uDE23",
+        "\uD83D\uDE1E",
+        "\uD83D\uDE13",
+        "\uD83D\uDE29",
+        "\uD83D\uDE2A",
+        "\uD83E\uDD24",
+        "\uD83D\uDE34",
+        "\uD83D\uDE37",
+        "\uD83E\uDD12",
+        "\uD83E\uDD15",
+        "\uD83E\uDD22",
+        "\uD83E\uDD2E",
+        "\uD83E\uDD27",
+        "\uD83E\uDD75",
+        "\uD83E\uDD76",
+        "\uD83D\uDE35",
+        "\uD83E\uDD2F",
+        "\uD83E\uDD20",
+        "\uD83E\uDD73",
+        "\uD83D\uDE0E",
+        "\uD83E\uDD13",
+        "\uD83E\uDDD0",
+        "\uD83D\uDE15",
+        "\uD83D\uDE1F",
+        "\uD83D\uDE41",
+        "\uD83D\uDE2E",
+        "\uD83D\uDE24",
+        "\uD83D\uDE21",
+        "\uD83D\uDE20",
+        "\uD83E\uDD2C",
         // Gestures: 👍👎👊✊🤛🤜👏🙌👐🤲🤝🙏✌️🤞🤟🤘👌👈👉👆👇☝️✋🤚🖐️👋🤙💪
-        "\uD83D\uDC4D", "\uD83D\uDC4E", "\uD83D\uDC4A", "\u270A", "\uD83E\uDD1B",
-        "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C", "\uD83D\uDC50", "\uD83E\uDD32",
-        "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270C\uFE0F", "\uD83E\uDD1E", "\uD83E\uDD1F",
-        "\uD83E\uDD18", "\uD83D\uDC4C", "\uD83D\uDC48", "\uD83D\uDC49", "\uD83D\uDC46",
-        "\uD83D\uDC47", "\u261D\uFE0F", "\u270B", "\uD83E\uDD1A", "\uD83D\uDD90\uFE0F",
-        "\uD83D\uDC4B", "\uD83E\uDD19", "\uD83D\uDCAA",
+        "\uD83D\uDC4D",
+        "\uD83D\uDC4E",
+        "\uD83D\uDC4A",
+        "\u270A",
+        "\uD83E\uDD1B",
+        "\uD83E\uDD1C",
+        "\uD83D\uDC4F",
+        "\uD83D\uDE4C",
+        "\uD83D\uDC50",
+        "\uD83E\uDD32",
+        "\uD83E\uDD1D",
+        "\uD83D\uDE4F",
+        "\u270C\uFE0F",
+        "\uD83E\uDD1E",
+        "\uD83E\uDD1F",
+        "\uD83E\uDD18",
+        "\uD83D\uDC4C",
+        "\uD83D\uDC48",
+        "\uD83D\uDC49",
+        "\uD83D\uDC46",
+        "\uD83D\uDC47",
+        "\u261D\uFE0F",
+        "\u270B",
+        "\uD83E\uDD1A",
+        "\uD83D\uDD90\uFE0F",
+        "\uD83D\uDC4B",
+        "\uD83E\uDD19",
+        "\uD83D\uDCAA",
         // Hearts & Love: ❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝
-        "\u2764\uFE0F", "\uD83E\uDDE1", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99",
-        "\uD83D\uDC9C", "\uD83D\uDDA4", "\uD83E\uDD0D", "\uD83E\uDD0E", "\uD83D\uDC94",
-        "\u2763\uFE0F", "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97",
-        "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D",
+        "\u2764\uFE0F",
+        "\uD83E\uDDE1",
+        "\uD83D\uDC9B",
+        "\uD83D\uDC9A",
+        "\uD83D\uDC99",
+        "\uD83D\uDC9C",
+        "\uD83D\uDDA4",
+        "\uD83E\uDD0D",
+        "\uD83E\uDD0E",
+        "\uD83D\uDC94",
+        "\u2763\uFE0F",
+        "\uD83D\uDC95",
+        "\uD83D\uDC9E",
+        "\uD83D\uDC93",
+        "\uD83D\uDC97",
+        "\uD83D\uDC96",
+        "\uD83D\uDC98",
+        "\uD83D\uDC9D",
         // Celebrations: 🎉🎊🎎🎁🎄🎆🎇✨🎈
-        "\uD83C\uDF89", "\uD83C\uDF8A", "\uD83C\uDF8E", "\uD83C\uDF81", "\uD83C\uDF84",
-        "\uD83C\uDF86", "\uD83C\uDF87", "\u2728", "\uD83C\uDF88",
+        "\uD83C\uDF89",
+        "\uD83C\uDF8A",
+        "\uD83C\uDF8E",
+        "\uD83C\uDF81",
+        "\uD83C\uDF84",
+        "\uD83C\uDF86",
+        "\uD83C\uDF87",
+        "\u2728",
+        "\uD83C\uDF88",
         // Fire & Stars: 🔥⭐🌟💫⚡
-        "\uD83D\uDD25", "\u2B50", "\uD83C\uDF1F", "\uD83D\uDCAB", "\u26A1",
+        "\uD83D\uDD25",
+        "\u2B50",
+        "\uD83C\uDF1F",
+        "\uD83D\uDCAB",
+        "\u26A1",
         // Other common: 👋👀💀💩🤡👻👽🤖💥💯💤💬💡💎🌈☀️🌙❄️🌻🌹🌷
-        "\uD83D\uDC4B", "\uD83D\uDC40", "\uD83D\uDC80", "\uD83D\uDCA9", "\uD83E\uDD21",
-        "\uD83D\uDC7B", "\uD83D\uDC7D", "\uD83E\uDD16", "\uD83D\uDCA5", "\uD83D\uDCAF",
-        "\uD83D\uDCA4", "\uD83D\uDCAC", "\uD83D\uDCA1", "\uD83D\uDC8E", "\uD83C\uDF08",
-        "\u2600\uFE0F", "\uD83C\uDF19", "\u2744\uFE0F", "\uD83C\uDF3B", "\uD83C\uDF39",
+        "\uD83D\uDC4B",
+        "\uD83D\uDC40",
+        "\uD83D\uDC80",
+        "\uD83D\uDCA9",
+        "\uD83E\uDD21",
+        "\uD83D\uDC7B",
+        "\uD83D\uDC7D",
+        "\uD83E\uDD16",
+        "\uD83D\uDCA5",
+        "\uD83D\uDCAF",
+        "\uD83D\uDCA4",
+        "\uD83D\uDCAC",
+        "\uD83D\uDCA1",
+        "\uD83D\uDC8E",
+        "\uD83C\uDF08",
+        "\u2600\uFE0F",
+        "\uD83C\uDF19",
+        "\u2744\uFE0F",
+        "\uD83C\uDF3B",
+        "\uD83C\uDF39",
         "\uD83C\uDF37",
     )
 
@@ -837,7 +960,17 @@ fun ReactionModeOverlay(
             )
 
             // Message snapshot with animation
-            messageBitmap?.let { bitmap ->
+            // Guard against recycled/invalid underlying bitmap (COLUMBA-20)
+            val validBitmap =
+                messageBitmap?.let { bitmap ->
+                    try {
+                        val androidBitmap = bitmap.asAndroidBitmap()
+                        if (!androidBitmap.isRecycled) bitmap else null
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            validBitmap?.let { bitmap ->
                 // Use scaled dimensions for large messages
                 val displayWidthDp = with(density) { scaledMessageWidth.toDp() }
                 val displayHeightDp = with(density) { scaledMessageHeight.toDp() }
@@ -861,8 +994,7 @@ fun ReactionModeOverlay(
                             .size(width = displayWidthDp, height = displayHeightDp)
                             .offset {
                                 IntOffset(scaledMessageX.toInt(), animatedOffsetY.value.toInt())
-                            }
-                            .alpha(1f) // Don't fade out with AnimatedVisibility
+                            }.alpha(1f) // Don't fade out with AnimatedVisibility
                             .clip(
                                 RoundedCornerShape(
                                     topStart = 20.dp,

@@ -64,7 +64,6 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.ui.components.AudioBadge
@@ -255,7 +254,10 @@ fun AnnounceStreamScreen(
                 ) {
                     items(
                         count = pagingItems.itemCount,
-                        key = pagingItems.itemKey { announce -> announce.destinationHash },
+                        key = { index ->
+                            val announce = pagingItems.peek(index)
+                            if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
+                        },
                     ) { index ->
                         val announce = pagingItems[index]
                         if (announce != null) {
@@ -698,7 +700,10 @@ fun AnnounceStreamContent(
             ) {
                 items(
                     count = pagingItems.itemCount,
-                    key = pagingItems.itemKey { announce -> announce.destinationHash },
+                    key = { index ->
+                        val announce = pagingItems.peek(index)
+                        if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
+                    },
                 ) { index ->
                     val announce = pagingItems[index]
                     if (announce != null) {

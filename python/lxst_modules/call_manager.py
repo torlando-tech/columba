@@ -262,6 +262,10 @@ class CallManager:
             RNS.log("Cannot call: CallManager not initialized", RNS.LOG_ERROR)
             return {"success": False, "error": "CallManager not initialized"}
 
+        if self.active_call is not None:
+            RNS.log("Cannot call: already in call", RNS.LOG_WARNING)
+            return {"success": False, "error": "Already in call"}
+
         try:
             identity_hash = bytes.fromhex(destination_hash_hex)
             identity = RNS.Identity.recall(identity_hash)

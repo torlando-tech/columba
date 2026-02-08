@@ -1403,22 +1403,29 @@ class ReticulumServiceBinder(
             // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
             val telephone = wrapperManager.getTelephone()
             if (telephone != null) {
-                // Convert hex string to ByteArray
-                val destHashBytes = destHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-                // Convert profile code to Profile (-1 means default)
-                val profile = if (profileCode == -1) {
-                    tech.torlando.lxst.telephone.Profile.DEFAULT
+                // Validate hex string before decoding (IPC boundary input)
+                val isValidHex = destHash.length % 2 == 0 && destHash.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                if (!isValidHex) {
+                    """{"success": false, "error": "Invalid destination hash"}"""
                 } else {
-                    tech.torlando.lxst.telephone.Profile.fromId(profileCode)
-                        ?: tech.torlando.lxst.telephone.Profile.DEFAULT
-                }
+                    val destHashBytes = destHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-                // Launch call on IO dispatcher (call() is suspend)
-                scope.launch(Dispatchers.IO) {
-                    telephone.call(destHashBytes, profile)
+                    // Convert profile code to Profile (-1 means default)
+                    val profile =
+                        if (profileCode == -1) {
+                            tech.torlando.lxst.telephone.Profile.DEFAULT
+                        } else {
+                            tech.torlando.lxst.telephone.Profile
+                                .fromId(profileCode)
+                                ?: tech.torlando.lxst.telephone.Profile.DEFAULT
+                        }
+
+                    // Launch call on IO dispatcher (call() is suspend)
+                    scope.launch(Dispatchers.IO) {
+                        telephone.call(destHashBytes, profile)
+                    }
+                    """{"success": true}"""
                 }
-                """{"success": true}"""
             } else {
                 Log.w(TAG, "📞 Kotlin Telephone not available, falling back to Python")
                 // Fallback to Python call_manager
@@ -1450,11 +1457,16 @@ class ReticulumServiceBinder(
                     // Telephone doesn't know about incoming call (_notify_kotlin callback
                     // from Python doesn't work reliably via Chaquopy). Set up minimal
                     // state from CallCoordinator which Python notified directly.
-                    val identity = tech.torlando.lxst.core.CallCoordinator.getInstance()
-                        .remoteIdentity.value
+                    val identity =
+                        tech.torlando.lxst.core.CallCoordinator
+                            .getInstance()
+                            .remoteIdentity.value
                     if (identity != null) {
-                        Log.i(TAG, "📞 Telephone missed incoming call setup, " +
-                            "initializing from CallCoordinator: ${identity.take(16)}...")
+                        Log.i(
+                            TAG,
+                            "📞 Telephone missed incoming call setup, " +
+                                "initializing from CallCoordinator: ${identity.take(16)}...",
+                        )
                         telephone.prepareForAnswer(identity)
                         answered = telephone.answer()
                     }
@@ -1546,16 +1558,17 @@ class ReticulumServiceBinder(
             // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
             val telephone = wrapperManager.getTelephone()
             if (telephone != null) {
-                val status = when (telephone.callStatus) {
-                    tech.torlando.lxst.audio.Signalling.STATUS_AVAILABLE -> "available"
-                    tech.torlando.lxst.audio.Signalling.STATUS_CALLING -> "calling"
-                    tech.torlando.lxst.audio.Signalling.STATUS_RINGING -> "ringing"
-                    tech.torlando.lxst.audio.Signalling.STATUS_CONNECTING -> "connecting"
-                    tech.torlando.lxst.audio.Signalling.STATUS_ESTABLISHED -> "established"
-                    tech.torlando.lxst.audio.Signalling.STATUS_BUSY -> "busy"
-                    tech.torlando.lxst.audio.Signalling.STATUS_REJECTED -> "rejected"
-                    else -> "unknown"
-                }
+                val status =
+                    when (telephone.callStatus) {
+                        tech.torlando.lxst.audio.Signalling.STATUS_AVAILABLE -> "available"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CALLING -> "calling"
+                        tech.torlando.lxst.audio.Signalling.STATUS_RINGING -> "ringing"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CONNECTING -> "connecting"
+                        tech.torlando.lxst.audio.Signalling.STATUS_ESTABLISHED -> "established"
+                        tech.torlando.lxst.audio.Signalling.STATUS_BUSY -> "busy"
+                        tech.torlando.lxst.audio.Signalling.STATUS_REJECTED -> "rejected"
+                        else -> "unknown"
+                    }
                 val isActive = telephone.isCallActive()
                 val isMuted = telephone.isTransmitMuted()
                 """{"status": "$status", "is_active": $isActive, "is_muted": $isMuted}"""

@@ -62,14 +62,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.CallNotificationHelper
-import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
-import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
 import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
@@ -98,12 +96,10 @@ import com.lxmf.messenger.ui.screens.offlinemaps.OfflineMapsScreen
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingPagerScreen
 import com.lxmf.messenger.ui.screens.tcpclient.TcpClientWizardScreen
 import com.lxmf.messenger.ui.theme.ColumbaTheme
+import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
-import com.lxmf.messenger.viewmodel.MainViewModel
-import com.lxmf.messenger.viewmodel.MigrationViewModel
-import com.lxmf.messenger.viewmodel.NotificationSettingsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
@@ -443,7 +439,9 @@ sealed class PendingNavigation {
         val lxmaUrl: String,
     ) : PendingNavigation()
 
-    data class SharedText(val text: String) : PendingNavigation()
+    data class SharedText(
+        val text: String,
+    ) : PendingNavigation()
 
     data class IncomingCall(
         val identityHash: String,
@@ -451,6 +449,11 @@ sealed class PendingNavigation {
 
     data class AnswerCall(
         val identityHash: String,
+    ) : PendingNavigation()
+
+    /** Navigate to Identity Manager with a pre-filled Base32 identity key (from Sideband share) */
+    data class ImportIdentityFromText(
+        val base32Text: String,
     ) : PendingNavigation()
 
     /** Navigate to interface stats screen for an existing configured interface */
@@ -615,6 +618,12 @@ fun ColumbaNavigation(
                     }
                     pendingContactAdd = navigation.lxmaUrl
                     Log.d("ColumbaNavigation", "Navigated to contacts for deep link: ${navigation.lxmaUrl}")
+                }
+                is PendingNavigation.ImportIdentityFromText -> {
+                    // Navigate to Identity Manager with pre-filled Base32 key
+                    val encodedKey = Uri.encode(navigation.base32Text)
+                    navController.navigate("identity_manager?base32Key=$encodedKey")
+                    Log.d("ColumbaNavigation", "Navigated to identity import from shared text")
                 }
                 is PendingNavigation.SharedText -> {
                     sharedTextViewModel.setText(navigation.text)
@@ -1589,9 +1598,21 @@ fun ColumbaNavigation(
                         )
                     }
 
-                    composable("identity_manager") {
+                    composable(
+                        "identity_manager?base32Key={base32Key}",
+                        arguments =
+                            listOf(
+                                navArgument("base32Key") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val base32Key = backStackEntry.arguments?.getString("base32Key")
                         IdentityManagerScreen(
                             onNavigateBack = { navController.popBackStack() },
+                            prefilledBase32Key = base32Key,
                         )
                     }
 

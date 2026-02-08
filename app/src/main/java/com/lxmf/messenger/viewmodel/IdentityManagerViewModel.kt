@@ -9,14 +9,18 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
+import com.lxmf.messenger.util.Base32
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 
 private const val TAG = "IdentityManagerVM"
@@ -419,6 +423,212 @@ class IdentityManagerViewModel
         }
 
         /**
+         * Import an identity from a Base32-encoded text string.
+         *
+         * This is the primary import path for Sideband interoperability.
+         * Sideband shares identity keys as Base32 text via Android's share sheet.
+         */
+        fun importIdentityFromBase32(
+            base32Text: String,
+            displayName: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    _uiState.value = IdentityManagerUiState.Loading("Importing identity...")
+
+                    // Decode Base32 to raw bytes
+                    val fileData =
+                        try {
+                            Base32.decode(base32Text.trim())
+                        } catch (e: IllegalArgumentException) {
+                            error("Invalid Base32 key: ${e.message}")
+                        }
+
+                    require(fileData.size == 64) {
+                        "Invalid identity key: expected 64 bytes, got ${fileData.size}"
+                    }
+
+                    // Import via Python service (same path as file import)
+                    val result = reticulumProtocol.importIdentityFile(fileData, displayName)
+
+                    if (result.containsKey("error")) {
+                        _uiState.value =
+                            IdentityManagerUiState.Error(
+                                result["error"] as? String ?: "Unknown error",
+                            )
+                        return@launch
+                    }
+
+                    // Extract identity info
+                    val identityHash = checkNotNull(result["identity_hash"] as? String) { "No identity_hash in result" }
+                    val destinationHash = checkNotNull(result["destination_hash"] as? String) { "No destination_hash in result" }
+                    val filePath = checkNotNull(result["file_path"] as? String) { "No file_path in result" }
+                    val keyData =
+                        result["key_data"] as? ByteArray
+
+                    // Check if identity already exists
+                    val existingIdentity = identities.value.find { it.identityHash == identityHash }
+                    if (existingIdentity != null) {
+                        _uiState.value =
+                            IdentityManagerUiState.Error(
+                                "Identity already exists as \"${existingIdentity.displayName}\"",
+                            )
+                        return@launch
+                    }
+
+                    // Save to database
+                    identityRepository
+                        .importIdentity(
+                            identityHash = identityHash,
+                            displayName = displayName,
+                            destinationHash = destinationHash,
+                            filePath = filePath,
+                            keyData = keyData,
+                        ).onSuccess {
+                            _uiState.value =
+                                IdentityManagerUiState.Success("Identity imported successfully")
+                        }.onFailure { e ->
+                            _uiState.value =
+                                IdentityManagerUiState.Error(
+                                    e.message ?: "Failed to save imported identity",
+                                )
+                        }
+                } catch (e: Exception) {
+                    _uiState.value =
+                        IdentityManagerUiState.Error(
+                            e.message ?: "Failed to import identity from text",
+                        )
+                }
+            }
+        }
+
+        /**
+         * Export an identity as a Base32 text string for sharing with Sideband.
+         */
+        fun exportIdentityAsText(
+            identityHash: String,
+            filePath: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    _uiState.value = IdentityManagerUiState.Loading("Exporting identity...")
+
+                    val fileData = reticulumProtocol.exportIdentityFile(identityHash, filePath)
+
+                    if (fileData.isEmpty()) {
+                        _uiState.value =
+                            IdentityManagerUiState.Error("Failed to read identity file")
+                        return@launch
+                    }
+
+                    val base32String = Base32.encode(fileData)
+                    _uiState.value = IdentityManagerUiState.ExportTextReady(base32String)
+                } catch (e: Exception) {
+                    _uiState.value =
+                        IdentityManagerUiState.Error(
+                            e.message ?: "Failed to export identity as text",
+                        )
+                }
+            }
+        }
+
+        /**
+         * Import an identity from a Sideband tar.gz backup file.
+         *
+         * Sideband backups contain `Sideband Backup/primary_identity` which is the
+         * raw 64-byte identity file.
+         */
+        @Suppress("NestedBlockDepth") // tar.gz extraction requires nested stream handling
+        fun importIdentityFromBackup(
+            fileUri: Uri,
+            displayName: String,
+        ) {
+            viewModelScope.launch {
+                try {
+                    _uiState.value = IdentityManagerUiState.Loading("Extracting backup...")
+
+                    // Read and extract identity from tar.gz (I/O off main thread)
+                    val fileData =
+                        withContext(Dispatchers.IO) {
+                            checkNotNull(
+                                context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
+                                    GZIPInputStream(inputStream).use { gzipStream ->
+                                        extractIdentityFromTar(gzipStream)
+                                    }
+                                },
+                            ) { "Failed to open backup file" }
+                        }
+
+                    require(fileData.size == 64) {
+                        "Invalid identity in backup: expected 64 bytes, got ${fileData.size}"
+                    }
+
+                    // Import via Python service (same path as file import)
+                    _uiState.value = IdentityManagerUiState.Loading("Importing identity...")
+                    val result = reticulumProtocol.importIdentityFile(fileData, displayName)
+
+                    if (result.containsKey("error")) {
+                        _uiState.value =
+                            IdentityManagerUiState.Error(
+                                result["error"] as? String ?: "Unknown error",
+                            )
+                        return@launch
+                    }
+
+                    // Extract identity info
+                    val identityHash = checkNotNull(result["identity_hash"] as? String) { "No identity_hash in result" }
+                    val destinationHash = checkNotNull(result["destination_hash"] as? String) { "No destination_hash in result" }
+                    val resultFilePath = checkNotNull(result["file_path"] as? String) { "No file_path in result" }
+                    val keyData =
+                        result["key_data"] as? ByteArray
+
+                    // Check if identity already exists
+                    val existingIdentity = identities.value.find { it.identityHash == identityHash }
+                    if (existingIdentity != null) {
+                        _uiState.value =
+                            IdentityManagerUiState.Error(
+                                "Identity already exists as \"${existingIdentity.displayName}\"",
+                            )
+                        return@launch
+                    }
+
+                    // Save to database
+                    identityRepository
+                        .importIdentity(
+                            identityHash = identityHash,
+                            displayName = displayName,
+                            destinationHash = destinationHash,
+                            filePath = resultFilePath,
+                            keyData = keyData,
+                        ).onSuccess {
+                            _uiState.value =
+                                IdentityManagerUiState.Success(
+                                    "Identity imported from backup successfully",
+                                )
+                        }.onFailure { e ->
+                            _uiState.value =
+                                IdentityManagerUiState.Error(
+                                    e.message ?: "Failed to save imported identity",
+                                )
+                        }
+                } catch (e: Exception) {
+                    _uiState.value =
+                        IdentityManagerUiState.Error(
+                            e.message ?: "Failed to import from backup",
+                        )
+                }
+            }
+        }
+
+        /**
+         * Extract the primary_identity file from a Sideband tar archive.
+         *
+         * Sideband backup tars use `arcname="Sideband Backup"`, so the identity
+         * file is at path `Sideband Backup/primary_identity`.
+         */
+        private fun extractIdentityFromTar(inputStream: java.io.InputStream): ByteArray = TarIdentityExtractor.extract(inputStream)
+
+        /**
          * Get statistics for an identity (for the delete confirmation dialog).
          */
         fun getIdentityStats(identityHash: String): IdentityStats {
@@ -460,6 +670,10 @@ sealed class IdentityManagerUiState {
 
     data class ExportReady(
         val uri: Uri,
+    ) : IdentityManagerUiState()
+
+    data class ExportTextReady(
+        val base32String: String,
     ) : IdentityManagerUiState()
 }
 

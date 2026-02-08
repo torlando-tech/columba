@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
+import com.lxmf.messenger.util.Base32
 
 class MainActivityIntentHandler(
     private val activity: MainActivity,
@@ -64,11 +65,18 @@ class MainActivityIntentHandler(
         }
 
         val extrasKeys = intent.extras?.keySet()?.joinToString() ?: "<none>"
-        val clipLabel = intent.clipData?.description?.label?.toString() ?: "<none>"
+        val clipLabel =
+            intent.clipData
+                ?.description
+                ?.label
+                ?.toString() ?: "<none>"
         val sharedText =
             intent.getStringExtra(Intent.EXTRA_TEXT)
                 ?: intent.getStringExtra(Intent.EXTRA_HTML_TEXT)
-                ?: intent.clipData?.getItemAt(0)?.coerceToText(activity)?.toString()
+                ?: intent.clipData
+                    ?.getItemAt(0)
+                    ?.coerceToText(activity)
+                    ?.toString()
 
         if (!sharedText.isNullOrBlank()) {
             Log.d(
@@ -93,7 +101,11 @@ class MainActivityIntentHandler(
         }
 
         val extrasKeys = intent.extras?.keySet()?.joinToString() ?: "<none>"
-        val clipLabel = intent.clipData?.description?.label?.toString() ?: "<none>"
+        val clipLabel =
+            intent.clipData
+                ?.description
+                ?.label
+                ?.toString() ?: "<none>"
         val sharedTextList = intent.getCharSequenceArrayListExtra(Intent.EXTRA_TEXT)
         val sharedText =
             sharedTextList?.joinToString("\n") { it.toString() }
@@ -131,7 +143,12 @@ class MainActivityIntentHandler(
 
     private fun triggerSharedText(sharedText: String) {
         pendingNavigation.value = null
-        pendingNavigation.value = PendingNavigation.SharedText(sharedText)
+        if (Base32.isIdentityKey(sharedText)) {
+            Log.d(logTag, "Shared text is a valid identity key, routing to identity import")
+            pendingNavigation.value = PendingNavigation.ImportIdentityFromText(sharedText.trim())
+        } else {
+            pendingNavigation.value = PendingNavigation.SharedText(sharedText)
+        }
     }
 
     private fun handleOpenCall(intent: Intent) {

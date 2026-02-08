@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -687,6 +688,398 @@ class IdentityManagerViewModelTest {
                 assertEquals("FileProvider error", (errorState as IdentityManagerUiState.Error).message)
             }
         }
+
+    // ========== Import Identity from Base32 Tests ==========
+
+    /** A valid 64-byte identity key encoded as Base32. */
+    private val testIdentityBytes = ByteArray(64) { (it * 3 + 17).toByte() }
+    private val testBase32Key =
+        com.lxmf.messenger.util.Base32
+            .encode(testIdentityBytes)
+
+    @Test
+    fun importIdentityFromBase32_success_transitionsToSuccessState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            coEvery { mockProtocol.importIdentityFile(testIdentityBytes, "Shared Key") } returns
+                mapOf(
+                    "identity_hash" to "b32_hash",
+                    "destination_hash" to "b32_dest",
+                    "file_path" to "/data/identity_b32_hash",
+                )
+            coEvery { mockRepository.importIdentity(any(), any(), any(), any()) } returns
+                Result.success(createTestIdentity(hash = "b32_hash"))
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBase32(testBase32Key, "Shared Key")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val successState = awaitItem()
+                assertTrue(successState is IdentityManagerUiState.Success)
+                assertEquals(
+                    "Identity imported successfully",
+                    (successState as IdentityManagerUiState.Success).message,
+                )
+            }
+        }
+
+    @Test
+    fun importIdentityFromBase32_invalidBase32_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When — garbage that isn't valid Base32
+                viewModel.importIdentityFromBase32("not-valid-base32!@#", "Test")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("Invalid Base32"))
+            }
+        }
+
+    @Test
+    fun importIdentityFromBase32_wrongSize_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — valid Base32 but only 32 bytes (not 64)
+            val shortKey =
+                com.lxmf.messenger.util.Base32
+                    .encode(ByteArray(32) { it.toByte() })
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBase32(shortKey, "Test")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("expected 64 bytes"))
+            }
+        }
+
+    @Test
+    fun importIdentityFromBase32_pythonError_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            coEvery { mockProtocol.importIdentityFile(any(), any()) } returns mockPythonError()
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBase32(testBase32Key, "Test")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertEquals("Python error occurred", (errorState as IdentityManagerUiState.Error).message)
+            }
+        }
+
+    @Test
+    fun importIdentityFromBase32_duplicateIdentity_transitionsToErrorState() =
+        runTest {
+            // Given — identity already exists in the repository
+            val existingIdentity = createTestIdentity(hash = "existing_hash", displayName = "My Key")
+            every { mockRepository.allIdentities } returns MutableStateFlow(listOf(existingIdentity))
+            val viewModel = createTestViewModel()
+
+            // WhileSubscribed requires an active collector for identities to populate
+            val identitiesJob = launch { viewModel.identities.collect {} }
+            advanceUntilIdle()
+
+            coEvery { mockProtocol.importIdentityFile(any(), any()) } returns
+                mapOf(
+                    "identity_hash" to "existing_hash",
+                    "destination_hash" to "existing_dest",
+                    "file_path" to "/data/identity_existing",
+                )
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBase32(testBase32Key, "Duplicate")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("already exists"))
+                assertTrue(errorState.message.contains("My Key"))
+            }
+
+            identitiesJob.cancel()
+        }
+
+    @Test
+    fun importIdentityFromBase32_databaseError_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            coEvery { mockProtocol.importIdentityFile(any(), any()) } returns
+                mapOf(
+                    "identity_hash" to "new_hash",
+                    "destination_hash" to "new_dest",
+                    "file_path" to "/data/identity_new",
+                )
+            coEvery { mockRepository.importIdentity(any(), any(), any(), any()) } returns
+                Result.failure(RuntimeException("DB write failed"))
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBase32(testBase32Key, "Test")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertEquals("DB write failed", (errorState as IdentityManagerUiState.Error).message)
+            }
+        }
+
+    // ========== Export Identity as Text Tests ==========
+
+    @Test
+    fun exportIdentityAsText_success_transitionsToExportTextReadyState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            val fileData = ByteArray(64) { it.toByte() }
+            coEvery { mockProtocol.exportIdentityFile("id1", "/test/path") } returns fileData
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.exportIdentityAsText("id1", "/test/path")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val exportState = awaitItem()
+                assertTrue(exportState is IdentityManagerUiState.ExportTextReady)
+
+                // Verify round-trip: decode the Base32 string back to bytes
+                val decoded =
+                    com.lxmf.messenger.util.Base32.decode(
+                        (exportState as IdentityManagerUiState.ExportTextReady).base32String,
+                    )
+                assertArrayEquals(fileData, decoded)
+            }
+        }
+
+    @Test
+    fun exportIdentityAsText_emptyFileData_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns byteArrayOf()
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.exportIdentityAsText("id1", "/test/path")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertEquals("Failed to read identity file", (errorState as IdentityManagerUiState.Error).message)
+            }
+        }
+
+    @Test
+    fun exportIdentityAsText_protocolException_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            coEvery { mockProtocol.exportIdentityFile(any(), any()) } throws
+                RuntimeException("Service not connected")
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.exportIdentityAsText("id1", "/test/path")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertEquals("Service not connected", (errorState as IdentityManagerUiState.Error).message)
+            }
+        }
+
+    // ========== Import Identity from Backup Tests ==========
+
+    @Test
+    fun importIdentityFromBackup_success_transitionsToSuccessState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — build a gzipped tar containing a 64-byte identity
+            val identityData = ByteArray(64) { (it * 5).toByte() }
+            val tarBytes = buildTestTar("Sideband Backup/primary_identity", identityData)
+            val gzipBytes = gzipCompress(tarBytes)
+
+            val mockUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(mockUri) } returns ByteArrayInputStream(gzipBytes)
+
+            coEvery { mockProtocol.importIdentityFile(identityData, "From Backup") } returns
+                mapOf(
+                    "identity_hash" to "backup_hash",
+                    "destination_hash" to "backup_dest",
+                    "file_path" to "/data/identity_backup",
+                )
+            coEvery { mockRepository.importIdentity(any(), any(), any(), any()) } returns
+                Result.success(createTestIdentity(hash = "backup_hash"))
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBackup(mockUri, "From Backup")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                // Second loading state: "Importing identity..."
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val successState = awaitItem()
+                assertTrue(successState is IdentityManagerUiState.Success)
+                assertEquals(
+                    "Identity imported from backup successfully",
+                    (successState as IdentityManagerUiState.Success).message,
+                )
+            }
+        }
+
+    @Test
+    fun importIdentityFromBackup_wrongIdentitySize_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — tar contains a 32-byte file (not 64)
+            val shortData = ByteArray(32) { it.toByte() }
+            val tarBytes = buildTestTar("Sideband Backup/primary_identity", shortData)
+            val gzipBytes = gzipCompress(tarBytes)
+
+            val mockUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(mockUri) } returns ByteArrayInputStream(gzipBytes)
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBackup(mockUri, "Bad Backup")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("expected 64 bytes"))
+            }
+        }
+
+    @Test
+    fun importIdentityFromBackup_nullInputStream_transitionsToErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            val mockUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(mockUri) } returns null
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+
+                // When
+                viewModel.importIdentityFromBackup(mockUri, "Test")
+                testDispatcher.scheduler.advanceUntilIdle()
+
+                // Then
+                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
+                val errorState = awaitItem()
+                assertTrue(errorState is IdentityManagerUiState.Error)
+                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("Failed"))
+            }
+        }
+
+    // ========== Backup Test Helpers ==========
+
+    /** Build a minimal tar archive with one entry. */
+    private fun buildTestTar(
+        name: String,
+        data: ByteArray,
+    ): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val header = ByteArray(512)
+        // Name field (0-99)
+        name.toByteArray(Charsets.US_ASCII).copyInto(header, 0, 0, minOf(name.length, 100))
+        // Size field (124-135), octal
+        data.size
+            .toString(8)
+            .padStart(11, '0')
+            .toByteArray(Charsets.US_ASCII)
+            .copyInto(header, 124)
+        header[156] = '0'.code.toByte()
+        out.write(header)
+        out.write(data)
+        val remainder = data.size % 512
+        if (remainder > 0) out.write(ByteArray(512 - remainder))
+        out.write(ByteArray(1024)) // end-of-archive
+        return out.toByteArray()
+    }
+
+    /** Gzip-compress a byte array. */
+    private fun gzipCompress(data: ByteArray): ByteArray {
+        val bos = java.io.ByteArrayOutputStream()
+        java.util.zip
+            .GZIPOutputStream(bos)
+            .use { it.write(data) }
+        return bos.toByteArray()
+    }
 
     // ========== Reset UI State Tests ==========
 

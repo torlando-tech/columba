@@ -626,7 +626,7 @@ class IdentityManagerViewModel
             // Simple tar parser: read 512-byte headers, look for primary_identity
             val headerBuffer = ByteArray(512)
             while (true) {
-                val bytesRead = inputStream.readNBytes(headerBuffer, 0, 512)
+                val bytesRead = inputStream.readFully(headerBuffer, 0, 512)
                 check(bytesRead == 512) { "Identity not found in backup (unexpected end of archive)" }
 
                 // Check for zero block (end of archive)
@@ -649,12 +649,42 @@ class IdentityManagerViewModel
                 if (fileName.endsWith("primary_identity") || fileName.endsWith("/identity")) {
                     // Found it - read the file data
                     val data = ByteArray(fileSize.toInt())
-                    val dataRead = inputStream.readNBytes(data, 0, fileSize.toInt())
+                    val dataRead = inputStream.readFully(data, 0, fileSize.toInt())
                     check(dataRead == fileSize.toInt()) { "Truncated identity file in backup" }
                     return data
                 } else {
                     // Skip this entry's data
-                    inputStream.skipNBytes(paddedSize)
+                    inputStream.skipFully(paddedSize)
+                }
+            }
+        }
+
+        /** Read exactly [len] bytes into [buf] at [off]. Returns bytes read (< len only at EOF). */
+        private fun java.io.InputStream.readFully(
+            buf: ByteArray,
+            off: Int,
+            len: Int,
+        ): Int {
+            var totalRead = 0
+            while (totalRead < len) {
+                val n = read(buf, off + totalRead, len - totalRead)
+                if (n < 0) break
+                totalRead += n
+            }
+            return totalRead
+        }
+
+        /** Skip exactly [n] bytes, looping since InputStream.skip() may skip fewer. */
+        private fun java.io.InputStream.skipFully(n: Long) {
+            var remaining = n
+            while (remaining > 0) {
+                val skipped = skip(remaining)
+                if (skipped == 0L) {
+                    // skip() returned 0 — read and discard a byte to make progress
+                    if (read() < 0) break
+                    remaining--
+                } else {
+                    remaining -= skipped
                 }
             }
         }

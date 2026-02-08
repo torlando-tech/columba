@@ -70,6 +70,7 @@ data class ReplyPreview(
     val firstFileName: String?, // For file attachment preview
 )
 
+@Suppress("LargeClass")
 @Singleton
 class ConversationRepository
     @Inject
@@ -907,5 +908,4 @@ class ConversationRepository
             )
             return result
         }
-
     }

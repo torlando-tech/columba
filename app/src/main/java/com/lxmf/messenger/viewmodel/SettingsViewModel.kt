@@ -50,6 +50,7 @@ enum class SettingsCardId {
     THEME,
     BATTERY,
     DATA_MIGRATION,
+    RNODE_FLASHER,
     ABOUT,
     SHARED_INSTANCE_BANNER,
 }

@@ -397,7 +397,7 @@ class PythonWrapperManager(
                 // Get network packet bridge singleton (eager init for Phase 10)
                 val netBridge = PacketRouter.getInstance(context)
                 networkPacketBridge = netBridge
-                wrapper.callAttr("set_network_bridge", netBridge)
+                wrapper.callAttr("set_network_bridge", netBridge)?.close()
                 Log.d(TAG, "Network packet bridge set in Python wrapper")
 
                 // Initialize the call manager
@@ -413,6 +413,7 @@ class PythonWrapperManager(
                         ?.toBoolean() ?: false
 
                 if (success) {
+                    result?.close()
                     Log.i(TAG, "📞 CallManager initialized successfully")
 
                     // Store reference to call_manager for Telephone setup
@@ -439,23 +440,23 @@ class PythonWrapperManager(
                         callBridge.setCallManager(
                             object : CallController {
                                 override fun call(destinationHash: String) {
-                                    cm.callAttr("call", destinationHash)
+                                    cm.callAttr("call", destinationHash)?.close()
                                 }
 
                                 override fun answer() {
-                                    cm.callAttr("answer")
+                                    cm.callAttr("answer")?.close()
                                 }
 
                                 override fun hangup() {
-                                    cm.callAttr("hangup")
+                                    cm.callAttr("hangup")?.close()
                                 }
 
                                 override fun muteMicrophone(muted: Boolean) {
-                                    cm.callAttr("mute_microphone", muted)
+                                    cm.callAttr("mute_microphone", muted)?.close()
                                 }
 
                                 override fun setSpeaker(enabled: Boolean) {
-                                    cm.callAttr("set_speaker", enabled)
+                                    cm.callAttr("set_speaker", enabled)?.close()
                                 }
                             },
                         )
@@ -469,6 +470,7 @@ class PythonWrapperManager(
                             ?.find { it.key.toString() == "error" }
                             ?.value
                             ?.toString() ?: "Unknown error"
+                    result?.close()
                     Log.e(TAG, "Failed to initialize CallManager: $error")
                     false
                 }

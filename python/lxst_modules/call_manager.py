@@ -262,9 +262,13 @@ class CallManager:
             RNS.log("Cannot call: CallManager not initialized", RNS.LOG_ERROR)
             return {"success": False, "error": "CallManager not initialized"}
 
-        if self.active_call is not None:
-            RNS.log("Cannot call: already in call", RNS.LOG_WARNING)
-            return {"success": False, "error": "Already in call"}
+        # Reserve the line under lock so incoming calls see _busy and get
+        # rejected during path discovery (which can block for up to 70s).
+        with self._call_handler_lock:
+            if self.active_call is not None or self._busy:
+                RNS.log("Cannot call: already in call", RNS.LOG_WARNING)
+                return {"success": False, "error": "Already in call"}
+            self._busy = True
 
         try:
             identity_hash = bytes.fromhex(destination_hash_hex)
@@ -295,11 +299,12 @@ class CallManager:
 
             # Establish link
             RNS.log(f"Establishing link to {destination_hash_hex[:16]}...", RNS.LOG_INFO)
-            self.active_call = RNS.Link(
-                call_destination,
-                established_callback=self.__outgoing_link_established,
-                closed_callback=self.__link_closed
-            )
+            with self._call_handler_lock:
+                self.active_call = RNS.Link(
+                    call_destination,
+                    established_callback=self.__outgoing_link_established,
+                    closed_callback=self.__link_closed
+                )
 
             return {"success": True}
 
@@ -309,6 +314,9 @@ class CallManager:
         except Exception as e:
             RNS.log(f"Error initiating call: {e}", RNS.LOG_ERROR)
             return {"success": False, "error": str(e)}
+        finally:
+            with self._call_handler_lock:
+                self._busy = False
 
     def answer(self):
         """Answer an incoming call.

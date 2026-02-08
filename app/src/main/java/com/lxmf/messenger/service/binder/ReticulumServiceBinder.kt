@@ -1100,6 +1100,11 @@ class ReticulumServiceBinder(
         // Note: BLE bridge is set in beforeInit callback (before Python initialization)
         // because AndroidBLEDriver needs it during Reticulum startup
 
+        // CallManager/Telephone first — no dependency on other bridges, and users
+        // may attempt calls shortly after the app starts (the retry window in
+        // CallViewModel is limited).
+        setupLxstCallManager()
+
         setupBleCoordinator()
         initializeRNodeInterface()
         setupReticulumBridgeCallback()
@@ -1112,7 +1117,6 @@ class ReticulumServiceBinder(
         setupPropagationStateCallback()
         // Note: Native stamp generator is registered in setupPreInitializationBridges()
         // to ensure it's available before any stamp generation can occur
-        setupLxstCallManager()
     }
 
     /** Wire up BLE coordinator to broadcast connection changes via IPC. */
@@ -1246,10 +1250,8 @@ class ReticulumServiceBinder(
         try {
             val callManagerInitialized = wrapperManager.setupCallManager()
             if (callManagerInitialized) {
-                Log.i(TAG, "📞 LXST voice call support enabled")
-                registerCallBridgeListeners()
-            } else {
-                Log.w(TAG, "📞 LXST voice call support not available")
+                registerCallCoordinatorListeners()
+                wrapperManager.setupTelephone()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
@@ -1257,9 +1259,9 @@ class ReticulumServiceBinder(
     }
 
     /** Register listeners for IPC notification to UI process. */
-    private fun registerCallBridgeListeners() {
+    private fun registerCallCoordinatorListeners() {
         val callBridge =
-            com.lxmf.messenger.reticulum.call.bridge.CallBridge
+            tech.torlando.lxst.core.CallCoordinator
                 .getInstance()
         val callNotificationHelper = CallNotificationHelper(context)
 
@@ -1298,7 +1300,7 @@ class ReticulumServiceBinder(
         }
         callBridge.setCallStateChangedListener { state, identityHash ->
             // Cancel incoming notification when call becomes active (answered)
-            if (state == "active") {
+            if (state == "established") {
                 callNotificationHelper.cancelIncomingCallNotification()
             }
 
@@ -1391,17 +1393,39 @@ class ReticulumServiceBinder(
     ): String =
         try {
             Log.i(TAG, "📞 Initiating call to ${destHash.take(16)} with profile=${if (profileCode == -1) "default" else "0x${profileCode.toString(16)}"}...")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"success": false, "error": "CallManager not initialized"}"""
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                // Validate hex string before decoding (IPC boundary input)
+                val isValidHex = destHash.length % 2 == 0 && destHash.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                if (!isValidHex) {
+                    """{"success": false, "error": "Invalid destination hash"}"""
+                } else if (telephone.isCallActive()) {
+                    """{"success": false, "error": "Already in call"}"""
                 } else {
-                    // Pass profile to Python: -1 means use default (pass null to Python)
-                    val profile: Any? = if (profileCode == -1) null else profileCode
-                    val result = callManager.callAttr("call", destHash, profile)
-                    result?.toString() ?: """{"success": false, "error": "No result"}"""
+                    val destHashBytes = destHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+                    // Convert profile code to Profile (-1 means default)
+                    val profile =
+                        if (profileCode == -1) {
+                            tech.torlando.lxst.telephone.Profile.DEFAULT
+                        } else {
+                            tech.torlando.lxst.telephone.Profile
+                                .fromId(profileCode)
+                                ?: tech.torlando.lxst.telephone.Profile.DEFAULT
+                        }
+
+                    // Launch call on IO dispatcher (call() is suspend)
+                    scope.launch(Dispatchers.IO) {
+                        telephone.call(destHashBytes, profile)
+                    }
+                    """{"success": true}"""
                 }
-            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+            } else {
+                Log.e(TAG, "📞 Telephone not initialized — cannot initiate call")
+                """{"success": false, "error": "Telephone not initialized"}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error initiating call", e)
             """{"success": false, "error": "${e.message}"}"""
@@ -1410,16 +1434,39 @@ class ReticulumServiceBinder(
     override fun answerCall(): String =
         try {
             Log.i(TAG, "📞 Answering call")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"success": false, "error": "CallManager not initialized"}"""
-                } else {
-                    val result = callManager.callAttr("answer")
-                    val success = result?.toBoolean() ?: false
-                    """{"success": $success}"""
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                var answered = telephone.answer()
+                if (!answered) {
+                    // Telephone doesn't know about incoming call (_notify_kotlin callback
+                    // from Python doesn't work reliably via Chaquopy). Set up minimal
+                    // state from CallCoordinator which Python notified directly.
+                    val identity =
+                        tech.torlando.lxst.core.CallCoordinator
+                            .getInstance()
+                            .remoteIdentity.value
+                    if (identity != null) {
+                        Log.i(
+                            TAG,
+                            "📞 Telephone missed incoming call setup, " +
+                                "initializing from CallCoordinator: ${identity.take(16)}...",
+                        )
+                        telephone.prepareForAnswer(identity)
+                        answered = telephone.answer()
+                    }
                 }
-            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+                if (answered) {
+                    """{"success": true}"""
+                } else {
+                    Log.e(TAG, "📞 Telephone.answer() returned false (not ringing or not incoming)")
+                    """{"success": false, "error": "Call not in ringing state"}"""
+                }
+            } else {
+                Log.e(TAG, "📞 Telephone not initialized — cannot answer call")
+                """{"success": false, "error": "Telephone not initialized"}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error answering call", e)
             """{"success": false, "error": "${e.message}"}"""
@@ -1428,9 +1475,13 @@ class ReticulumServiceBinder(
     override fun hangupCall() {
         try {
             Log.i(TAG, "📞 Hanging up call")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                callManager?.callAttr("hangup")
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                telephone.hangup()
+            } else {
+                Log.w(TAG, "📞 Telephone not initialized — ignoring hangup")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error hanging up call", e)
@@ -1439,15 +1490,22 @@ class ReticulumServiceBinder(
 
     override fun setCallMuted(muted: Boolean) {
         try {
-            Log.i(TAG, "📞 setCallMuted($muted) - calling Python mute_microphone")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager != null) {
-                    Log.i(TAG, "📞 Calling callManager.mute_microphone($muted)")
-                    callManager.callAttr("mute_microphone", muted)
-                    Log.i(TAG, "📞 mute_microphone call completed")
-                } else {
-                    Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+            Log.i(TAG, "📞 setCallMuted($muted)")
+
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                telephone.muteTransmit(muted)
+                Log.i(TAG, "📞 Kotlin Telephone muteTransmit($muted) called")
+            } else {
+                Log.w(TAG, "📞 Telephone not initialized, mute request ignored")
+                wrapperManager.withWrapper { wrapper ->
+                    val callManager = wrapper.callAttr("get_call_manager")
+                    if (callManager != null) {
+                        callManager.callAttr("mute_microphone", muted)
+                    } else {
+                        Log.w(TAG, "📞 WARNING: get_call_manager returned null!")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -1458,10 +1516,11 @@ class ReticulumServiceBinder(
     override fun setCallSpeaker(speakerOn: Boolean) {
         try {
             Log.d(TAG, "📞 Setting call speaker: $speakerOn")
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                callManager?.callAttr("set_speaker", speakerOn)
-            }
+
+            // Use AudioDevice directly for speaker routing (Phase 11 - Kotlin LXST)
+            tech.torlando.lxst.core.AudioDevice
+                .getInstance(context)
+                .setSpeakerphoneOn(speakerOn)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting call speaker", e)
         }
@@ -1469,15 +1528,34 @@ class ReticulumServiceBinder(
 
     override fun getCallState(): String =
         try {
-            wrapperManager.withWrapper { wrapper ->
-                val callManager = wrapper.callAttr("get_call_manager")
-                if (callManager == null) {
-                    """{"status": "unavailable", "is_active": false, "is_muted": false}"""
-                } else {
-                    val result = callManager.callAttr("get_call_state")
-                    result?.toString() ?: """{"status": "unknown", "is_active": false, "is_muted": false}"""
-                }
-            } ?: """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+            // Use Kotlin Telephone (Phase 11 - Kotlin LXST)
+            val telephone = wrapperManager.getTelephone()
+            if (telephone != null) {
+                val status =
+                    when (telephone.callStatus) {
+                        tech.torlando.lxst.audio.Signalling.STATUS_AVAILABLE -> "available"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CALLING -> "calling"
+                        tech.torlando.lxst.audio.Signalling.STATUS_RINGING -> "ringing"
+                        tech.torlando.lxst.audio.Signalling.STATUS_CONNECTING -> "connecting"
+                        tech.torlando.lxst.audio.Signalling.STATUS_ESTABLISHED -> "established"
+                        tech.torlando.lxst.audio.Signalling.STATUS_BUSY -> "busy"
+                        tech.torlando.lxst.audio.Signalling.STATUS_REJECTED -> "rejected"
+                        else -> "unknown"
+                    }
+                val isActive = telephone.isCallActive()
+                val isMuted = telephone.isTransmitMuted()
+                """{"status": "$status", "is_active": $isActive, "is_muted": $isMuted}"""
+            } else {
+                wrapperManager.withWrapper { wrapper ->
+                    val callManager = wrapper.callAttr("get_call_manager")
+                    if (callManager == null) {
+                        """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+                    } else {
+                        val result = callManager.callAttr("get_call_state")
+                        result?.toString() ?: """{"status": "unknown", "is_active": false, "is_muted": false}"""
+                    }
+                } ?: """{"status": "unavailable", "is_active": false, "is_muted": false}"""
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting call state", e)
             """{"status": "error", "is_active": false, "is_muted": false, "error": "${e.message}"}"""

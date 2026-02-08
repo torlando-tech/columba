@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -15,17 +13,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * ViewModel for voice call screens.
  *
- * Observes CallBridge state and provides UI-friendly state for
+ * Observes CallCoordinator state and provides UI-friendly state for
  * VoiceCallScreen and IncomingCallScreen.
  *
  * Uses ReticulumProtocol for call actions (IPC to service process)
- * and CallBridge for local state management.
+ * and CallCoordinator for local state management.
  */
 @HiltViewModel
 class CallViewModel
@@ -39,7 +39,7 @@ class CallViewModel
             private const val TAG = "CallViewModel"
         }
 
-        private val callBridge = CallBridge.getInstance()
+        private val callBridge = CallCoordinator.getInstance()
 
         // Expose call state from bridge
         val callState: StateFlow<CallState> = callBridge.callState

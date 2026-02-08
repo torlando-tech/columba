@@ -3,8 +3,8 @@ package com.lxmf.messenger.viewmodel
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -41,10 +41,10 @@ class CallViewModelTest {
     private lateinit var mockContactRepository: ContactRepository
     private lateinit var mockAnnounceRepository: AnnounceRepository
     private lateinit var mockProtocol: ReticulumProtocol
-    private lateinit var mockCallBridge: CallBridge
+    private lateinit var mockCallCoordinator: CallCoordinator
     private lateinit var viewModel: CallViewModel
 
-    // StateFlows for mocking CallBridge
+    // StateFlows for mocking CallCoordinator
     private lateinit var callStateFlow: MutableStateFlow<CallState>
     private lateinit var isMutedFlow: MutableStateFlow<Boolean>
     private lateinit var isSpeakerOnFlow: MutableStateFlow<Boolean>
@@ -61,7 +61,7 @@ class CallViewModelTest {
         mockContactRepository = mockk()
         mockAnnounceRepository = mockk()
         mockProtocol = mockk()
-        mockCallBridge = mockk()
+        mockCallCoordinator = mockk()
 
         // Initialize state flows
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
@@ -69,14 +69,14 @@ class CallViewModelTest {
         isSpeakerOnFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
 
-        // Mock CallBridge singleton
-        mockkObject(CallBridge.Companion)
-        every { CallBridge.getInstance() } returns mockCallBridge
-        every { mockCallBridge.callState } returns callStateFlow
-        every { mockCallBridge.isMuted } returns isMutedFlow
-        every { mockCallBridge.isSpeakerOn } returns isSpeakerOnFlow
-        every { mockCallBridge.remoteIdentity } returns remoteIdentityFlow
-        every { mockCallBridge.hasActiveCall() } answers {
+        // Mock CallCoordinator singleton
+        mockkObject(CallCoordinator.Companion)
+        every { CallCoordinator.getInstance() } returns mockCallCoordinator
+        every { mockCallCoordinator.callState } returns callStateFlow
+        every { mockCallCoordinator.isMuted } returns isMutedFlow
+        every { mockCallCoordinator.isSpeakerOn } returns isSpeakerOnFlow
+        every { mockCallCoordinator.remoteIdentity } returns remoteIdentityFlow
+        every { mockCallCoordinator.hasActiveCall() } answers {
             when (callStateFlow.value) {
                 is CallState.Connecting,
                 is CallState.Ringing,
@@ -87,12 +87,12 @@ class CallViewModelTest {
             }
         }
 
-        // Stub void methods on CallBridge
-        every { mockCallBridge.setConnecting(capture(connectingHashSlot)) } just Runs
+        // Stub void methods on CallCoordinator
+        every { mockCallCoordinator.setConnecting(capture(connectingHashSlot)) } just Runs
         // setEnded() must update the state flow to stop the duration timer loop
-        every { mockCallBridge.setEnded() } answers { callStateFlow.value = CallState.Ended }
-        every { mockCallBridge.setMutedLocally(capture(mutedSlot)) } just Runs
-        every { mockCallBridge.setSpeakerLocally(capture(speakerSlot)) } just Runs
+        every { mockCallCoordinator.setEnded() } answers { callStateFlow.value = CallState.Ended }
+        every { mockCallCoordinator.setMutedLocally(capture(mutedSlot)) } just Runs
+        every { mockCallCoordinator.setSpeakerLocally(capture(speakerSlot)) } just Runs
 
         // Stub protocol methods with default success returns
         coEvery { mockProtocol.initiateCall(any(), any()) } returns Result.success(Unit)
@@ -113,7 +113,7 @@ class CallViewModelTest {
     fun tearDown() {
         // Transition to Idle to stop any running duration timer
         callStateFlow.value = CallState.Idle
-        unmockkObject(CallBridge.Companion)
+        unmockkObject(CallCoordinator.Companion)
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -121,22 +121,22 @@ class CallViewModelTest {
     // ========== Call State Tests ==========
 
     @Test
-    fun `callState exposes CallBridge callState`() {
+    fun `callState exposes CallCoordinator callState`() {
         assertEquals(callStateFlow, viewModel.callState)
     }
 
     @Test
-    fun `isMuted exposes CallBridge isMuted`() {
+    fun `isMuted exposes CallCoordinator isMuted`() {
         assertEquals(isMutedFlow, viewModel.isMuted)
     }
 
     @Test
-    fun `isSpeakerOn exposes CallBridge isSpeakerOn`() {
+    fun `isSpeakerOn exposes CallCoordinator isSpeakerOn`() {
         assertEquals(isSpeakerOnFlow, viewModel.isSpeakerOn)
     }
 
     @Test
-    fun `remoteIdentity exposes CallBridge remoteIdentity`() {
+    fun `remoteIdentity exposes CallCoordinator remoteIdentity`() {
         assertEquals(remoteIdentityFlow, viewModel.remoteIdentity)
     }
 

@@ -179,18 +179,18 @@ class TestAnnounceHandler(unittest.TestCase):
     def test_received_announce_without_packet_hash(self):
         """received_announce should work without announce_packet_hash."""
         callback = MagicMock()
-        handler = reticulum_wrapper.AnnounceHandler("call.audio", callback)
+        handler = reticulum_wrapper.AnnounceHandler("nomadnetwork.node", callback)
 
         dest_hash = bytes.fromhex("deadbeef" * 4)
         identity = MagicMock()
-        app_data = b"audio_data"
+        app_data = b"node_data"
 
         handler.received_announce(dest_hash, identity, app_data)
 
         # Should still call callback with None for packet hash
         callback.assert_called_once()
         args = callback.call_args[0]
-        self.assertEqual(args[0], "call.audio")
+        self.assertEqual(args[0], "nomadnetwork.node")
         self.assertEqual(args[1], dest_hash)
 
 
@@ -230,7 +230,6 @@ class TestReticulumWrapperInitialization(unittest.TestCase):
         expected_aspects = [
             "lxmf.delivery",
             "lxmf.propagation",
-            "call.audio",
             "nomadnetwork.node",
             "rmsp.maps",
         ]
@@ -809,7 +808,7 @@ class TestReticulumWrapperAnnounceHandler(unittest.TestCase):
         mock_identity.get_public_key.return_value = b'key'
 
         self.wrapper._announce_handler(
-            "call.audio",
+            "nomadnetwork.node",
             b'd' * 16,
             mock_identity,
             None,

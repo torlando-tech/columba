@@ -126,14 +126,19 @@ def main():
     script_dir = Path(__file__).parent.resolve()
     project_dir = script_dir.parent
     python_dir = project_dir / 'python'
-    kotlin_dir = project_dir / 'reticulum' / 'src' / 'main' / 'java'
+    kotlin_dirs = [
+        project_dir / 'reticulum' / 'src' / 'main' / 'java',
+        project_dir / 'LXST-kt' / 'lxst' / 'src' / 'main' / 'java',
+    ]
 
     if not python_dir.exists():
         print(f"ERROR: Python directory not found: {python_dir}")
         sys.exit(2)
 
-    if not kotlin_dir.exists():
-        print(f"ERROR: Kotlin directory not found: {kotlin_dir}")
+    # At least one Kotlin source dir must exist
+    existing_kotlin_dirs = [d for d in kotlin_dirs if d.exists()]
+    if not existing_kotlin_dirs:
+        print(f"ERROR: No Kotlin directories found: {kotlin_dirs}")
         sys.exit(2)
 
     print("=" * 60)
@@ -142,8 +147,10 @@ def main():
     print()
 
     # Step 1: Extract bridge classes from Kotlin source (dynamic discovery)
-    print(f"Scanning Kotlin source for *Bridge classes: {kotlin_dir}")
-    bridge_classes = extract_bridge_classes_from_kotlin(kotlin_dir)
+    bridge_classes = set()
+    for kotlin_dir in existing_kotlin_dirs:
+        print(f"Scanning Kotlin source for *Bridge classes: {kotlin_dir}")
+        bridge_classes.update(extract_bridge_classes_from_kotlin(kotlin_dir))
     print(f"Found {len(bridge_classes)} bridge classes: {', '.join(sorted(bridge_classes))}")
     print()
 

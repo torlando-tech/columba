@@ -534,15 +534,17 @@ class CallManager:
         """
         self._rx_packet_count += 1
 
-        if self.active_call is None:
+        # Capture local ref to avoid TOCTOU race with hangup()/__link_closed()
+        link = self.active_call
+        if link is None:
             if self._rx_packet_count <= 5:
                 RNS.log(f"receive_audio_packet #{self._rx_packet_count}: active_call is None, dropping", RNS.LOG_WARNING)
             return
 
         try:
-            if hasattr(self.active_call, 'status') and self.active_call.status != RNS.Link.ACTIVE:
+            if hasattr(link, 'status') and link.status != RNS.Link.ACTIVE:
                 if self._rx_packet_count <= 5:
-                    RNS.log(f"receive_audio_packet #{self._rx_packet_count}: link not ACTIVE (status={self.active_call.status}), dropping", RNS.LOG_WARNING)
+                    RNS.log(f"receive_audio_packet #{self._rx_packet_count}: link not ACTIVE (status={link.status}), dropping", RNS.LOG_WARNING)
                 return
 
             # Convert jarray to bytes if needed (Chaquopy passes byte[] as jarray)
@@ -551,7 +553,7 @@ class CallManager:
 
             frame_data = {FIELD_FRAMES: packet_data}
             packed = umsgpack.packb(frame_data)
-            RNS.Packet(self.active_call, packed, create_receipt=False).send()
+            RNS.Packet(link, packed, create_receipt=False).send()
 
             if self._rx_packet_count <= 5 or self._rx_packet_count % 100 == 0:
                 RNS.log(f"receive_audio_packet #{self._rx_packet_count}: sent {len(packed)} bytes to remote", RNS.LOG_DEBUG)
@@ -567,10 +569,12 @@ class CallManager:
         Args:
             signal: int signal value
         """
-        if self.active_call is None:
+        # Capture local ref to avoid TOCTOU race with hangup()/__link_closed()
+        link = self.active_call
+        if link is None:
             return
 
-        self._send_signal_to_remote(signal, self.active_call)
+        self._send_signal_to_remote(signal, link)
 
     # ===== Stub Methods (audio handled by Kotlin) =====
 

@@ -60,6 +60,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.RNodeFlasherCard
+import com.lxmf.messenger.ui.screens.settings.cards.ShareColumbaCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
@@ -90,6 +91,7 @@ fun SettingsScreen(
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
+    onNavigateToApkSharing: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -382,6 +384,12 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.DATA_MIGRATION.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.DATA_MIGRATION, it) },
                     onNavigateToMigration = onNavigateToMigration,
+                )
+
+                ShareColumbaCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.SHARE_COLUMBA.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.SHARE_COLUMBA, it) },
+                    onNavigateToApkSharing = onNavigateToApkSharing,
                 )
 
                 RNodeFlasherCard(

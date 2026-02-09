@@ -31,6 +31,165 @@ LXMF = None
 
 
 # ============================================================================
+# SOCKS5 Proxy Support (for Tor/Orbot)
+# ============================================================================
+# Minimal SOCKS5 client implementation for routing TCP connections through
+# a SOCKS5 proxy (e.g., Orbot for Tor .onion address support).
+# No external dependencies required - implements the SOCKS5 handshake directly.
+import socket as _socket
+
+# Registry of (target_host, target_port) -> (proxy_host, proxy_port)
+_socks_proxy_targets = {}
+_original_create_connection = None
+
+
+def _socks5_connect(proxy_host, proxy_port, dest_host, dest_port, timeout=None):
+    """
+    Create a TCP connection through a SOCKS5 proxy.
+    Uses SOCKS5 with domain name resolution by the proxy (required for .onion).
+    """
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    if timeout is not None and timeout is not _socket._GLOBAL_DEFAULT_TIMEOUT:
+        sock.settimeout(timeout)
+
+    try:
+        # Connect to the SOCKS5 proxy
+        sock.connect((proxy_host, proxy_port))
+
+        # SOCKS5 greeting: version 5, 1 auth method, no-auth (0x00)
+        sock.sendall(b'\x05\x01\x00')
+
+        # Receive greeting response (2 bytes: version, chosen method)
+        resp = sock.recv(2)
+        if len(resp) < 2 or resp[0] != 0x05 or resp[1] != 0x00:
+            raise ConnectionError(
+                f"SOCKS5 proxy rejected connection (response: {resp.hex() if resp else 'empty'}). "
+                f"Ensure Orbot is running and connected."
+            )
+
+        # SOCKS5 connect request with domain name (ATYP=0x03)
+        dest_host_bytes = dest_host.encode('utf-8')
+        dest_port_bytes = struct.pack('!H', dest_port)
+        # Version(5) + CMD(connect=1) + RSV(0) + ATYP(domain=3) + len + domain + port
+        connect_req = (
+            b'\x05\x01\x00\x03'
+            + bytes([len(dest_host_bytes)])
+            + dest_host_bytes
+            + dest_port_bytes
+        )
+        sock.sendall(connect_req)
+
+        # Receive connect response (at least 10 bytes for IPv4 bind addr)
+        resp = sock.recv(10)
+        if len(resp) < 4:
+            raise ConnectionError(
+                f"SOCKS5 proxy returned incomplete response ({len(resp)} bytes)"
+            )
+        if resp[1] != 0x00:
+            error_codes = {
+                0x01: "general SOCKS server failure",
+                0x02: "connection not allowed by ruleset",
+                0x03: "network unreachable",
+                0x04: "host unreachable",
+                0x05: "connection refused",
+                0x06: "TTL expired",
+                0x07: "command not supported",
+                0x08: "address type not supported",
+            }
+            error_msg = error_codes.get(resp[1], f"unknown error (0x{resp[1]:02x})")
+            raise ConnectionError(
+                f"SOCKS5 connect to {dest_host}:{dest_port} failed: {error_msg}"
+            )
+
+        # If bind address type is domain (0x03), we need to read extra bytes
+        if resp[3] == 0x03:
+            # Domain type: read length byte + domain + port
+            extra_len = resp[4] + 2 - (len(resp) - 5) if len(resp) > 4 else 0
+            if extra_len > 0:
+                sock.recv(extra_len)
+        elif resp[3] == 0x04:
+            # IPv6: need 16 bytes addr + 2 port = 18 total, we got 10 - 4 header = 6
+            remaining = 12
+            sock.recv(remaining)
+
+        # Connection established through SOCKS5 proxy
+        return sock
+
+    except Exception:
+        sock.close()
+        raise
+
+
+def _socks_aware_create_connection(address, timeout=_socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
+    """
+    Drop-in replacement for socket.create_connection that routes
+    configured targets through their SOCKS5 proxy.
+    """
+    host, port = address
+
+    # Check if this target should go through a SOCKS proxy
+    proxy_config = _socks_proxy_targets.get((host, port))
+    if proxy_config is None and isinstance(host, str) and host.endswith('.onion'):
+        # Auto-route .onion addresses through any configured SOCKS proxy
+        proxy_config = _socks_proxy_targets.get('__default_tor__')
+
+    if proxy_config is not None:
+        proxy_host, proxy_port = proxy_config
+        log_info("SOCKS5", "create_connection",
+                 f"Routing {host}:{port} through SOCKS5 proxy {proxy_host}:{proxy_port}")
+        effective_timeout = timeout if timeout is not _socket._GLOBAL_DEFAULT_TIMEOUT else 30
+        return _socks5_connect(proxy_host, proxy_port, host, port, timeout=effective_timeout)
+    else:
+        # Standard connection for non-proxied targets
+        return _original_create_connection(address, timeout, source_address)
+
+
+def _install_socks_proxy(interfaces):
+    """
+    Scan interface configurations for SOCKS proxy settings and install
+    the socket monkey-patch if any are found.
+    """
+    global _original_create_connection, _socks_proxy_targets
+
+    _socks_proxy_targets.clear()
+    has_socks = False
+
+    for iface in interfaces:
+        if iface.get('type') != 'TCPClient':
+            continue
+        if not iface.get('socks_proxy_enabled', False):
+            continue
+
+        target_host = iface.get('target_host', '')
+        target_port = iface.get('target_port', 4242)
+        proxy_host = iface.get('socks_proxy_host', '127.0.0.1')
+        proxy_port = iface.get('socks_proxy_port', 9050)
+
+        _socks_proxy_targets[(target_host, target_port)] = (proxy_host, proxy_port)
+        has_socks = True
+
+        # Also register as default Tor proxy for auto-routing .onion addresses
+        if '__default_tor__' not in _socks_proxy_targets:
+            _socks_proxy_targets['__default_tor__'] = (proxy_host, proxy_port)
+
+        log_info("SOCKS5", "_install_socks_proxy",
+                 f"Registered SOCKS5 proxy for {target_host}:{target_port} "
+                 f"via {proxy_host}:{proxy_port}")
+
+    if has_socks:
+        if _original_create_connection is None:
+            _original_create_connection = _socket.create_connection
+        _socket.create_connection = _socks_aware_create_connection
+        log_info("SOCKS5", "_install_socks_proxy",
+                 f"Socket monkey-patch installed ({len(_socks_proxy_targets)} targets)")
+    elif _original_create_connection is not None:
+        # No SOCKS targets - restore original
+        _socket.create_connection = _original_create_connection
+        _original_create_connection = None
+        log_info("SOCKS5", "_install_socks_proxy", "Socket monkey-patch removed (no SOCKS targets)")
+
+
+# ============================================================================
 # Global Exception Handler
 # ============================================================================
 # Catches unhandled exceptions in any thread and logs them before the crash.
@@ -1718,6 +1877,14 @@ class ReticulumWrapper:
                 required_discovery_value=required_discovery_value,
             ):
                 return {"success": False, "error": "Failed to create config file"}
+
+            # Install SOCKS5 proxy support for Tor/Orbot connections
+            # Must be done before RNS.Reticulum() so TCP interfaces route through proxy
+            try:
+                _install_socks_proxy(enabled_interfaces)
+            except Exception as socks_err:
+                log_warning("ReticulumWrapper", "initialize",
+                           f"Failed to install SOCKS proxy: {socks_err}")
 
             # Set log level
             log_info("ReticulumWrapper", "initialize", "Setting RNS log level")

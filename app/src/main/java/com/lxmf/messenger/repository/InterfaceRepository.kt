@@ -247,6 +247,9 @@ class InterfaceRepository
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },
                             bootstrapOnly = json.optBoolean("bootstrap_only", false),
+                            socksProxyEnabled = json.optBoolean("socks_proxy_enabled", false),
+                            socksProxyHost = json.optString("socks_proxy_host", "127.0.0.1"),
+                            socksProxyPort = json.optInt("socks_proxy_port", 9050),
                         )
                     }
 

@@ -519,6 +519,14 @@ class LocationSharingManager
                 val expires = if (json.has("expires") && !json.isNull("expires")) json.getLong("expires") else null
                 val approxRadius = json.optInt("approxRadius", 0)
 
+                // Extract appearance data if present (from FIELD_TELEMETRY_STREAM entries)
+                val appearanceJson =
+                    if (json.has("appearance") && !json.isNull("appearance")) {
+                        json.getJSONObject("appearance").toString()
+                    } else {
+                        null
+                    }
+
                 val entity =
                     ReceivedLocationEntity(
                         id = UUID.randomUUID().toString(),
@@ -530,10 +538,11 @@ class LocationSharingManager
                         expiresAt = expires,
                         receivedAt = System.currentTimeMillis(),
                         approximateRadius = approxRadius,
+                        appearanceJson = appearanceJson,
                     )
 
                 receivedLocationDao.insert(entity)
-                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius")
+                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius appearance=${appearanceJson != null}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse/store received location: $locationJson", e)
             }

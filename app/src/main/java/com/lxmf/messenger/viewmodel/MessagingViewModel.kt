@@ -303,6 +303,9 @@ class MessagingViewModel
         // Debounce job for draft saving - cancels previous save when new text arrives
         private var draftSaveJob: kotlinx.coroutines.Job? = null
 
+        // Tracks the latest text from onDraftTextChanged so loadMessages can flush it on switch
+        private var lastDraftText: String = ""
+
         // Reply state - tracks which message is being replied to
         private val _pendingReplyTo = MutableStateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?>(null)
         val pendingReplyTo: StateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?> = _pendingReplyTo.asStateFlow()
@@ -874,9 +877,21 @@ class MessagingViewModel
             destinationHash: String,
             peerName: String = "Unknown",
         ) {
+            // Flush any pending draft save for the previous conversation
+            val previousHash = _currentConversation.value
+            draftSaveJob?.cancel()
+            draftSaveJob = null
+            if (previousHash != null && previousHash != destinationHash) {
+                viewModelScope.launch {
+                    // lastDraftText holds the most recent text from onDraftTextChanged
+                    saveDraftNow(previousHash, lastDraftText)
+                }
+            }
+
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash
+            lastDraftText = ""
 
             // Register this conversation as active (suppresses notifications for this peer)
             activeConversationManager.setActive(destinationHash)
@@ -912,16 +927,21 @@ class MessagingViewModel
         /**
          * Called when the user types in the message input field.
          * Debounces saves at 500ms to avoid excessive database writes.
+         * Re-checks the active conversation after the delay to prevent saving to the wrong chat.
          */
         fun onDraftTextChanged(text: String) {
             val peerHash = _currentConversation.value ?: return
+            lastDraftText = text
             draftSaveJob?.cancel()
             draftSaveJob = viewModelScope.launch {
                 kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
-                try {
-                    conversationRepository.saveDraft(peerHash, text)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error saving draft", e)
+                // Re-check: only save if still in the same conversation
+                if (_currentConversation.value == peerHash) {
+                    try {
+                        conversationRepository.saveDraft(peerHash, text)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error saving draft", e)
+                    }
                 }
             }
         }

@@ -41,6 +41,7 @@ class PttMediaSessionManager(
      * Activate the MediaSession to capture headset button events.
      * Call when PTT mode is enabled during an active call.
      */
+    @Synchronized
     fun activate() {
         if (isSessionActive) return
         Log.d(TAG, "Activating PTT MediaSession")
@@ -77,6 +78,7 @@ class PttMediaSessionManager(
      * Deactivate the MediaSession and release resources.
      * Call when PTT mode is disabled or the call ends.
      */
+    @Synchronized
     fun deactivate() {
         if (!isSessionActive) return
         Log.d(TAG, "Deactivating PTT MediaSession")

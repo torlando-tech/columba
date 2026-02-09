@@ -314,6 +314,7 @@ class CallViewModel
          */
         fun setPttActive(active: Boolean) {
             if (!callBridge.isPttMode.value) return
+            if (callState.value !is CallState.Active) return
             callBridge.setPttActiveLocally(active)
             callBridge.setMutedLocally(!active)
             viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(!active) } }

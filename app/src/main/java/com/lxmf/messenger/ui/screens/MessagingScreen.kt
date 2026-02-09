@@ -10,6 +10,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -66,6 +71,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Call
@@ -2015,6 +2021,8 @@ fun MessageInputBar(
                 )
             }
 
+            var showAttachmentMenu by remember { mutableStateOf(false) }
+
             Row(
                 modifier =
                     Modifier
@@ -2104,49 +2112,111 @@ fun MessageInputBar(
                     )
                 }
 
-                // Image attachment button
-                IconButton(
-                    onClick = onImageAttachmentClick,
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .padding(0.dp),
-                    enabled = !isProcessingImage,
+                // Attachment buttons - collapse when typing to give text field more space
+                AnimatedVisibility(
+                    visible = messageText.isEmpty(),
+                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
+                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
                 ) {
-                    if (isProcessingImage) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Image,
-                            contentDescription = "Attach image",
-                            modifier = Modifier.size(24.dp),
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Image attachment button
+                        IconButton(
+                            onClick = onImageAttachmentClick,
+                            modifier =
+                                Modifier
+                                    .size(48.dp)
+                                    .padding(0.dp),
+                            enabled = !isProcessingImage,
+                        ) {
+                            if (isProcessingImage) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = "Attach image",
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
+
+                        // File attachment button
+                        IconButton(
+                            onClick = onFileAttachmentClick,
+                            modifier =
+                                Modifier
+                                    .size(48.dp)
+                                    .padding(0.dp),
+                            enabled = !isProcessingFile,
+                        ) {
+                            if (isProcessingFile) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AttachFile,
+                                    contentDescription = "Attach file",
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
                     }
                 }
 
-                // File attachment button
-                IconButton(
-                    onClick = onFileAttachmentClick,
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .padding(0.dp),
-                    enabled = !isProcessingFile,
+                // Compact attachment button - appears when typing
+                AnimatedVisibility(
+                    visible = messageText.isNotBlank(),
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally(),
                 ) {
-                    if (isProcessingFile) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = "Attach file",
-                            modifier = Modifier.size(24.dp),
-                        )
+                    Box {
+                        IconButton(
+                            onClick = { showAttachmentMenu = true },
+                            modifier =
+                                Modifier
+                                    .size(48.dp)
+                                    .padding(0.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Attach",
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showAttachmentMenu,
+                            onDismissRequest = { showAttachmentMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Image") },
+                                onClick = {
+                                    showAttachmentMenu = false
+                                    onImageAttachmentClick()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Image, contentDescription = null)
+                                },
+                                enabled = !isProcessingImage,
+                            )
+                            DropdownMenuItem(
+                                text = { Text("File") },
+                                onClick = {
+                                    showAttachmentMenu = false
+                                    onFileAttachmentClick()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.AttachFile, contentDescription = null)
+                                },
+                                enabled = !isProcessingFile,
+                            )
+                        }
                     }
                 }
 

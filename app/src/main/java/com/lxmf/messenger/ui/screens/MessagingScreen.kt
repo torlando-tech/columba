@@ -2022,6 +2022,12 @@ fun MessageInputBar(
             }
 
             var showAttachmentMenu by remember { mutableStateOf(false) }
+            val hasText = messageText.isNotEmpty()
+
+            // Dismiss dropdown if text state changes (e.g. user clears input while menu is open)
+            LaunchedEffect(hasText) {
+                showAttachmentMenu = false
+            }
 
             Row(
                 modifier =
@@ -2114,7 +2120,7 @@ fun MessageInputBar(
 
                 // Attachment buttons - collapse when typing to give text field more space
                 AnimatedVisibility(
-                    visible = messageText.isEmpty(),
+                    visible = !hasText,
                     enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
                     exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
                 ) {
@@ -2172,7 +2178,7 @@ fun MessageInputBar(
 
                 // Compact attachment button - appears when typing
                 AnimatedVisibility(
-                    visible = messageText.isNotBlank(),
+                    visible = hasText,
                     enter = fadeIn() + expandHorizontally(),
                     exit = fadeOut() + shrinkHorizontally(),
                 ) {

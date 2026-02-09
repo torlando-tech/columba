@@ -119,6 +119,7 @@ class ServicePersistenceManager(
                         stampCostFlexibility = stampCostFlexibility,
                         peeringCost = peeringCost,
                         propagationTransferLimitKb = propagationTransferLimitKb,
+                        computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
                     )
 
                 announceDao.upsertAnnounce(entity)
@@ -459,32 +460,16 @@ class ServicePersistenceManager(
     }
 
     /**
-     * Find an announce by identity hash.
-     * Computes identity hash from each announce's public key and compares.
+     * Find an announce by identity hash using indexed column lookup.
      * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
      */
-    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? {
-        return try {
-            val allAnnounces = announceDao.getAllAnnouncesSync()
-            Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
-            for (announce in allAnnounces) {
-                val computedHash = HashUtils.computeIdentityHash(announce.publicKey)
-                Log.d(
-                    TAG,
-                    "  Announce ${announce.destinationHash.take(16)}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}",
-                )
-                if (computedHash.equals(identityHash, ignoreCase = true)) {
-                    Log.d(TAG, "  -> MATCHED!")
-                    return announce
-                }
-            }
-            Log.d(TAG, "No announce matched identity hash $identityHash")
-            null
+    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? =
+        try {
+            announceDao.getAnnounceByIdentityHash(identityHash.lowercase())
         } catch (e: Exception) {
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
-    }
 
     /**
      * Close the database connection.

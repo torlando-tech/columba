@@ -223,4 +223,23 @@ interface OfflineMapRegionDao {
      */
     @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' AND localStylePath IS NOT NULL LIMIT 1")
     suspend fun getFirstCompletedRegionWithLocalStyle(): OfflineMapRegionEntity?
+
+    /**
+     * Get the region marked as default map center.
+     * Returns null if no region is marked as default.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE isDefault = 1 AND status = 'COMPLETE' LIMIT 1")
+    suspend fun getDefaultRegion(): OfflineMapRegionEntity?
+
+    /**
+     * Clear the default flag from all regions.
+     */
+    @Query("UPDATE offline_map_regions SET isDefault = 0 WHERE isDefault = 1")
+    suspend fun clearDefaultRegion()
+
+    /**
+     * Set a specific region as the default map center.
+     */
+    @Query("UPDATE offline_map_regions SET isDefault = 1 WHERE id = :id")
+    suspend fun setDefaultRegion(id: Long)
 }

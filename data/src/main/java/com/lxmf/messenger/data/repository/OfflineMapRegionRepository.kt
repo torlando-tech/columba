@@ -32,6 +32,8 @@ data class OfflineMapRegion(
     val maplibreRegionId: Long? = null,
     /** Path to locally cached style JSON file for offline rendering (null if not cached) */
     val localStylePath: String? = null,
+    /** Whether this region is the default map center when no GPS location is available */
+    val isDefault: Boolean = false,
 ) {
     enum class Status {
         PENDING,
@@ -278,6 +280,35 @@ class OfflineMapRegionRepository
         suspend fun getFirstCompletedRegionWithStyle(): OfflineMapRegion? = offlineMapRegionDao.getFirstCompletedRegionWithLocalStyle()?.toOfflineMapRegion()
 
         /**
+         * Get the region marked as default map center.
+         * If no region is explicitly marked, returns the first completed region (auto-default).
+         */
+        suspend fun getDefaultRegion(): OfflineMapRegion? {
+            // Try explicitly marked default first
+            val explicit = offlineMapRegionDao.getDefaultRegion()
+            if (explicit != null) return explicit.toOfflineMapRegion()
+
+            // Fall back to first completed region (implicit default when only one exists)
+            return null
+        }
+
+        /**
+         * Set a region as the default map center.
+         * Clears any existing default first to ensure only one region is default.
+         */
+        suspend fun setDefaultRegion(id: Long) {
+            offlineMapRegionDao.clearDefaultRegion()
+            offlineMapRegionDao.setDefaultRegion(id)
+        }
+
+        /**
+         * Clear the default region flag (no region is default).
+         */
+        suspend fun clearDefaultRegion() {
+            offlineMapRegionDao.clearDefaultRegion()
+        }
+
+        /**
          * Import an orphaned MBTiles file into the database.
          * Attempts to extract center/bounds from MBTiles metadata.
          * @return The ID of the imported region
@@ -407,6 +438,7 @@ private fun OfflineMapRegionEntity.toOfflineMapRegion(): OfflineMapRegion =
         tileVersion = tileVersion,
         maplibreRegionId = maplibreRegionId,
         localStylePath = localStylePath,
+        isDefault = isDefault,
     )
 
 /**

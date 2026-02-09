@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
@@ -70,6 +71,16 @@ data class ContactMarker(
 )
 
 /**
+ * Saved camera position for restoring viewport across tab switches.
+ */
+@Immutable
+data class SavedCameraPosition(
+    val latitude: Double,
+    val longitude: Double,
+    val zoom: Double,
+)
+
+/**
  * UI state for the Map screen.
  */
 @Immutable
@@ -85,6 +96,10 @@ data class MapState(
     val activeSessions: List<SharingSession> = emptyList(),
     val lastRefresh: Long = 0L,
     val mapStyleResult: MapStyleResult? = null,
+    /** Center coordinates of the default offline map region (fallback when no GPS) */
+    val defaultRegionCenter: SavedCameraPosition? = null,
+    /** Last camera position for restoring viewport after tab switches */
+    val lastCameraPosition: SavedCameraPosition? = null,
 )
 
 /**
@@ -107,6 +122,7 @@ class MapViewModel
         private val announceDao: AnnounceDao,
         private val settingsRepository: SettingsRepository,
         private val mapTileSourceManager: MapTileSourceManager,
+        private val offlineMapRegionRepository: OfflineMapRegionRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -163,6 +179,23 @@ class MapViewModel
         init {
             // Resolve initial map style (with null location)
             resolveMapStyle(null, null)
+
+            // Load default offline map region center as fallback for initial map position
+            viewModelScope.launch {
+                val defaultRegion = offlineMapRegionRepository.getDefaultRegion()
+                if (defaultRegion != null) {
+                    _state.update {
+                        it.copy(
+                            defaultRegionCenter = SavedCameraPosition(
+                                latitude = defaultRegion.centerLatitude,
+                                longitude = defaultRegion.centerLongitude,
+                                zoom = 12.0,
+                            ),
+                        )
+                    }
+                    Log.d(TAG, "Default region loaded: ${defaultRegion.name} at ${defaultRegion.centerLatitude}, ${defaultRegion.centerLongitude}")
+                }
+            }
 
             // Refresh map style when offline map availability changes (e.g., after download)
             viewModelScope.launch {
@@ -385,6 +418,19 @@ class MapViewModel
             // Also update DataStore for app-level state management
             viewModelScope.launch {
                 settingsRepository.markLocationPermissionSheetDismissed()
+            }
+        }
+
+        /**
+         * Save the current camera position for viewport restoration after tab switches.
+         */
+        fun saveCameraPosition(
+            latitude: Double,
+            longitude: Double,
+            zoom: Double,
+        ) {
+            _state.update {
+                it.copy(lastCameraPosition = SavedCameraPosition(latitude, longitude, zoom))
             }
         }
 

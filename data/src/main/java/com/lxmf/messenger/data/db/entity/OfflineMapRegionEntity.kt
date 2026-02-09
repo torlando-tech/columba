@@ -56,6 +56,8 @@ data class OfflineMapRegionEntity(
     val maplibreRegionId: Long? = null,
     /** Path to locally cached style JSON file for offline rendering (null if not cached) */
     val localStylePath: String? = null,
+    /** Whether this region is the default map center when no GPS location is available */
+    val isDefault: Boolean = false,
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

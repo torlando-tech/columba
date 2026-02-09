@@ -58,6 +58,7 @@ data class TcpClientWizardState(
 /**
  * ViewModel for the TCP Client interface setup wizard.
  */
+@Suppress("TooManyFunctions") // Wizard ViewModel exposes one method per UI control
 @HiltViewModel
 class TcpClientWizardViewModel
     @Inject

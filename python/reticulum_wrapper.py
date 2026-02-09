@@ -43,6 +43,19 @@ _socks_proxy_targets = {}
 _original_create_connection = None
 
 
+def _recv_exact(sock, n):
+    """Read exactly n bytes from a socket, raising on premature close."""
+    buf = b''
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError(
+                f"SOCKS5 proxy closed connection (received {len(buf)}/{n} bytes)"
+            )
+        buf += chunk
+    return buf
+
+
 def _socks5_connect(proxy_host, proxy_port, dest_host, dest_port, timeout=None):
     """
     Create a TCP connection through a SOCKS5 proxy.
@@ -60,10 +73,10 @@ def _socks5_connect(proxy_host, proxy_port, dest_host, dest_port, timeout=None):
         sock.sendall(b'\x05\x01\x00')
 
         # Receive greeting response (2 bytes: version, chosen method)
-        resp = sock.recv(2)
-        if len(resp) < 2 or resp[0] != 0x05 or resp[1] != 0x00:
+        resp = _recv_exact(sock, 2)
+        if resp[0] != 0x05 or resp[1] != 0x00:
             raise ConnectionError(
-                f"SOCKS5 proxy rejected connection (response: {resp.hex() if resp else 'empty'}). "
+                f"SOCKS5 proxy rejected connection (response: {resp.hex()}). "
                 f"Ensure Orbot is running and connected."
             )
 
@@ -79,12 +92,8 @@ def _socks5_connect(proxy_host, proxy_port, dest_host, dest_port, timeout=None):
         )
         sock.sendall(connect_req)
 
-        # Receive connect response (at least 10 bytes for IPv4 bind addr)
-        resp = sock.recv(10)
-        if len(resp) < 4:
-            raise ConnectionError(
-                f"SOCKS5 proxy returned incomplete response ({len(resp)} bytes)"
-            )
+        # Receive connect response header (4 bytes: VER, REP, RSV, ATYP)
+        resp = _recv_exact(sock, 4)
         if resp[1] != 0x00:
             error_codes = {
                 0x01: "general SOCKS server failure",
@@ -101,16 +110,18 @@ def _socks5_connect(proxy_host, proxy_port, dest_host, dest_port, timeout=None):
                 f"SOCKS5 connect to {dest_host}:{dest_port} failed: {error_msg}"
             )
 
-        # If bind address type is domain (0x03), we need to read extra bytes
-        if resp[3] == 0x03:
-            # Domain type: read length byte + domain + port
-            extra_len = resp[4] + 2 - (len(resp) - 5) if len(resp) > 4 else 0
-            if extra_len > 0:
-                sock.recv(extra_len)
-        elif resp[3] == 0x04:
-            # IPv6: need 16 bytes addr + 2 port = 18 total, we got 10 - 4 header = 6
-            remaining = 12
-            sock.recv(remaining)
+        # Consume the bind address based on address type
+        atyp = resp[3]
+        if atyp == 0x01:
+            # IPv4: 4 bytes addr + 2 bytes port
+            _recv_exact(sock, 6)
+        elif atyp == 0x03:
+            # Domain: 1 byte length + domain + 2 bytes port
+            domain_len = _recv_exact(sock, 1)[0]
+            _recv_exact(sock, domain_len + 2)
+        elif atyp == 0x04:
+            # IPv6: 16 bytes addr + 2 bytes port
+            _recv_exact(sock, 18)
 
         # Connection established through SOCKS5 proxy
         return sock

@@ -1072,9 +1072,37 @@ class MapViewModelTest {
     // ===== deleteMarker Tests =====
 
     @Test
-    fun `deleteMarker calls receivedLocationDao deleteLocationsForSender`() =
+    fun `deleteMarker removes marker from state`() =
         runTest {
-            coEvery { receivedLocationDao.deleteLocationsForSender(any()) } just Runs
+            // Set up a location that will produce a marker
+            val locationsFlow =
+                MutableStateFlow(
+                    listOf(
+                        ReceivedLocationEntity(
+                            id = "loc1",
+                            senderHash = "stale_hash",
+                            latitude = 37.7749,
+                            longitude = -122.4194,
+                            accuracy = 10f,
+                            timestamp = System.currentTimeMillis(),
+                            expiresAt = null,
+                            receivedAt = System.currentTimeMillis(),
+                        ),
+                    ),
+                )
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        destinationHash = "stale_hash",
+                        displayName = "Stale Contact",
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns locationsFlow
+            coEvery { receivedLocationDao.deleteLocationsForSender(any()) } coAnswers {
+                // Simulate the DB deletion by clearing the flow
+                locationsFlow.value = emptyList()
+            }
 
             viewModel =
                 MapViewModel(
@@ -1087,9 +1115,19 @@ class MapViewModelTest {
                     mapTileSourceManager,
                 )
 
-            viewModel.deleteMarker("stale_hash")
+            viewModel.state.test {
+                // Marker should be present initially
+                val initial = awaitItem()
+                assertEquals(1, initial.contactMarkers.size)
+                assertEquals("stale_hash", initial.contactMarkers[0].destinationHash)
 
-            coVerify { receivedLocationDao.deleteLocationsForSender("stale_hash") }
+                // Delete the marker
+                viewModel.deleteMarker("stale_hash")
+
+                // Marker should be removed from state
+                val updated = awaitItem()
+                assertTrue(updated.contactMarkers.isEmpty())
+            }
         }
 
     // ===== sharing state updates Tests =====

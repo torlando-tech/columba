@@ -135,16 +135,23 @@ class MessageCollector
                                     false
                                 }
 
-                            try {
-                                notificationHelper.notifyMessageReceived(
-                                    destinationHash = sourceHash,
-                                    peerName = peerName,
-                                    messagePreview = receivedMessage.content.take(100),
-                                    isFavorite = isFavorite,
-                                )
-                                Log.d(TAG, "Posted notification for already-persisted message")
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to post notification for already-persisted message", e)
+                            // Only notify if the message hasn't been read yet
+                            // This prevents duplicate notifications after service restart
+                            // for messages the user has already seen
+                            if (!existingMessage.isRead) {
+                                try {
+                                    notificationHelper.notifyMessageReceived(
+                                        destinationHash = sourceHash,
+                                        peerName = peerName,
+                                        messagePreview = receivedMessage.content.take(100),
+                                        isFavorite = isFavorite,
+                                    )
+                                    Log.d(TAG, "Posted notification for already-persisted unread message")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to post notification for already-persisted message", e)
+                                }
+                            } else {
+                                Log.d(TAG, "Skipping notification for already-read message ${receivedMessage.messageHash.take(16)}")
                             }
 
                             // Record peer activity for "last seen" status

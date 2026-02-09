@@ -1057,7 +1057,9 @@ class VoiceCallScreenTest {
             )
         }
 
-        composeTestRule.onNode(hasText("PTT On"), useUnmergedTree = true).assertIsDisplayed()
+        // Use assertExists() — the PTT hold-to-talk button (120dp) can push the control
+        // buttons row below the Robolectric viewport, making assertIsDisplayed() fail
+        composeTestRule.onNode(hasText("PTT On"), useUnmergedTree = true).assertExists()
     }
 
     @Test

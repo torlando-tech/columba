@@ -507,6 +507,7 @@ class CallViewModelTest {
     fun `setPttActive pressed unmutes and activates`() =
         runTest {
             isPttModeFlow.value = true
+            callStateFlow.value = CallState.Active("test-hash")
             every { mockCallCoordinator.isPttMode } returns isPttModeFlow
 
             viewModel.setPttActive(true)
@@ -514,12 +515,16 @@ class CallViewModelTest {
             verify { mockCallCoordinator.setPttActiveLocally(true) }
             verify { mockCallCoordinator.setMutedLocally(false) }
             coVerify { mockProtocol.setCallMuted(false) }
+
+            // Cancel the duration timer so runTest can complete
+            callStateFlow.value = CallState.Idle
         }
 
     @Test
     fun `setPttActive released mutes and deactivates`() =
         runTest {
             isPttModeFlow.value = true
+            callStateFlow.value = CallState.Active("test-hash")
             every { mockCallCoordinator.isPttMode } returns isPttModeFlow
 
             viewModel.setPttActive(false)
@@ -527,6 +532,9 @@ class CallViewModelTest {
             verify { mockCallCoordinator.setPttActiveLocally(false) }
             verify { mockCallCoordinator.setMutedLocally(true) }
             coVerify { mockProtocol.setCallMuted(true) }
+
+            // Cancel the duration timer so runTest can complete
+            callStateFlow.value = CallState.Idle
         }
 
     @Test

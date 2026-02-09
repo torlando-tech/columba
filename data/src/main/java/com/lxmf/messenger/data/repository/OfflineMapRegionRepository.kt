@@ -294,10 +294,9 @@ class OfflineMapRegionRepository
 
         /**
          * Set a region as the default map center.
-         * Clears any existing default first to ensure only one region is default.
+         * Atomically clears any existing default (transaction in DAO layer).
          */
         suspend fun setDefaultRegion(id: Long) {
-            offlineMapRegionDao.clearDefaultRegion()
             offlineMapRegionDao.setDefaultRegion(id)
         }
 

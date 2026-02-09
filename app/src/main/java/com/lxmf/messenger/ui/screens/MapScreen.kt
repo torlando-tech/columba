@@ -571,7 +571,7 @@ fun MapScreen(
                         map.cameraPosition = initialPosition
                         metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
 
-                        // Add camera move listener to update scale bar and save viewport
+                        // Add camera move listener to update scale bar
                         // Measure actual distance between two screen points for accuracy
                         map.addOnCameraMoveListener {
                             val centerX = map.width / 2f
@@ -582,8 +582,12 @@ fun MapScreen(
                             val latLng2 = map.projection.fromScreenLocation(point2)
                             val distance = latLng1.distanceTo(latLng2) // meters
                             metersPerPixel = distance / 100.0 // 100 pixels between points
+                        }
 
-                            // Save viewport so it persists across tab switches (issue #333)
+                        // Save viewport when user stops interacting (issue #333)
+                        // Uses onCameraIdle instead of onCameraMove to avoid excessive
+                        // state updates during pan/zoom gestures.
+                        map.addOnCameraIdleListener {
                             val pos = map.cameraPosition
                             viewModel.saveCameraPosition(
                                 pos.target.latitude,

@@ -414,13 +414,15 @@ class CallManager:
         RNS.log("hangup() called", RNS.LOG_INFO)
         self._cancel_event.set()
 
+        # Extract link reference under lock, then teardown OUTSIDE lock.
+        # Link.teardown() can trigger __link_closed() synchronously on the
+        # same thread, which also acquires _call_handler_lock. Since
+        # threading.Lock is non-reentrant, calling teardown() inside the
+        # lock causes a deadlock — the second call() then blocks forever.
+        link_to_teardown = None
         with self._call_handler_lock:
             if self.active_call is not None:
-                try:
-                    if hasattr(self.active_call, 'status') and self.active_call.status == RNS.Link.ACTIVE:
-                        self.active_call.teardown()
-                except Exception as e:
-                    RNS.log(f"Error during hangup teardown: {e}", RNS.LOG_ERROR)
+                link_to_teardown = self.active_call
                 self.active_call = None
 
             # Notify Kotlin that call ended
@@ -432,6 +434,14 @@ class CallManager:
 
             self._active_call_identity = None
             self._call_start_time = None
+
+        # Teardown link outside lock to prevent deadlock
+        if link_to_teardown is not None:
+            try:
+                if hasattr(link_to_teardown, 'status') and link_to_teardown.status == RNS.Link.ACTIVE:
+                    link_to_teardown.teardown()
+            except Exception as e:
+                RNS.log(f"Error during hangup teardown: {e}", RNS.LOG_ERROR)
 
     # ===== Reticulum Link Callbacks =====
 

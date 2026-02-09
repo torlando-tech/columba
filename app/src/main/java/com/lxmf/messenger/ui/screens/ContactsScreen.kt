@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -105,6 +106,7 @@ import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
 import com.lxmf.messenger.ui.components.ProfileIcon
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
@@ -141,6 +143,7 @@ fun ContactsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+    val contactsListState = rememberLazyListState()
 
     // Tab selection state - use rememberSaveable to preserve across navigation
     var selectedTab by androidx.compose.runtime.saveable
@@ -454,11 +457,13 @@ fun ContactsScreen(
                     }
                     else -> {
                         LazyColumn(
+                            state = contactsListState,
                             modifier =
                                 Modifier
                                     .fillMaxSize()
                                     .padding(paddingValues)
-                                    .consumeWindowInsets(paddingValues),
+                                    .consumeWindowInsets(paddingValues)
+                                    .simpleVerticalScrollbar(contactsListState),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {

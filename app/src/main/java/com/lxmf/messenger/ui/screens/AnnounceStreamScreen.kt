@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
@@ -248,7 +249,8 @@ fun AnnounceStreamScreen(
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
-                            .consumeWindowInsets(paddingValues),
+                            .consumeWindowInsets(paddingValues)
+                            .simpleVerticalScrollbar(listState),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -694,7 +696,9 @@ fun AnnounceStreamContent(
         else -> {
             LazyColumn(
                 state = listState,
-                modifier = modifier.fillMaxSize(),
+                modifier = modifier
+                    .fillMaxSize()
+                    .simpleVerticalScrollbar(listState),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

@@ -60,8 +60,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -90,6 +94,7 @@ fun ChatsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
+    val draftsMap by viewModel.draftsMap.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -195,11 +200,14 @@ fun ChatsScreen(
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
                         val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
+                        val draftText = draftsMap[conversation.peerHash]
+
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ConversationCard(
                                 conversation = conversation,
                                 isSaved = isSaved,
+                                draftText = draftText,
                                 onClick = {
                                     if (pendingSharedText != null) {
                                         sharedTextViewModel.assignToDestination(conversation.peerHash)
@@ -298,6 +306,7 @@ fun ChatsScreen(
 fun ConversationCard(
     conversation: Conversation,
     isSaved: Boolean = false,
+    draftText: String? = null,
     onClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
     onStarClick: () -> Unit = {},
@@ -393,20 +402,46 @@ fun ConversationCard(
                         overflow = TextOverflow.Ellipsis,
                     )
 
-                    // Last message preview
-                    Text(
-                        text = conversation.lastMessage,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color =
-                            if (conversation.unreadCount > 0) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                    // Last message preview (or draft indicator)
+                    if (draftText != null) {
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontStyle = FontStyle.Italic,
+                                    ),
+                                ) {
+                                    append("Draft: ")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        fontStyle = FontStyle.Italic,
+                                    ),
+                                ) {
+                                    append(draftText)
+                                }
                             },
-                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        Text(
+                            text = conversation.lastMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color =
+                                if (conversation.unreadCount > 0) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 // Timestamp

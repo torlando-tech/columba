@@ -59,6 +59,8 @@ class SettingsRepository
             val NOTIFICATION_RECEIVED_MESSAGE = booleanPreferencesKey("notification_received_message")
             val NOTIFICATION_RECEIVED_MESSAGE_FAVORITE = booleanPreferencesKey("notification_received_message_favorite")
             val NOTIFICATION_HEARD_ANNOUNCE = booleanPreferencesKey("notification_heard_announce")
+            val NOTIFICATION_ANNOUNCE_DIRECT_ONLY = booleanPreferencesKey("notification_announce_direct_only")
+            val NOTIFICATION_ANNOUNCE_EXCLUDE_TCP = booleanPreferencesKey("notification_announce_exclude_tcp")
             val NOTIFICATION_BLE_CONNECTED = booleanPreferencesKey("notification_ble_connected")
             val NOTIFICATION_BLE_DISCONNECTED = booleanPreferencesKey("notification_ble_disconnected")
             val HAS_REQUESTED_NOTIFICATION_PERMISSION = booleanPreferencesKey("has_requested_notification_permission")
@@ -260,6 +262,50 @@ class SettingsRepository
         suspend fun saveNotificationHeardAnnounce(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOTIFICATION_HEARD_ANNOUNCE] = enabled
+            }
+        }
+
+        /**
+         * Flow of announce direct-only notification preference.
+         * When true, only announces with 1 hop (direct neighbors) trigger notifications.
+         * Defaults to true if not set.
+         */
+        val notificationAnnounceDirectOnlyFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NOTIFICATION_ANNOUNCE_DIRECT_ONLY] ?: true
+                }.distinctUntilChanged()
+
+        /**
+         * Save the announce direct-only notification preference.
+         *
+         * @param enabled Whether to only notify for direct (1-hop) announces
+         */
+        suspend fun saveNotificationAnnounceDirectOnly(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOTIFICATION_ANNOUNCE_DIRECT_ONLY] = enabled
+            }
+        }
+
+        /**
+         * Flow of announce exclude-TCP notification preference.
+         * When true, announces received via TCP interfaces are excluded from notifications.
+         * Defaults to true if not set.
+         */
+        val notificationAnnounceExcludeTcpFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NOTIFICATION_ANNOUNCE_EXCLUDE_TCP] ?: true
+                }.distinctUntilChanged()
+
+        /**
+         * Save the announce exclude-TCP notification preference.
+         *
+         * @param enabled Whether to exclude TCP announces from notifications
+         */
+        suspend fun saveNotificationAnnounceExcludeTcp(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOTIFICATION_ANNOUNCE_EXCLUDE_TCP] = enabled
             }
         }
 

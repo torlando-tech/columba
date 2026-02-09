@@ -50,6 +50,8 @@ class NotificationSettingsViewModelTest {
     private val notificationReceivedMessageFlow = MutableStateFlow(true)
     private val notificationReceivedMessageFavoriteFlow = MutableStateFlow(true)
     private val notificationHeardAnnounceFlow = MutableStateFlow(false)
+    private val notificationAnnounceDirectOnlyFlow = MutableStateFlow(true)
+    private val notificationAnnounceExcludeTcpFlow = MutableStateFlow(true)
     private val notificationBleConnectedFlow = MutableStateFlow(false)
     private val notificationBleDisconnectedFlow = MutableStateFlow(false)
     private val hasRequestedNotificationPermissionFlow = MutableStateFlow(false)
@@ -65,6 +67,8 @@ class NotificationSettingsViewModelTest {
         every { settingsRepository.notificationReceivedMessageFlow } returns notificationReceivedMessageFlow
         every { settingsRepository.notificationReceivedMessageFavoriteFlow } returns notificationReceivedMessageFavoriteFlow
         every { settingsRepository.notificationHeardAnnounceFlow } returns notificationHeardAnnounceFlow
+        every { settingsRepository.notificationAnnounceDirectOnlyFlow } returns notificationAnnounceDirectOnlyFlow
+        every { settingsRepository.notificationAnnounceExcludeTcpFlow } returns notificationAnnounceExcludeTcpFlow
         every { settingsRepository.notificationBleConnectedFlow } returns notificationBleConnectedFlow
         every { settingsRepository.notificationBleDisconnectedFlow } returns notificationBleDisconnectedFlow
         every { settingsRepository.hasRequestedNotificationPermissionFlow } returns hasRequestedNotificationPermissionFlow
@@ -74,6 +78,8 @@ class NotificationSettingsViewModelTest {
         coEvery { settingsRepository.saveNotificationReceivedMessage(any()) } just Runs
         coEvery { settingsRepository.saveNotificationReceivedMessageFavorite(any()) } just Runs
         coEvery { settingsRepository.saveNotificationHeardAnnounce(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationAnnounceDirectOnly(any()) } just Runs
+        coEvery { settingsRepository.saveNotificationAnnounceExcludeTcp(any()) } just Runs
         coEvery { settingsRepository.saveNotificationBleConnected(any()) } just Runs
         coEvery { settingsRepository.saveNotificationBleDisconnected(any()) } just Runs
         coEvery { settingsRepository.markNotificationPermissionRequested() } just Runs
@@ -105,6 +111,8 @@ class NotificationSettingsViewModelTest {
             notificationReceivedMessageFlow.value = false
             notificationReceivedMessageFavoriteFlow.value = false
             notificationHeardAnnounceFlow.value = true
+            notificationAnnounceDirectOnlyFlow.value = false
+            notificationAnnounceExcludeTcpFlow.value = false
             notificationBleConnectedFlow.value = true
             notificationBleDisconnectedFlow.value = true
             hasRequestedNotificationPermissionFlow.value = true
@@ -119,6 +127,8 @@ class NotificationSettingsViewModelTest {
                 assertFalse("receivedMessage should be false", state.receivedMessage)
                 assertFalse("receivedMessageFavorite should be false", state.receivedMessageFavorite)
                 assertTrue("heardAnnounce should be true", state.heardAnnounce)
+                assertFalse("announceDirectOnly should be false", state.announceDirectOnly)
+                assertFalse("announceExcludeTcp should be false", state.announceExcludeTcp)
                 assertTrue("bleConnected should be true", state.bleConnected)
                 assertTrue("bleDisconnected should be true", state.bleDisconnected)
                 assertTrue("hasRequestedNotificationPermission should be true", state.hasRequestedNotificationPermission)
@@ -196,6 +206,34 @@ class NotificationSettingsViewModelTest {
             coVerify { settingsRepository.saveNotificationHeardAnnounce(true) }
             assertTrue("Repository should have been called", capturedValue.isCaptured)
             assertTrue("Should pass true to repository", capturedValue.captured)
+        }
+
+    @Test
+    fun `toggleAnnounceDirectOnly calls repository saveNotificationAnnounceDirectOnly`() =
+        runTest {
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationAnnounceDirectOnly(capture(capturedValue)) } just Runs
+            viewModel = createViewModel()
+
+            viewModel.toggleAnnounceDirectOnly(false)
+
+            coVerify { settingsRepository.saveNotificationAnnounceDirectOnly(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should pass false to repository", capturedValue.captured)
+        }
+
+    @Test
+    fun `toggleAnnounceExcludeTcp calls repository saveNotificationAnnounceExcludeTcp`() =
+        runTest {
+            val capturedValue = slot<Boolean>()
+            coEvery { settingsRepository.saveNotificationAnnounceExcludeTcp(capture(capturedValue)) } just Runs
+            viewModel = createViewModel()
+
+            viewModel.toggleAnnounceExcludeTcp(false)
+
+            coVerify { settingsRepository.saveNotificationAnnounceExcludeTcp(false) }
+            assertTrue("Repository should have been called", capturedValue.isCaptured)
+            assertFalse("Should pass false to repository", capturedValue.captured)
         }
 
     @Test
@@ -377,6 +415,8 @@ class NotificationSettingsViewModelTest {
                 assertTrue("receivedMessage defaults to true", state.receivedMessage)
                 assertTrue("receivedMessageFavorite defaults to true", state.receivedMessageFavorite)
                 assertFalse("heardAnnounce defaults to false", state.heardAnnounce)
+                assertTrue("announceDirectOnly defaults to true", state.announceDirectOnly)
+                assertTrue("announceExcludeTcp defaults to true", state.announceExcludeTcp)
                 assertFalse("bleConnected defaults to false", state.bleConnected)
                 assertFalse("bleDisconnected defaults to false", state.bleDisconnected)
                 assertFalse("hasRequestedNotificationPermission defaults to false", state.hasRequestedNotificationPermission)
@@ -395,6 +435,8 @@ class NotificationSettingsViewModelTest {
                 receivedMessage = true,
                 receivedMessageFavorite = true,
                 heardAnnounce = false,
+                announceDirectOnly = true,
+                announceExcludeTcp = true,
                 bleConnected = false,
                 bleDisconnected = false,
                 hasRequestedNotificationPermission = false,
@@ -406,6 +448,8 @@ class NotificationSettingsViewModelTest {
                 receivedMessage = true,
                 receivedMessageFavorite = true,
                 heardAnnounce = false,
+                announceDirectOnly = true,
+                announceExcludeTcp = true,
                 bleConnected = false,
                 bleDisconnected = false,
                 hasRequestedNotificationPermission = false,
@@ -417,6 +461,8 @@ class NotificationSettingsViewModelTest {
                 receivedMessage = true,
                 receivedMessageFavorite = true,
                 heardAnnounce = false,
+                announceDirectOnly = true,
+                announceExcludeTcp = true,
                 bleConnected = false,
                 bleDisconnected = false,
                 hasRequestedNotificationPermission = false,

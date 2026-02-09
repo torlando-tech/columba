@@ -19,6 +19,8 @@ data class NotificationSettingsState(
     val receivedMessage: Boolean = true,
     val receivedMessageFavorite: Boolean = true,
     val heardAnnounce: Boolean = false,
+    val announceDirectOnly: Boolean = true,
+    val announceExcludeTcp: Boolean = true,
     val bleConnected: Boolean = false,
     val bleDisconnected: Boolean = false,
     val hasRequestedNotificationPermission: Boolean = false,
@@ -51,6 +53,8 @@ class NotificationSettingsViewModel
                         settingsRepository.notificationReceivedMessageFlow,
                         settingsRepository.notificationReceivedMessageFavoriteFlow,
                         settingsRepository.notificationHeardAnnounceFlow,
+                        settingsRepository.notificationAnnounceDirectOnlyFlow,
+                        settingsRepository.notificationAnnounceExcludeTcpFlow,
                         settingsRepository.notificationBleConnectedFlow,
                         settingsRepository.notificationBleDisconnectedFlow,
                         settingsRepository.hasRequestedNotificationPermissionFlow,
@@ -60,9 +64,11 @@ class NotificationSettingsViewModel
                             receivedMessage = values[1],
                             receivedMessageFavorite = values[2],
                             heardAnnounce = values[3],
-                            bleConnected = values[4],
-                            bleDisconnected = values[5],
-                            hasRequestedNotificationPermission = values[6],
+                            announceDirectOnly = values[4],
+                            announceExcludeTcp = values[5],
+                            bleConnected = values[6],
+                            bleDisconnected = values[7],
+                            hasRequestedNotificationPermission = values[8],
                             isLoading = false,
                         )
                     }.distinctUntilChanged().collect { newState ->
@@ -116,6 +122,28 @@ class NotificationSettingsViewModel
                     Log.d(TAG, "Heard announce notifications: $enabled")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving heard announce notification", e)
+                }
+            }
+        }
+
+        fun toggleAnnounceDirectOnly(enabled: Boolean) {
+            viewModelScope.launch {
+                try {
+                    settingsRepository.saveNotificationAnnounceDirectOnly(enabled)
+                    Log.d(TAG, "Announce direct-only notifications: $enabled")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving announce direct-only notification", e)
+                }
+            }
+        }
+
+        fun toggleAnnounceExcludeTcp(enabled: Boolean) {
+            viewModelScope.launch {
+                try {
+                    settingsRepository.saveNotificationAnnounceExcludeTcp(enabled)
+                    Log.d(TAG, "Announce exclude TCP notifications: $enabled")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving announce exclude TCP notification", e)
                 }
             }
         }

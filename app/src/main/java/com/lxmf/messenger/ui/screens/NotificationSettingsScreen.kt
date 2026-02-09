@@ -22,12 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -160,6 +161,10 @@ fun NotificationSettingsScreen(
                     onReceivedMessageFavoriteToggle = { viewModel.toggleReceivedMessageFavorite(it) },
                     heardAnnounce = state.heardAnnounce,
                     onHeardAnnounceToggle = { viewModel.toggleHeardAnnounce(it) },
+                    announceDirectOnly = state.announceDirectOnly,
+                    onAnnounceDirectOnlyToggle = { viewModel.toggleAnnounceDirectOnly(it) },
+                    announceExcludeTcp = state.announceExcludeTcp,
+                    onAnnounceExcludeTcpToggle = { viewModel.toggleAnnounceExcludeTcp(it) },
                     bleConnected = state.bleConnected,
                     onBleConnectedToggle = { viewModel.toggleBleConnected(it) },
                     bleDisconnected = state.bleDisconnected,
@@ -247,6 +252,10 @@ fun NotificationTypesCard(
     onReceivedMessageFavoriteToggle: (Boolean) -> Unit,
     heardAnnounce: Boolean,
     onHeardAnnounceToggle: (Boolean) -> Unit,
+    announceDirectOnly: Boolean,
+    onAnnounceDirectOnlyToggle: (Boolean) -> Unit,
+    announceExcludeTcp: Boolean,
+    onAnnounceExcludeTcpToggle: (Boolean) -> Unit,
     bleConnected: Boolean,
     onBleConnectedToggle: (Boolean) -> Unit,
     bleDisconnected: Boolean,
@@ -310,6 +319,29 @@ fun NotificationTypesCard(
                 onCheckedChange = onHeardAnnounceToggle,
             )
 
+            // Announce sub-options (only shown when heard announce is enabled)
+            if (heardAnnounce) {
+                NotificationTypeItem(
+                    icon = Icons.Default.NearMe,
+                    title = "Direct Only",
+                    description = "Only notify for direct (1-hop) announces from nearby peers",
+                    enabled = masterEnabled,
+                    checked = announceDirectOnly,
+                    onCheckedChange = onAnnounceDirectOnlyToggle,
+                    indented = true,
+                )
+
+                NotificationTypeItem(
+                    icon = Icons.Default.WifiOff,
+                    title = "Exclude TCP",
+                    description = "Skip announces received via TCP interfaces",
+                    enabled = masterEnabled,
+                    checked = announceExcludeTcp,
+                    onCheckedChange = onAnnounceExcludeTcpToggle,
+                    indented = true,
+                )
+            }
+
             NotificationTypeItem(
                 icon = Icons.Default.Bluetooth,
                 title = "BLE Peer Connected",
@@ -339,12 +371,14 @@ fun NotificationTypeItem(
     enabled: Boolean,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    indented: Boolean = false,
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 4.dp)
+                .padding(start = if (indented) 36.dp else 0.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

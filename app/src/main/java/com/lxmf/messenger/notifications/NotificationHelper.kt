@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -196,11 +197,15 @@ class NotificationHelper
          * @param destinationHash The destination hash of the announcing peer
          * @param peerName The display name of the announcing peer
          * @param appData Optional app data from the announce
+         * @param hops Number of hops to the announcing peer (1 = direct neighbor)
+         * @param interfaceType The type of interface the announce was received on
          */
         suspend fun notifyAnnounceHeard(
             destinationHash: String,
             peerName: String,
             appData: String? = null,
+            hops: Int = 0,
+            interfaceType: InterfaceType = InterfaceType.UNKNOWN,
         ) {
             // Check master notification toggle
             val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
@@ -209,6 +214,14 @@ class NotificationHelper
             // Check specific notification preference
             val announceNotificationsEnabled = settingsRepository.notificationHeardAnnounceFlow.first()
             if (!announceNotificationsEnabled) return
+
+            // Check direct-only filter: when enabled, only notify for 1-hop (direct neighbor) announces
+            val directOnly = settingsRepository.notificationAnnounceDirectOnlyFlow.first()
+            if (directOnly && hops > 1) return
+
+            // Check TCP exclusion filter: when enabled, skip announces received via TCP interfaces
+            val excludeTcp = settingsRepository.notificationAnnounceExcludeTcpFlow.first()
+            if (excludeTcp && interfaceType == InterfaceType.TCP_CLIENT) return
 
             // Check permission
             if (!hasNotificationPermission()) return

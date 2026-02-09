@@ -409,6 +409,8 @@ class MessageCollector
                                     destinationHash = peerHash,
                                     peerName = peerName,
                                     appData = appDataString,
+                                    hops = announce.hops,
+                                    interfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface),
                                 )
                                 Log.d(TAG, "Posted notification for announce")
                             } catch (e: Exception) {

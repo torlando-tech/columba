@@ -269,6 +269,22 @@ class OfflineMapsViewModel
         }
 
         /**
+         * Set a region as the default map center.
+         * Clears any previous default and sets the given region.
+         */
+        fun setDefaultRegion(regionId: Long) {
+            viewModelScope.launch {
+                try {
+                    offlineMapRegionRepository.setDefaultRegion(regionId)
+                    Log.d(TAG, "Set default region: $regionId")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set default region", e)
+                    _errorMessage.value = "Failed to set default region: ${e.message}"
+                }
+            }
+        }
+
+        /**
          * Resolve the display name for a content URI.
          */
         private fun resolveFileName(uri: Uri): String? {
@@ -283,6 +299,20 @@ class OfflineMapsViewModel
                 }
             }
             return uri.lastPathSegment
+        }
+
+        /**
+         * Clear the default region (no region is default).
+         */
+        fun clearDefaultRegion() {
+            viewModelScope.launch {
+                try {
+                    offlineMapRegionRepository.clearDefaultRegion()
+                    Log.d(TAG, "Cleared default region")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to clear default region", e)
+                }
+            }
         }
 
         /**

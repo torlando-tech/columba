@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
 import kotlinx.coroutines.flow.Flow
@@ -241,5 +242,16 @@ interface OfflineMapRegionDao {
      * Set a specific region as the default map center.
      */
     @Query("UPDATE offline_map_regions SET isDefault = 1 WHERE id = :id")
-    suspend fun setDefaultRegion(id: Long)
+    suspend fun setDefaultRegionById(id: Long)
+
+    /**
+     * Atomically clear any existing default and set the given region as default.
+     * Wrapped in a transaction to prevent race conditions where multiple regions
+     * could end up marked as default simultaneously.
+     */
+    @Transaction
+    suspend fun setDefaultRegion(id: Long) {
+        clearDefaultRegion()
+        setDefaultRegionById(id)
+    }
 }

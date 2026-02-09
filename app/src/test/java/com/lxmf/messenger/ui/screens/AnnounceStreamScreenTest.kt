@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.paging.PagingData
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.test.RegisterComponentActivityRule
@@ -210,7 +211,7 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithContentDescription("Filter node types").performClick()
 
         // Filter dialog should appear
-        composeTestRule.onNodeWithText("Filter Node Types").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Filter Announces").assertIsDisplayed()
     }
 
     @Test
@@ -237,12 +238,12 @@ class AnnounceStreamScreenTest {
                 selectedTypes = setOf(NodeType.PEER),
                 showAudio = true,
                 onDismiss = {},
-                onConfirm = { _, _ -> },
+                onConfirm = { _, _, _ -> },
             )
         }
 
-        composeTestRule.onNodeWithText("Filter Node Types").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Select which node types to display:").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Filter Announces").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Node Types").assertIsDisplayed()
         composeTestRule.onNodeWithText("Node").assertIsDisplayed()
         composeTestRule.onNodeWithText("Peer").assertIsDisplayed()
         composeTestRule.onNodeWithText("Relay").assertIsDisplayed()
@@ -255,7 +256,7 @@ class AnnounceStreamScreenTest {
                 selectedTypes = setOf(NodeType.PEER),
                 showAudio = true,
                 onDismiss = {},
-                onConfirm = { _, _ -> },
+                onConfirm = { _, _, _ -> },
             )
         }
 
@@ -283,6 +284,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.selectedNodeTypes } returns MutableStateFlow(selectedNodeTypes)
         every { mockViewModel.showAudioAnnounces } returns MutableStateFlow(showAudioAnnounces)
+        every { mockViewModel.selectedInterfaceTypes } returns MutableStateFlow(emptySet<InterfaceType>())
         every { mockViewModel.isAnnouncing } returns MutableStateFlow(isAnnouncing)
         every { mockViewModel.announceSuccess } returns MutableStateFlow(announceSuccess)
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)
@@ -291,6 +293,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.triggerAnnounce() } just Runs
         every { mockViewModel.updateSelectedNodeTypes(any()) } just Runs
         every { mockViewModel.updateShowAudioAnnounces(any()) } just Runs
+        every { mockViewModel.updateSelectedInterfaceTypes(any()) } just Runs
         every { mockViewModel.clearAnnounceStatus() } just Runs
 
         return mockViewModel

@@ -98,7 +98,8 @@ class ApkSharingViewModel
          * Start the local HTTP server to serve the APK.
          */
         fun startServer() {
-            if (_state.value.isServerRunning) return
+            // Guard against duplicate launches while a server job is already in progress
+            if (serverJob?.isActive == true) return
 
             serverJob = viewModelScope.launch {
                 val apkFile = prepareApkFile()
@@ -120,21 +121,15 @@ class ApkSharingViewModel
                     return@launch
                 }
 
-                // Start server - this will bind to a random port
-                // We need to launch it and then update state with the port
-                val serverStartJob = launch {
-                    server.start(apkFile)
-                }
+                // Launch the accept loop in a child coroutine
+                launch { server.start(apkFile) }
 
-                // Small delay to let the server socket bind
-                kotlinx.coroutines.delay(100)
-
-                val port = server.port
+                // Await actual server readiness instead of using a fixed delay
+                val port = server.awaitPort()
                 if (port == 0) {
                     _state.value = _state.value.copy(
                         errorMessage = "Failed to start sharing server",
                     )
-                    serverStartJob.cancel()
                     return@launch
                 }
 

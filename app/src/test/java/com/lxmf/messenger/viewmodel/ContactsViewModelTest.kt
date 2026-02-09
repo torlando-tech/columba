@@ -506,21 +506,37 @@ class ContactsViewModelTest {
         }
 
     @Test
-    fun `unsetRelayAndDelete - deletes and triggers reselection`() =
+    fun `unsetRelayAndDelete - deletes and triggers reselection when autoSelectNew`() =
         runTest {
             // Given
-            coEvery { propagationNodeManager.excludeFromAutoSelect(any()) } just Runs
             coEvery { contactRepository.deleteContact(any()) } just Runs
-            coEvery { propagationNodeManager.onRelayDeleted() } just Runs
+            coEvery { propagationNodeManager.onRelayDeleted(any(), any()) } just Runs
 
             // When
-            val result = runCatching { viewModel.unsetRelayAndDelete(testDestHash) }
+            val result = runCatching { viewModel.unsetRelayAndDelete(testDestHash, autoSelectNew = true) }
             advanceUntilIdle()
 
             // Then
             assertTrue("unsetRelayAndDelete should complete without exception", result.isSuccess)
             coVerify { contactRepository.deleteContact(testDestHash) }
-            coVerify { propagationNodeManager.onRelayDeleted() }
+            coVerify { propagationNodeManager.onRelayDeleted(autoSelectNew = true, excludeHash = testDestHash) }
+        }
+
+    @Test
+    fun `unsetRelayAndDelete - deletes without reselection when not autoSelectNew`() =
+        runTest {
+            // Given
+            coEvery { contactRepository.deleteContact(any()) } just Runs
+            coEvery { propagationNodeManager.onRelayDeleted(any(), any()) } just Runs
+
+            // When
+            val result = runCatching { viewModel.unsetRelayAndDelete(testDestHash, autoSelectNew = false) }
+            advanceUntilIdle()
+
+            // Then
+            assertTrue("unsetRelayAndDelete should complete without exception", result.isSuccess)
+            coVerify { contactRepository.deleteContact(testDestHash) }
+            coVerify { propagationNodeManager.onRelayDeleted(autoSelectNew = false, excludeHash = testDestHash) }
         }
 
     // ========== Update Operations Tests ==========

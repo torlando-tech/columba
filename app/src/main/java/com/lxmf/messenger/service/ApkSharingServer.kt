@@ -1,6 +1,7 @@
 package com.lxmf.messenger.service
 
 import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
@@ -27,42 +28,54 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ApkSharingServer {
     companion object {
         private const val TAG = "ApkSharingServer"
+        private const val CLIENT_TIMEOUT_MS = 30_000
 
         /**
          * Get the device's local WiFi IP address.
          * Returns null if no suitable address is found.
          */
-        fun getLocalIpAddress(): String? {
+        fun getLocalIpAddress(): String? =
             try {
-                val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
-                for (networkInterface in interfaces) {
-                    if (networkInterface.isLoopback || !networkInterface.isUp) continue
-
-                    val isWifi = networkInterface.name.startsWith("wlan") ||
-                        networkInterface.name.startsWith("ap") ||
-                        networkInterface.name.startsWith("swlan")
-
-                    for (address in networkInterface.inetAddresses) {
-                        if (address.isLoopbackAddress) continue
-                        if (address !is Inet4Address) continue
-
-                        val hostAddress = address.hostAddress ?: continue
-                        if (isWifi) return hostAddress
-                    }
-                }
-
-                // Fallback: return any non-loopback IPv4 address
-                val fallbackInterfaces = NetworkInterface.getNetworkInterfaces() ?: return null
-                for (networkInterface in fallbackInterfaces) {
-                    if (networkInterface.isLoopback || !networkInterface.isUp) continue
-                    for (address in networkInterface.inetAddresses) {
-                        if (address.isLoopbackAddress) continue
-                        if (address !is Inet4Address) continue
-                        return address.hostAddress
-                    }
-                }
+                findWifiAddress() ?: findAnyAddress()
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting local IP address", e)
+                null
+            }
+
+        private fun findWifiAddress(): String? {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            for (iface in interfaces) {
+                if (!isUsableInterface(iface)) continue
+                if (!isWifiInterface(iface)) continue
+                val addr = firstIpv4Address(iface)
+                if (addr != null) return addr
+            }
+            return null
+        }
+
+        private fun findAnyAddress(): String? {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            for (iface in interfaces) {
+                if (!isUsableInterface(iface)) continue
+                val addr = firstIpv4Address(iface)
+                if (addr != null) return addr
+            }
+            return null
+        }
+
+        private fun isUsableInterface(iface: NetworkInterface): Boolean =
+            !iface.isLoopback && iface.isUp
+
+        private fun isWifiInterface(iface: NetworkInterface): Boolean =
+            iface.name.startsWith("wlan") ||
+                iface.name.startsWith("ap") ||
+                iface.name.startsWith("swlan")
+
+        private fun firstIpv4Address(iface: NetworkInterface): String? {
+            for (address in iface.inetAddresses) {
+                if (!address.isLoopbackAddress && address is Inet4Address) {
+                    return address.hostAddress
+                }
             }
             return null
         }
@@ -71,8 +84,21 @@ class ApkSharingServer {
     private var serverSocket: ServerSocket? = null
     private val isRunning = AtomicBoolean(false)
 
+    /**
+     * Deferred that completes with the bound port once the server socket is ready,
+     * or with 0 if binding failed. This allows the caller to await actual readiness
+     * rather than using a fixed delay.
+     */
+    private var portReady = CompletableDeferred<Int>()
+
     val port: Int
         get() = serverSocket?.localPort ?: 0
+
+    /**
+     * Await the server binding and return the port number.
+     * Returns 0 if the server failed to bind.
+     */
+    suspend fun awaitPort(): Int = portReady.await()
 
     /**
      * Start the HTTP server and serve the given APK file.
@@ -86,30 +112,44 @@ class ApkSharingServer {
             return
         }
 
+        portReady = CompletableDeferred()
+
         withContext(Dispatchers.IO) {
             try {
                 serverSocket = ServerSocket(0).also {
                     it.reuseAddress = true
                 }
-                Log.i(TAG, "APK sharing server started on port ${serverSocket?.localPort}")
+                val boundPort = serverSocket?.localPort ?: 0
+                Log.i(TAG, "APK sharing server started on port $boundPort")
+                portReady.complete(boundPort)
 
-                while (isRunning.get()) {
-                    try {
-                        val clientSocket = serverSocket?.accept() ?: break
-                        handleClient(clientSocket, apkFile)
-                    } catch (e: SocketException) {
-                        if (isRunning.get()) {
-                            Log.e(TAG, "Socket error while accepting", e)
-                        }
-                        break
-                    }
-                }
+                acceptLoop(apkFile)
             } catch (e: Exception) {
                 Log.e(TAG, "Server error", e)
+                portReady.complete(0)
             } finally {
                 isRunning.set(false)
                 Log.i(TAG, "APK sharing server stopped")
             }
+        }
+    }
+
+    private fun acceptLoop(apkFile: File) {
+        while (isRunning.get()) {
+            val clientSocket: Socket
+            try {
+                clientSocket = serverSocket?.accept() ?: return
+            } catch (e: SocketException) {
+                if (isRunning.get()) {
+                    Log.e(TAG, "Socket error while accepting", e)
+                }
+                return
+            }
+
+            // Handle each client on its own thread so the accept loop is not blocked
+            Thread {
+                handleClient(clientSocket, apkFile)
+            }.start()
         }
     }
 
@@ -120,6 +160,7 @@ class ApkSharingServer {
      */
     private fun handleClient(clientSocket: Socket, apkFile: File) {
         try {
+            clientSocket.soTimeout = CLIENT_TIMEOUT_MS
             clientSocket.use { socket ->
                 val reader = socket.getInputStream().bufferedReader()
                 val output = BufferedOutputStream(socket.getOutputStream())

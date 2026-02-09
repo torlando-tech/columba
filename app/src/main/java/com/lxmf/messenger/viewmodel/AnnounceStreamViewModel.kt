@@ -96,7 +96,10 @@ class AnnounceStreamViewModel
             ) { query, selectedTypes, showAudio, selectedInterfaces ->
                 FilterParams(query, selectedTypes, showAudio, selectedInterfaces)
             }.flatMapLatest { params ->
-                val (query, selectedTypes, showAudio, selectedInterfaces) = params
+                val query = params.query
+                val selectedTypes = params.selectedTypes
+                val showAudio = params.showAudio
+                val selectedInterfaces = params.selectedInterfaces
                 // Build type list for database query
                 // If showAudio is true but PEER is not selected, still include PEER in DB query
                 // (because audio announces have nodeType=PEER), then filter by aspect in memory

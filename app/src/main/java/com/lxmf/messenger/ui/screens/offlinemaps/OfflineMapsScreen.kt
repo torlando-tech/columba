@@ -1,5 +1,8 @@
 package com.lxmf.messenger.ui.screens.offlinemaps
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Update
@@ -70,11 +74,27 @@ fun OfflineMapsScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // File picker launcher for MBTiles import
+    val importLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri: Uri? ->
+            uri?.let { viewModel.importMbtilesFile(it) }
+        }
+
     // Show error in snackbar
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
+        }
+    }
+
+    // Show import success in snackbar
+    LaunchedEffect(state.importSuccessMessage) {
+        state.importSuccessMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearImportSuccess()
         }
     }
 
@@ -88,6 +108,26 @@ fun OfflineMapsScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                         )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                        },
+                        enabled = !state.isImporting,
+                    ) {
+                        if (state.isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.FileOpen,
+                                contentDescription = "Import MBTiles file",
+                            )
+                        }
                     }
                 },
             )
@@ -541,7 +581,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Download map regions for offline use",
+            text = "Download or import map regions for offline use",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -549,7 +589,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Tap + to get started",
+            text = "Tap + to download, or use the import button to load an MBTiles file",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

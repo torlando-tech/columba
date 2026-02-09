@@ -1,6 +1,7 @@
 package com.lxmf.messenger.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -8,14 +9,17 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
+import com.lxmf.messenger.map.OfflineMapStyleBuilder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -43,6 +47,8 @@ data class OfflineMapsState(
     val totalStorageBytes: Long = 0L,
     val isLoading: Boolean = true,
     val isDeleting: Boolean = false,
+    val isImporting: Boolean = false,
+    val importSuccessMessage: String? = null,
     val errorMessage: String? = null,
     val updateCheckResults: Map<Long, UpdateCheckResult> = emptyMap(),
     val latestTileVersion: String? = null,
@@ -82,6 +88,8 @@ class OfflineMapsViewModel
 
         private val _errorMessage = MutableStateFlow<String?>(null)
         private val _isDeleting = MutableStateFlow(false)
+        private val _isImporting = MutableStateFlow(false)
+        private val _importSuccessMessage = MutableStateFlow<String?>(null)
         private val _updateCheckResults = MutableStateFlow<Map<Long, UpdateCheckResult>>(emptyMap())
         private val _latestTileVersion = MutableStateFlow<String?>(null)
 
@@ -98,13 +106,21 @@ class OfflineMapsViewModel
                 offlineMapRegionRepository.getTotalStorageUsed(),
                 _errorMessage,
                 _isDeleting,
-                combine(_updateCheckResults, _latestTileVersion) { a, b -> a to b },
-            ) { regions, totalStorage, error, isDeleting, (updateResults, latestVersion) ->
+                combine(
+                    _updateCheckResults,
+                    _latestTileVersion,
+                    _isImporting,
+                    _importSuccessMessage,
+                ) { a, b, c, d -> Triple(a to b, c, d) },
+            ) { regions, totalStorage, error, isDeleting, (updatePair, isImporting, importSuccess) ->
+                val (updateResults, latestVersion) = updatePair
                 OfflineMapsState(
                     regions = regions,
                     totalStorageBytes = totalStorage ?: 0L,
                     isLoading = false,
                     isDeleting = isDeleting,
+                    isImporting = isImporting,
+                    importSuccessMessage = importSuccess,
                     errorMessage = error,
                     updateCheckResults = updateResults,
                     latestTileVersion = latestVersion,
@@ -166,6 +182,89 @@ class OfflineMapsViewModel
          */
         fun clearError() {
             _errorMessage.value = null
+        }
+
+        /**
+         * Clear the import success message.
+         */
+        fun clearImportSuccess() {
+            _importSuccessMessage.value = null
+        }
+
+        /**
+         * Import an MBTiles file from a content URI (e.g. from a file picker).
+         * Copies the file to the offline_maps directory and registers it in the database.
+         */
+        fun importMbtilesFile(uri: Uri) {
+            viewModelScope.launch {
+                _isImporting.value = true
+                try {
+                    val destFile = withContext(Dispatchers.IO) {
+                        val offlineMapsDir = getOfflineMapsDir()
+                        val resolver = context.contentResolver
+
+                        // Derive a filename from the URI
+                        val displayName = resolveFileName(uri) ?: "imported_${System.currentTimeMillis()}.mbtiles"
+                        val safeName = displayName.let {
+                            if (!it.endsWith(".mbtiles")) "$it.mbtiles" else it
+                        }
+
+                        // Avoid overwriting existing files
+                        var destFile = File(offlineMapsDir, safeName)
+                        var counter = 1
+                        while (destFile.exists()) {
+                            val base = safeName.removeSuffix(".mbtiles")
+                            destFile = File(offlineMapsDir, "${base}_$counter.mbtiles")
+                            counter++
+                        }
+
+                        // Copy the content URI to the destination file
+                        resolver.openInputStream(uri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        } ?: throw IllegalStateException("Could not open input stream for URI")
+
+                        // Validate the copied file
+                        if (!OfflineMapStyleBuilder.isValidMBTiles(destFile.absolutePath)) {
+                            destFile.delete()
+                            throw IllegalStateException("File does not appear to be a valid MBTiles file")
+                        }
+
+                        destFile
+                    }
+
+                    // Register in the database using existing import logic
+                    val regionId = offlineMapRegionRepository.importOrphanedFile(destFile)
+                    val region = offlineMapRegionRepository.getRegionById(regionId)
+                    val regionName = region?.name ?: destFile.nameWithoutExtension
+
+                    Log.i(TAG, "Imported MBTiles file: ${destFile.name} as region $regionId ($regionName)")
+                    _importSuccessMessage.value = "Imported \"$regionName\""
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to import MBTiles file", e)
+                    _errorMessage.value = "Import failed: ${e.message}"
+                } finally {
+                    _isImporting.value = false
+                }
+            }
+        }
+
+        /**
+         * Resolve the display name for a content URI.
+         */
+        private fun resolveFileName(uri: Uri): String? {
+            if (uri.scheme == "content") {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex >= 0) {
+                            return cursor.getString(nameIndex)
+                        }
+                    }
+                }
+            }
+            return uri.lastPathSegment
         }
 
         /**

@@ -332,6 +332,62 @@ class MapLibreOfflineManager
             }
         }
 
+        /**
+         * Clear MapLibre's ambient tile cache.
+         *
+         * This removes tiles that were cached during regular map browsing (not part of
+         * downloaded offline regions). Useful when the ambient cache becomes corrupted,
+         * causing map rendering issues after extended offline periods (#354).
+         *
+         * Downloaded offline regions are NOT affected.
+         *
+         * @param callback Success/failure callback
+         */
+        fun clearAmbientCache(callback: (Boolean) -> Unit) {
+            Log.d(TAG, "Clearing ambient tile cache")
+            offlineManager.clearAmbientCache(
+                object : OfflineManager.FileSourceCallback {
+                    override fun onSuccess() {
+                        Log.d(TAG, "Ambient cache cleared successfully")
+                        callback(true)
+                    }
+
+                    override fun onError(message: String) {
+                        Log.e(TAG, "Failed to clear ambient cache: $message")
+                        callback(false)
+                    }
+                },
+            )
+        }
+
+        /**
+         * Reset MapLibre's entire offline database.
+         *
+         * WARNING: This deletes ALL data including downloaded offline regions.
+         * Use as a last resort when the database is corrupted and clearAmbientCache
+         * doesn't resolve the issue.
+         *
+         * After calling this, all offline regions will need to be re-downloaded.
+         *
+         * @param callback Success/failure callback
+         */
+        fun resetDatabase(callback: (Boolean) -> Unit) {
+            Log.w(TAG, "Resetting entire offline database - all offline regions will be deleted")
+            offlineManager.resetDatabase(
+                object : OfflineManager.FileSourceCallback {
+                    override fun onSuccess() {
+                        Log.d(TAG, "Offline database reset successfully")
+                        callback(true)
+                    }
+
+                    override fun onError(message: String) {
+                        Log.e(TAG, "Failed to reset offline database: $message")
+                        callback(false)
+                    }
+                },
+            )
+        }
+
         private fun findRegion(
             regionId: Long,
             callback: (OfflineRegion?) -> Unit,

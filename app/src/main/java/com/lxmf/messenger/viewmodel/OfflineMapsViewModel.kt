@@ -198,8 +198,9 @@ class OfflineMapsViewModel
         fun importMbtilesFile(uri: Uri) {
             viewModelScope.launch {
                 _isImporting.value = true
+                var destFile: File? = null
                 try {
-                    val destFile = withContext(Dispatchers.IO) {
+                    destFile = withContext(Dispatchers.IO) {
                         val offlineMapsDir = getOfflineMapsDir()
                         val resolver = context.contentResolver
 
@@ -210,28 +211,28 @@ class OfflineMapsViewModel
                         }
 
                         // Avoid overwriting existing files
-                        var destFile = File(offlineMapsDir, safeName)
+                        var file = File(offlineMapsDir, safeName)
                         var counter = 1
-                        while (destFile.exists()) {
+                        while (file.exists()) {
                             val base = safeName.removeSuffix(".mbtiles")
-                            destFile = File(offlineMapsDir, "${base}_$counter.mbtiles")
+                            file = File(offlineMapsDir, "${base}_$counter.mbtiles")
                             counter++
                         }
 
                         // Copy the content URI to the destination file
                         resolver.openInputStream(uri)?.use { input ->
-                            destFile.outputStream().use { output ->
+                            file.outputStream().use { output ->
                                 input.copyTo(output)
                             }
-                        } ?: throw IllegalStateException("Could not open input stream for URI")
+                        } ?: error("Could not open input stream for URI")
 
                         // Validate the copied file
-                        if (!OfflineMapStyleBuilder.isValidMBTiles(destFile.absolutePath)) {
-                            destFile.delete()
-                            throw IllegalStateException("File does not appear to be a valid MBTiles file")
+                        if (!OfflineMapStyleBuilder.isValidMBTiles(file.absolutePath)) {
+                            file.delete()
+                            error("File does not appear to be a valid MBTiles file")
                         }
 
-                        destFile
+                        file
                     }
 
                     // Register in the database using existing import logic
@@ -244,6 +245,12 @@ class OfflineMapsViewModel
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to import MBTiles file", e)
                     _errorMessage.value = "Import failed: ${e.message}"
+                    // Clean up the copied file if DB registration failed
+                    destFile?.let { file ->
+                        if (file.exists() && !file.delete()) {
+                            Log.w(TAG, "Failed to clean up imported file: ${file.absolutePath}")
+                        }
+                    }
                 } finally {
                     _isImporting.value = false
                 }

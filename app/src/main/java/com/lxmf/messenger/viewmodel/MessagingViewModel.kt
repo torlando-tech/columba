@@ -1651,11 +1651,19 @@ class MessagingViewModel
             pendingSharedImageUris = uris
             pendingSharedImageDestHash = destinationHash
 
-            // Show quality dialog using the explicit destinationHash for link probing
-            // (not _currentConversation which may not yet reflect the share target)
+            // Show quality dialog using the explicit destinationHash for link probing.
+            // We await the probe result (up to 5s) so transfer-time estimates are accurate.
             viewModelScope.launch {
                 conversationLinkManager.openConversationLink(destinationHash)
-                val linkState = currentLinkState.value
+
+                // Wait for the link probe to finish (active or failed), reading directly
+                // from linkStates with the explicit destinationHash
+                val linkState =
+                    withTimeoutOrNull(5_000L) {
+                        conversationLinkManager.linkStates
+                            .map { it[destinationHash] }
+                            .first { state -> state != null && !state.isEstablishing }
+                    }
 
                 val recommendedPreset =
                     if (linkState != null && linkState.isActive) {
@@ -1777,7 +1785,6 @@ class MessagingViewModel
                 result
                     .onSuccess { receipt ->
                         handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
-                        conversationLinkManager.onMessageSent(destinationHash)
                     }.onFailure { error ->
                         handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                     }

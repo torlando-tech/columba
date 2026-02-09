@@ -216,8 +216,9 @@ class NotificationHelper
             if (!announceNotificationsEnabled) return
 
             // Check direct-only filter: when enabled, only notify for 1-hop (direct neighbor) announces
+            // hops == 0 means unknown (Python fallback), hops == 1 means direct neighbor, hops >= 2 means multi-hop
             val directOnly = settingsRepository.notificationAnnounceDirectOnlyFlow.first()
-            if (directOnly && hops > 1) return
+            if (directOnly && hops != 1) return
 
             // Check TCP exclusion filter: when enabled, skip announces received via TCP interfaces
             val excludeTcp = settingsRepository.notificationAnnounceExcludeTcpFlow.first()

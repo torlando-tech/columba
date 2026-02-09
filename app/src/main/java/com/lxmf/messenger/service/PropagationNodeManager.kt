@@ -1056,6 +1056,7 @@ class PropagationNodeManager
                     if (_isSyncing.value) {
                         Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
                         _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
                     }
                 }
 

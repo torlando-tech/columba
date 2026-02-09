@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lxmf.messenger.MainActivity
@@ -44,6 +46,17 @@ class ServiceNotificationManager(
     @Suppress("unused")
     private var currentSyncProgress: Float = 0f
     private var lastNetworkStatus: String = "READY"
+
+    // Watchdog: auto-reset sync notification if Python never sends a terminal state.
+    // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
+    private val syncNotificationTimeoutMs = 5 * 60 * 1000L + 30_000L
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val resetSyncRunnable = Runnable {
+        Log.w(TAG, "Sync notification watchdog fired - resetting to normal notification")
+        currentSyncState = PropagationState.STATE_IDLE
+        currentSyncProgress = 0f
+        notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+    }
 
     /**
      * Create notification channel for Android O+.
@@ -126,14 +139,38 @@ class ServiceNotificationManager(
             if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
                 val notification = createSyncNotification(stateName, progress)
                 notificationManager.notify(NOTIFICATION_ID, notification)
-            } else if (state == PropagationState.STATE_COMPLETE || state == PropagationState.STATE_IDLE) {
-                // Sync complete or idle - restore normal notification
+                // Reset watchdog on each active state update
+                scheduleSyncTimeout()
+            } else {
+                // Any non-active state (complete, idle, or error) restores normal notification
+                cancelSyncTimeout()
                 currentSyncState = PropagationState.STATE_IDLE
                 notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse sync progress: ${e.message}")
         }
+    }
+
+    /**
+     * Force-reset the sync notification to normal state.
+     * Called when the service is shutting down or when sync state is
+     * known to be stale (e.g., after a timeout in PropagationNodeManager).
+     */
+    fun resetSyncNotification() {
+        cancelSyncTimeout()
+        currentSyncState = PropagationState.STATE_IDLE
+        currentSyncProgress = 0f
+        notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+    }
+
+    private fun scheduleSyncTimeout() {
+        mainHandler.removeCallbacks(resetSyncRunnable)
+        mainHandler.postDelayed(resetSyncRunnable, syncNotificationTimeoutMs)
+    }
+
+    private fun cancelSyncTimeout() {
+        mainHandler.removeCallbacks(resetSyncRunnable)
     }
 
     /**

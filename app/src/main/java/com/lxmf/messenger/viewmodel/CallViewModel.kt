@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 import java.util.Locale
@@ -41,6 +43,9 @@ class CallViewModel
         }
 
         private val callBridge = CallCoordinator.getInstance()
+
+        // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
+        private val muteMutex = Mutex()
 
         // Expose call state from bridge
         val callState: StateFlow<CallState> = callBridge.callState
@@ -265,7 +270,7 @@ class CallViewModel
             val newMuted = !callBridge.isMuted.value
             callBridge.setMutedLocally(newMuted)
             viewModelScope.launch {
-                protocol.setCallMuted(newMuted)
+                muteMutex.withLock { protocol.setCallMuted(newMuted) }
             }
         }
 
@@ -293,12 +298,12 @@ class CallViewModel
                 // Entering PTT: mute transmit
                 callBridge.setMutedLocally(true)
                 callBridge.setPttActiveLocally(false)
-                viewModelScope.launch { protocol.setCallMuted(true) }
+                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(true) } }
             } else {
                 // Leaving PTT: unmute transmit (full duplex)
                 callBridge.setMutedLocally(false)
                 callBridge.setPttActiveLocally(false)
-                viewModelScope.launch { protocol.setCallMuted(false) }
+                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(false) } }
             }
         }
 
@@ -311,7 +316,7 @@ class CallViewModel
             if (!callBridge.isPttMode.value) return
             callBridge.setPttActiveLocally(active)
             callBridge.setMutedLocally(!active)
-            viewModelScope.launch { protocol.setCallMuted(!active) }
+            viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(!active) } }
         }
 
         /**

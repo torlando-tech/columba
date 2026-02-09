@@ -226,6 +226,10 @@ class MessagingViewModel
                 }
         }
 
+        // Multi-image share state: URIs pending compression+send after quality selection
+        private var pendingSharedImageUris: List<Uri> = emptyList()
+        private var pendingSharedImageDestHash: String? = null
+
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
             combine(
@@ -1623,7 +1627,145 @@ class MessagingViewModel
         fun dismissQualitySelection() {
             Log.d(TAG, "Dismissing quality selection dialog")
             _qualitySelectionState.value = null
+            pendingSharedImageUris = emptyList()
+            pendingSharedImageDestHash = null
         }
+
+        /**
+         * Show quality selection dialog for externally shared images.
+         * When the user picks a preset, all images are compressed and sent
+         * as individual messages via [selectImageQualityForSharedImages].
+         */
+        fun processSharedImages(
+            context: Context,
+            uris: List<Uri>,
+            destinationHash: String,
+        ) {
+            if (uris.isEmpty()) return
+
+            // Dismiss any in-progress quality dialog to avoid sending the wrong images
+            if (_qualitySelectionState.value != null) {
+                dismissQualitySelection()
+            }
+
+            pendingSharedImageUris = uris
+            pendingSharedImageDestHash = destinationHash
+
+            // Show quality dialog using the first image for transfer-time estimates
+            processImageWithCompression(context, uris.first())
+        }
+
+        /**
+         * User selected a quality preset for shared images.
+         * Compresses each image with the chosen preset and sends each as a separate message.
+         * Bypasses the single-image StateFlows to avoid race conditions.
+         */
+        fun selectImageQualityForSharedImages(preset: ImageCompressionPreset) {
+            val state = _qualitySelectionState.value ?: return
+            val uris = pendingSharedImageUris.toList()
+            val destHash = pendingSharedImageDestHash ?: return
+
+            _qualitySelectionState.value = null
+            pendingSharedImageUris = emptyList()
+            pendingSharedImageDestHash = null
+
+            viewModelScope.launch {
+                _isProcessingImage.value = true
+                try {
+                    for (uri in uris) {
+                        val result =
+                            withContext(Dispatchers.IO) {
+                                ImageUtils.compressImageWithPreset(state.context, uri, preset)
+                            }
+                        if (result == null) {
+                            Log.e(TAG, "Failed to compress shared image: $uri")
+                            continue
+                        }
+                        Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
+                        sendImageMessageDirect(destHash, result.compressedImage.data, result.compressedImage.format)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing shared images", e)
+                } finally {
+                    _isProcessingImage.value = false
+                }
+            }
+        }
+
+        /**
+         * Send a message with an image directly, bypassing the single-image StateFlows.
+         * Used by multi-image share to send each image as a separate message.
+         */
+        private suspend fun sendImageMessageDirect(
+            destinationHash: String,
+            imageData: ByteArray,
+            imageFormat: String,
+        ) {
+            _isSending.value = true
+            try {
+                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
+                val destHashBytes = validateDestinationHash(destinationHash) ?: return
+                val identity =
+                    loadIdentityIfNeeded() ?: run {
+                        Log.e(TAG, "Failed to load source identity")
+                        return
+                    }
+
+                val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+                val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+                val deliveryMethod = determineDeliveryMethod(sanitized, imageData, emptyList(), defaultMethod)
+                val deliveryMethodString = deliveryMethod.toStorageString()
+
+                val iconAppearance =
+                    identityRepository.getActiveIdentitySync()?.let { activeId ->
+                        val name = activeId.iconName
+                        val fg = activeId.iconForegroundColor
+                        val bg = activeId.iconBackgroundColor
+                        if (name != null && fg != null && bg != null) {
+                            com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                                iconName = name,
+                                foregroundColor = fg,
+                                backgroundColor = bg,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+
+                Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
+
+                val result =
+                    reticulumProtocol.sendLxmfMessageWithMethod(
+                        destinationHash = destHashBytes,
+                        content = sanitized,
+                        sourceIdentity = identity,
+                        deliveryMethod = deliveryMethod,
+                        tryPropagationOnFail = tryPropOnFail,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = null,
+                        replyToMessageId = null,
+                        iconAppearance = iconAppearance,
+                    )
+
+                result
+                    .onSuccess { receipt ->
+                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
+                        conversationLinkManager.onMessageSent(destinationHash)
+                    }.onFailure { error ->
+                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending shared image message", e)
+            } finally {
+                _isSending.value = false
+            }
+        }
+
+        /**
+         * Number of pending shared images (0 if not in multi-image share mode).
+         */
+        fun pendingSharedImageCount(): Int = pendingSharedImageUris.size
 
         /**
          * Load an image attachment asynchronously.

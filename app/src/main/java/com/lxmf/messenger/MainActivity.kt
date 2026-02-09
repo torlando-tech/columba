@@ -103,6 +103,7 @@ import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -444,6 +445,8 @@ sealed class PendingNavigation {
         val text: String,
     ) : PendingNavigation()
 
+    data class SharedImage(val uris: List<android.net.Uri>) : PendingNavigation()
+
     data class IncomingCall(
         val identityHash: String,
     ) : PendingNavigation()
@@ -520,8 +523,9 @@ fun ColumbaNavigation(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
 
-    // Clear pending shared text deterministically if the user leaves Chats/Contacts
+    // Clear pending shared text/images deterministically if the user leaves Chats/Contacts
     // without selecting a destination.
     var lastRoute by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(navController) {
@@ -532,6 +536,7 @@ fun ColumbaNavigation(
 
             if (wasInPickDestinationFlow && !isInPickDestinationFlow) {
                 sharedTextViewModel.clearIfUnassigned()
+                sharedImageViewModel.clearIfUnassigned()
             }
 
             lastRoute = route
@@ -641,6 +646,22 @@ fun ColumbaNavigation(
                         }
                     }
                     Log.d("ColumbaNavigation", "Handled shared text intent")
+                }
+                is PendingNavigation.SharedImage -> {
+                    sharedImageViewModel.setImages(navigation.uris)
+
+                    selectedTab = 0
+                    val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
+                    if (!poppedToChats) {
+                        navController.navigate(Screen.Chats.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                    Log.d("ColumbaNavigation", "Handled shared image intent (${navigation.uris.size} images)")
                 }
                 is PendingNavigation.IncomingCall -> {
                     // Navigate to incoming call screen

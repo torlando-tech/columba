@@ -45,6 +45,10 @@ data class TcpClientWizardState(
     val targetPort: String = "",
     // RNS 1.1.x Bootstrap Interface option
     val bootstrapOnly: Boolean = false,
+    // SOCKS5 proxy (Tor/Orbot) settings
+    val socksProxyEnabled: Boolean = false,
+    val socksProxyHost: String = "127.0.0.1",
+    val socksProxyPort: String = "9050",
     // Save state
     val isSaving: Boolean = false,
     val saveError: String? = null,
@@ -98,6 +102,9 @@ class TcpClientWizardViewModel
                             targetHost = config.targetHost,
                             targetPort = config.targetPort.toString(),
                             bootstrapOnly = config.bootstrapOnly,
+                            socksProxyEnabled = config.socksProxyEnabled,
+                            socksProxyHost = config.socksProxyHost,
+                            socksProxyPort = config.socksProxyPort.toString(),
                         )
                     }
 
@@ -122,6 +129,7 @@ class TcpClientWizardViewModel
                     server.host == host && server.port == port
                 }
 
+            val isOnion = host.endsWith(".onion")
             _state.update {
                 it.copy(
                     selectedServer = matchingServer,
@@ -130,6 +138,8 @@ class TcpClientWizardViewModel
                     targetHost = host,
                     targetPort = port.toString(),
                     bootstrapOnly = matchingServer?.isBootstrap ?: false,
+                    // Auto-enable SOCKS proxy for .onion addresses
+                    socksProxyEnabled = isOnion,
                     // Skip to review step since we have all the info
                     currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
                 )
@@ -146,6 +156,7 @@ class TcpClientWizardViewModel
          * Select a community server.
          */
         fun selectServer(server: TcpCommunityServer) {
+            val isOnion = server.host.endsWith(".onion")
             _state.update {
                 it.copy(
                     selectedServer = server,
@@ -154,6 +165,8 @@ class TcpClientWizardViewModel
                     targetHost = server.host,
                     targetPort = server.port.toString(),
                     bootstrapOnly = server.isBootstrap,
+                    // Auto-enable SOCKS proxy for .onion servers
+                    socksProxyEnabled = isOnion,
                 )
             }
         }
@@ -170,6 +183,9 @@ class TcpClientWizardViewModel
                     targetHost = "",
                     targetPort = "",
                     bootstrapOnly = false,
+                    socksProxyEnabled = false,
+                    socksProxyHost = "127.0.0.1",
+                    socksProxyPort = "9050",
                 )
             }
         }
@@ -191,9 +207,17 @@ class TcpClientWizardViewModel
 
         /**
          * Update target host field.
+         * Auto-enables SOCKS proxy when a .onion address is entered.
          */
         fun updateTargetHost(value: String) {
-            _state.update { it.copy(targetHost = value) }
+            val isOnion = value.trim().endsWith(".onion")
+            _state.update {
+                it.copy(
+                    targetHost = value,
+                    // Auto-enable SOCKS proxy for .onion addresses
+                    socksProxyEnabled = if (isOnion) true else it.socksProxyEnabled,
+                )
+            }
         }
 
         /**
@@ -201,6 +225,27 @@ class TcpClientWizardViewModel
          */
         fun updateTargetPort(value: String) {
             _state.update { it.copy(targetPort = value) }
+        }
+
+        /**
+         * Toggle SOCKS5 proxy (Tor/Orbot) for this connection.
+         */
+        fun toggleSocksProxy(enabled: Boolean) {
+            _state.update { it.copy(socksProxyEnabled = enabled) }
+        }
+
+        /**
+         * Update SOCKS5 proxy host.
+         */
+        fun updateSocksProxyHost(value: String) {
+            _state.update { it.copy(socksProxyHost = value) }
+        }
+
+        /**
+         * Update SOCKS5 proxy port.
+         */
+        fun updateSocksProxyPort(value: String) {
+            _state.update { it.copy(socksProxyPort = value) }
         }
 
         /**
@@ -289,6 +334,9 @@ class TcpClientWizardViewModel
                             kissFraming = false,
                             mode = "full",
                             bootstrapOnly = currentState.bootstrapOnly,
+                            socksProxyEnabled = currentState.socksProxyEnabled,
+                            socksProxyHost = currentState.socksProxyHost.trim().ifEmpty { "127.0.0.1" },
+                            socksProxyPort = currentState.socksProxyPort.toIntOrNull() ?: 9050,
                         )
 
                     if (isEditing) {

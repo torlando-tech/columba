@@ -27,6 +27,11 @@ fun InterfaceConfig.toJsonString(): String {
                 networkName?.let { put("network_name", it) }
                 passphrase?.let { put("passphrase", it) }
                 if (bootstrapOnly) put("bootstrap_only", true)
+                if (socksProxyEnabled) {
+                    put("socks_proxy_enabled", true)
+                    put("socks_proxy_host", socksProxyHost)
+                    put("socks_proxy_port", socksProxyPort)
+                }
             }.toString()
 
         is InterfaceConfig.RNode ->

@@ -110,6 +110,15 @@ sealed class InterfaceConfig {
         val networkName: String? = null,
         val passphrase: String? = null,
         val bootstrapOnly: Boolean = false,
+        /**
+         * When true, route this TCP connection through a SOCKS5 proxy (e.g., Orbot for Tor).
+         * Required for connecting to .onion addresses.
+         */
+        val socksProxyEnabled: Boolean = false,
+        /** SOCKS5 proxy host. Defaults to 127.0.0.1 (Orbot's default). */
+        val socksProxyHost: String = "127.0.0.1",
+        /** SOCKS5 proxy port. Defaults to 9050 (Orbot's default SOCKS port). */
+        val socksProxyPort: Int = 9050,
     ) : InterfaceConfig()
 
     /**

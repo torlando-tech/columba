@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 import java.util.Locale
@@ -27,6 +29,7 @@ import javax.inject.Inject
  * Uses ReticulumProtocol for call actions (IPC to service process)
  * and CallCoordinator for local state management.
  */
+@Suppress("TooManyFunctions") // Call + PTT controls require many small action methods
 @HiltViewModel
 class CallViewModel
     @Inject
@@ -41,10 +44,15 @@ class CallViewModel
 
         private val callBridge = CallCoordinator.getInstance()
 
+        // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
+        private val muteMutex = Mutex()
+
         // Expose call state from bridge
         val callState: StateFlow<CallState> = callBridge.callState
         val isMuted: StateFlow<Boolean> = callBridge.isMuted
         val isSpeakerOn: StateFlow<Boolean> = callBridge.isSpeakerOn
+        val isPttMode: StateFlow<Boolean> = callBridge.isPttMode
+        val isPttActive: StateFlow<Boolean> = callBridge.isPttActive
         val remoteIdentity: StateFlow<String?> = callBridge.remoteIdentity
 
         // Call duration (updated every second during active call)
@@ -262,7 +270,7 @@ class CallViewModel
             val newMuted = !callBridge.isMuted.value
             callBridge.setMutedLocally(newMuted)
             viewModelScope.launch {
-                protocol.setCallMuted(newMuted)
+                muteMutex.withLock { protocol.setCallMuted(newMuted) }
             }
         }
 
@@ -275,6 +283,41 @@ class CallViewModel
             viewModelScope.launch {
                 protocol.setCallSpeaker(newSpeaker)
             }
+        }
+
+        /**
+         * Toggle push-to-talk mode.
+         *
+         * When enabled, transmit is muted by default. The user must press
+         * and hold the PTT button (on-screen or Bluetooth headset) to transmit.
+         */
+        fun togglePttMode() {
+            val newMode = !callBridge.isPttMode.value
+            callBridge.setPttModeLocally(newMode)
+            if (newMode) {
+                // Entering PTT: mute transmit
+                callBridge.setMutedLocally(true)
+                callBridge.setPttActiveLocally(false)
+                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(true) } }
+            } else {
+                // Leaving PTT: unmute transmit (full duplex)
+                callBridge.setMutedLocally(false)
+                callBridge.setPttActiveLocally(false)
+                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(false) } }
+            }
+        }
+
+        /**
+         * Set PTT transmit state (press/release).
+         *
+         * @param active true when pressed (transmitting), false when released (listening)
+         */
+        fun setPttActive(active: Boolean) {
+            if (!callBridge.isPttMode.value) return
+            if (callState.value !is CallState.Active) return
+            callBridge.setPttActiveLocally(active)
+            callBridge.setMutedLocally(!active)
+            viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(!active) } }
         }
 
         /**

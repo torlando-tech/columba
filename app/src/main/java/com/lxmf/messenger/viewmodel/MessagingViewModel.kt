@@ -1651,8 +1651,34 @@ class MessagingViewModel
             pendingSharedImageUris = uris
             pendingSharedImageDestHash = destinationHash
 
-            // Show quality dialog using the first image for transfer-time estimates
-            processImageWithCompression(context, uris.first())
+            // Show quality dialog using the explicit destinationHash for link probing
+            // (not _currentConversation which may not yet reflect the share target)
+            viewModelScope.launch {
+                conversationLinkManager.openConversationLink(destinationHash)
+                val linkState = currentLinkState.value
+
+                val recommendedPreset =
+                    if (linkState != null && linkState.isActive) {
+                        linkState.recommendPreset()
+                    } else {
+                        val savedPreset = settingsRepository.getImageCompressionPreset()
+                        if (savedPreset == ImageCompressionPreset.AUTO) {
+                            ImageCompressionPreset.MEDIUM
+                        } else {
+                            savedPreset
+                        }
+                    }
+
+                val transferTimeEstimates = calculateTransferTimeEstimates(linkState, context, uris.first())
+
+                _qualitySelectionState.value =
+                    QualitySelectionState(
+                        imageUri = uris.first(),
+                        context = context,
+                        recommendedPreset = recommendedPreset,
+                        transferTimeEstimates = transferTimeEstimates,
+                    )
+            }
         }
 
         /**

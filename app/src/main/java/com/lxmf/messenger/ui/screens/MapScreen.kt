@@ -370,7 +370,9 @@ fun MapScreen(
     }
 
     // Proper MapView lifecycle management
-    // This ensures the map survives tab switches while properly handling lifecycle events
+    // This ensures the map survives tab switches while properly handling lifecycle events.
+    // CRITICAL: onDispose must destroy the MapView to prevent leaked native resources
+    // and concurrent database connections that corrupt MapLibre's offline tile database (#354).
     DisposableEffect(lifecycleOwner, mapView) {
         val observer =
             LifecycleEventObserver { _, event ->
@@ -395,6 +397,29 @@ fun MapScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Destroy the MapView when the composable leaves composition (e.g., tab switch).
+            // Without this, the old MapView leaks its native resources including its connection
+            // to MapLibre's singleton offline database (mbgl-offline.db). When a new MapView is
+            // created on re-entry, the concurrent database connections cause corruption that
+            // makes offline tiles inaccessible (#354).
+            val view = mapView
+            if (view != null) {
+                Log.d("MapScreen", "Disposing MapView - destroying to prevent database corruption")
+                mapLibreMap?.locationComponent?.let { locationComponent ->
+                    try {
+                        if (locationComponent.isLocationComponentActivated) {
+                            locationComponent.isLocationComponentEnabled = false
+                        }
+                    } catch (e: Exception) {
+                        Log.w("MapScreen", "Error disabling location component during dispose", e)
+                    }
+                }
+                view.onPause()
+                view.onStop()
+                view.onDestroy()
+            }
+            mapLibreMap = null
+            mapStyleLoaded = false
         }
     }
 
@@ -426,46 +451,19 @@ fun MapScreen(
                             map.uiSettings.setAttributionMargins(marginPx, 0, 0, bottomMarginPx)
                         }
 
-                        // Load map style based on settings (offline, HTTP, or RMSP)
-                        // When Unavailable, load an empty style to clear the map
-                        val styleResult = state.mapStyleResult
-
-                        // Control MapLibre's network connectivity based on style result
-                        // When Offline or Unavailable, prevent any network requests for tiles
-                        val allowNetwork =
-                            styleResult is MapStyleResult.Online ||
-                                styleResult is MapStyleResult.Rmsp ||
-                                styleResult == null // Default to online if not yet resolved
-                        MapLibre.setConnected(allowNetwork)
-                        Log.d("MapScreen", "Initial MapLibre network connectivity: $allowNetwork")
-
-                        val styleBuilder =
-                            when (styleResult) {
-                                is MapStyleResult.Online -> Style.Builder().fromUri(styleResult.styleUrl)
-                                is MapStyleResult.Offline -> Style.Builder().fromUri(styleResult.styleUrl)
-                                is MapStyleResult.OfflineWithLocalStyle -> {
-                                    try {
-                                        val styleJson = java.io.File(styleResult.localStylePath).readText()
-                                        Style.Builder().fromJson(styleJson)
-                                    } catch (e: Exception) {
-                                        Log.e("MapScreen", "Failed to read cached style JSON, falling back to HTTP", e)
-                                        Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                                    }
-                                }
-                                is MapStyleResult.Rmsp -> {
-                                    // For RMSP, use default HTTP as fallback (RMSP rendering not yet implemented)
-                                    Log.d("MapScreen", "RMSP style requested, using HTTP fallback")
-                                    Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                                }
-                                is MapStyleResult.Unavailable -> {
-                                    Log.w("MapScreen", "No map source available: ${styleResult.reason}")
-                                    // Load empty style to clear the map
-                                    Style.Builder().fromJson(EMPTY_MAP_STYLE)
-                                }
-                                null -> Style.Builder().fromUri(MapTileSourceManager.DEFAULT_STYLE_URL)
-                            }
-                        map.setStyle(styleBuilder) { style ->
-                            Log.d("MapScreen", "Map style loaded: ${styleResult?.javaClass?.simpleName ?: "default"}")
+                        // Don't load the real style here - let the LaunchedEffect handle it
+                        // exclusively. Loading style in both places caused a race condition (#354):
+                        // 1. Factory runs with mapStyleResult=null, defaults allowNetwork=true
+                        // 2. LaunchedEffect fires when mapStyleResult resolves, sets allowNetwork=false
+                        // During the brief online window, failed network requests can poison the
+                        // tile cache. Additionally, double style loading can corrupt MapLibre state.
+                        //
+                        // Load a minimal empty style as placeholder. The LaunchedEffect will
+                        // apply the correct style once mapStyleResult is resolved.
+                        MapLibre.setConnected(false)
+                        Log.d("MapScreen", "Factory: loading placeholder style, deferring to LaunchedEffect")
+                        map.setStyle(Style.Builder().fromJson(EMPTY_MAP_STYLE)) { style ->
+                            Log.d("MapScreen", "Placeholder style loaded in factory")
                             onMapStyleLoaded(map, style, ctx, state.hasLocationPermission)
                         }
 

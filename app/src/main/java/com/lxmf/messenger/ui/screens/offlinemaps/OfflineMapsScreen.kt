@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -77,6 +78,18 @@ fun OfflineMapsScreen(
             viewModel.clearError()
         }
     }
+
+    // Show cache reset message in snackbar
+    LaunchedEffect(state.cacheResetMessage) {
+        state.cacheResetMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearCacheResetMessage()
+        }
+    }
+
+    // Confirmation dialogs for cache operations
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showResetDatabaseDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -160,12 +173,81 @@ fun OfflineMapsScreen(
                     )
                 }
 
+                // Troubleshooting section
+                item {
+                    TroubleshootingCard(
+                        isResetting = state.isResettingCache,
+                        onClearCache = { showClearCacheDialog = true },
+                        onResetDatabase = { showResetDatabaseDialog = true },
+                    )
+                }
+
                 // Bottom spacing
                 item {
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }
+    }
+
+    // Clear cache confirmation dialog
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { Text("Clear Map Tile Cache") },
+            text = {
+                Text(
+                    "This clears cached map tiles from browsing. Your downloaded offline " +
+                        "maps will not be affected.\n\nUse this if the map shows a blank/white " +
+                        "background or fails to load offline tiles.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCacheDialog = false
+                        viewModel.clearMapTileCache()
+                    },
+                ) {
+                    Text("Clear Cache")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Reset database confirmation dialog
+    if (showResetDatabaseDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDatabaseDialog = false },
+            title = { Text("Reset Map Database") },
+            text = {
+                Text(
+                    "WARNING: This deletes ALL map data including your downloaded offline maps. " +
+                        "You will need to re-download any offline regions.\n\n" +
+                        "Only use this if clearing the cache didn't fix the issue.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetDatabaseDialog = false
+                        viewModel.resetMapDatabase()
+                    },
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDatabaseDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
@@ -514,6 +596,86 @@ fun StatusChip(
         color = color,
         modifier = modifier,
     )
+}
+
+/**
+ * Troubleshooting card with cache clearing and database reset options.
+ * Provides recovery from MapLibre offline database corruption (#354).
+ */
+@Composable
+fun TroubleshootingCard(
+    isResetting: Boolean,
+    onClearCache: () -> Unit,
+    onResetDatabase: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+        ) {
+            Text(
+                text = "Troubleshooting",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "If the map shows a blank screen or offline tiles don't load:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(
+                    onClick = onClearCache,
+                    enabled = !isResetting,
+                ) {
+                    if (isResetting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text("Clear Tile Cache")
+                }
+                TextButton(
+                    onClick = onResetDatabase,
+                    enabled = !isResetting,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RestartAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "Reset Map Database",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

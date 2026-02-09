@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -43,6 +44,8 @@ data class OfflineMapsState(
     val totalStorageBytes: Long = 0L,
     val isLoading: Boolean = true,
     val isDeleting: Boolean = false,
+    val isResettingCache: Boolean = false,
+    val cacheResetMessage: String? = null,
     val errorMessage: String? = null,
     val updateCheckResults: Map<Long, UpdateCheckResult> = emptyMap(),
     val latestTileVersion: String? = null,
@@ -82,6 +85,8 @@ class OfflineMapsViewModel
 
         private val _errorMessage = MutableStateFlow<String?>(null)
         private val _isDeleting = MutableStateFlow(false)
+        private val _isResettingCache = MutableStateFlow(false)
+        private val _cacheResetMessage = MutableStateFlow<String?>(null)
         private val _updateCheckResults = MutableStateFlow<Map<Long, UpdateCheckResult>>(emptyMap())
         private val _latestTileVersion = MutableStateFlow<String?>(null)
 
@@ -98,13 +103,21 @@ class OfflineMapsViewModel
                 offlineMapRegionRepository.getTotalStorageUsed(),
                 _errorMessage,
                 _isDeleting,
-                combine(_updateCheckResults, _latestTileVersion) { a, b -> a to b },
-            ) { regions, totalStorage, error, isDeleting, (updateResults, latestVersion) ->
+                combine(
+                    _updateCheckResults,
+                    _latestTileVersion,
+                    _isResettingCache,
+                    _cacheResetMessage,
+                ) { a, b, c, d -> Triple(a to b, c, d) },
+            ) { regions, totalStorage, error, isDeleting, (updatePair, isResetting, resetMsg) ->
+                val (updateResults, latestVersion) = updatePair
                 OfflineMapsState(
                     regions = regions,
                     totalStorageBytes = totalStorage ?: 0L,
                     isLoading = false,
                     isDeleting = isDeleting,
+                    isResettingCache = isResetting,
+                    cacheResetMessage = resetMsg,
                     errorMessage = error,
                     updateCheckResults = updateResults,
                     latestTileVersion = latestVersion,
@@ -166,6 +179,73 @@ class OfflineMapsViewModel
          */
         fun clearError() {
             _errorMessage.value = null
+        }
+
+        /**
+         * Clear the cache reset message.
+         */
+        fun clearCacheResetMessage() {
+            _cacheResetMessage.value = null
+        }
+
+        /**
+         * Clear MapLibre's ambient tile cache.
+         *
+         * This removes tiles cached during regular map browsing without affecting
+         * downloaded offline regions. Fixes map rendering issues caused by corrupted
+         * ambient cache entries (#354).
+         */
+        fun clearMapTileCache() {
+            _isResettingCache.value = true
+            mapLibreOfflineManager.clearAmbientCache { success ->
+                _isResettingCache.value = false
+                _cacheResetMessage.value =
+                    if (success) {
+                        "Map tile cache cleared. Return to the map to reload."
+                    } else {
+                        "Failed to clear map tile cache."
+                    }
+            }
+        }
+
+        /**
+         * Reset MapLibre's entire offline database.
+         *
+         * WARNING: This deletes ALL data including downloaded offline regions.
+         * All offline regions will need to be re-downloaded. Also clears the Columba
+         * database records for consistency.
+         *
+         * Use as a last resort when clearMapTileCache doesn't resolve rendering issues (#354).
+         */
+        fun resetMapDatabase() {
+            _isResettingCache.value = true
+            mapLibreOfflineManager.resetDatabase { success ->
+                if (success) {
+                    // Also clear Columba's tracking records since the MapLibre regions are gone
+                    viewModelScope.launch {
+                        try {
+                            val regions = offlineMapRegionRepository.getAllRegions().first()
+                            for (region in regions) {
+                                offlineMapRegionRepository.deleteRegion(region.id)
+                            }
+                            // Clean up cached style JSON files
+                            val styleDir = File(context.filesDir, "offline_styles")
+                            if (styleDir.exists()) {
+                                styleDir.listFiles()?.forEach { it.delete() }
+                            }
+                            Log.d(TAG, "Cleared ${regions.size} region records and cached styles")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to clean up region records", e)
+                        }
+                        _isResettingCache.value = false
+                        _cacheResetMessage.value =
+                            "Map database reset. All offline maps have been removed and will need to be re-downloaded."
+                    }
+                } else {
+                    _isResettingCache.value = false
+                    _cacheResetMessage.value = "Failed to reset map database."
+                }
+            }
         }
 
         /**

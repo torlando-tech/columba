@@ -16,6 +16,7 @@ import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
+import com.lxmf.messenger.data.util.HashUtils
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -69,6 +70,7 @@ object DatabaseModule {
             MIGRATION_32_33,
             MIGRATION_33_34,
             MIGRATION_34_35,
+            MIGRATION_35_36,
         )
     }
 
@@ -1441,6 +1443,42 @@ object DatabaseModule {
                 database.execSQL(
                     "ALTER TABLE offline_map_regions ADD COLUMN localStylePath TEXT DEFAULT NULL",
                 )
+            }
+        }
+
+    // Migration from version 35 to 36: Add pre-computed identity hash to announces table
+    // Fixes COLUMBA-28 OOM crash: findByIdentityHash() was loading ALL announces into memory
+    // to compute SHA-256 per row. This adds an indexed column so the lookup is O(1) SQL seek.
+    private val MIGRATION_35_36 =
+        object : Migration(35, 36) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add computedIdentityHash column (nullable for backward compat)
+                database.execSQL(
+                    "ALTER TABLE announces ADD COLUMN computedIdentityHash TEXT",
+                )
+
+                // Create index for O(1) lookup by identity hash
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_announces_computedIdentityHash ON announces(computedIdentityHash)",
+                )
+
+                // Backfill existing rows: compute SHA-256(publicKey)[:16] as hex
+                // Uses cursor-based iteration (same pattern as MIGRATION_25_26) to avoid OOM
+                database
+                    .query("SELECT destinationHash, publicKey FROM announces")
+                    .use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val destinationHash = cursor.getString(0)
+                            val publicKey = cursor.getBlob(1)
+                            if (publicKey != null) {
+                                val identityHash = HashUtils.computeIdentityHash(publicKey)
+                                database.execSQL(
+                                    "UPDATE announces SET computedIdentityHash = ? WHERE destinationHash = ?",
+                                    arrayOf(identityHash, destinationHash),
+                                )
+                            }
+                        }
+                    }
             }
         }
 

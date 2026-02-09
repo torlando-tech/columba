@@ -73,6 +73,14 @@ interface AnnounceDao {
     suspend fun getAnnounce(destinationHash: String): AnnounceEntity?
 
     /**
+     * Find an announce by its pre-computed identity hash.
+     * Identity hash = first 16 bytes of SHA-256(publicKey) as hex string.
+     * Uses indexed column for O(1) lookup instead of full-table scan + hash computation.
+     */
+    @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash LIMIT 1")
+    suspend fun getAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
+
+    /**
      * Check if an announce exists for a given destination hash
      */
     @Query("SELECT EXISTS(SELECT 1 FROM announces WHERE destinationHash = :destinationHash)")

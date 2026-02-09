@@ -17,6 +17,7 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.InterfaceType
+import com.lxmf.messenger.data.util.HashUtils
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -34,7 +35,7 @@ import javax.inject.Singleton
 /**
  * Handles importing data from a migration bundle file.
  */
-@Suppress("TooManyFunctions") // Helper methods extracted for readability
+@Suppress("TooManyFunctions", "LargeClass") // Helper methods extracted for readability
 @Singleton
 class MigrationImporter
     @Inject
@@ -378,10 +379,11 @@ class MigrationImporter
                         announce.receivingInterfaceType
                             ?: InterfaceType.fromInterfaceName(announce.receivingInterface).name
 
+                    val decodedPublicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP)
                     AnnounceEntity(
                         destinationHash = announce.destinationHash,
                         peerName = announce.peerName,
-                        publicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP),
+                        publicKey = decodedPublicKey,
                         appData = announce.appData?.let { Base64.decode(it, Base64.NO_WRAP) },
                         hops = announce.hops,
                         lastSeenTimestamp = announce.lastSeenTimestamp,
@@ -391,6 +393,7 @@ class MigrationImporter
                         aspect = announce.aspect,
                         isFavorite = announce.isFavorite,
                         favoritedTimestamp = announce.favoritedTimestamp,
+                        computedIdentityHash = HashUtils.computeIdentityHash(decodedPublicKey),
                     )
                 }
             database.announceDao().insertAnnounces(entities)
@@ -415,8 +418,12 @@ class MigrationImporter
         private suspend fun importInterfaces(interfaces: List<InterfaceExport>): Int {
             var imported = 0
             val existingKeys =
-                interfaceDatabase.interfaceDao().getAllInterfaces().first()
-                    .map { "${it.name}|${it.type}" }.toSet()
+                interfaceDatabase
+                    .interfaceDao()
+                    .getAllInterfaces()
+                    .first()
+                    .map { "${it.name}|${it.type}" }
+                    .toSet()
 
             interfaces.forEach { iface ->
                 val key = "${iface.name}|${iface.type}"
@@ -439,14 +446,26 @@ class MigrationImporter
             return imported
         }
 
-        private data class ContactImportResult(val imported: Int, val relayHash: String?)
+        private data class ContactImportResult(
+            val imported: Int,
+            val relayHash: String?,
+        )
 
-        private data class ThemeImportResult(val imported: Int, val idMap: Map<Long, Long>)
+        private data class ThemeImportResult(
+            val imported: Int,
+            val idMap: Map<Long, Long>,
+        )
 
         private suspend fun importCustomThemes(themes: List<CustomThemeExport>): ThemeImportResult {
             var imported = 0
             val themeIdMap = mutableMapOf<Long, Long>()
-            val existingNames = database.customThemeDao().getAllThemes().first().map { it.name }.toSet()
+            val existingNames =
+                database
+                    .customThemeDao()
+                    .getAllThemes()
+                    .first()
+                    .map { it.name }
+                    .toSet()
 
             themes.forEach { theme ->
                 if (theme.name !in existingNames) {

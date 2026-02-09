@@ -35,6 +35,7 @@ class PttMediaSessionManager(
 
     private var mediaSession: MediaSession? = null
     private var isSessionActive = false
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { /* no-op */ }
 
     /**
      * Activate the MediaSession to capture headset button events.
@@ -44,20 +45,22 @@ class PttMediaSessionManager(
         if (isSessionActive) return
         Log.d(TAG, "Activating PTT MediaSession")
 
-        val session = MediaSession(context, SESSION_TAG).apply {
-            setCallback(mediaSessionCallback)
+        val session =
+            MediaSession(context, SESSION_TAG).apply {
+                setCallback(mediaSessionCallback)
 
-            // Set a "playing" playback state so the session receives media button events.
-            // Without an active state, Android routes buttons to the last active media app.
-            setPlaybackState(
-                PlaybackState.Builder()
-                    .setState(PlaybackState.STATE_PLAYING, 0, 1f)
-                    .setActions(PlaybackState.ACTION_PLAY_PAUSE)
-                    .build(),
-            )
+                // Set a "playing" playback state so the session receives media button events.
+                // Without an active state, Android routes buttons to the last active media app.
+                setPlaybackState(
+                    PlaybackState
+                        .Builder()
+                        .setState(PlaybackState.STATE_PLAYING, 0, 1f)
+                        .setActions(PlaybackState.ACTION_PLAY_PAUSE)
+                        .build(),
+                )
 
-            isActive = true
-        }
+                isActive = true
+            }
 
         mediaSession = session
         isSessionActive = true
@@ -65,7 +68,7 @@ class PttMediaSessionManager(
         // Request audio focus so our session is the active one for media buttons
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         @Suppress("DEPRECATION")
-        audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN)
+        audioManager.requestAudioFocus(audioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN)
 
         Log.i(TAG, "PTT MediaSession activated")
     }
@@ -88,6 +91,11 @@ class PttMediaSessionManager(
         mediaSession = null
         isSessionActive = false
 
+        // Release audio focus acquired in activate()
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        @Suppress("DEPRECATION")
+        audioManager.abandonAudioFocus(audioFocusListener)
+
         Log.i(TAG, "PTT MediaSession deactivated")
     }
 
@@ -103,32 +111,34 @@ class PttMediaSessionManager(
         deactivate()
     }
 
-    private val mediaSessionCallback = object : MediaSession.Callback() {
-        override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
-            val keyEvent = mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
-                ?: return super.onMediaButtonEvent(mediaButtonIntent)
+    private val mediaSessionCallback =
+        object : MediaSession.Callback() {
+            override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                val keyEvent =
+                    mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                        ?: return super.onMediaButtonEvent(mediaButtonIntent)
 
-            if (keyEvent.keyCode != KeyEvent.KEYCODE_HEADSETHOOK &&
-                keyEvent.keyCode != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-            ) {
-                return super.onMediaButtonEvent(mediaButtonIntent)
-            }
+                if (keyEvent.keyCode != KeyEvent.KEYCODE_HEADSETHOOK &&
+                    keyEvent.keyCode != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                ) {
+                    return super.onMediaButtonEvent(mediaButtonIntent)
+                }
 
-            return when (keyEvent.action) {
-                KeyEvent.ACTION_DOWN -> {
-                    if (keyEvent.repeatCount == 0) {
-                        Log.d(TAG, "PTT button pressed")
-                        onPttStateChanged(true)
+                return when (keyEvent.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        if (keyEvent.repeatCount == 0) {
+                            Log.d(TAG, "PTT button pressed")
+                            onPttStateChanged(true)
+                        }
+                        true
                     }
-                    true
+                    KeyEvent.ACTION_UP -> {
+                        Log.d(TAG, "PTT button released")
+                        onPttStateChanged(false)
+                        true
+                    }
+                    else -> super.onMediaButtonEvent(mediaButtonIntent)
                 }
-                KeyEvent.ACTION_UP -> {
-                    Log.d(TAG, "PTT button released")
-                    onPttStateChanged(false)
-                    true
-                }
-                else -> super.onMediaButtonEvent(mediaButtonIntent)
             }
         }
-    }
 }

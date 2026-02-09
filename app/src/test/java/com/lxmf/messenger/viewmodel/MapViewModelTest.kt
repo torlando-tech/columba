@@ -1069,6 +1069,29 @@ class MapViewModelTest {
             verify(exactly = 1) { locationSharingManager.stopSharing(null) }
         }
 
+    // ===== deleteMarker Tests =====
+
+    @Test
+    fun `deleteMarker calls receivedLocationDao deleteLocationsForSender`() =
+        runTest {
+            coEvery { receivedLocationDao.deleteLocationsForSender(any()) } just Runs
+
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                )
+
+            viewModel.deleteMarker("stale_hash")
+
+            coVerify { receivedLocationDao.deleteLocationsForSender("stale_hash") }
+        }
+
     // ===== sharing state updates Tests =====
 
     @Test

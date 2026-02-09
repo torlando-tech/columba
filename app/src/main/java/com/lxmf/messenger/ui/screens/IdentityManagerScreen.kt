@@ -109,6 +109,7 @@ fun IdentityManagerScreen(
     var showImportTypeDialog by remember { mutableStateOf(false) }
     var showBackupImportDialog by remember { mutableStateOf(false) }
     var selectedBackupUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingExportSourceUri by remember { mutableStateOf<Uri?>(null) }
 
     // File picker for raw identity import
     val importLauncher =
@@ -130,6 +131,25 @@ fun IdentityManagerScreen(
                 selectedBackupUri = it
                 showBackupImportDialog = true
             }
+        }
+
+    // SAF file save launcher for identity export
+    val exportSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ) { destinationUri: Uri? ->
+            if (destinationUri != null && pendingExportSourceUri != null) {
+                try {
+                    context.contentResolver.openInputStream(pendingExportSourceUri!!)?.use { input ->
+                        context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Error will be visible to user as empty/corrupt file
+                }
+            }
+            pendingExportSourceUri = null
         }
 
     // Auto-show paste dialog when navigated with a pre-filled key
@@ -158,14 +178,9 @@ fun IdentityManagerScreen(
                 // No longer used - identity switch now restarts service without app restart
             }
             is IdentityManagerUiState.ExportReady -> {
-                // Launch share sheet for binary export
-                val shareIntent =
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_STREAM, state.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                context.startActivity(Intent.createChooser(shareIntent, "Export Identity"))
+                // Launch SAF file save dialog for binary export
+                pendingExportSourceUri = state.uri
+                exportSaveLauncher.launch("identity.rnsidentity")
                 viewModel.resetUiState()
             }
             is IdentityManagerUiState.ExportTextReady -> {

@@ -1,7 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
 import android.Manifest
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -90,6 +89,7 @@ fun MigrationScreen(
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var showNotificationPermissionDialog by remember { mutableStateOf(false) }
     var pendingImportComplete by remember { mutableStateOf(false) }
+    var pendingExportSourceUri by remember { mutableStateOf<Uri?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -104,6 +104,25 @@ fun MigrationScreen(
                 pendingImportComplete = false
                 onImportComplete()
             }
+        }
+
+    // SAF file save launcher for data export
+    val exportSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ) { destinationUri: Uri? ->
+            if (destinationUri != null && pendingExportSourceUri != null) {
+                try {
+                    context.contentResolver.openInputStream(pendingExportSourceUri!!)?.use { input ->
+                        context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Error will be visible to user as empty/corrupt file
+                }
+            }
+            pendingExportSourceUri = null
         }
 
     // Check if notification permission is needed (Android 13+ with notifications enabled in settings)
@@ -129,13 +148,12 @@ fun MigrationScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is MigrationUiState.ExportComplete -> {
-                val shareIntent =
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_STREAM, state.fileUri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                context.startActivity(Intent.createChooser(shareIntent, "Export Data"))
+                pendingExportSourceUri = state.fileUri
+                val timestamp = SimpleDateFormat(
+                    "yyyy-MM-dd_HHmmss",
+                    Locale.US,
+                ).format(Date())
+                exportSaveLauncher.launch("columba_export_$timestamp.columba")
             }
             is MigrationUiState.ImportPreview -> {
                 pendingImportUri = state.fileUri
@@ -358,7 +376,7 @@ private fun ExportSection(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export complete! Share sheet opened.")
+                        Text("Export complete! Save dialog opened.")
                     }
                 }
                 else -> {}

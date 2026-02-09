@@ -54,6 +54,15 @@ class ChatsViewModel
         // Cache for contact saved state flows to prevent flickering on recomposition
         private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()
 
+        // Draft texts keyed by peerHash - for showing "Draft:" in conversation list
+        val draftsMap: StateFlow<Map<String, String>> =
+            conversationRepository.observeDrafts()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = emptyMap(),
+                )
+
         // Search query state
         val searchQuery = MutableStateFlow("")
 

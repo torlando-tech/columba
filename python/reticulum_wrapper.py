@@ -2802,8 +2802,20 @@ class ReticulumWrapper:
                         log_info("ReticulumWrapper", "_on_lxmf_delivery",
                                 f"📍 Location-only message detected ({telemetry_source}), skipping message queue")
 
-                    # Add source hash and invoke callback
+                    # Add source hash and appearance from FIELD_ICON_APPEARANCE
                     location_event['source_hash'] = lxmf_message.source_hash.hex()
+
+                    if FIELD_ICON_APPEARANCE in lxmf_message.fields:
+                        try:
+                            icon_data = lxmf_message.fields[FIELD_ICON_APPEARANCE]
+                            if isinstance(icon_data, list) and len(icon_data) >= 3:
+                                location_event['appearance'] = {
+                                    'icon_name': icon_data[0],
+                                    'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                                    'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                                }
+                        except Exception:
+                            pass
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}, cease={location_event.get('cease', False)}")
@@ -3785,7 +3797,7 @@ class ReticulumWrapper:
                 try:
                     fg_bytes = bytes.fromhex(icon_fg_color)
                     bg_bytes = bytes.fromhex(icon_bg_color)
-                    fields[FIELD_ICON_APPEARANCE] = [icon_name, bg_bytes, fg_bytes]
+                    fields[FIELD_ICON_APPEARANCE] = [icon_name, fg_bytes, bg_bytes]
                     log_debug("ReticulumWrapper", "send_location_telemetry",
                               f"📎 Adding icon appearance: {icon_name}")
                 except (ValueError, TypeError) as e:

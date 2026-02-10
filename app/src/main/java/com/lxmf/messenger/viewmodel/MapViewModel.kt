@@ -235,6 +235,22 @@ class MapViewModel
                             Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
                         }
 
+                        // Prefer appearance from telemetry message, fall back to announce
+                        val telemetryAppearance =
+                            loc.appearanceJson?.let { json ->
+                                try {
+                                    val obj = org.json.JSONObject(json)
+                                    Triple(
+                                        obj.optString("icon_name", ""),
+                                        obj.optString("foreground_color", ""),
+                                        obj.optString("background_color", ""),
+                                    ).takeIf { it.first.isNotEmpty() }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to parse appearanceJson", e)
+                                    null
+                                }
+                            }
+
                         ContactMarker(
                             destinationHash = loc.senderHash,
                             displayName = displayName,
@@ -245,9 +261,9 @@ class MapViewModel
                             expiresAt = loc.expiresAt,
                             state = markerState,
                             approximateRadius = loc.approximateRadius,
-                            iconName = announce?.iconName,
-                            iconForegroundColor = announce?.iconForegroundColor,
-                            iconBackgroundColor = announce?.iconBackgroundColor,
+                            iconName = telemetryAppearance?.first ?: announce?.iconName,
+                            iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
+                            iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
                             publicKey = announce?.publicKey,
                         )
                     }

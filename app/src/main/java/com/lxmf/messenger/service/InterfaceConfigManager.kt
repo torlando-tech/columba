@@ -135,7 +135,11 @@ class InterfaceConfigManager
                             Intent(context, ReticulumService::class.java).apply {
                                 action = ReticulumService.ACTION_STOP
                             }
-                        context.startService(stopIntent)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            context.startForegroundService(stopIntent)
+                        } else {
+                            context.startService(stopIntent)
+                        }
                     } else {
                         Log.d(TAG, "Service process not found (may have already stopped)")
                     }

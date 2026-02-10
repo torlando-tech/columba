@@ -2673,7 +2673,7 @@ class ReticulumWrapper:
                 elif isinstance(content, str):
                     has_text_content = len(content.strip()) > 0
 
-            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
 
                 location_event = None
                 telemetry_source = None
@@ -2726,6 +2726,8 @@ class ReticulumWrapper:
 
                             # Invoke callback for each entry in the stream
                             for stream_entry in stream_entries:
+                                if not self.kotlin_location_received_callback:
+                                    break
                                 try:
                                     self.kotlin_location_received_callback(json.dumps(stream_entry))
                                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
@@ -2820,15 +2822,19 @@ class ReticulumWrapper:
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}, cease={location_event.get('cease', False)}")
 
-                    try:
-                        self.kotlin_location_received_callback(json.dumps(location_event))
-                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                "✅ Location callback invoked successfully")
-                    except Exception as e:
-                        log_error("ReticulumWrapper", "_on_lxmf_delivery",
-                                 f"⚠️ Error invoking location callback: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    if self.kotlin_location_received_callback:
+                        try:
+                            self.kotlin_location_received_callback(json.dumps(location_event))
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    "✅ Location callback invoked successfully")
+                        except Exception as e:
+                            log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"⚠️ Error invoking location callback: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   "Location callback not yet registered, dropping location event")
 
             # ✅ TELEMETRY COLLECTOR HOST: Handle FIELD_COMMANDS telemetry requests
             if self.telemetry_collector_enabled and hasattr(lxmf_message, 'fields') and lxmf_message.fields:

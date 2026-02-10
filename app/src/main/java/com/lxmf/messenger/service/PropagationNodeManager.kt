@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -1098,7 +1099,15 @@ class PropagationNodeManager
         ) {
             // Wait for relay state to be loaded from database
             // This prevents race conditions where sync is triggered before DB query completes
-            val state = currentRelayState.first { it is RelayLoadState.Loaded }
+            val state =
+                withTimeoutOrNull(10_000L) {
+                    currentRelayState.first { it is RelayLoadState.Loaded }
+                }
+            if (state == null) {
+                Log.w(TAG, "Timed out waiting for relay state to load from database")
+                if (!silent) _manualSyncResult.emit(SyncResult.Error("Relay configuration not available yet"))
+                return
+            }
             val relay = (state as RelayLoadState.Loaded).relay
 
             if (relay == null) {

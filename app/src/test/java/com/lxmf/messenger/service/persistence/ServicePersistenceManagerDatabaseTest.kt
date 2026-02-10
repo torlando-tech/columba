@@ -45,7 +45,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
-    private val testPublicKey = ByteArray(32) { it.toByte() }
+    private val testPublicKey = ByteArray(64) { it.toByte() }
     private val testAppData = "Test App Data".toByteArray()
 
     @Before
@@ -663,7 +663,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             // Verify peer identity was saved
             val saved = peerIdentityDao.getPeerIdentity(peerHash)
             assertNotNull("Peer identity should be saved", saved)
-            assertEquals(32, saved?.publicKey?.size)
+            assertEquals(64, saved?.publicKey?.size)
         }
 
     // ========== Unread Count Edge Cases ==========

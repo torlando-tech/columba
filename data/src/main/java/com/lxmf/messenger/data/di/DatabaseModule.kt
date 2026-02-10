@@ -1471,7 +1471,7 @@ object DatabaseModule {
                     val processed =
                         database
                             .query(
-                                "SELECT destinationHash, publicKey FROM announces LIMIT $batchSize OFFSET $offset",
+                                "SELECT destinationHash, publicKey FROM announces ORDER BY destinationHash LIMIT $batchSize OFFSET $offset",
                             ).use { cursor ->
                                 var count = 0
                                 while (cursor.moveToNext()) {

@@ -117,47 +117,65 @@ class InterfaceConfigManager
                     }
                 }
 
-                // Now use ActivityManager to force kill the process
-                var reticulumProcessPid: Int? = null
+                // Now send ACTION_STOP to let the service shut down gracefully.
+                // This triggers System.exit(0) inside the service process, which
+                // allows JVM shutdown hooks (including Chaquopy's Python VM teardown)
+                // to run — preventing SIGSEGV in PyGILState_Ensure.
                 val reticulumProcessName = "${context.packageName}:reticulum"
+                var reticulumProcessFound = false
                 try {
                     val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
                     val runningProcesses = activityManager.runningAppProcesses.orEmpty()
                     val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
                     if (reticulumProcess != null) {
-                        reticulumProcessPid = reticulumProcess.pid
-                        Log.d(TAG, "Found reticulum process PID $reticulumProcessPid, killing it...")
-                        Process.killProcess(reticulumProcess.pid)
+                        reticulumProcessFound = true
+                        Log.d(TAG, "Found reticulum process PID ${reticulumProcess.pid}, sending ACTION_STOP intent...")
+                        val stopIntent =
+                            Intent(context, ReticulumService::class.java).apply {
+                                action = ReticulumService.ACTION_STOP
+                            }
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            context.startForegroundService(stopIntent)
+                        } else {
+                            context.startService(stopIntent)
+                        }
                     } else {
                         Log.d(TAG, "Service process not found (may have already stopped)")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Could not kill process via ActivityManager: ${e.message}")
+                    Log.w(TAG, "Could not send ACTION_STOP to service: ${e.message}")
                 }
 
                 // Step 5: Verify process is dead (poll up to 5 seconds)
                 // This is CRITICAL - if process survives, old identity keeps running
-                if (reticulumProcessPid != null) {
+                if (reticulumProcessFound) {
                     Log.d(TAG, "Step 5: Verifying service process terminated...")
-                    var verifyAttempts = 0
                     val maxVerifyAttempts = 10
-                    while (verifyAttempts < maxVerifyAttempts) {
+                    var processDied = false
+                    for (attempt in 1..maxVerifyAttempts) {
                         delay(500)
-                        verifyAttempts++
-
                         val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                        val runningProcesses = activityManager.runningAppProcesses.orEmpty()
-                        val stillRunning = runningProcesses.any { it.processName == reticulumProcessName }
-
+                        val stillRunning =
+                            activityManager.runningAppProcesses
+                                .orEmpty()
+                                .any { it.processName == reticulumProcessName }
                         if (!stillRunning) {
-                            Log.d(TAG, "✓ Service process confirmed dead after ${verifyAttempts * 500}ms")
+                            Log.d(TAG, "✓ Service process confirmed dead after ${attempt * 500}ms")
+                            processDied = true
                             break
                         }
-
-                        if (verifyAttempts >= maxVerifyAttempts) {
-                            Log.e(TAG, "ERROR: Service process refused to die after ${maxVerifyAttempts * 500}ms")
-                            error("Service process did not terminate")
+                    }
+                    if (!processDied) {
+                        Log.w(TAG, "Service process didn't exit gracefully after ${maxVerifyAttempts * 500}ms, sending SIGKILL...")
+                        try {
+                            val am = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                            val proc = am.runningAppProcesses.orEmpty().find { it.processName == reticulumProcessName }
+                            if (proc != null) {
+                                Process.killProcess(proc.pid)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "SIGKILL fallback failed: ${e.message}")
                         }
                     }
                 }

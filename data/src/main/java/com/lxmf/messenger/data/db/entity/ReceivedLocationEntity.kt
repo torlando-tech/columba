@@ -31,5 +31,5 @@ data class ReceivedLocationEntity(
     val expiresAt: Long?, // When sharing ends (null = indefinite)
     val receivedAt: Long, // When we received this update
     val approximateRadius: Int = 0, // Coarsening radius in meters (0 = precise)
-    val appearanceJson: String? = null, // Icon appearance JSON: {"name":"icon", "fg":"#RRGGBB", "bg":"#RRGGBB"}
+    val appearanceJson: String? = null, // Icon appearance JSON: {"icon_name":"car","foreground_color":"RRGGBB","background_color":"RRGGBB"}
 )

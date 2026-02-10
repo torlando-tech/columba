@@ -26,15 +26,14 @@ import time
 import tempfile
 import shutil
 from unittest.mock import MagicMock, Mock, patch
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import umsgpack
 except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'u-msgpack-python', '-q'])
-    import umsgpack
+    pytest.skip("umsgpack not installed (pip install u-msgpack-python)", allow_module_level=True)
 
 sys.modules['umsgpack'] = umsgpack
 

@@ -38,8 +38,8 @@ class ContactRepository
          *
          * Online threshold is set to 5 minutes - peers seen within this time are considered online.
          */
-        fun getEnrichedContacts(): Flow<List<EnrichedContact>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getEnrichedContacts(): Flow<List<EnrichedContact>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
@@ -47,21 +47,19 @@ class ContactRepository
                     contactDao.getEnrichedContacts(identity.identityHash, onlineThreshold)
                 }
             }
-        }
 
         /**
          * Get all contacts for the active identity (basic entity data only, no enrichment).
          * Automatically switches when identity changes.
          */
-        fun getAllContacts(): Flow<List<ContactEntity>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getAllContacts(): Flow<List<ContactEntity>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
                     contactDao.getAllContacts(identity.identityHash)
                 }
             }
-        }
 
         /**
          * Get a specific contact by destination hash for the active identity
@@ -75,15 +73,14 @@ class ContactRepository
          * Get a specific contact as Flow (for observing changes) for the active identity.
          * Automatically switches when identity changes.
          */
-        fun getContactFlow(destinationHash: String): Flow<ContactEntity?> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getContactFlow(destinationHash: String): Flow<ContactEntity?> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(null)
                 } else {
                     contactDao.getContactFlow(destinationHash, identity.identityHash)
                 }
             }
-        }
 
         /**
          * Check if a contact exists for the active identity (for star button state in announce stream)
@@ -97,15 +94,14 @@ class ContactRepository
          * Check if a contact exists as Flow (for observing star button state) for the active identity.
          * Automatically switches when identity changes.
          */
-        fun hasContactFlow(destinationHash: String): Flow<Boolean> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun hasContactFlow(destinationHash: String): Flow<Boolean> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(false)
                 } else {
                     contactDao.contactExistsFlow(destinationHash, identity.identityHash)
                 }
             }
-        }
 
         /**
          * Add a contact from an announce (when user stars an announce).
@@ -330,43 +326,40 @@ class ContactRepository
          * Get contact count as Flow for the active identity.
          * Automatically switches when identity changes.
          */
-        fun getContactCountFlow(): Flow<Int> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getContactCountFlow(): Flow<Int> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(0)
                 } else {
                     contactDao.getContactCountFlow(identity.identityHash)
                 }
             }
-        }
 
         /**
          * Search contacts by nickname, announce name, or hash for the active identity.
          * Automatically switches when identity changes.
          */
-        fun searchContacts(query: String): Flow<List<ContactEntity>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun searchContacts(query: String): Flow<List<ContactEntity>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
                     contactDao.searchContacts(identity.identityHash, query)
                 }
             }
-        }
 
         /**
          * Get all pinned contacts for the active identity.
          * Automatically switches when identity changes.
          */
-        fun getPinnedContacts(): Flow<List<ContactEntity>> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getPinnedContacts(): Flow<List<ContactEntity>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
                     contactDao.getPinnedContacts(identity.identityHash)
                 }
             }
-        }
 
         /**
          * Delete all contacts for the active identity (for testing/debugging)
@@ -547,9 +540,7 @@ class ContactRepository
          * @param statuses List of statuses to query
          * @return List of contacts matching the statuses
          */
-        suspend fun getContactsByStatus(statuses: List<ContactStatus>): List<ContactEntity> {
-            return contactDao.getContactsByStatus(statuses.map { it.name })
-        }
+        suspend fun getContactsByStatus(statuses: List<ContactStatus>): List<ContactEntity> = contactDao.getContactsByStatus(statuses.map { it.name })
 
         /**
          * Gets all contacts with specified statuses for the active identity.
@@ -584,6 +575,14 @@ class ContactRepository
                 return
             }
             android.util.Log.d("ContactRepository", "setAsMyRelay: dest=$destinationHash, identity=${activeIdentity.identityHash}")
+
+            // Check if already set as relay — avoid redundant DB write and Room invalidation (COLUMBA-3)
+            val currentRelay = contactDao.getMyRelay(activeIdentity.identityHash)
+            if (currentRelay?.destinationHash == destinationHash) {
+                android.util.Log.d("ContactRepository", "setAsMyRelay: $destinationHash is already the relay, skipping write")
+                return
+            }
+
             if (clearOther) {
                 contactDao.clearMyRelay(activeIdentity.identityHash)
             }
@@ -613,36 +612,33 @@ class ContactRepository
          * Get the current relay contact as Flow for observing changes.
          * Automatically switches when identity changes.
          */
-        fun getMyRelayFlow(): Flow<ContactEntity?> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getMyRelayFlow(): Flow<ContactEntity?> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(null)
                 } else {
                     contactDao.getMyRelayFlow(identity.identityHash)
                 }
             }
-        }
 
         /**
          * Check if a specific contact is the user's relay.
          * Automatically switches when identity changes.
          */
-        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> {
-            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun isMyRelayFlow(destinationHash: String): Flow<Boolean> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(false)
                 } else {
-                    contactDao.isMyRelayFlow(destinationHash, identity.identityHash)
+                    contactDao
+                        .isMyRelayFlow(destinationHash, identity.identityHash)
                         .flatMapLatest { isRelay -> flowOf(isRelay == true) }
                 }
             }
-        }
 
         /**
          * Get any relay contact (not filtered by identity).
          * Used during initialization before active identity is available.
          */
-        suspend fun getAnyRelay(): ContactEntity? {
-            return contactDao.getAnyMyRelay()
-        }
+        suspend fun getAnyRelay(): ContactEntity? = contactDao.getAnyMyRelay()
     }

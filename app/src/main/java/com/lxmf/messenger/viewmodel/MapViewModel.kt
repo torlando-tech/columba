@@ -471,4 +471,16 @@ class MapViewModel
             Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
             locationSharingManager.stopSharing(destinationHash)
         }
+
+        /**
+         * Delete a stale marker by removing all stored locations for the given sender.
+         *
+         * @param destinationHash The destination hash of the contact whose marker to remove
+         */
+        fun deleteMarker(destinationHash: String) {
+            Log.d(TAG, "Deleting marker for: ${destinationHash.take(16)}")
+            viewModelScope.launch {
+                receivedLocationDao.deleteLocationsForSender(destinationHash)
+            }
+        }
     }

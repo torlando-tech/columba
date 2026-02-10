@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,7 @@ fun ContactLocationBottomSheet(
     userLocation: Location?,
     onDismiss: () -> Unit,
     onSendMessage: () -> Unit,
+    onRemoveMarker: () -> Unit = {},
     sheetState: SheetState,
 ) {
     val context = LocalContext.current
@@ -166,6 +169,27 @@ fun ContactLocationBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Message")
+                }
+            }
+
+            // Remove marker button (only for stale/expired markers)
+            if (isStale) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = onRemoveMarker,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Remove from map",
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
 

@@ -1462,23 +1462,35 @@ object DatabaseModule {
                     "CREATE INDEX IF NOT EXISTS index_announces_computedIdentityHash ON announces(computedIdentityHash)",
                 )
 
-                // Backfill existing rows: compute SHA-256(publicKey)[:16] as hex
-                // Uses cursor-based iteration (same pattern as MIGRATION_25_26) to avoid OOM
-                database
-                    .query("SELECT destinationHash, publicKey FROM announces")
-                    .use { cursor ->
-                        while (cursor.moveToNext()) {
-                            val destinationHash = cursor.getString(0)
-                            val publicKey = cursor.getBlob(1)
-                            if (publicKey != null) {
-                                val identityHash = HashUtils.computeIdentityHash(publicKey)
-                                database.execSQL(
-                                    "UPDATE announces SET computedIdentityHash = ? WHERE destinationHash = ?",
-                                    arrayOf(identityHash, destinationHash),
-                                )
+                // Backfill existing rows: compute SHA-256(publicKey)[:16] as hex.
+                // Uses batched LIMIT/OFFSET to bound cursor window memory usage.
+                // publicKey is always 64 bytes (Reticulum spec) but we batch defensively.
+                val batchSize = 500
+                var offset = 0
+                while (true) {
+                    val processed =
+                        database
+                            .query(
+                                "SELECT destinationHash, publicKey FROM announces LIMIT $batchSize OFFSET $offset",
+                            ).use { cursor ->
+                                var count = 0
+                                while (cursor.moveToNext()) {
+                                    count++
+                                    val destinationHash = cursor.getString(0)
+                                    val publicKey = cursor.getBlob(1)
+                                    if (publicKey != null) {
+                                        val identityHash = HashUtils.computeIdentityHash(publicKey)
+                                        database.execSQL(
+                                            "UPDATE announces SET computedIdentityHash = ? WHERE destinationHash = ?",
+                                            arrayOf(identityHash, destinationHash),
+                                        )
+                                    }
+                                }
+                                count
                             }
-                        }
-                    }
+                    if (processed < batchSize) break
+                    offset += batchSize
+                }
             }
         }
 

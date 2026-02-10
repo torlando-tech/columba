@@ -85,13 +85,13 @@ class MapViewModelAppearanceTest {
 
     @Test
     fun `parseAppearanceJson distinguishes foreground from background`() {
-        // Distinct values to catch any swap
-        val json = """{"icon_name":"pin","foreground_color":"FGFGFG","background_color":"BGBGBG"}"""
+        // Distinct valid hex values to catch any swap
+        val json = """{"icon_name":"pin","foreground_color":"a1b2c3","background_color":"0f1e2d"}"""
         val result = MapViewModel.parseAppearanceJson(json)
 
         assertNotNull(result)
-        assertEquals("FGFGFG", result!!.second) // second = foreground
-        assertEquals("BGBGBG", result.third)     // third = background
+        assertEquals("a1b2c3", result!!.second) // second = foreground
+        assertEquals("0f1e2d", result.third)     // third = background
     }
 
     @Test

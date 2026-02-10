@@ -752,13 +752,7 @@ class ReticulumWrapper:
                 # This handles cases where sender's clock is off or telemetry was generated earlier
                 # If timebase is None or 0, send all entries
                 if timebase is None or timebase == 0 or received_at >= timebase:
-                    # Resolve appearance: use stored appearance, or derive from
-                    # marker symbol if available
                     entry_appearance = entry.get('appearance', None)
-                    if entry_appearance is None:
-                        marker_sym = entry.get('marker_symbol')
-                        if marker_sym:
-                            entry_appearance = appearance_from_marker_symbol(marker_sym)
 
                     # Format: [source_hash_bytes, timestamp, packed_telemetry, appearance]
                     entries_to_send.append([
@@ -805,7 +799,7 @@ class ReticulumWrapper:
             traceback.print_exc()
 
     def _store_telemetry_for_collector(self, source_hash_hex, packed_telemetry, timestamp,
-                                       appearance=None, marker_symbol=None):
+                                       appearance=None):
         """
         Store incoming telemetry data when acting as host/collector.
 
@@ -814,15 +808,12 @@ class ReticulumWrapper:
             packed_telemetry: The raw packed telemetry bytes
             timestamp: Timestamp from the telemetry data
             appearance: Optional appearance data (icon/color) from FIELD_ICON_APPEARANCE
-            marker_symbol: Optional marker symbol key (e.g. "car", "person") for
-                           deriving appearance from the marker symbol registry
         """
         import time
         self.collected_telemetry[source_hash_hex] = {
             'timestamp': timestamp,
             'packed_telemetry': packed_telemetry,
             'appearance': appearance,
-            'marker_symbol': marker_symbol,
             'received_at': time.time()
         }
         log_debug("ReticulumWrapper", "_store_telemetry_for_collector",

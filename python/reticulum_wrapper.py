@@ -505,6 +505,7 @@ class ReticulumWrapper:
 
         # Location telemetry callback support (Phase 3 - location sharing over LXMF)
         self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
+        self._pending_location_events = []  # Buffer for events arriving before callback registration
 
         # Reaction received callback support (emoji reactions to messages)
         self.kotlin_reaction_received_callback = None  # Callback to Kotlin when reaction received
@@ -996,6 +997,17 @@ class ReticulumWrapper:
         self.kotlin_location_received_callback = callback
         log_info("ReticulumWrapper", "set_location_received_callback",
                 "✅ Location received callback registered (location sharing enabled)")
+        # Drain any location events that arrived before callback registration
+        if self._pending_location_events:
+            log_info("ReticulumWrapper", "set_location_received_callback",
+                    f"📍 Draining {len(self._pending_location_events)} buffered location event(s)")
+            for event_json in self._pending_location_events:
+                try:
+                    callback(event_json)
+                except Exception as e:
+                    log_error("ReticulumWrapper", "set_location_received_callback",
+                             f"Error draining buffered event: {e}")
+            self._pending_location_events.clear()
 
     def set_reaction_received_callback(self, callback):
         """
@@ -2726,10 +2738,12 @@ class ReticulumWrapper:
 
                             # Invoke callback for each entry in the stream
                             for stream_entry in stream_entries:
+                                entry_json = json.dumps(stream_entry)
                                 if not self.kotlin_location_received_callback:
-                                    break
+                                    self._pending_location_events.append(entry_json)
+                                    continue
                                 try:
-                                    self.kotlin_location_received_callback(json.dumps(stream_entry))
+                                    self.kotlin_location_received_callback(entry_json)
                                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                              f"✅ Stream entry callback invoked for source {stream_entry.get('source_hash', 'unknown')[:16]}...")
                                 except Exception as e:
@@ -2834,7 +2848,8 @@ class ReticulumWrapper:
                             traceback.print_exc()
                     else:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
-                                   "Location callback not yet registered, dropping location event")
+                                   "Location callback not yet registered, buffering location event")
+                        self._pending_location_events.append(json.dumps(location_event))
 
             # ✅ TELEMETRY COLLECTOR HOST: Handle FIELD_COMMANDS telemetry requests
             if self.telemetry_collector_enabled and hasattr(lxmf_message, 'fields') and lxmf_message.fields:

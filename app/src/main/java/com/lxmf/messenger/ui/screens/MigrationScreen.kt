@@ -89,7 +89,6 @@ fun MigrationScreen(
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var showNotificationPermissionDialog by remember { mutableStateOf(false) }
     var pendingImportComplete by remember { mutableStateOf(false) }
-    var pendingExportSourceUri by remember { mutableStateOf<Uri?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -111,18 +110,9 @@ fun MigrationScreen(
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
         ) { destinationUri: Uri? ->
-            if (destinationUri != null && pendingExportSourceUri != null) {
-                try {
-                    context.contentResolver.openInputStream(pendingExportSourceUri!!)?.use { input ->
-                        context.contentResolver.openOutputStream(destinationUri)?.use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                } catch (_: Exception) {
-                    // Error will be visible to user as empty/corrupt file
-                }
+            destinationUri?.let {
+                viewModel.saveExportToFile(context.contentResolver, it)
             }
-            pendingExportSourceUri = null
         }
 
     // Check if notification permission is needed (Android 13+ with notifications enabled in settings)
@@ -148,7 +138,6 @@ fun MigrationScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is MigrationUiState.ExportComplete -> {
-                pendingExportSourceUri = state.fileUri
                 val timestamp = SimpleDateFormat(
                     "yyyy-MM-dd_HHmmss",
                     Locale.US,

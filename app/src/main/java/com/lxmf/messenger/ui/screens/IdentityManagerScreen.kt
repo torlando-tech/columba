@@ -109,7 +109,6 @@ fun IdentityManagerScreen(
     var showImportTypeDialog by remember { mutableStateOf(false) }
     var showBackupImportDialog by remember { mutableStateOf(false) }
     var selectedBackupUri by remember { mutableStateOf<Uri?>(null) }
-    var pendingExportSourceUri by remember { mutableStateOf<Uri?>(null) }
 
     // File picker for raw identity import
     val importLauncher =
@@ -138,18 +137,9 @@ fun IdentityManagerScreen(
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
         ) { destinationUri: Uri? ->
-            if (destinationUri != null && pendingExportSourceUri != null) {
-                try {
-                    context.contentResolver.openInputStream(pendingExportSourceUri!!)?.use { input ->
-                        context.contentResolver.openOutputStream(destinationUri)?.use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                } catch (_: Exception) {
-                    // Error will be visible to user as empty/corrupt file
-                }
+            destinationUri?.let {
+                viewModel.saveExportedIdentityToFile(it)
             }
-            pendingExportSourceUri = null
         }
 
     // Auto-show paste dialog when navigated with a pre-filled key
@@ -179,7 +169,6 @@ fun IdentityManagerScreen(
             }
             is IdentityManagerUiState.ExportReady -> {
                 // Launch SAF file save dialog for binary export
-                pendingExportSourceUri = state.uri
                 exportSaveLauncher.launch("identity.rnsidentity")
                 viewModel.resetUiState()
             }

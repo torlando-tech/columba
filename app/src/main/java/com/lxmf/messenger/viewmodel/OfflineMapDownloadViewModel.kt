@@ -440,6 +440,14 @@ class OfflineMapDownloadViewModel
                 }
             }
 
+            // Delete cached style JSON file if it exists
+            if (dbRegionId != null) {
+                val styleFile = java.io.File(context.filesDir, "offline_styles/$dbRegionId.json")
+                if (styleFile.exists() && !styleFile.delete()) {
+                    Log.w(TAG, "Failed to delete cached style file: ${styleFile.absolutePath}")
+                }
+            }
+
             // Delete database record if it exists
             if (dbRegionId != null) {
                 viewModelScope.launch {

@@ -198,13 +198,17 @@ class OfflineMapsViewModel
         fun clearMapTileCache() {
             _isResettingCache.value = true
             mapLibreOfflineManager.clearAmbientCache { success ->
-                _isResettingCache.value = false
-                _cacheResetMessage.value =
-                    if (success) {
-                        "Map tile cache cleared. Return to the map to reload."
-                    } else {
-                        "Failed to clear map tile cache."
-                    }
+                // FileSourceCallback may be invoked off the main thread;
+                // use viewModelScope to safely mutate StateFlow values.
+                viewModelScope.launch {
+                    _isResettingCache.value = false
+                    _cacheResetMessage.value =
+                        if (success) {
+                            "Map tile cache cleared. Return to the map to reload."
+                        } else {
+                            "Failed to clear map tile cache."
+                        }
+                }
             }
         }
 
@@ -220,9 +224,11 @@ class OfflineMapsViewModel
         fun resetMapDatabase() {
             _isResettingCache.value = true
             mapLibreOfflineManager.resetDatabase { success ->
-                if (success) {
-                    // Also clear Columba's tracking records since the MapLibre regions are gone
-                    viewModelScope.launch {
+                // FileSourceCallback may be invoked off the main thread;
+                // use viewModelScope to safely mutate StateFlow values.
+                viewModelScope.launch {
+                    if (success) {
+                        // Also clear Columba's tracking records since the MapLibre regions are gone
                         try {
                             val regions = offlineMapRegionRepository.getAllRegions().first()
                             for (region in regions) {
@@ -240,10 +246,10 @@ class OfflineMapsViewModel
                         _isResettingCache.value = false
                         _cacheResetMessage.value =
                             "Map database reset. All offline maps have been removed and will need to be re-downloaded."
+                    } else {
+                        _isResettingCache.value = false
+                        _cacheResetMessage.value = "Failed to reset map database."
                     }
-                } else {
-                    _isResettingCache.value = false
-                    _cacheResetMessage.value = "Failed to reset map database."
                 }
             }
         }

@@ -402,10 +402,18 @@ fun MapScreen(
             // to MapLibre's singleton offline database (mbgl-offline.db). When a new MapView is
             // created on re-entry, the concurrent database connections cause corruption that
             // makes offline tiles inaccessible (#354).
+            //
+            // Null out mapView BEFORE destroying so the lifecycle observer's
+            // `val view = mapView ?: return` guard prevents a double-destroy
+            // if onDispose fires during the host ON_DESTROY event.
             val view = mapView
+            val map = mapLibreMap
+            mapView = null
+            mapLibreMap = null
+            mapStyleLoaded = false
             if (view != null) {
                 Log.d("MapScreen", "Disposing MapView - destroying to prevent database corruption")
-                mapLibreMap?.locationComponent?.let { locationComponent ->
+                map?.locationComponent?.let { locationComponent ->
                     try {
                         if (locationComponent.isLocationComponentActivated) {
                             locationComponent.isLocationComponentEnabled = false
@@ -418,8 +426,6 @@ fun MapScreen(
                 view.onStop()
                 view.onDestroy()
             }
-            mapLibreMap = null
-            mapStyleLoaded = false
         }
     }
 

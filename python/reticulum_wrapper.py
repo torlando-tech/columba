@@ -220,7 +220,7 @@ def pack_location_telemetry(lat: float, lon: float, accuracy: float, timestamp_m
         struct.pack("!i", int(round(altitude, 2) * 1e2)),  # altitude in centimeters
         struct.pack("!I", int(round(speed, 2) * 1e2)),     # speed in cm/s (unsigned)
         struct.pack("!i", int(round(bearing, 2) * 1e2)),   # bearing in centi-degrees
-        struct.pack("!H", int(round(accuracy, 2) * 1e2)),  # accuracy in centimeters (unsigned short)
+        struct.pack("!H", min(int(round(accuracy, 2) * 1e2), 65535)),  # accuracy in centimeters (unsigned short, clamped)
         timestamp_s,                                        # last_update timestamp
     ]
 

@@ -212,28 +212,32 @@ class TestUnpackTelemetryStream(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     def test_parses_valid_appearance(self):
-        """Should parse valid appearance data."""
+        """Should parse valid appearance data.
+
+        Sideband format: [icon_name, bg_rgb_bytes, fg_rgb_bytes]
+        """
         source_hash = bytes.fromhex("a1" * 16)
         timestamp = 1703980800
         packed_telemetry = self._create_valid_packed_telemetry()
-        appearance = ["icon_name", b'\xff\x00\x00', b'\x00\xff\x00']  # Red fg, green bg
+        # Sideband format: [icon_name, bg_bytes, fg_bytes]
+        appearance = ["icon_name", b'\xff\x00\x00', b'\x00\xff\x00']  # Red bg, green fg
 
         stream = [[source_hash, timestamp, packed_telemetry, appearance]]
         result = unpack_telemetry_stream(stream)
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], 'icon_name')
-        self.assertEqual(result[0]['appearance']['fg'], '#ff0000')
-        self.assertEqual(result[0]['appearance']['bg'], '#00ff00')
+        self.assertEqual(result[0]['appearance']['icon_name'], 'icon_name')
+        self.assertEqual(result[0]['appearance']['background_color'], 'ff0000')
+        self.assertEqual(result[0]['appearance']['foreground_color'], '00ff00')
 
     def test_handles_appearance_with_invalid_icon_name(self):
-        """Should reject appearance with invalid icon name."""
+        """Should reject appearance with invalid icon name (special chars)."""
         source_hash = bytes.fromhex("a1" * 16)
         timestamp = 1703980800
         packed_telemetry = self._create_valid_packed_telemetry()
-        # Icon name with invalid characters
-        appearance = ["icon-name-with-dashes!", b'\xff\x00\x00', b'\x00\xff\x00']
+        # Icon name with invalid characters (exclamation mark)
+        appearance = ["icon-name-with-invalid!", b'\xff\x00\x00', b'\x00\xff\x00']
 
         stream = [[source_hash, timestamp, packed_telemetry, appearance]]
         result = unpack_telemetry_stream(stream)
@@ -269,8 +273,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
         self.assertEqual(len(result), 1)
         # Appearance should be set but colors should be None
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_handles_appearance_with_non_bytes_colors(self):
         """Should handle appearance with non-bytes color values."""
@@ -285,8 +289,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_processes_multiple_entries(self):
         """Should process multiple valid entries."""

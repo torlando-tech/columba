@@ -845,6 +845,9 @@ class ReticulumServiceBinder(
         destHash: ByteArray,
         locationJson: String,
         sourceIdentityPrivateKey: ByteArray,
+        iconName: String?,
+        iconFgColor: String?,
+        iconBgColor: String?,
     ): String =
         try {
             Log.d(TAG, "📍 Sending location telemetry to ${destHash.joinToString("") { "%02x".format(it) }.take(16)}")
@@ -855,6 +858,9 @@ class ReticulumServiceBinder(
                         destHash,
                         locationJson,
                         sourceIdentityPrivateKey,
+                        iconName,
+                        iconFgColor,
+                        iconBgColor,
                     )
                 result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
             } ?: """{"success": false, "error": "Wrapper not available"}"""

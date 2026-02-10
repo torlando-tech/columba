@@ -200,6 +200,8 @@ fun MapScreen(
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapStyleLoaded by remember { mutableStateOf(false) }
     var metersPerPixel by remember { mutableStateOf(1.0) }
+    // Track current marker image IDs per contact to remove stale bitmaps on appearance change
+    val markerImageIds = remember { mutableMapOf<String, String>() }
 
     // Helper function to set up map style after it loads
     // Extracted to avoid duplication between factory and LaunchedEffect callbacks
@@ -548,8 +550,18 @@ fun MapScreen(
             val screenDensity = context.resources.displayMetrics.density
 
             // Generate and register marker bitmaps for each contact
+            val currentImageIds = mutableSetOf<String>()
             state.contactMarkers.forEach { marker ->
-                val imageId = "marker-${marker.destinationHash}"
+                // Include icon identity in cache key so bitmap refreshes when appearance changes
+                val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
+                currentImageIds.add(imageId)
+                // Remove previous bitmap for this contact if appearance changed
+                val previousId = markerImageIds[marker.destinationHash]
+                if (previousId != null && previousId != imageId) {
+                    style.removeImage(previousId)
+                }
+                markerImageIds[marker.destinationHash] = imageId
                 if (style.getImage(imageId) == null) {
                     // Try profile icon first, fall back to initials
                     val bitmap =
@@ -585,7 +597,8 @@ fun MapScreen(
             // Create GeoJSON features from contact markers with state and approximateRadius properties
             val features =
                 state.contactMarkers.map { marker ->
-                    val imageId = "marker-${marker.destinationHash}"
+                    val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                    val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
                     Feature
                         .fromGeometry(
                             Point.fromLngLat(marker.longitude, marker.latitude),

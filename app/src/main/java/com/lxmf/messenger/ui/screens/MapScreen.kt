@@ -975,6 +975,10 @@ fun MapScreen(
                 onNavigateToConversation(marker.destinationHash)
                 selectedMarker = null
             },
+            onRemoveMarker = {
+                viewModel.deleteMarker(marker.destinationHash)
+                selectedMarker = null
+            },
             sheetState = contactLocationSheetState,
         )
     }

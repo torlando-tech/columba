@@ -417,6 +417,18 @@ class MapViewModel
         }
 
         /**
+         * Delete a stale marker by removing all stored locations for the given sender.
+         *
+         * @param destinationHash The destination hash of the contact whose marker to remove
+         */
+        fun deleteMarker(destinationHash: String) {
+            Log.d(TAG, "Deleting marker for: ${destinationHash.take(16)}")
+            viewModelScope.launch {
+                receivedLocationDao.deleteLocationsForSender(destinationHash)
+            }
+        }
+
+        /**
          * Calculate the marker state based on timestamp and expiry.
          *
          * @param timestamp When the location was captured

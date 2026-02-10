@@ -1069,6 +1069,67 @@ class MapViewModelTest {
             verify(exactly = 1) { locationSharingManager.stopSharing(null) }
         }
 
+    // ===== deleteMarker Tests =====
+
+    @Test
+    fun `deleteMarker removes marker from state`() =
+        runTest {
+            // Set up a location that will produce a marker
+            val locationsFlow =
+                MutableStateFlow(
+                    listOf(
+                        ReceivedLocationEntity(
+                            id = "loc1",
+                            senderHash = "stale_hash",
+                            latitude = 37.7749,
+                            longitude = -122.4194,
+                            accuracy = 10f,
+                            timestamp = System.currentTimeMillis(),
+                            expiresAt = null,
+                            receivedAt = System.currentTimeMillis(),
+                        ),
+                    ),
+                )
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        destinationHash = "stale_hash",
+                        displayName = "Stale Contact",
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns locationsFlow
+            coEvery { receivedLocationDao.deleteLocationsForSender(any()) } coAnswers {
+                // Simulate the DB deletion by clearing the flow
+                locationsFlow.value = emptyList()
+            }
+
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                )
+
+            viewModel.state.test {
+                // Marker should be present initially
+                val initial = awaitItem()
+                assertEquals(1, initial.contactMarkers.size)
+                assertEquals("stale_hash", initial.contactMarkers[0].destinationHash)
+
+                // Delete the marker
+                viewModel.deleteMarker("stale_hash")
+
+                // Marker should be removed from state
+                val updated = awaitItem()
+                assertTrue(updated.contactMarkers.isEmpty())
+            }
+        }
+
     // ===== sharing state updates Tests =====
 
     @Test

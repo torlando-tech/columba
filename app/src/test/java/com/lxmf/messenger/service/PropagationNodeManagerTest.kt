@@ -25,8 +25,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -1244,6 +1246,194 @@ class PropagationNodeManagerTest {
                     SyncResult.NoRelay,
                     result,
                 )
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    // ========== triggerSync Timeout Tests (COLUMBA-13) ==========
+
+    @Test
+    fun `triggerSync - times out and emits Error when relay state never loads`() =
+        runTest(testDispatcher) {
+            // Given: getMyRelayFlow returns a flow that never emits (simulates cold/stuck DB query)
+            val neverEmittingFlow = MutableSharedFlow<ContactEntity?>()
+            every { contactRepository.getMyRelayFlow() } returns neverEmittingFlow
+
+            val stuckManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = backgroundScope,
+                )
+
+            // Verify relay state starts as Loading
+            assert(stuckManager.currentRelayState.value is RelayLoadState.Loading) {
+                "currentRelayState should start as Loading"
+            }
+
+            stuckManager.manualSyncResult.test(timeout = 30.seconds) {
+                val syncJob = launch { stuckManager.triggerSync() }
+
+                // Advance virtual time past the 10s timeout
+                advanceTimeBy(10_001)
+                runCurrent()
+
+                // Should emit Error with timeout message
+                val result = awaitItem()
+                assert(result is SyncResult.Error) { "Expected SyncResult.Error, got $result" }
+                assertEquals(
+                    "Relay configuration not available yet",
+                    (result as SyncResult.Error).message,
+                )
+
+                syncJob.join()
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // isSyncing should still be false (we returned before setting it)
+            assert(!stuckManager.isSyncing.value) { "isSyncing should be false after timeout" }
+
+            // requestMessagesFromPropagationNode should NOT have been called
+            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+            stuckManager.stop()
+        }
+
+    @Test
+    fun `triggerSync - timeout with silent flag does not emit result`() =
+        runTest(testDispatcher) {
+            // Given: getMyRelayFlow returns a flow that never emits
+            val neverEmittingFlow = MutableSharedFlow<ContactEntity?>()
+            every { contactRepository.getMyRelayFlow() } returns neverEmittingFlow
+
+            val stuckManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = backgroundScope,
+                )
+
+            // When: Trigger sync with silent=true
+            stuckManager.manualSyncResult.test(timeout = 30.seconds) {
+                val syncJob = launch { stuckManager.triggerSync(silent = true) }
+
+                // Advance virtual time past the 10s timeout
+                advanceTimeBy(10_001)
+                runCurrent()
+
+                // Then: sync should complete (returned early due to timeout)
+                syncJob.join()
+
+                // No SyncResult should have been emitted
+                expectNoEvents()
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // And: isSyncing should still be false (returned before setting it)
+            assert(!stuckManager.isSyncing.value) { "isSyncing should be false after silent timeout" }
+
+            // And: relay state should still be Loading (never loaded)
+            assert(stuckManager.currentRelayState.value is RelayLoadState.Loading) {
+                "currentRelayState should still be Loading"
+            }
+
+            // And: No sync was attempted
+            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+            stuckManager.stop()
+        }
+
+    @Test
+    fun `triggerSync - succeeds when relay loads within timeout`() =
+        runTest(testDispatcher) {
+            // Given: getMyRelayFlow that emits after a delay (simulates slow DB query)
+            val delayedRelayFlow = MutableSharedFlow<ContactEntity?>()
+            every { contactRepository.getMyRelayFlow() } returns delayedRelayFlow
+
+            val slowManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = backgroundScope,
+                )
+
+            val mockSyncState =
+                PropagationState(
+                    state = 0,
+                    stateName = "IDLE",
+                    progress = 0.0f,
+                    messagesReceived = 0,
+                )
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.success(mockSyncState)
+
+            // Verify state starts as Loading
+            assert(slowManager.currentRelayState.value is RelayLoadState.Loading) {
+                "currentRelayState should start as Loading"
+            }
+
+            // Launch sync in background
+            val syncJob = launch { slowManager.triggerSync() }
+
+            // After 5s (within 10s timeout), the relay loads from the database
+            advanceTimeBy(5_000)
+            delayedRelayFlow.emit(
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                ),
+            )
+            advanceUntilIdle()
+            syncJob.join()
+
+            // Should have proceeded past the timeout check to call the sync protocol
+            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+
+            slowManager.stop()
+        }
+
+    @Test
+    fun `triggerSync - does not time out when relay loads immediately`() =
+        runTest {
+            // Given: Relay is already configured (immediate load path)
+            myRelayFlow.value =
+                TestFactories.createContactEntity(
+                    destinationHash = testDestHash,
+                    isMyRelay = true,
+                )
+
+            // Wait for currentRelayState to become Loaded
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+                Result.failure(Exception("test"))
+
+            // When: Trigger sync - relay is already loaded, should not timeout
+            manager.manualSyncResult.test(timeout = 5.seconds) {
+                manager.triggerSync()
+                advanceUntilIdle()
+
+                // Then: Should proceed to sync (get protocol error, not timeout error)
+                val result = awaitItem()
+                assert(result is SyncResult.Error) { "Expected SyncResult.Error, got $result" }
+                assertNotEquals(
+                    "Should not be timeout message",
+                    "Relay configuration not available yet",
+                    (result as SyncResult.Error).message,
+                )
+                assertEquals("test", result.message)
                 cancelAndConsumeRemainingEvents()
             }
         }

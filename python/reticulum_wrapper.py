@@ -2813,8 +2813,8 @@ class ReticulumWrapper:
                             if isinstance(icon_data, list) and len(icon_data) >= 3:
                                 location_event['appearance'] = {
                                     'icon_name': icon_data[0],
-                                    'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
-                                    'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                                    'background_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                                    'foreground_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
                                 }
                         except Exception:
                             pass
@@ -3069,8 +3069,8 @@ class ReticulumWrapper:
                     if isinstance(icon_data, list) and len(icon_data) >= 3:
                         icon_appearance = {
                             'icon_name': icon_data[0],
-                            'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
-                            'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                            'background_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                            'foreground_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
                         }
                         log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                  f"Parsed icon appearance: {icon_appearance['icon_name']}")
@@ -3498,7 +3498,7 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
+            # Format: [icon_name, bg_bytes(3), fg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
@@ -3506,8 +3506,8 @@ class ReticulumWrapper:
                 bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    fg_bytes,
-                    bg_bytes
+                    bg_bytes,
+                    fg_bytes
                 ]
                 log_info("ReticulumWrapper", "send_lxmf_message",
                         f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
@@ -3803,7 +3803,7 @@ class ReticulumWrapper:
                 try:
                     fg_bytes = bytes.fromhex(icon_fg_color)
                     bg_bytes = bytes.fromhex(icon_bg_color)
-                    fields[FIELD_ICON_APPEARANCE] = [icon_name, fg_bytes, bg_bytes]
+                    fields[FIELD_ICON_APPEARANCE] = [icon_name, bg_bytes, fg_bytes]
                     log_debug("ReticulumWrapper", "send_location_telemetry",
                               f"📎 Adding icon appearance: {icon_name}")
                 except (ValueError, TypeError) as e:
@@ -4428,7 +4428,7 @@ class ReticulumWrapper:
                         f"📎 Replying to message: {reply_to_message_id[:16]}...")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
+            # Format: [icon_name, bg_bytes(3), fg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
@@ -4436,8 +4436,8 @@ class ReticulumWrapper:
                 bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    fg_bytes,
-                    bg_bytes
+                    bg_bytes,
+                    fg_bytes
                 ]
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
@@ -6038,12 +6038,12 @@ class ReticulumWrapper:
                                                  f"Field 16: app extensions with keys {list(value.keys())}")
 
                                 elif key == 4 and isinstance(value, list) and len(value) >= 3:
-                                    # Field 4 (FIELD_ICON_APPEARANCE): [icon_name, fg_rgb, bg_rgb]
+                                    # Field 4 (FIELD_ICON_APPEARANCE): [icon_name, bg_rgb, fg_rgb]
                                     try:
                                         icon_appearance = {
                                             'icon_name': value[0],
-                                            'foreground_color': value[1].hex() if isinstance(value[1], bytes) else value[1],
-                                            'background_color': value[2].hex() if isinstance(value[2], bytes) else value[2],
+                                            'background_color': value[1].hex() if isinstance(value[1], bytes) else value[1],
+                                            'foreground_color': value[2].hex() if isinstance(value[2], bytes) else value[2],
                                         }
                                         message_event['icon_appearance'] = icon_appearance
                                         fields_serialized['4'] = icon_appearance

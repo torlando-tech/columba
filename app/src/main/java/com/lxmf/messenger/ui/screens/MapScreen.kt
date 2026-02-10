@@ -549,7 +549,9 @@ fun MapScreen(
 
             // Generate and register marker bitmaps for each contact
             state.contactMarkers.forEach { marker ->
-                val imageId = "marker-${marker.destinationHash}"
+                // Include icon identity in cache key so bitmap refreshes when appearance changes
+                val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
                 if (style.getImage(imageId) == null) {
                     // Try profile icon first, fall back to initials
                     val bitmap =
@@ -585,7 +587,8 @@ fun MapScreen(
             // Create GeoJSON features from contact markers with state and approximateRadius properties
             val features =
                 state.contactMarkers.map { marker ->
-                    val imageId = "marker-${marker.destinationHash}"
+                    val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                    val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
                     Feature
                         .fromGeometry(
                             Point.fromLngLat(marker.longitude, marker.latitude),

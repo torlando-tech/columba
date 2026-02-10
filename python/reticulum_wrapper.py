@@ -591,7 +591,7 @@ class ReticulumWrapper:
         self.telemetry_collector_enabled = False  # True when acting as host/collector
         self.collected_telemetry = {}  # {source_hash_hex: {timestamp, packed_telemetry, appearance, received_at}}
         self.telemetry_retention_seconds = 86400  # 24 hours TTL
-        self.telemetry_allowed_requesters = set()  # Empty = allow all, otherwise set of allowed identity hashes (lowercase hex)
+        self.telemetry_allowed_requesters = set()  # Empty = block all; populated = allow only listed identity hashes (lowercase hex)
 
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
@@ -703,7 +703,7 @@ class ReticulumWrapper:
                          f"Configured {count} allowed requester(s)")
             else:
                 log_info("ReticulumWrapper", "set_telemetry_allowed_requesters",
-                         "Cleared allowed requesters list (all requesters allowed)")
+                         "Allowed requesters list is empty (all requests will be blocked)")
 
             return {'success': True, 'count': count}
         except Exception as e:

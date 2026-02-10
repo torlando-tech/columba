@@ -53,14 +53,13 @@ data class OfflineMapsState(
     /**
      * Get a human-readable total storage string.
      */
-    fun getTotalStorageString(): String {
-        return when {
+    fun getTotalStorageString(): String =
+        when {
             totalStorageBytes < 1024 -> "$totalStorageBytes B"
             totalStorageBytes < 1024 * 1024 -> "${totalStorageBytes / 1024} KB"
             totalStorageBytes < 1024 * 1024 * 1024 -> "${totalStorageBytes / (1024 * 1024)} MB"
             else -> "%.1f GB".format(totalStorageBytes / (1024.0 * 1024.0 * 1024.0))
         }
-    }
 }
 
 /**
@@ -240,12 +239,14 @@ class OfflineMapsViewModel
                                 styleDir.listFiles()?.forEach { it.delete() }
                             }
                             Log.d(TAG, "Cleared ${regions.size} region records and cached styles")
+                            _cacheResetMessage.value =
+                                "Map database reset. All offline maps have been removed and will need to be re-downloaded."
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to clean up region records", e)
+                            _cacheResetMessage.value =
+                                "Map database reset, but some tracking records could not be removed."
                         }
                         _isResettingCache.value = false
-                        _cacheResetMessage.value =
-                            "Map database reset. All offline maps have been removed and will need to be re-downloaded."
                     } else {
                         _isResettingCache.value = false
                         _cacheResetMessage.value = "Failed to reset map database."
@@ -312,9 +313,7 @@ class OfflineMapsViewModel
         /**
          * Get the offline maps directory (for legacy MBTiles files).
          */
-        fun getOfflineMapsDir(): File {
-            return File(context.filesDir, "offline_maps").also { it.mkdirs() }
-        }
+        fun getOfflineMapsDir(): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
         /**
          * Scan for orphaned files and clean up.

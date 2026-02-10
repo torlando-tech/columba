@@ -374,6 +374,8 @@ fun MapScreen(
     // CRITICAL: onDispose must destroy the MapView to prevent leaked native resources
     // and concurrent database connections that corrupt MapLibre's offline tile database (#354).
     DisposableEffect(lifecycleOwner, mapView) {
+        var destroyed = false
+
         val observer =
             LifecycleEventObserver { _, event ->
                 val view = mapView ?: return@LifecycleEventObserver
@@ -383,13 +385,16 @@ fun MapScreen(
                     Lifecycle.Event.ON_PAUSE -> view.onPause()
                     Lifecycle.Event.ON_STOP -> view.onStop()
                     Lifecycle.Event.ON_DESTROY -> {
-                        // Disable location component before destroying map to prevent crashes
-                        mapLibreMap?.locationComponent?.let { locationComponent ->
-                            if (locationComponent.isLocationComponentActivated) {
-                                locationComponent.isLocationComponentEnabled = false
+                        if (!destroyed) {
+                            destroyed = true
+                            // Disable location component before destroying map to prevent crashes
+                            mapLibreMap?.locationComponent?.let { locationComponent ->
+                                if (locationComponent.isLocationComponentActivated) {
+                                    locationComponent.isLocationComponentEnabled = false
+                                }
                             }
+                            view.onDestroy()
                         }
-                        view.onDestroy()
                     }
                     else -> {}
                 }
@@ -411,7 +416,8 @@ fun MapScreen(
             mapView = null
             mapLibreMap = null
             mapStyleLoaded = false
-            if (view != null) {
+            if (view != null && !destroyed) {
+                destroyed = true
                 Log.d("MapScreen", "Disposing MapView - destroying to prevent database corruption")
                 map?.locationComponent?.let { locationComponent ->
                     try {

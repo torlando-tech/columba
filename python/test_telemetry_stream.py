@@ -261,9 +261,9 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], "person")
-        self.assertEqual(result[0]['appearance']['bg'], "#00ff00")
-        self.assertEqual(result[0]['appearance']['fg'], "#ff0000")
+        self.assertEqual(result[0]['appearance']['icon_name'], "person")
+        self.assertEqual(result[0]['appearance']['background_color'], "00ff00")
+        self.assertEqual(result[0]['appearance']['foreground_color'], "ff0000")
 
     def test_appearance_with_different_colors(self):
         """Test appearance with various color values.
@@ -277,8 +277,8 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
         stream = [[source_hash, 1703980800, packed, appearance]]
         result = unpack_telemetry_stream(stream)
 
-        self.assertEqual(result[0]['appearance']['bg'], "#808080")
-        self.assertEqual(result[0]['appearance']['fg'], "#0000ff")
+        self.assertEqual(result[0]['appearance']['background_color'], "808080")
+        self.assertEqual(result[0]['appearance']['foreground_color'], "0000ff")
 
     def test_invalid_appearance_ignored(self):
         """Invalid appearance data should be ignored (not crash)."""
@@ -315,9 +315,9 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], "valid_icon")
-        self.assertIsNone(result[0]['appearance']['bg'])
-        self.assertIsNone(result[0]['appearance']['fg'])
+        self.assertEqual(result[0]['appearance']['icon_name'], "valid_icon")
+        self.assertIsNone(result[0]['appearance']['background_color'])
+        self.assertIsNone(result[0]['appearance']['foreground_color'])
 
     def test_icon_name_with_special_chars_rejected(self):
         """Icon names with special characters should be rejected."""
@@ -377,7 +377,7 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
             result = unpack_telemetry_stream(stream)
             self.assertEqual(len(result), 1)
             self.assertIn('appearance', result[0], f"Icon name '{name}' should be accepted")
-            self.assertEqual(result[0]['appearance']['name'], name)
+            self.assertEqual(result[0]['appearance']['icon_name'], name)
 
 
 class TestUnpackTelemetryStreamErrorHandling(unittest.TestCase):
@@ -505,9 +505,9 @@ class TestUnpackTelemetryStreamSidebandFormat(unittest.TestCase):
         self.assertEqual(result[0]['ts'], timestamp * 1000)
         self.assertAlmostEqual(result[0]['lat'], 40.7128, places=6)
         self.assertAlmostEqual(result[0]['lng'], -74.0060, places=6)
-        self.assertEqual(result[0]['appearance']['name'], "runner")
-        self.assertEqual(result[0]['appearance']['bg'], "#ff8000")
-        self.assertEqual(result[0]['appearance']['fg'], "#004080")
+        self.assertEqual(result[0]['appearance']['icon_name'], "runner")
+        self.assertEqual(result[0]['appearance']['background_color'], "ff8000")
+        self.assertEqual(result[0]['appearance']['foreground_color'], "004080")
 
     def test_multiple_peers_in_stream(self):
         """Test unpacking stream with multiple peers (real collector scenario)."""
@@ -663,9 +663,9 @@ class TestAppearanceFromMarkerSymbol(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], "account")  # person -> account
-        self.assertIsNotNone(result[0]['appearance']['bg'])
-        self.assertEqual(result[0]['appearance']['fg'], "#ffffff")
+        self.assertEqual(result[0]['appearance']['icon_name'], "account")  # person -> account
+        self.assertIsNotNone(result[0]['appearance']['background_color'])
+        self.assertEqual(result[0]['appearance']['foreground_color'], "ffffff")
 
 
 if __name__ == '__main__':

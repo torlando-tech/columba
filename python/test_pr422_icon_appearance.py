@@ -206,8 +206,8 @@ class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertIn('appearance', results[0])
-        self.assertEqual(results[0]['appearance']['bg'], "#00ff00")
-        self.assertEqual(results[0]['appearance']['fg'], "#ff0000")
+        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")
+        self.assertEqual(results[0]['appearance']['foreground_color'], "ff0000")
 
     def test_appearance_name_preserved(self):
         """The icon name should be preserved in the unpacked appearance."""
@@ -219,9 +219,9 @@ class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
         stream = [[source_hash, timestamp, packed, appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['name'], "sail-boat")
-        self.assertEqual(results[0]['appearance']['bg'], "#aabbcc")
-        self.assertEqual(results[0]['appearance']['fg'], "#112233")
+        self.assertEqual(results[0]['appearance']['icon_name'], "sail-boat")
+        self.assertEqual(results[0]['appearance']['background_color'], "aabbcc")
+        self.assertEqual(results[0]['appearance']['foreground_color'], "112233")
 
     def test_appearance_absent_when_not_provided(self):
         """Entries without appearance should not have an appearance key."""
@@ -246,8 +246,8 @@ class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
         stream = [[source_hash, timestamp, packed, appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['bg'], "#ffffff")
-        self.assertEqual(results[0]['appearance']['fg'], "#000000")
+        self.assertEqual(results[0]['appearance']['background_color'], "ffffff")
+        self.assertEqual(results[0]['appearance']['foreground_color'], "000000")
 
 
 class TestIconNameValidation(unittest.TestCase):
@@ -277,25 +277,25 @@ class TestIconNameValidation(unittest.TestCase):
         """MDI icon name 'sail-boat' with hyphen should be accepted."""
         result = self._validate_icon_name_via_stream("sail-boat")
         self.assertIsNotNone(result)
-        self.assertEqual(result['name'], "sail-boat")
+        self.assertEqual(result['icon_name'], "sail-boat")
 
     def test_hyphenated_access_point_network_accepted(self):
         """MDI icon name 'access-point-network' with multiple hyphens should be accepted."""
         result = self._validate_icon_name_via_stream("access-point-network")
         self.assertIsNotNone(result)
-        self.assertEqual(result['name'], "access-point-network")
+        self.assertEqual(result['icon_name'], "access-point-network")
 
     def test_hyphenated_food_fork_drink_accepted(self):
         """MDI icon name 'food-fork-drink' should be accepted."""
         result = self._validate_icon_name_via_stream("food-fork-drink")
         self.assertIsNotNone(result)
-        self.assertEqual(result['name'], "food-fork-drink")
+        self.assertEqual(result['icon_name'], "food-fork-drink")
 
     def test_underscore_icon_accepted(self):
         """Icon name with underscore 'my_icon' should still be accepted."""
         result = self._validate_icon_name_via_stream("my_icon")
         self.assertIsNotNone(result)
-        self.assertEqual(result['name'], "my_icon")
+        self.assertEqual(result['icon_name'], "my_icon")
 
     def test_simple_alphanumeric_accepted(self):
         """Simple alphanumeric icon name 'account' should be accepted."""
@@ -898,8 +898,8 @@ class TestEndToEndByteOrder(unittest.TestCase):
         stream = [[source_hash, timestamp, telemetry, packed_appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['bg'], "#00ff00")  # green
-        self.assertEqual(results[0]['appearance']['fg'], "#ff0000")  # red
+        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")  # green
+        self.assertEqual(results[0]['appearance']['foreground_color'], "ff0000")  # red
 
     def test_stream_appearance_roundtrip_with_distinct_colors(self):
         """Test that completely distinct RGB values survive the roundtrip correctly."""
@@ -913,9 +913,9 @@ class TestEndToEndByteOrder(unittest.TestCase):
         stream = [[source_hash, timestamp, telemetry, appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['name'], "car")
-        self.assertEqual(results[0]['appearance']['bg'], "#123456")
-        self.assertEqual(results[0]['appearance']['fg'], "#789abc")
+        self.assertEqual(results[0]['appearance']['icon_name'], "car")
+        self.assertEqual(results[0]['appearance']['background_color'], "123456")
+        self.assertEqual(results[0]['appearance']['foreground_color'], "789abc")
 
 
 if __name__ == '__main__':

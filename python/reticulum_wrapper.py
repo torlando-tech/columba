@@ -375,21 +375,22 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
                     # Validate icon name - alphanumeric, underscores, and hyphens only, max 50 chars
                     # MDI icon names use hyphens (e.g. "sail-boat", "access-point-network")
                     if isinstance(icon_name, str) and len(icon_name) <= 50 and icon_name.replace('_', '').replace('-', '').isalnum():
-                        # Convert RGB bytes to hex color string
+                        # Convert RGB bytes to hex color string (no # prefix — Kotlin expects raw hex)
                         if isinstance(fg_bytes, bytes) and len(fg_bytes) >= 3:
-                            fg_hex = "#{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
+                            fg_hex = "{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
                         else:
                             fg_hex = None
 
                         if isinstance(bg_bytes, bytes) and len(bg_bytes) >= 3:
-                            bg_hex = "#{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
+                            bg_hex = "{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
                         else:
                             bg_hex = None
 
+                        # Keys must match Kotlin parser: icon_name, foreground_color, background_color
                         location_event['appearance'] = {
-                            'name': icon_name,
-                            'fg': fg_hex,
-                            'bg': bg_hex,
+                            'icon_name': icon_name,
+                            'foreground_color': fg_hex,
+                            'background_color': bg_hex,
                         }
                     else:
                         log_warning("TelemetryHelper", "unpack_telemetry_stream",
@@ -506,6 +507,7 @@ class ReticulumWrapper:
         # Location telemetry callback support (Phase 3 - location sharing over LXMF)
         self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
         self._pending_location_events = []  # Buffer for events arriving before callback registration
+        self._max_pending_location_events = 100  # Cap to prevent unbounded memory growth
 
         # Reaction received callback support (emoji reactions to messages)
         self.kotlin_reaction_received_callback = None  # Callback to Kotlin when reaction received
@@ -2740,7 +2742,8 @@ class ReticulumWrapper:
                             for stream_entry in stream_entries:
                                 entry_json = json.dumps(stream_entry)
                                 if not self.kotlin_location_received_callback:
-                                    self._pending_location_events.append(entry_json)
+                                    if len(self._pending_location_events) < self._max_pending_location_events:
+                                        self._pending_location_events.append(entry_json)
                                     continue
                                 try:
                                     self.kotlin_location_received_callback(entry_json)
@@ -2849,7 +2852,8 @@ class ReticulumWrapper:
                     else:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    "Location callback not yet registered, buffering location event")
-                        self._pending_location_events.append(json.dumps(location_event))
+                        if len(self._pending_location_events) < self._max_pending_location_events:
+                            self._pending_location_events.append(json.dumps(location_event))
 
             # ✅ TELEMETRY COLLECTOR HOST: Handle FIELD_COMMANDS telemetry requests
             if self.telemetry_collector_enabled and hasattr(lxmf_message, 'fields') and lxmf_message.fields:

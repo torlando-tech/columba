@@ -227,9 +227,9 @@ class TestUnpackTelemetryStream(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], 'icon_name')
-        self.assertEqual(result[0]['appearance']['bg'], '#ff0000')
-        self.assertEqual(result[0]['appearance']['fg'], '#00ff00')
+        self.assertEqual(result[0]['appearance']['icon_name'], 'icon_name')
+        self.assertEqual(result[0]['appearance']['background_color'], 'ff0000')
+        self.assertEqual(result[0]['appearance']['foreground_color'], '00ff00')
 
     def test_handles_appearance_with_invalid_icon_name(self):
         """Should reject appearance with invalid icon name (special chars)."""
@@ -273,8 +273,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
         self.assertEqual(len(result), 1)
         # Appearance should be set but colors should be None
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_handles_appearance_with_non_bytes_colors(self):
         """Should handle appearance with non-bytes color values."""
@@ -289,8 +289,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_processes_multiple_entries(self):
         """Should process multiple valid entries."""

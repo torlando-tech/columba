@@ -201,16 +201,7 @@ class AnnounceRepository
          * Identity hash is the first 16 bytes of SHA256(public_key).
          * This is useful for LXST calls where we receive identity hash instead of destination hash.
          */
-        suspend fun findByIdentityHash(identityHash: String): Announce? {
-            val allAnnounces = announceDao.getAllAnnouncesSync()
-            for (entity in allAnnounces) {
-                val computedHash = HashUtils.computeIdentityHash(entity.publicKey)
-                if (computedHash.equals(identityHash, ignoreCase = true)) {
-                    return entity.toAnnounce()
-                }
-            }
-            return null
-        }
+        suspend fun findByIdentityHash(identityHash: String): Announce? = announceDao.getAnnounceByIdentityHash(identityHash.lowercase())?.toAnnounce()
 
         /**
          * Save or update an announce. If an announce with the same destinationHash
@@ -265,6 +256,7 @@ class AnnounceRepository
                     stampCostFlexibility = stampCostFlexibility,
                     peeringCost = peeringCost,
                     propagationTransferLimitKb = propagationTransferLimitKb,
+                    computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
                 )
             announceDao.upsertAnnounce(entity)
         }

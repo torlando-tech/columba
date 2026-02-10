@@ -10,6 +10,7 @@ import androidx.room.PrimaryKey
         Index("lastSeenTimestamp"), // For ordering by date
         Index("isFavorite", "favoritedTimestamp"), // For favorite queries
         Index("nodeType", "lastSeenTimestamp"), // For filtering by type and ordering
+        Index("computedIdentityHash"), // For O(1) identity hash lookup (COLUMBA-28)
     ],
 )
 data class AnnounceEntity(
@@ -32,6 +33,7 @@ data class AnnounceEntity(
     // Note: Icon fields removed - icons are now stored in peer_icons table (LXMF concept)
     // The old columns remain in the DB but are no longer used (Room ignores extra columns)
     val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
+    val computedIdentityHash: String? = null, // Pre-computed SHA-256(publicKey)[:16] for O(1) identity hash lookup
 ) {
     @Suppress("CyclomaticComplexMethod") // Equals must compare all fields for correctness
     override fun equals(other: Any?): Boolean {
@@ -53,16 +55,16 @@ data class AnnounceEntity(
             stampCost == other.stampCost &&
             stampCostFlexibility == other.stampCostFlexibility &&
             peeringCost == other.peeringCost &&
-            propagationTransferLimitKb == other.propagationTransferLimitKb
+            propagationTransferLimitKb == other.propagationTransferLimitKb &&
+            computedIdentityHash == other.computedIdentityHash
     }
 
-    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean {
-        return when {
+    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean =
+        when {
             this == null && other == null -> true
             this != null && other != null -> this.contentEquals(other)
             else -> false
         }
-    }
 
     override fun hashCode(): Int {
         var result = destinationHash.hashCode()
@@ -81,6 +83,7 @@ data class AnnounceEntity(
         result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
         result = 31 * result + (peeringCost?.hashCode() ?: 0)
         result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
+        result = 31 * result + (computedIdentityHash?.hashCode() ?: 0)
         return result
     }
 }

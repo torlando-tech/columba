@@ -3649,7 +3649,8 @@ class ReticulumWrapper:
 
     # ==================== LOCATION TELEMETRY ====================
 
-    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes) -> Dict:
+    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes,
+                                icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send location telemetry to a destination via LXMF FIELD_TELEMETRY (0x02).
 
@@ -3660,6 +3661,9 @@ class ReticulumWrapper:
             dest_hash: Identity hash bytes (16 bytes) of the recipient
             location_json: JSON string with location data (lat, lng, acc, ts, expires, cease)
             source_identity_private_key: Private key of sender identity
+            icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
+            icon_fg_color: Optional foreground color hex string (3 bytes RGB)
+            icon_bg_color: Optional background color hex string (3 bytes RGB)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp' or 'error'
@@ -3775,6 +3779,18 @@ class ReticulumWrapper:
 
                 log_debug("ReticulumWrapper", "send_location_telemetry",
                           f"Sending Sideband-compatible telemetry in FIELD_TELEMETRY (0x02)")
+
+            # Attach icon appearance if provided (Sideband/MeshChat interop)
+            if icon_name and icon_fg_color and icon_bg_color:
+                try:
+                    fg_bytes = bytes.fromhex(icon_fg_color)
+                    bg_bytes = bytes.fromhex(icon_bg_color)
+                    fields[FIELD_ICON_APPEARANCE] = [icon_name, bg_bytes, fg_bytes]
+                    log_debug("ReticulumWrapper", "send_location_telemetry",
+                              f"📎 Adding icon appearance: {icon_name}")
+                except (ValueError, TypeError) as e:
+                    log_warning("ReticulumWrapper", "send_location_telemetry",
+                                f"Invalid icon color format, skipping appearance: {e}")
 
             # Create LXMF message with location telemetry
             lxmf_message = LXMF.LXMessage(

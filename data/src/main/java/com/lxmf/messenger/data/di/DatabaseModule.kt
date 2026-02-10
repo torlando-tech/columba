@@ -69,6 +69,7 @@ object DatabaseModule {
             MIGRATION_32_33,
             MIGRATION_33_34,
             MIGRATION_34_35,
+            MIGRATION_35_36,
         )
     }
 
@@ -1440,6 +1441,18 @@ object DatabaseModule {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE offline_map_regions ADD COLUMN localStylePath TEXT DEFAULT NULL",
+                )
+            }
+        }
+
+    // Migration from version 35 to 36: Add isDefault column to offline_map_regions
+    // Allows users to mark an offline map region as the default map center
+    // Used when no GPS location is available (instead of defaulting to San Francisco)
+    private val MIGRATION_35_36 =
+        object : Migration(35, 36) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE offline_map_regions ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0",
                 )
             }
         }

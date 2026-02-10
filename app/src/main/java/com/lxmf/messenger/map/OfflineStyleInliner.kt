@@ -52,7 +52,7 @@ object OfflineStyleInliner {
         }
 
         for (sourceName in sourceNames) {
-            val source = sources.getJSONObject(sourceName)
+            val source = sources.optJSONObject(sourceName) ?: continue
             val tileJsonUrl = source.optString("url", "")
 
             // Only resolve http(s) TileJSON URLs (skip empty, mapbox://, mbtiles://, etc.)
@@ -95,7 +95,8 @@ object OfflineStyleInliner {
             if (tileJson.has("minzoom")) source.put("minzoom", tileJson.get("minzoom"))
             if (tileJson.has("maxzoom")) source.put("maxzoom", tileJson.get("maxzoom"))
             if (tileJson.has("bounds")) source.put("bounds", tileJson.get("bounds"))
-            if (tileJson.has("attribution")) source.put("attribution", tileJson.getString("attribution"))
+            val attribution = tileJson.optString("attribution", null)
+            if (attribution != null) source.put("attribution", attribution)
 
             Log.d(TAG, "Inlined TileJSON for source '$sourceName' (${tiles.length()} tile URL template(s))")
         } catch (e: Exception) {

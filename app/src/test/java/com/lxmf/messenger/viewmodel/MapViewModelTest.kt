@@ -740,7 +740,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - 1_000L, // 1 second ago
                     expiresAt = now + 3600_000L, // Expires in 1 hour
                     currentTime = now,
@@ -765,7 +765,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (6 * 60_000L), // 6 minutes ago
                     expiresAt = now + 3600_000L, // Not expired
                     currentTime = now,
@@ -790,7 +790,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (10 * 60_000L), // 10 minutes ago
                     expiresAt = now - (5 * 60_000L), // Expired 5 minutes ago (within 1 hour grace)
                     currentTime = now,
@@ -815,7 +815,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (3 * 3600_000L), // 3 hours ago
                     expiresAt = now - (2 * 3600_000L), // Expired 2 hours ago (past 1 hour grace)
                     currentTime = now,
@@ -840,7 +840,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (6 * 60_000L), // 6 minutes ago (stale)
                     expiresAt = null, // Indefinite
                     currentTime = now,
@@ -865,7 +865,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (5 * 60_000L), // Exactly 5 minutes ago
                     expiresAt = null,
                     currentTime = now,
@@ -891,7 +891,7 @@ class MapViewModelTest {
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (5 * 60_000L + 1L), // 5 minutes + 1ms ago
                     expiresAt = null,
                     currentTime = now,

@@ -122,6 +122,59 @@ class MapViewModel
              * @suppress VisibleForTesting
              */
             internal var enablePeriodicRefresh = true
+
+            /**
+             * Parse appearance JSON from telemetry into icon fields.
+             *
+             * @param appearanceJson JSON string with icon_name, foreground_color, background_color
+             * @return Triple of (iconName, foregroundColor, backgroundColor) or null if invalid/empty
+             */
+            internal fun parseAppearanceJson(appearanceJson: String?): Triple<String, String, String>? =
+                appearanceJson?.let { json ->
+                    try {
+                        val obj = org.json.JSONObject(json)
+                        Triple(
+                            obj.optString("icon_name", ""),
+                            obj.optString("foreground_color", ""),
+                            obj.optString("background_color", ""),
+                        ).takeIf { it.first.isNotEmpty() }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse appearanceJson", e)
+                        null
+                    }
+                }
+
+            /**
+             * Calculate the marker state based on timestamp and expiry.
+             *
+             * @param timestamp When the location was captured
+             * @param expiresAt When sharing ends (null = indefinite)
+             * @param currentTime Current time for comparison (injectable for testing)
+             * @return MarkerState indicating freshness, or null if marker should be hidden
+             */
+            internal fun calculateMarkerState(
+                timestamp: Long,
+                expiresAt: Long?,
+                currentTime: Long = System.currentTimeMillis(),
+            ): MarkerState? {
+                val age = currentTime - timestamp
+                val isExpired = expiresAt != null && expiresAt < currentTime
+                val gracePeriodEnd = (expiresAt ?: Long.MAX_VALUE) + GRACE_PERIOD_MS
+
+                return when {
+                    // Beyond grace period - should not be shown
+                    isExpired && currentTime > gracePeriodEnd -> null
+
+                    // Expired but within grace period (last known location)
+                    isExpired -> MarkerState.EXPIRED_GRACE_PERIOD
+
+                    // Not expired but stale (5+ minutes without update)
+                    age > STALE_THRESHOLD_MS -> MarkerState.STALE
+
+                    // Fresh location
+                    else -> MarkerState.FRESH
+                }
+            }
         }
 
         private val _state =
@@ -236,20 +289,7 @@ class MapViewModel
                         }
 
                         // Prefer appearance from telemetry message, fall back to announce
-                        val telemetryAppearance =
-                            loc.appearanceJson?.let { json ->
-                                try {
-                                    val obj = org.json.JSONObject(json)
-                                    Triple(
-                                        obj.optString("icon_name", ""),
-                                        obj.optString("foreground_color", ""),
-                                        obj.optString("background_color", ""),
-                                    ).takeIf { it.first.isNotEmpty() }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Failed to parse appearanceJson", e)
-                                    null
-                                }
-                            }
+                        val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
 
                         ContactMarker(
                             destinationHash = loc.senderHash,
@@ -430,37 +470,5 @@ class MapViewModel
         fun stopSharing(destinationHash: String? = null) {
             Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
             locationSharingManager.stopSharing(destinationHash)
-        }
-
-        /**
-         * Calculate the marker state based on timestamp and expiry.
-         *
-         * @param timestamp When the location was captured
-         * @param expiresAt When sharing ends (null = indefinite)
-         * @param currentTime Current time for comparison (injectable for testing)
-         * @return MarkerState indicating freshness, or null if marker should be hidden
-         */
-        internal fun calculateMarkerState(
-            timestamp: Long,
-            expiresAt: Long?,
-            currentTime: Long = System.currentTimeMillis(),
-        ): MarkerState? {
-            val age = currentTime - timestamp
-            val isExpired = expiresAt != null && expiresAt < currentTime
-            val gracePeriodEnd = (expiresAt ?: Long.MAX_VALUE) + GRACE_PERIOD_MS
-
-            return when {
-                // Beyond grace period - should not be shown
-                isExpired && currentTime > gracePeriodEnd -> null
-
-                // Expired but within grace period (last known location)
-                isExpired -> MarkerState.EXPIRED_GRACE_PERIOD
-
-                // Not expired but stale (5+ minutes without update)
-                age > STALE_THRESHOLD_MS -> MarkerState.STALE
-
-                // Fresh location
-                else -> MarkerState.FRESH
-            }
         }
     }

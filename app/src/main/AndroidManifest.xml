@@ -185,6 +185,17 @@
             android:name="io.sentry.auto-init"
             android:value="false" />
 
+        <!-- Incoming call Activity - lightweight, shows over lock screen -->
+        <activity
+            android:name=".IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="com.lxmf.messenger.incoming_call"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Columba" />
+
         <!-- Call notification action receiver -->
         <receiver
             android:name=".notifications.CallActionReceiver"

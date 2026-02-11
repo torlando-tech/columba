@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.lxmf.messenger.IncomingCallActivity
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -108,8 +109,10 @@ class CallNotificationHelper
             val displayName = callerName ?: formatIdentityHash(identityHash)
 
             // Full-screen intent to open incoming call screen
+            // Uses IncomingCallActivity (lightweight) instead of MainActivity (heavy)
+            // This ensures the call screen shows instantly over the lock screen
             val fullScreenIntent =
-                Intent(context, MainActivity::class.java).apply {
+                Intent(context, IncomingCallActivity::class.java).apply {
                     action = ACTION_OPEN_CALL
                     putExtra(EXTRA_IDENTITY_HASH, identityHash)
                     putExtra(EXTRA_CALLER_NAME, displayName)

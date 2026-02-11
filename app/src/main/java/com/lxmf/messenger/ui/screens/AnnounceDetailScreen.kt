@@ -485,12 +485,13 @@ private fun UnsetRelayConfirmationDialog(
             Text("\"$relayName\" will be removed from contacts.")
         },
         confirmButton = {
-            TextButton(onClick = onAutoSelect) {
-                Text("Remove & Auto-Select New")
-            }
-        },
-        dismissButton = {
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End,
+            ) {
+                TextButton(onClick = onAutoSelect) {
+                    Text("Remove & Auto-Select New")
+                }
                 TextButton(onClick = onRemoveOnly) {
                     Text("Remove Only")
                 }

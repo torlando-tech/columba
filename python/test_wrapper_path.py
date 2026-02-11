@@ -108,6 +108,7 @@ class TestRequestPath(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    @patch('reticulum_wrapper.RETICULUM_AVAILABLE', False)
     def test_request_path_mock_mode_returns_success(self):
         """Test that request_path returns success in mock mode"""
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)

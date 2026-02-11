@@ -925,13 +925,19 @@ class TestSendTelemetryRequestSuccess(unittest.TestCase):
         self.wrapper.local_lxmf_destination.hexhash = "a" * 32
         self.wrapper.identities = {}
 
-        # Set up RNS mock
+        # Set up RNS mock (save originals for tearDown)
+        self._original_rns = reticulum_wrapper.RNS
+        self._original_lxmf = reticulum_wrapper.LXMF
+        self._original_available = reticulum_wrapper.RETICULUM_AVAILABLE
         reticulum_wrapper.RNS = MagicMock()
         reticulum_wrapper.LXMF = MagicMock()
         reticulum_wrapper.RETICULUM_AVAILABLE = True
 
     def tearDown(self):
         """Clean up test fixtures."""
+        reticulum_wrapper.RNS = self._original_rns
+        reticulum_wrapper.LXMF = self._original_lxmf
+        reticulum_wrapper.RETICULUM_AVAILABLE = self._original_available
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_successful_send_with_immediate_identity_recall(self):

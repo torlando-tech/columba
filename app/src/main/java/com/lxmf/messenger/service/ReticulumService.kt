@@ -208,6 +208,7 @@ class ReticulumService : Service() {
 
         // Clean up all resources (if initialized)
         if (::managers.isInitialized) {
+            managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
             managers.healthCheckManager.stop()
             managers.eventHandler.stopAll()

@@ -775,21 +775,22 @@ fun ContactsScreen(
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.unsetRelayAndDelete(
-                            currentRelayToUnset.destinationHash,
-                            autoSelectNew = true,
-                        )
-                        showUnsetRelayDialog = false
-                        relayToUnset = null
-                    },
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Text("Remove & Auto-Select New")
-                }
-            },
-            dismissButton = {
-                Column {
+                    TextButton(
+                        onClick = {
+                            viewModel.unsetRelayAndDelete(
+                                currentRelayToUnset.destinationHash,
+                                autoSelectNew = true,
+                            )
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Remove & Auto-Select New")
+                    }
                     TextButton(
                         onClick = {
                             viewModel.unsetRelayAndDelete(

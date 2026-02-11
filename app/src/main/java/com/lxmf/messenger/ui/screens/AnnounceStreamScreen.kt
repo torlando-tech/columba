@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +72,7 @@ import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import kotlinx.coroutines.launch
 
@@ -248,7 +250,8 @@ fun AnnounceStreamScreen(
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
-                            .consumeWindowInsets(paddingValues),
+                            .consumeWindowInsets(paddingValues)
+                            .simpleVerticalScrollbar(listState),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -680,6 +683,45 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
+    // Scroll position anchor — tracks which item the user is viewing by identity (not index).
+    // When Room invalidates the PagingSource and items shift positions, we find our anchor
+    // item in the new data and scroll back to it.
+    var anchorHash by remember { mutableStateOf<String?>(null) }
+    var anchorOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            val index = listState.firstVisibleItemIndex
+            val offset = listState.firstVisibleItemScrollOffset
+            val hash =
+                if (index < pagingItems.itemCount) {
+                    pagingItems.peek(index)?.destinationHash
+                } else {
+                    null
+                }
+            Triple(index, offset, hash)
+        }.collect { (index, offset, currentHash) ->
+            if (currentHash == null) return@collect
+            val savedHash = anchorHash
+
+            if (savedHash != null && savedHash != currentHash && index > 0) {
+                // The item at our position changed identity — data refreshed under us.
+                // Find where our anchor item moved to and restore position.
+                val newIndex =
+                    pagingItems.itemSnapshotList.items
+                        .indexOfFirst { it.destinationHash == savedHash }
+                if (newIndex >= 0) {
+                    listState.scrollToItem(newIndex, anchorOffset)
+                    return@collect // Don't update anchor yet — next emission will confirm
+                }
+            }
+
+            // Normal tracking: save current position
+            anchorHash = currentHash
+            anchorOffset = offset
+        }
+    }
+
     // Check loading state - only show spinner for initial load when list is empty
     // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
@@ -694,15 +736,17 @@ fun AnnounceStreamContent(
         else -> {
             LazyColumn(
                 state = listState,
-                modifier = modifier.fillMaxSize(),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .simpleVerticalScrollbar(listState),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(
                     count = pagingItems.itemCount,
                     key = { index ->
-                        val announce = pagingItems.peek(index)
-                        if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
+                        pagingItems.peek(index)?.destinationHash ?: "placeholder_$index"
                     },
                 ) { index ->
                     val announce = pagingItems[index]

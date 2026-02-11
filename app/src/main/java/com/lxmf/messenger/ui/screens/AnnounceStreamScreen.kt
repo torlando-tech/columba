@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
@@ -72,6 +71,7 @@ import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import kotlinx.coroutines.launch
 
@@ -696,17 +696,17 @@ fun AnnounceStreamContent(
         else -> {
             LazyColumn(
                 state = listState,
-                modifier = modifier
-                    .fillMaxSize()
-                    .simpleVerticalScrollbar(listState),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .simpleVerticalScrollbar(listState),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(
                     count = pagingItems.itemCount,
                     key = { index ->
-                        val announce = pagingItems.peek(index)
-                        if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
+                        pagingItems.peek(index)?.destinationHash ?: "placeholder_$index"
                     },
                 ) { index ->
                     val announce = pagingItems[index]

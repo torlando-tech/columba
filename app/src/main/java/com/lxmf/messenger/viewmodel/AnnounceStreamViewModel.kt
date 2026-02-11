@@ -430,15 +430,20 @@ class AnnounceStreamViewModel
         }
 
         /**
-         * Unset the current relay and delete it from contacts, then trigger auto-selection.
+         * Unset the current relay and delete it from contacts.
+         * @param autoSelectNew If true, auto-select a new relay (excluding the deleted one).
          */
-        fun unsetRelayAndDelete(destinationHash: String) {
+        fun unsetRelayAndDelete(
+            destinationHash: String,
+            autoSelectNew: Boolean,
+        ) {
             viewModelScope.launch {
                 try {
-                    // IMPORTANT: Set exclusion BEFORE delete to prevent immediate re-selection
-                    propagationNodeManager.excludeFromAutoSelect(destinationHash)
                     contactRepository.deleteContact(destinationHash)
-                    propagationNodeManager.onRelayDeleted()
+                    propagationNodeManager.onRelayDeleted(
+                        autoSelectNew = autoSelectNew,
+                        excludeHash = destinationHash,
+                    )
                     Log.d(TAG, "Unset relay and deleted: $destinationHash")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to unset relay: $destinationHash", e)

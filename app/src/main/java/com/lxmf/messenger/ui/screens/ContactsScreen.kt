@@ -780,31 +780,46 @@ fun ContactsScreen(
             },
             text = {
                 Text(
-                    text =
-                        "\"${currentRelayToUnset.displayName}\" will be removed from contacts. " +
-                            "A new relay will be selected automatically from available propagation nodes.",
+                    text = "\"${currentRelayToUnset.displayName}\" will be removed from contacts.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.unsetRelayAndDelete(currentRelayToUnset.destinationHash)
+                        viewModel.unsetRelayAndDelete(
+                            currentRelayToUnset.destinationHash,
+                            autoSelectNew = true,
+                        )
                         showUnsetRelayDialog = false
                         relayToUnset = null
                     },
                 ) {
-                    Text("Unset Relay")
+                    Text("Remove & Auto-Select New")
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showUnsetRelayDialog = false
-                        relayToUnset = null
-                    },
-                ) {
-                    Text("Cancel")
+                Column {
+                    TextButton(
+                        onClick = {
+                            viewModel.unsetRelayAndDelete(
+                                currentRelayToUnset.destinationHash,
+                                autoSelectNew = false,
+                            )
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Remove Only")
+                    }
+                    TextButton(
+                        onClick = {
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Cancel")
+                    }
                 }
             },
         )

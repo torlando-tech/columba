@@ -50,14 +50,13 @@ data class OfflineMapsState(
     /**
      * Get a human-readable total storage string.
      */
-    fun getTotalStorageString(): String {
-        return when {
+    fun getTotalStorageString(): String =
+        when {
             totalStorageBytes < 1024 -> "$totalStorageBytes B"
             totalStorageBytes < 1024 * 1024 -> "${totalStorageBytes / 1024} KB"
             totalStorageBytes < 1024 * 1024 * 1024 -> "${totalStorageBytes / (1024 * 1024)} MB"
             else -> "%.1f GB".format(totalStorageBytes / (1024.0 * 1024.0 * 1024.0))
         }
-    }
 }
 
 /**
@@ -138,6 +137,14 @@ class OfflineMapsViewModel
                         val file = File(path)
                         if (file.exists() && !file.delete()) {
                             Log.w(TAG, "Failed to delete MBTiles file at $path")
+                        }
+                    }
+
+                    // Delete the cached style JSON file if present
+                    region.localStylePath?.let { path ->
+                        val file = File(path)
+                        if (file.exists() && !file.delete()) {
+                            Log.w(TAG, "Failed to delete cached style file at $path")
                         }
                     }
 
@@ -226,9 +233,7 @@ class OfflineMapsViewModel
         /**
          * Get the offline maps directory (for legacy MBTiles files).
          */
-        fun getOfflineMapsDir(): File {
-            return File(context.filesDir, "offline_maps").also { it.mkdirs() }
-        }
+        fun getOfflineMapsDir(): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
         /**
          * Scan for orphaned files and clean up.

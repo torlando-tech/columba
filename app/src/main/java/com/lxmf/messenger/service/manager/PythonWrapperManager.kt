@@ -58,6 +58,10 @@ class PythonWrapperManager(
     @Volatile
     private var callManagerPyObject: PyObject? = null
 
+    // PythonNetworkTransport reference for shutdown signalling
+    @Volatile
+    private var pythonNetworkTransport: PythonNetworkTransport? = null
+
     companion object {
         private const val TAG = "PythonWrapperManager"
         private const val INIT_TIMEOUT_MS = 15_000L // 15s ANR protection
@@ -99,6 +103,9 @@ class PythonWrapperManager(
                     state.shutdownJob = null
                     Log.d(TAG, "Pending shutdown complete")
                 }
+
+                // Previous shutdown done — safe to call Python again
+                state.clearShutdownFlag()
 
                 // Increment generation to invalidate stale shutdown jobs
                 val generation = state.nextGeneration()
@@ -176,6 +183,9 @@ class PythonWrapperManager(
      * @param onComplete Called when shutdown completes (on any outcome)
      */
     suspend fun shutdown(onComplete: () -> Unit) {
+        // FIRST: Set kill switch before any Python teardown to prevent SIGSEGV
+        state.isPythonShutdownStarted.set(true)
+
         // Thread-safe: Atomically capture and clear wrapper reference
         val wrapperToShutdown: PyObject?
         val shutdownGeneration: Int
@@ -185,10 +195,15 @@ class PythonWrapperManager(
             state.wrapper = null
             shutdownGeneration = state.initializationGeneration.get()
 
+            // Signal PythonNetworkTransport before Telephone shutdown
+            // (Telephone.shutdown() may trigger teardownLink which calls into Python)
+            pythonNetworkTransport?.shuttingDown = true
+
             // Shutdown Kotlin Telephone
             telephone?.shutdown()
             telephone = null
             callManagerPyObject = null
+            pythonNetworkTransport = null
 
             // Shutdown network packet bridge
             networkPacketBridge?.shutdown()
@@ -245,6 +260,7 @@ class PythonWrapperManager(
      * @return Result of block or null if wrapper unavailable
      */
     fun <T> withWrapper(block: (PyObject) -> T): T? {
+        if (state.isPythonShutdownStarted.get()) return null
         val wrapper =
             state.wrapper ?: run {
                 Log.w(TAG, "withWrapper called but wrapper is null")
@@ -254,6 +270,24 @@ class PythonWrapperManager(
             block(wrapper)
         } catch (e: Exception) {
             Log.e(TAG, "Error in withWrapper block", e)
+            null
+        }
+    }
+
+    /**
+     * Execute a block with the call manager PyObject if Python is still alive.
+     *
+     * Parallel to [withWrapper] but for code paths that captured call_manager
+     * directly (AudioPacketHandler, CallController anonymous objects).
+     * Single guard point prevents SIGSEGV in PyGILState_Ensure during shutdown.
+     */
+    private inline fun <T> withCallManager(block: (PyObject) -> T): T? {
+        if (state.isPythonShutdownStarted.get()) return null
+        val cm = callManagerPyObject ?: return null
+        return try {
+            block(cm)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in withCallManager block", e)
             null
         }
     }
@@ -419,44 +453,46 @@ class PythonWrapperManager(
                     // Store reference to call_manager for Telephone setup
                     callManagerPyObject = wrapper.callAttr("get_call_manager")
 
-                    callManagerPyObject?.let { cm ->
+                    callManagerPyObject?.let { _ ->
                         // Register AudioPacketHandler for Kotlin→Python audio/signal packets.
                         // Without this, Packetizer encodes audio but PacketRouter's consumer
                         // loop silently drops all packets (packetHandler is null).
+                        // Uses withCallManager{} to guard against SIGSEGV during shutdown.
                         netBridge.setPacketHandler(
                             object : AudioPacketHandler {
                                 override fun receiveAudioPacket(packet: ByteArray) {
-                                    cm.callAttr("receive_audio_packet", packet)?.close()
+                                    withCallManager { it.callAttr("receive_audio_packet", packet)?.close() }
                                 }
 
                                 override fun receiveSignal(signal: Int) {
-                                    cm.callAttr("receive_signal", signal)?.close()
+                                    withCallManager { it.callAttr("receive_signal", signal)?.close() }
                                 }
                             },
                         )
 
                         // Register CallController wrapper for CallCoordinator.
                         // Kotlin wraps the PyObject so :lxst has no Chaquopy dependency.
+                        // Uses withCallManager{} to guard against SIGSEGV during shutdown.
                         callBridge.setCallManager(
                             object : CallController {
                                 override fun call(destinationHash: String) {
-                                    cm.callAttr("call", destinationHash)?.close()
+                                    withCallManager { it.callAttr("call", destinationHash)?.close() }
                                 }
 
                                 override fun answer() {
-                                    cm.callAttr("answer")?.close()
+                                    withCallManager { it.callAttr("answer")?.close() }
                                 }
 
                                 override fun hangup() {
-                                    cm.callAttr("hangup")?.close()
+                                    withCallManager { it.callAttr("hangup")?.close() }
                                 }
 
                                 override fun muteMicrophone(muted: Boolean) {
-                                    cm.callAttr("mute_microphone", muted)?.close()
+                                    withCallManager { it.callAttr("mute_microphone", muted)?.close() }
                                 }
 
                                 override fun setSpeaker(enabled: Boolean) {
-                                    cm.callAttr("set_speaker", enabled)?.close()
+                                    withCallManager { it.callAttr("set_speaker", enabled)?.close() }
                                 }
                             },
                         )
@@ -509,6 +545,7 @@ class PythonWrapperManager(
 
             // Create Python network transport
             val transport = PythonNetworkTransport(netBridge, callManager, scope)
+            pythonNetworkTransport = transport
 
             // Create Telephone
             telephone =
@@ -618,6 +655,8 @@ class PythonWrapperManager(
         workblock: ByteArray,
         stampCost: Int,
     ): PyObject {
+        check(!state.isPythonShutdownStarted.get()) { "Python shutdown in progress" }
+
         Log.d(TAG, "Stamp generator callback invoked: cost=$stampCost, workblock=${workblock.size} bytes")
 
         val generator = checkNotNull(stampGeneratorInstance) { "StampGenerator not initialized" }

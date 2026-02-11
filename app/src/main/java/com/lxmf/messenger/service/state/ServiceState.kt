@@ -49,6 +49,20 @@ class ServiceState {
     val isConversationActive = AtomicBoolean(false)
 
     /**
+     * Kill switch to prevent Python JNI calls during/after interpreter teardown.
+     *
+     * Set BEFORE any Python shutdown begins. Checked BEFORE every Chaquopy JNI call.
+     * Prevents SIGSEGV in PyGILState_Ensure when CPython is tearing down.
+     *
+     * AtomicBoolean.get() compiles to a single volatile read (~1ns) — negligible
+     * even on the audio hot path.
+     *
+     * NOT reset in [reset] — only cleared explicitly via [clearShutdownFlag] after
+     * a new initialization cycle confirms the previous shutdown completed.
+     */
+    val isPythonShutdownStarted = AtomicBoolean(false)
+
+    /**
      * Python wrapper instance reference.
      * Nullable - null when service is not initialized.
      */
@@ -81,6 +95,23 @@ class ServiceState {
     fun isCurrentGeneration(gen: Int): Boolean = initializationGeneration.get() == gen
 
     /**
+     * Check if it's safe to make a Python JNI call.
+     * Returns true only if shutdown hasn't started AND wrapper is available.
+     */
+    fun isPythonCallSafe(): Boolean = !isPythonShutdownStarted.get() && wrapper != null
+
+    /**
+     * Clear the shutdown flag after a previous shutdown has fully completed
+     * and a new initialization cycle is beginning.
+     *
+     * Must only be called from [PythonWrapperManager.initialize] after joining
+     * the pending shutdown job.
+     */
+    fun clearShutdownFlag() {
+        isPythonShutdownStarted.set(false)
+    }
+
+    /**
      * Check if the wrapper is initialized and network is ready.
      */
     fun isInitialized(): Boolean = wrapper != null && networkStatus.get() == "READY"
@@ -96,5 +127,7 @@ class ServiceState {
         pollingJob = null
         shutdownJob = null
         // Note: initializationGeneration is NOT reset to preserve race condition protection
+        // Note: isPythonShutdownStarted is NOT reset here — only by clearShutdownFlag()
+        // after a new initialization confirms the previous shutdown completed
     }
 }

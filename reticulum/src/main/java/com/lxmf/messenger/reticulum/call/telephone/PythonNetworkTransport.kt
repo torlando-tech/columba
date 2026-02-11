@@ -32,6 +32,13 @@ class PythonNetworkTransport(
         private const val TAG = "Columba:PyNetTransport"
     }
 
+    /**
+     * Kill switch set by PythonWrapperManager during shutdown.
+     * Prevents callManager JNI calls after CPython teardown begins.
+     */
+    @Volatile
+    var shuttingDown = false
+
     // Track link state based on establishLink/teardownLink calls
     @Volatile
     private var linkActive = false
@@ -51,6 +58,7 @@ class PythonNetworkTransport(
      */
     override suspend fun establishLink(destinationHash: ByteArray): Boolean =
         withContext(Dispatchers.IO) {
+            if (shuttingDown) return@withContext false
             try {
                 val destinationHashHex = destinationHash.toHexString()
                 Log.i(TAG, "Establishing link to ${destinationHashHex.take(16)}...")
@@ -103,8 +111,10 @@ class PythonNetworkTransport(
     override fun teardownLink() {
         Log.i(TAG, "Tearing down link")
         linkActive = false
+        if (shuttingDown) return
 
         scope.launch(Dispatchers.IO) {
+            if (shuttingDown) return@launch
             runCatching {
                 callManager.callAttr("hangup")?.close()
             }.onFailure { e ->

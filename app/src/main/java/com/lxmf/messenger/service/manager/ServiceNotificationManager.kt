@@ -51,12 +51,13 @@ class ServiceNotificationManager(
     // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
     private val syncNotificationTimeoutMs = 5 * 60 * 1000L + 30_000L
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val resetSyncRunnable = Runnable {
-        Log.w(TAG, "Sync notification watchdog fired - resetting to normal notification")
-        currentSyncState = PropagationState.STATE_IDLE
-        currentSyncProgress = 0f
-        notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
-    }
+    private val resetSyncRunnable =
+        Runnable {
+            Log.w(TAG, "Sync notification watchdog fired - resetting to normal notification")
+            currentSyncState = PropagationState.STATE_IDLE
+            currentSyncProgress = 0f
+            notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+        }
 
     /**
      * Create notification channel for Android O+.
@@ -90,14 +91,15 @@ class ServiceNotificationManager(
         val pendingIntent = createContentIntent()
         val (statusText, detailText) = getStatusTexts(networkStatus)
 
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat
+            .Builder(context, CHANNEL_ID)
             .setContentTitle("Columba Mesh Network")
             .setContentText(statusText)
             .setStyle(
-                NotificationCompat.BigTextStyle()
+                NotificationCompat
+                    .BigTextStyle()
                     .bigText(detailText),
-            )
-            .setSmallIcon(R.mipmap.ic_launcher)
+            ).setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -111,12 +113,14 @@ class ServiceNotificationManager(
      * @param networkStatus Current status: "SHUTDOWN", "INITIALIZING", "READY", or "ERROR:message"
      */
     fun updateNotification(networkStatus: String) {
-        lastNetworkStatus = networkStatus
-        // If we're actively syncing, don't override with network status
-        if (currentSyncState in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
-            return
+        mainHandler.post {
+            lastNetworkStatus = networkStatus
+            // If we're actively syncing, don't override with network status
+            if (currentSyncState in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
+                return@post
+            }
+            notificationManager.notify(NOTIFICATION_ID, createNotification(networkStatus))
         }
-        notificationManager.notify(NOTIFICATION_ID, createNotification(networkStatus))
     }
 
     /**
@@ -126,26 +130,30 @@ class ServiceNotificationManager(
      */
     @Suppress("SwallowedException", "TooGenericExceptionCaught")
     fun updateSyncProgress(stateJson: String) {
+        // Parse JSON on caller thread, then post state mutation + notify to main thread
+        // to serialize with watchdog resets (which also run on main via mainHandler).
         try {
             val json = JSONObject(stateJson)
             val state = json.optInt("state", PropagationState.STATE_IDLE)
             val stateName = json.optString("state_name", "idle")
             val progress = json.optDouble("progress", 0.0).toFloat()
 
-            currentSyncState = state
-            currentSyncProgress = progress
+            mainHandler.post {
+                currentSyncState = state
+                currentSyncProgress = progress
 
-            // Only show sync notification for active sync states
-            if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
-                val notification = createSyncNotification(stateName, progress)
-                notificationManager.notify(NOTIFICATION_ID, notification)
-                // Reset watchdog on each active state update
-                scheduleSyncTimeout()
-            } else {
-                // Any non-active state (complete, idle, or error) restores normal notification
-                cancelSyncTimeout()
-                currentSyncState = PropagationState.STATE_IDLE
-                notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+                // Only show sync notification for active sync states
+                if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
+                    val notification = createSyncNotification(stateName, progress)
+                    notificationManager.notify(NOTIFICATION_ID, notification)
+                    // Reset watchdog on each active state update
+                    scheduleSyncTimeout()
+                } else {
+                    // Any non-active state (complete, idle, or error) restores normal notification
+                    cancelSyncTimeout()
+                    currentSyncState = PropagationState.STATE_IDLE
+                    notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse sync progress: ${e.message}")
@@ -158,10 +166,12 @@ class ServiceNotificationManager(
      * known to be stale (e.g., after a timeout in PropagationNodeManager).
      */
     fun resetSyncNotification() {
-        cancelSyncTimeout()
-        currentSyncState = PropagationState.STATE_IDLE
-        currentSyncProgress = 0f
-        notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+        mainHandler.post {
+            cancelSyncTimeout()
+            currentSyncState = PropagationState.STATE_IDLE
+            currentSyncProgress = 0f
+            notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+        }
     }
 
     private fun scheduleSyncTimeout() {
@@ -184,7 +194,8 @@ class ServiceNotificationManager(
         val (title, subtitle) = getSyncStatusTexts(stateName, progress)
 
         val builder =
-            NotificationCompat.Builder(context, CHANNEL_ID)
+            NotificationCompat
+                .Builder(context, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(subtitle)
                 .setSmallIcon(R.mipmap.ic_launcher)

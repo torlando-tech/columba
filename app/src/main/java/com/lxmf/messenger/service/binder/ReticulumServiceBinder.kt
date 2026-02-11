@@ -284,6 +284,9 @@ class ReticulumServiceBinder(
     }
 
     override fun shutdown() {
+        // Set kill switch synchronously before any async work to prevent SIGSEGV
+        state.isPythonShutdownStarted.set(true)
+
         try {
             val stackTrace =
                 Thread
@@ -348,6 +351,7 @@ class ReticulumServiceBinder(
     }
 
     override fun forceExit() {
+        state.isPythonShutdownStarted.set(true)
         Log.i(TAG, "forceExit() called - shutting down and killing process")
         try {
             shutdown()

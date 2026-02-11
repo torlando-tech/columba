@@ -492,7 +492,11 @@ class PropagationNodeManager
             if (nearest != null) {
                 Log.i(TAG, "Auto-selecting relay: ${nearest.destinationHash.take(12)} at ${nearest.hops} hops")
                 if (!contactRepository.hasContact(nearest.destinationHash)) {
-                    contactRepository.addContactFromAnnounce(nearest.destinationHash, nearest.publicKey)
+                    val result = contactRepository.addContactFromAnnounce(nearest.destinationHash, nearest.publicKey)
+                    if (result.isFailure) {
+                        Log.e(TAG, "Failed to create contact for auto-selected relay: ${result.exceptionOrNull()?.message}")
+                        return
+                    }
                 }
                 // Idempotent — skips write if already set (COLUMBA-3 defense-in-depth)
                 contactRepository.setAsMyRelay(nearest.destinationHash, clearOther = true)
@@ -604,6 +608,10 @@ class PropagationNodeManager
             if (autoSelectNew) {
                 settingsRepository.saveAutoSelectPropagationNode(true)
                 selectBestRelay(excludeHash = excludeHash)
+            } else {
+                // Disable auto-select so periodic sync doesn't re-select a relay,
+                // which would contradict the user's "Remove Only" intent
+                settingsRepository.saveAutoSelectPropagationNode(false)
             }
         }
 

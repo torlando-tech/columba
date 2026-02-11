@@ -33,6 +33,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -521,6 +522,31 @@ class PropagationNodeManagerTest {
             assertEquals(testDestHash, hashSlot.captured)
         }
 
+    @Test
+    fun `selectBestRelay - aborts if addContactFromAnnounce fails`() =
+        runTest {
+            // Given: Propagation node exists, contact does not, but addContactFromAnnounce fails
+            val node =
+                TestFactories.createAnnounce(
+                    destinationHash = testDestHash,
+                    peerName = "Flaky Relay",
+                    hops = 2,
+                )
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(node))
+            coEvery { contactRepository.hasContact(testDestHash) } returns false
+            coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns
+                Result.failure(IllegalStateException("No active identity found"))
+
+            // When
+            manager.enableAutoSelect()
+            advanceUntilIdle()
+
+            // Then: No relay should be configured (contact creation failed)
+            assertNull("No relay should be set when contact creation fails", manager.currentRelay.value)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
+        }
+
     // ========== setManualRelay Tests ==========
 
     @Test
@@ -862,7 +888,7 @@ class PropagationNodeManagerTest {
         }
 
     @Test
-    fun `onRelayDeleted - autoSelectNew false does not select relay`() =
+    fun `onRelayDeleted - autoSelectNew false disables auto-select and does not select relay`() =
         runTest {
             // Given: A propagation node available
             val newNode =
@@ -877,10 +903,10 @@ class PropagationNodeManagerTest {
             val result = runCatching { manager.onRelayDeleted(autoSelectNew = false) }
             advanceUntilIdle()
 
-            // Then: Should NOT select any new relay
+            // Then: Should disable auto-select and NOT select any new relay
             assertTrue("onRelayDeleted() should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveManualPropagationNode(null) }
-            coVerify(exactly = 0) { settingsRepository.saveAutoSelectPropagationNode(any()) }
+            coVerify { settingsRepository.saveAutoSelectPropagationNode(false) }
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
         }
 

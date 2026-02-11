@@ -10,9 +10,6 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
-import io.sentry.Breadcrumb
-import io.sentry.Sentry
-import io.sentry.SentryLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -112,37 +108,17 @@ sealed class AvailableRelaysState {
 }
 
 /**
- * State machine for relay auto-selection process.
- * Prevents feedback loops by tracking selection lifecycle.
- */
-enum class RelaySelectionState {
-    /** Ready to auto-select. Only state where selection can trigger. */
-    IDLE,
-
-    /** Selection triggered, waiting for database update to complete. */
-    SELECTING,
-
-    /** Relay selected and stable. Cooldown active before returning to IDLE. */
-    STABLE,
-
-    /** Loop detected. Exponential backoff in progress before returning to IDLE. */
-    BACKING_OFF,
-}
-
-/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
- * This class implements Sideband's auto-selection algorithm:
- * - Listen for propagation node announces
- * - Automatically select the nearest node (by hop count)
- * - Only switch to a new node if it has fewer or equal hops
- * - Fall back to last known propagation node on restart
+ * Auto-selection is one-shot: "pick the best relay when asked, then stop."
+ * This eliminates the feedback loop category by design — no continuous observer
+ * means no Room invalidation loop (COLUMBA-3).
  *
  * Users can also manually select a specific propagation node, which
  * disables auto-selection until they re-enable it.
  */
 @Singleton
-@Suppress("TooManyFunctions", "LargeClass") // Relay management requires distinct operations; refactor deferred
+@Suppress("TooManyFunctions") // Relay lifecycle inherently needs many operations
 class PropagationNodeManager
     @Inject
     constructor(
@@ -155,30 +131,6 @@ class PropagationNodeManager
         companion object {
             private const val TAG = "PropagationNodeManager"
         }
-
-        // State machine to prevent relay selection feedback loops
-        private val _selectionState = MutableStateFlow(RelaySelectionState.IDLE)
-        val selectionState: StateFlow<RelaySelectionState> = _selectionState.asStateFlow()
-
-        // Cooldown duration after successful selection (30 seconds per context decisions)
-        private val selectionCooldownMs = 30_000L
-
-        // Job for cooldown timer (cancellable if user takes manual action)
-        private var cooldownJob: Job? = null
-
-        // Excluded relay: when user manually clears a relay, don't auto-select it again
-        // This prevents the frustrating "I cleared it but it came right back" experience
-        private var excludedRelayHash: String? = null
-
-        // Loop detection: track recent selections to detect rapid cycling
-        // Per context decisions: 3+ changes in 60 seconds triggers warning
-        private val recentSelections = ArrayDeque<Pair<String, Long>>()
-        private val loopThresholdCount = 3
-        private val loopWindowMs = 60_000L
-        private val maxBackoffMs = 10 * 60 * 1000L // 10 minutes max (per context decisions)
-
-        // Job for backoff timer
-        private var backoffJob: Job? = null
 
         /**
          * Build RelayInfo from a contact entity and auto-select setting.
@@ -271,7 +223,6 @@ class PropagationNodeManager
         // Timeout for sync operation (5 minutes for large transfers)
         private val syncTimeoutMs = 5 * 60 * 1000L
 
-        private var announceObserverJob: Job? = null
         private var syncJob: Job? = null
         private var settingsObserverJob: Job? = null
         private var propagationStateObserverJob: Job? = null
@@ -314,16 +265,9 @@ class PropagationNodeManager
             }
 
             // Observe relay changes from database and sync to Python layer
-            // This replaces the old restoreLastRelay() approach - now we're reactive
             relayObserverJob =
                 scope.launch {
                     observeRelayChanges()
-                }
-
-            // Start observing propagation node announces for auto-selection
-            announceObserverJob =
-                scope.launch {
-                    observePropagationNodeAnnounces()
                 }
 
             // Observe settings changes to restart sync with new interval
@@ -344,6 +288,15 @@ class PropagationNodeManager
 
             // Start periodic sync with propagation node
             startPeriodicSync()
+
+            // One-shot auto-select on startup (if auto mode + no relay configured)
+            scope.launch {
+                val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+                val loaded = currentRelayState.first { it is RelayLoadState.Loaded } as RelayLoadState.Loaded
+                if (isAutoSelect && loaded.relay == null) {
+                    selectBestRelay()
+                }
+            }
         }
 
         /**
@@ -508,71 +461,48 @@ class PropagationNodeManager
         fun stop() {
             Log.d(TAG, "Stopping PropagationNodeManager")
             relayObserverJob?.cancel()
-            announceObserverJob?.cancel()
             syncJob?.cancel()
             settingsObserverJob?.cancel()
             propagationStateObserverJob?.cancel()
-            cooldownJob?.cancel()
-            backoffJob?.cancel()
             relayObserverJob = null
-            announceObserverJob = null
             syncJob = null
             settingsObserverJob = null
             propagationStateObserverJob = null
-            cooldownJob = null
-            backoffJob = null
         }
 
         /**
-         * Called when a propagation node announce is received.
-         * Implements Sideband's algorithm: select nearest by hop count, only switch if new node has <= hops.
+         * One-shot: query DB for best available relay and set it.
+         * Called on startup, when user enables auto-select, or after relay deletion.
          *
-         * Note: This method only updates the database. The currentRelay Flow automatically
-         * picks up changes, and observeRelayChanges() syncs to Python layer.
+         * @param excludeHash Optional hash to exclude (e.g., just-deleted relay)
          */
-        suspend fun onPropagationNodeAnnounce(
-            destinationHash: String,
-            hops: Int,
-            publicKey: ByteArray,
-        ) {
-            val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-            val manualNode = settingsRepository.getManualPropagationNode()
+        private suspend fun selectBestRelay(excludeHash: String? = null) {
+            val propagationNodes =
+                announceRepository
+                    .getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
+                    .first()
 
-            // If user has manually selected a node, don't auto-switch
-            if (!isAutoSelect && manualNode != null) {
-                Log.d(TAG, "Manual relay selected, ignoring announce from ${destinationHash.take(16)}")
-                return
-            }
-
-            // Get current relay from the database-derived StateFlow
-            val current = currentRelay.value
-
-            // Auto-selection logic (from Sideband)
-            val shouldSwitch =
-                when {
-                    current == null -> true // No relay yet
-                    hops < current.hops || current.hops == -1 -> true // New node is closer (or current hops unknown)
-                    hops == current.hops && destinationHash == current.destinationHash -> true // Same node
-                    else -> false // Current node is closer, keep it
+            val candidates =
+                if (excludeHash != null) {
+                    propagationNodes.filter { it.destinationHash != excludeHash }
+                } else {
+                    propagationNodes
                 }
+            val nearest = candidates.minByOrNull { it.hops }
 
-            if (shouldSwitch) {
-                Log.i(TAG, "Switching to relay ${destinationHash.take(16)} at $hops hops")
-
-                // Auto-add to contacts if not already present
-                val contactExists = contactRepository.hasContact(destinationHash)
-                Log.d(TAG, "Contact exists for $destinationHash: $contactExists")
-                if (!contactExists) {
-                    val result = contactRepository.addContactFromAnnounce(destinationHash, publicKey)
-                    Log.d(TAG, "Added contact from announce: ${result.isSuccess}, error: ${result.exceptionOrNull()?.message}")
+            if (nearest != null) {
+                Log.i(TAG, "Auto-selecting relay: ${nearest.destinationHash.take(12)} at ${nearest.hops} hops")
+                if (!contactRepository.hasContact(nearest.destinationHash)) {
+                    val result = contactRepository.addContactFromAnnounce(nearest.destinationHash, nearest.publicKey)
+                    if (result.isFailure) {
+                        Log.e(TAG, "Failed to create contact for auto-selected relay: ${result.exceptionOrNull()?.message}")
+                        return
+                    }
                 }
-
-                // Mark as relay in contacts (clears other relays first)
-                // This updates the database, which triggers currentRelay Flow,
-                // which triggers observeRelayChanges() to sync Python layer
-                Log.d(TAG, "Setting as my relay: $destinationHash")
-                contactRepository.setAsMyRelay(destinationHash, clearOther = true)
-                Log.d(TAG, "Set as my relay complete")
+                // Idempotent — skips write if already set (COLUMBA-3 defense-in-depth)
+                contactRepository.setAsMyRelay(nearest.destinationHash, clearOther = true)
+            } else {
+                Log.d(TAG, "No propagation nodes available for auto-selection")
             }
         }
 
@@ -584,15 +514,6 @@ class PropagationNodeManager
          * automatically picks up changes, and observeRelayChanges() syncs to Python layer.
          */
         suspend fun setManualRelay(destinationHash: String) {
-            // Cancel any ongoing auto-selection - user action takes precedence
-            if (_selectionState.value != RelaySelectionState.IDLE) {
-                Log.i(TAG, "User manual selection - cancelling auto-select (state was ${_selectionState.value})")
-                cooldownJob?.cancel()
-                backoffJob?.cancel()
-            }
-            _selectionState.value = RelaySelectionState.IDLE // User action always resets to IDLE
-            excludedRelayHash = null // Clear exclusion - user made explicit choice
-
             Log.i(TAG, "User manually selected relay: ${destinationHash.take(16)}")
 
             // Disable auto-select and save manual selection
@@ -612,56 +533,22 @@ class PropagationNodeManager
 
         /**
          * Switch back to auto-selection mode.
+         * Immediately picks the best available relay.
          */
         suspend fun enableAutoSelect() {
-            // Reset state when enabling auto-select
-            cooldownJob?.cancel()
-            backoffJob?.cancel()
-            _selectionState.value = RelaySelectionState.IDLE
-            excludedRelayHash = null // Clear any exclusion - user wants fresh auto-select
-
             Log.i(TAG, "Enabling auto-select for propagation node")
 
             settingsRepository.saveAutoSelectPropagationNode(true)
             settingsRepository.saveManualPropagationNode(null)
 
-            // Try to find nearest known propagation node
-            val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
-            val nearest = propagationNodes.minByOrNull { it.hops }
-
-            if (nearest != null) {
-                onPropagationNodeAnnounce(
-                    nearest.destinationHash,
-                    nearest.hops,
-                    nearest.publicKey,
-                )
-                // Record for loop detection
-                recordSelection(nearest.destinationHash, "auto-select-enabled")
-            } else {
-                // No known propagation nodes, clear and wait for announces
-                // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
-                contactRepository.clearMyRelay()
-            }
+            selectBestRelay()
         }
 
         /**
          * Clear the current relay (no propagation node selected).
          */
         suspend fun clearRelay() {
-            // Cancel any ongoing auto-selection
-            cooldownJob?.cancel()
-            backoffJob?.cancel()
-            _selectionState.value = RelaySelectionState.IDLE
-
-            // Exclude the current relay from auto-selection
-            // This prevents the "I cleared it but it came right back" frustration
-            val currentHash = currentRelay.value?.destinationHash
-            if (currentHash != null) {
-                excludedRelayHash = currentHash
-                Log.i(TAG, "Clearing relay selection, excluding ${currentHash.take(12)}... from auto-select")
-            } else {
-                Log.i(TAG, "Clearing relay selection")
-            }
+            Log.i(TAG, "Clearing relay selection")
 
             settingsRepository.saveManualPropagationNode(null)
             // Database update triggers currentRelay Flow → observeRelayChanges() → Python sync
@@ -680,15 +567,6 @@ class PropagationNodeManager
             destinationHash: String,
             nickname: String?,
         ) {
-            // Cancel any ongoing auto-selection - user action takes precedence
-            if (_selectionState.value != RelaySelectionState.IDLE) {
-                Log.i(TAG, "User manual relay by hash - cancelling auto-select (state was ${_selectionState.value})")
-                cooldownJob?.cancel()
-                backoffJob?.cancel()
-            }
-            _selectionState.value = RelaySelectionState.IDLE
-            excludedRelayHash = null // Clear exclusion - user made explicit choice
-
             Log.i(TAG, "User manually entered relay hash: $destinationHash")
 
             // Disable auto-select and save manual selection
@@ -715,57 +593,26 @@ class PropagationNodeManager
         }
 
         /**
-         * Exclude a relay from auto-selection. Call this BEFORE deleting a relay contact
-         * to prevent it from being immediately re-selected.
-         *
-         * @param destinationHash The relay hash to exclude from auto-selection
-         */
-        fun excludeFromAutoSelect(destinationHash: String) {
-            excludedRelayHash = destinationHash
-            Log.i(TAG, "Excluding relay ${destinationHash.take(12)}... from auto-select")
-        }
-
-        /**
          * Called when the current relay contact is deleted by the user.
-         * Clears current state and triggers auto-selection of a new relay if enabled.
+         * Optionally triggers auto-selection of a new relay.
+         *
+         * @param autoSelectNew If true, auto-select a new relay after deletion
+         * @param excludeHash Optional hash to exclude from auto-selection (e.g., just-deleted relay)
          */
-        suspend fun onRelayDeleted() {
-            Log.i(TAG, "Relay contact was deleted, selecting new relay")
-
-            // If manual node was deleted, switch to auto-select
-            val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-            if (!isAutoSelect) {
-                Log.d(TAG, "Manual relay deleted, enabling auto-select")
-                settingsRepository.saveAutoSelectPropagationNode(true)
-            }
+        suspend fun onRelayDeleted(
+            autoSelectNew: Boolean,
+            excludeHash: String? = null,
+        ) {
+            Log.i(TAG, "Relay deleted, autoSelectNew=$autoSelectNew")
             settingsRepository.saveManualPropagationNode(null)
 
-            // Find the best available propagation node, respecting any exclusion
-            val propagationNodes = announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")).first()
-            val candidates =
-                if (excludedRelayHash != null) {
-                    val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                    if (filtered.size < propagationNodes.size) {
-                        Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
-                    }
-                    filtered
-                } else {
-                    propagationNodes
-                }
-            val nearest = candidates.minByOrNull { it.hops }
-
-            if (nearest != null) {
-                Log.i(TAG, "Auto-selecting new relay: ${nearest.destinationHash.take(16)} at ${nearest.hops} hops")
-                onPropagationNodeAnnounce(
-                    nearest.destinationHash,
-                    nearest.hops,
-                    nearest.publicKey,
-                )
-                // Record for loop detection
-                recordSelection(nearest.destinationHash, "relay-deleted")
+            if (autoSelectNew) {
+                settingsRepository.saveAutoSelectPropagationNode(true)
+                selectBestRelay(excludeHash = excludeHash)
             } else {
-                Log.d(TAG, "No propagation nodes available for auto-selection")
-                // currentRelay Flow will emit null, observeRelayChanges() will sync to Python
+                // Disable auto-select so periodic sync doesn't re-select a relay,
+                // which would contradict the user's "Remove Only" intent
+                settingsRepository.saveAutoSelectPropagationNode(false)
             }
         }
 
@@ -810,179 +657,6 @@ class PropagationNodeManager
         }
 
         /**
-         * Record a relay selection for loop detection.
-         * If 3+ selections happen within 60 seconds, triggers BACKING_OFF state.
-         *
-         * @param destinationHash The selected relay's destination hash
-         * @param reason Reason for selection (for logging)
-         */
-        private suspend fun recordSelection(
-            destinationHash: String,
-            reason: String,
-        ) {
-            val now = System.currentTimeMillis()
-            val windowStart = now - loopWindowMs
-
-            // Synchronize deque access — callers run on both Dispatchers.Main and Default
-            val (recentCount, hashes) =
-                synchronized(recentSelections) {
-                    recentSelections.addLast(destinationHash to now)
-
-                    // Keep only last 10 entries to bound memory
-                    while (recentSelections.size > 10) {
-                        recentSelections.removeFirst()
-                    }
-
-                    val count = recentSelections.count { it.second > windowStart }
-                    val hashList =
-                        if (count >= loopThresholdCount) {
-                            recentSelections
-                                .filter { it.second > windowStart }
-                                .map { it.first.take(12) }
-                        } else {
-                            emptyList()
-                        }
-                    count to hashList
-                }
-
-            Log.i(TAG, "Relay selected: ${destinationHash.take(12)}... ($reason) [${recentCount}x in last 60s]")
-
-            if (recentCount >= loopThresholdCount) {
-                Log.w(TAG, "⚠️ Relay loop detected! $recentCount selections in 60s: $hashes")
-
-                // Send Sentry event for diagnostics (per context decisions)
-                // The Sentry integration was added in Phase 1 (01-03-PLAN.md)
-                try {
-                    Sentry.captureMessage(
-                        "Relay selection loop detected: $recentCount selections in 60s",
-                        SentryLevel.WARNING,
-                    )
-                    Sentry.addBreadcrumb(
-                        Breadcrumb().apply {
-                            category = "relay"
-                            message = "Loop detected: hashes=$hashes"
-                            level = SentryLevel.WARNING
-                        },
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to send Sentry event: ${e.message}")
-                }
-
-                // Transition to BACKING_OFF state
-                _selectionState.value = RelaySelectionState.BACKING_OFF
-
-                // Calculate exponential backoff: 1s, 2s, 4s, 8s... max 10 minutes
-                // Formula: 2^(recentCount - loopThreshold) seconds, capped at max
-                val exponent = (recentCount - loopThresholdCount).coerceAtLeast(0)
-                val backoffMs =
-                    minOf(
-                        (1L shl exponent) * 1000L, // 2^exponent * 1000ms
-                        maxBackoffMs,
-                    )
-
-                Log.w(TAG, "Entering backoff for ${backoffMs / 1000}s (exponent=$exponent)")
-
-                // Start backoff timer
-                backoffJob?.cancel()
-                backoffJob =
-                    scope.launch {
-                        delay(backoffMs)
-                        if (_selectionState.value == RelaySelectionState.BACKING_OFF) {
-                            _selectionState.value = RelaySelectionState.IDLE
-                            Log.i(TAG, "Backoff complete, returning to IDLE")
-                        }
-                    }
-            }
-        }
-
-        /**
-         * Observe propagation node announces for auto-selection.
-         */
-        private suspend fun observePropagationNodeAnnounces() {
-            announceRepository
-                .getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
-                .debounce(1000) // Batch rapid Room invalidation triggers (per research)
-                .collect { propagationNodes ->
-                    // CRITICAL: Don't trigger selection if already selecting or in cooldown
-                    if (_selectionState.value != RelaySelectionState.IDLE) {
-                        Log.d(TAG, "Skipping auto-select - state=${_selectionState.value} (only IDLE allows selection)")
-                        return@collect
-                    }
-
-                    val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-
-                    Log.d(
-                        TAG,
-                        "observePropagationNodeAnnounces: isAutoSelect=$isAutoSelect, " +
-                            "availableNodes=${propagationNodes.size}, state=${_selectionState.value}",
-                    )
-
-                    if (isAutoSelect && propagationNodes.isNotEmpty()) {
-                        // Transition to SELECTING state BEFORE any selection logic
-                        _selectionState.value = RelaySelectionState.SELECTING
-                        Log.i(TAG, "Relay selection started (state=SELECTING)")
-
-                        // Find the nearest propagation node, excluding any recently-cleared relay
-                        val candidates =
-                            if (excludedRelayHash != null) {
-                                val filtered = propagationNodes.filter { it.destinationHash != excludedRelayHash }
-                                if (filtered.size < propagationNodes.size) {
-                                    Log.d(TAG, "Excluding recently-cleared relay ${excludedRelayHash?.take(12)}... from auto-select")
-                                }
-                                filtered
-                            } else {
-                                propagationNodes
-                            }
-                        val nearest = candidates.minByOrNull { it.hops }
-                        if (nearest != null) {
-                            Log.i(
-                                TAG,
-                                "Auto-selecting nearest relay: " +
-                                    "${nearest.destinationHash.take(12)}... at ${nearest.hops} hops",
-                            )
-                            onPropagationNodeAnnounce(
-                                nearest.destinationHash,
-                                nearest.hops,
-                                nearest.publicKey,
-                            )
-
-                            // Record for loop detection - may transition to BACKING_OFF
-                            recordSelection(nearest.destinationHash, "auto-select")
-
-                            // Only transition to STABLE if loop detection didn't trigger BACKING_OFF
-                            if (_selectionState.value != RelaySelectionState.BACKING_OFF) {
-                                _selectionState.value = RelaySelectionState.STABLE
-                                Log.i(TAG, "Relay selection complete (state=STABLE), cooldown=${selectionCooldownMs}ms")
-
-                                // Start cooldown timer
-                                cooldownJob?.cancel() // Cancel any existing cooldown
-                                cooldownJob =
-                                    scope.launch {
-                                        delay(selectionCooldownMs)
-                                        if (_selectionState.value == RelaySelectionState.STABLE) {
-                                            _selectionState.value = RelaySelectionState.IDLE
-                                            Log.d(TAG, "Relay selection cooldown complete (state=IDLE)")
-                                        }
-                                    }
-                            } else {
-                                Log.w(TAG, "Relay selection triggered backoff - skipping STABLE transition")
-                            }
-                        } else {
-                            // No nearest found (shouldn't happen if list is non-empty, but safety)
-                            _selectionState.value = RelaySelectionState.IDLE
-                            Log.w(TAG, "Auto-select enabled but no nearest node found, returning to IDLE")
-                        }
-                    } else if (isAutoSelect && propagationNodes.isEmpty()) {
-                        Log.w(
-                            TAG,
-                            "Auto-select enabled but no valid propagation nodes available. " +
-                                "Nodes with deprecated announce format (stampCostFlexibility=NULL) are filtered out.",
-                        )
-                    }
-                }
-        }
-
-        /**
          * Convert hex string to ByteArray.
          */
         private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
@@ -1024,6 +698,9 @@ class PropagationNodeManager
          * Sync messages from the propagation node (periodic/automatic sync).
          * This requests any waiting messages from the configured propagation node.
          *
+         * If no relay is configured and auto-select is enabled, tries to select one first.
+         * This handles the fresh-install case where announces arrive after startup.
+         *
          * The actual completion is handled by observePropagationStateChanges() which
          * monitors LXMF propagation states.
          */
@@ -1036,8 +713,12 @@ class PropagationNodeManager
 
             val relay = currentRelay.value
             if (relay == null) {
-                Log.d(TAG, "No relay configured, skipping sync")
-                return
+                // Try auto-select if enabled (handles fresh install where announces arrived after startup)
+                val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+                if (isAutoSelect) {
+                    selectBestRelay()
+                }
+                return // next sync cycle will use the newly selected relay
             }
 
             // Don't start a new sync if one is already in progress

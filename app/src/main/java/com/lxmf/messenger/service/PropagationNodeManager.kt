@@ -363,8 +363,12 @@ class PropagationNodeManager
 
                 when (state.state) {
                     PropagationState.STATE_IDLE -> {
-                        // Only update to Idle if we're not in a sync cycle
-                        if (!_isSyncing.value) {
+                        if (_isSyncing.value) {
+                            // LXMF returned to IDLE during active sync — sync completed
+                            // (possibly with 0 messages, or COMPLETE was missed by heartbeat)
+                            Log.d(TAG, "IDLE observed while syncing — treating as completion")
+                            handleSyncComplete(state.messagesReceived)
+                        } else {
                             _syncProgress.value = SyncProgress.Idle
                         }
                     }

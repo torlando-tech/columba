@@ -211,11 +211,12 @@ class CallNotificationHelper
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("Incoming Voice Call")
                     .setContentText(displayName)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_CALL)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setOngoing(true)
                     .setAutoCancel(false)
+                    .setContentIntent(fullScreenPendingIntent)
                     .setFullScreenIntent(fullScreenPendingIntent, true)
                     .addAction(
                         android.R.drawable.ic_menu_close_clear_cancel,

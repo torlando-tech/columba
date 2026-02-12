@@ -539,6 +539,29 @@ class ServiceReticulumProtocol(
                     tech.torlando.lxst.core.CallCoordinator
                         .getInstance()
                         .onIncomingCall(callerHash)
+
+                    // Launch IncomingCallActivity directly from the UI process.
+                    // The fullScreenIntent on the notification only fires when the
+                    // device is locked. When unlocked, we must start the Activity
+                    // ourselves. This callback runs in the main app process, so
+                    // startActivity() is allowed here.
+                    try {
+                        val callScreenIntent =
+                            Intent(
+                                context,
+                                com.lxmf.messenger.IncomingCallActivity::class.java,
+                            ).apply {
+                                action = com.lxmf.messenger.notifications.CallNotificationHelper.ACTION_OPEN_CALL
+                                putExtra(
+                                    com.lxmf.messenger.notifications.CallNotificationHelper.EXTRA_IDENTITY_HASH,
+                                    callerHash,
+                                )
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                        context.startActivity(callScreenIntent)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "📞 Could not launch IncomingCallActivity: ${e.message}")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling incoming call callback", e)
                 }

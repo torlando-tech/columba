@@ -21,6 +21,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -28,6 +29,9 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.ui.screens.IncomingCallActivityScreen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -52,17 +56,22 @@ class IncomingCallActivity : ComponentActivity() {
 
     private val callCoordinator = CallCoordinator.getInstance()
     private var ringtone: Ringtone? = null
+    private var ringtoneLoopJob: Job? = null
     private var vibrator: Vibrator? = null
+
+    // Compose-observable state so UI updates when onNewIntent delivers a new call
+    private val currentIdentityHash = mutableStateOf<String?>(null)
+    private val currentCallerName = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val identityHash = intent?.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
-        val callerName = intent?.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NAME)
+        currentIdentityHash.value = intent?.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
+        currentCallerName.value = intent?.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NAME)
 
-        Log.i(TAG, "onCreate - identityHash=${identityHash?.take(16)}, callerName=$callerName")
+        Log.i(TAG, "onCreate - identityHash=${currentIdentityHash.value?.take(16)}, callerName=${currentCallerName.value}")
 
-        if (identityHash == null) {
+        if (currentIdentityHash.value == null) {
             Log.e(TAG, "No identity hash provided, finishing")
             finish()
             return
@@ -84,7 +93,7 @@ class IncomingCallActivity : ComponentActivity() {
                     when (state) {
                         is CallState.Active -> {
                             // Call was answered - open MainActivity with the active call
-                            navigateToActiveCall(identityHash)
+                            navigateToActiveCall(currentIdentityHash.value ?: return@collect)
                         }
                         is CallState.Ended,
                         is CallState.Rejected,
@@ -101,14 +110,15 @@ class IncomingCallActivity : ComponentActivity() {
         }
 
         setContent {
+            val hash = currentIdentityHash.value ?: return@setContent
             // Use a simple Material 3 theme (no Hilt-based theme needed)
             val darkTheme = isSystemInDarkTheme()
             MaterialTheme(
                 colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
             ) {
                 IncomingCallActivityScreen(
-                    identityHash = identityHash,
-                    callerName = callerName,
+                    identityHash = hash,
+                    callerName = currentCallerName.value,
                     onAnswer = { answerCall() },
                     onDecline = { declineCall() },
                 )
@@ -123,9 +133,17 @@ class IncomingCallActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.d(TAG, "onNewIntent: action=${intent.action}")
-        // If we get a new incoming call intent while already showing, just update
         setIntent(intent)
+        val newHash = intent.getStringExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH)
+        val newName = intent.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NAME)
+        Log.d(TAG, "onNewIntent: hash=${newHash?.take(16)}, name=$newName")
+        if (newHash != null) {
+            currentIdentityHash.value = newHash
+            currentCallerName.value = newName
+            // Restart ringtone/vibration for the new call
+            stopRingtoneAndVibration()
+            startRingtoneAndVibration()
+        }
     }
 
     /**
@@ -175,6 +193,16 @@ class IncomingCallActivity : ComponentActivity() {
                         .build()
                     play()
                 }
+                // On pre-P devices, isLooping is not available; manually restart
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && ringtone != null) {
+                    ringtoneLoopJob = lifecycleScope.launch {
+                        val rt = ringtone ?: return@launch
+                        while (isActive) {
+                            delay(1000)
+                            if (!rt.isPlaying) rt.play()
+                        }
+                    }
+                }
                 Log.d(TAG, "Ringtone started")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting ringtone", e)
@@ -213,6 +241,8 @@ class IncomingCallActivity : ComponentActivity() {
      * Stop ringtone and vibration.
      */
     private fun stopRingtoneAndVibration() {
+        ringtoneLoopJob?.cancel()
+        ringtoneLoopJob = null
         try {
             ringtone?.stop()
             ringtone = null

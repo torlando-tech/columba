@@ -106,8 +106,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         // Mock ContactRepository flow
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
 
-        // Mock TelemetryCollectorManager flows
+        // Mock TelemetryCollectorManager flows used during init
+        every { telemetryCollectorManager.isEnabled } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
 
         // Mock interfaceRepository flows
         every { interfaceRepository.enabledInterfaces } returns MutableStateFlow(emptyList<InterfaceConfig>())

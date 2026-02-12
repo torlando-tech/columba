@@ -196,6 +196,9 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        // Track group telemetry state before toggle-off so we can restore it on toggle-on
+        private var groupTelemetryWasEnabled = false
+
         // Track when we first noticed shared instance disconnected
         private var sharedInstanceDisconnectedTime: Long? = null
         private var sharedInstanceMonitorJob: Job? = null
@@ -1504,14 +1507,18 @@ class SettingsViewModel
          */
         fun setLocationSharingEnabled(enabled: Boolean) {
             viewModelScope.launch {
-                settingsRepository.saveLocationSharingEnabled(enabled)
-                Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
-
-                // When disabled, stop all active sharing sessions and group telemetry
                 if (!enabled) {
+                    // Save group telemetry state before disabling so we can restore on re-enable
+                    groupTelemetryWasEnabled = telemetryCollectorManager.isEnabled.value
                     stopAllSharing()
                     telemetryCollectorManager.setEnabled(false)
+                } else if (groupTelemetryWasEnabled) {
+                    // Restore group telemetry if it was enabled before the toggle was turned off
+                    telemetryCollectorManager.setEnabled(true)
+                    groupTelemetryWasEnabled = false
                 }
+                settingsRepository.saveLocationSharingEnabled(enabled)
+                Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

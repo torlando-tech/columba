@@ -25,8 +25,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.lxmf.messenger.notifications.CallNotificationHelper
-import com.lxmf.messenger.reticulum.call.bridge.CallBridge
-import com.lxmf.messenger.reticulum.call.bridge.CallState
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.ui.screens.IncomingCallActivityScreen
 import kotlinx.coroutines.launch
 
@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
  * - Turns screen on (turnScreenOn / FLAG_TURN_SCREEN_ON)
  * - Dismisses keyguard when answering
  * - Plays default ringtone and vibrates in a call pattern
- * - Directly uses CallBridge singleton (no Hilt dependency)
+ * - Directly uses CallCoordinator singleton (no Hilt dependency)
  * - Delegates to MainActivity for the active call screen after answering
  */
 class IncomingCallActivity : ComponentActivity() {
@@ -50,7 +50,7 @@ class IncomingCallActivity : ComponentActivity() {
         private const val TAG = "IncomingCallActivity"
     }
 
-    private val callBridge = CallBridge.getInstance()
+    private val callCoordinator = CallCoordinator.getInstance()
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
 
@@ -79,7 +79,7 @@ class IncomingCallActivity : ComponentActivity() {
         // Monitor call state to auto-finish when call ends or is answered
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                callBridge.callState.collect { state ->
+                callCoordinator.callState.collect { state ->
                     Log.d(TAG, "Call state changed: $state")
                     when (state) {
                         is CallState.Active -> {
@@ -230,12 +230,12 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     /**
-     * Answer the incoming call via CallBridge and navigate to MainActivity.
+     * Answer the incoming call via CallCoordinator and navigate to MainActivity.
      */
     private fun answerCall() {
         Log.i(TAG, "Answering call")
         stopRingtoneAndVibration()
-        // The CallBridge will handle the actual answer via Python IPC
+        // The CallCoordinator will handle the actual answer via Python IPC
         // For the service-based architecture, we need to go through the protocol
         val app = applicationContext as? ColumbaApplication
         if (app != null) {
@@ -244,13 +244,13 @@ class IncomingCallActivity : ComponentActivity() {
                     app.reticulumProtocol.answerCall()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error answering call via protocol", e)
-                    // Fallback: try CallBridge directly (works if in same process)
-                    callBridge.answerCall()
+                    // Fallback: try CallCoordinator directly (works if in same process)
+                    callCoordinator.answerCall()
                 }
             }
         } else {
             // Fallback
-            callBridge.answerCall()
+            callCoordinator.answerCall()
         }
     }
 
@@ -267,12 +267,12 @@ class IncomingCallActivity : ComponentActivity() {
                     app.reticulumProtocol.hangupCall()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error declining call via protocol", e)
-                    callBridge.declineCall()
+                    callCoordinator.declineCall()
                 }
                 finish()
             }
         } else {
-            callBridge.declineCall()
+            callCoordinator.declineCall()
             finish()
         }
     }

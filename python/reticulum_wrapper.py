@@ -4155,7 +4155,7 @@ class ReticulumWrapper:
                 self._check_propagation_state_change()
                 current = self.router.propagation_transfer_state
                 # Stop polling once sync reaches a terminal state
-                if current in (0, 7) or current >= 8:  # IDLE, COMPLETE, or any error state
+                if current in (0, 7) or current >= 0xf0:  # IDLE, COMPLETE, or error (NO_PATH/LINK_FAILED/TRANSFER_FAILED)
                     break
 
             return {

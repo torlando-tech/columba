@@ -324,13 +324,17 @@ class MigrationExporter
             val ownRatchetsDir = File(reticulumDir, "lxmf/ratchets")
             if (ownRatchetsDir.exists()) {
                 ownRatchetsDir.listFiles()?.filter { it.isFile }?.forEach { file ->
-                    refs.add(
-                        RatchetRef(
-                            type = "own",
-                            filename = file.name,
-                            data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
-                        ),
-                    )
+                    try {
+                        refs.add(
+                            RatchetRef(
+                                type = "own",
+                                filename = file.name,
+                                data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
+                            ),
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read own ratchet file: ${file.name}", e)
+                    }
                 }
             }
 
@@ -338,13 +342,17 @@ class MigrationExporter
             val peerRatchetsDir = File(reticulumDir, "storage/ratchets")
             if (peerRatchetsDir.exists()) {
                 peerRatchetsDir.listFiles()?.filter { it.isFile }?.forEach { file ->
-                    refs.add(
-                        RatchetRef(
-                            type = "peer",
-                            filename = file.name,
-                            data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
-                        ),
-                    )
+                    try {
+                        refs.add(
+                            RatchetRef(
+                                type = "peer",
+                                filename = file.name,
+                                data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
+                            ),
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read peer ratchet file: ${file.name}", e)
+                    }
                 }
             }
 

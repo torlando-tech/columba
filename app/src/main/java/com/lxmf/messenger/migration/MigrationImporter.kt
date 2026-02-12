@@ -142,7 +142,10 @@ class MigrationImporter
                     onProgress(0.86f)
 
                     if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri)
-                    onProgress(0.92f)
+                    onProgress(0.90f)
+
+                    importRatchets(bundle.ratchetFiles)
+                    onProgress(0.93f)
 
                     importSettings(bundle.settings, txResult.themeIdMap)
                     onProgress(0.95f)
@@ -659,6 +662,52 @@ class MigrationImporter
         }
 
         /**
+         * Import ratchet key files from the migration bundle.
+         * Restores forward secrecy keys so messages encrypted with ratchets
+         * can still be decrypted after migration.
+         */
+        private fun importRatchets(ratchetFiles: List<RatchetRef>): Int {
+            if (ratchetFiles.isEmpty()) return 0
+
+            val reticulumDir = File(context.filesDir, "reticulum")
+            val imported = ratchetFiles.count { importSingleRatchet(it, reticulumDir) }
+
+            Log.d(TAG, "Imported $imported ratchet files")
+            return imported
+        }
+
+        private fun importSingleRatchet(
+            ref: RatchetRef,
+            reticulumDir: File,
+        ): Boolean {
+            val subPath =
+                when (ref.type) {
+                    "own" -> "lxmf/ratchets"
+                    "peer" -> "storage/ratchets"
+                    else -> {
+                        Log.w(TAG, "Unknown ratchet type: ${ref.type}")
+                        return false
+                    }
+                }
+            val targetDir = File(reticulumDir, subPath).also { it.mkdirs() }
+
+            // Security: prevent path traversal
+            val destFile = File(targetDir, ref.filename)
+            if (!destFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator)) {
+                Log.w(TAG, "Skipping suspicious ratchet path: ${ref.filename}")
+                return false
+            }
+
+            return try {
+                destFile.writeBytes(Base64.decode(ref.data, Base64.NO_WRAP))
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to import ratchet ${ref.filename}", e)
+                false
+            }
+        }
+
+        /**
          * Import attachments from the ZIP file.
          */
         private fun importAttachments(uri: Uri): Int {
@@ -688,7 +737,7 @@ class MigrationImporter
                         val destFile = File(destDir, relativePath)
 
                         // Security: Prevent path traversal attacks (e.g., "../../../sensitive_file")
-                        if (!destFile.canonicalPath.startsWith(destDirCanonical)) {
+                        if (!destFile.canonicalPath.startsWith(destDirCanonical + File.separator)) {
                             Log.w(TAG, "Skipping suspicious path (path traversal attempt): ${entry.name}")
                             entry = zipIn.nextEntry
                             continue

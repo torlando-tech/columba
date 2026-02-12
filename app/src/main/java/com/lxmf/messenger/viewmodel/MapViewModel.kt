@@ -15,6 +15,7 @@ import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.model.SharingDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -85,6 +86,11 @@ data class MapState(
     val activeSessions: List<SharingSession> = emptyList(),
     val lastRefresh: Long = 0L,
     val mapStyleResult: MapStyleResult? = null,
+    val collectorAddress: String? = null,
+    val isTelemetrySendEnabled: Boolean = false,
+    val isTelemetryRequestEnabled: Boolean = false,
+    val isSendingTelemetry: Boolean = false,
+    val isRequestingTelemetry: Boolean = false,
 )
 
 /**
@@ -107,6 +113,7 @@ class MapViewModel
         private val announceDao: AnnounceDao,
         private val settingsRepository: SettingsRepository,
         private val mapTileSourceManager: MapTileSourceManager,
+        private val telemetryCollectorManager: TelemetryCollectorManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -341,6 +348,33 @@ class MapViewModel
                     }
                 }
             }
+
+            // Collect telemetry collector state for map FABs
+            viewModelScope.launch {
+                telemetryCollectorManager.collectorAddress.collect { address ->
+                    _state.update { it.copy(collectorAddress = address) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetrySendEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequestEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetryRequestEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isSending.collect { sending ->
+                    _state.update { it.copy(isSendingTelemetry = sending) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequesting.collect { requesting ->
+                    _state.update { it.copy(isRequestingTelemetry = requesting) }
+                }
+            }
         }
 
         /**
@@ -464,12 +498,37 @@ class MapViewModel
 
         /**
          * Stop sharing location.
+         * When stopping all (destinationHash == null), also disables group telemetry sending.
          *
          * @param destinationHash Specific contact to stop sharing with, or null to stop all
          */
         fun stopSharing(destinationHash: String? = null) {
             Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
             locationSharingManager.stopSharing(destinationHash)
+            // When stopping all sharing, also disable group telemetry sending
+            if (destinationHash == null && _state.value.isTelemetrySendEnabled) {
+                viewModelScope.launch {
+                    telemetryCollectorManager.setEnabled(false)
+                }
+            }
+        }
+
+        /**
+         * Manually send location telemetry to the configured collector.
+         */
+        fun sendTelemetryNow() {
+            viewModelScope.launch {
+                telemetryCollectorManager.sendTelemetryNow()
+            }
+        }
+
+        /**
+         * Manually request location telemetry from the configured collector.
+         */
+        fun requestTelemetryNow() {
+            viewModelScope.launch {
+                telemetryCollectorManager.requestTelemetryNow()
+            }
         }
 
         /**

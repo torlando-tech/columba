@@ -693,7 +693,7 @@ class MigrationImporter
 
             // Security: prevent path traversal
             val destFile = File(targetDir, ref.filename)
-            if (!destFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+            if (!destFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator)) {
                 Log.w(TAG, "Skipping suspicious ratchet path: ${ref.filename}")
                 return false
             }
@@ -737,7 +737,7 @@ class MigrationImporter
                         val destFile = File(destDir, relativePath)
 
                         // Security: Prevent path traversal attacks (e.g., "../../../sensitive_file")
-                        if (!destFile.canonicalPath.startsWith(destDirCanonical)) {
+                        if (!destFile.canonicalPath.startsWith(destDirCanonical + File.separator)) {
                             Log.w(TAG, "Skipping suspicious path (path traversal attempt): ${entry.name}")
                             entry = zipIn.nextEntry
                             continue

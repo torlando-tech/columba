@@ -4138,14 +4138,25 @@ class ReticulumWrapper:
                     f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
 
             # Reset last propagation state and progress to force callback on any change.
-            # This is critical: if heartbeat loop is in 1-second idle mode, we might miss
-            # fast state transitions. By resetting to None/0, we ensure the next state
-            # (including COMPLETE) will be detected as a change and trigger the callback.
-            self._last_propagation_state = None
+            # Use -1 sentinel (not a real LXMF state) instead of None so that the
+            # heartbeat fast-mode check (`_last_propagation_state is not None`) evaluates
+            # True, immediately switching from 1s to 100ms polling interval.
+            self._last_propagation_state = -1
             self._last_propagation_progress = 0.0
 
             # Request messages from the propagation node
             self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
+
+            # Catch fast completions that would otherwise be missed by the heartbeat loop.
+            # On fast transports with cached paths/links and no waiting messages, LXMF can
+            # complete the entire sync within milliseconds. Poll briefly to detect this.
+            for _ in range(20):  # 20 × 100ms = 2s max
+                time.sleep(0.1)
+                self._check_propagation_state_change()
+                current = self.router.propagation_transfer_state
+                # Stop polling once sync reaches a terminal state
+                if current in (0, 7) or current >= 8:  # IDLE, COMPLETE, or any error state
+                    break
 
             return {
                 "success": True,

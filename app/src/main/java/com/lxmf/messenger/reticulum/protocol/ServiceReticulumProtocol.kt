@@ -195,7 +195,7 @@ class ServiceReticulumProtocol(
     private val _propagationStateFlow =
         MutableSharedFlow<PropagationState>(
             replay = 1,
-            extraBufferCapacity = 1,
+            extraBufferCapacity = 5,
         )
     val propagationStateFlow: SharedFlow<PropagationState> = _propagationStateFlow.asSharedFlow()
 

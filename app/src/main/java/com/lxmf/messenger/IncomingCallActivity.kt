@@ -138,19 +138,54 @@ class IncomingCallActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
+            // NOTE: Do NOT call requestDismissKeyguard() here.
+            // It captures `this` Activity in a native IKeyguardDismissCallback that
+            // persists as a GC root, causing a memory leak after onDestroy().
+            // The keyguard is dismissed only when the user answers (see dismissKeyguardIfNeeded).
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
 
         // Keep screen on while incoming call is displayed
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /**
+     * Dismiss the keyguard when the user answers the call.
+     * Uses a weak reference to avoid the native IKeyguardDismissCallback
+     * leaking this Activity after onDestroy().
+     */
+    private fun dismissKeyguardIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                val activityRef = java.lang.ref.WeakReference(this)
+                keyguardManager.requestDismissKeyguard(
+                    this,
+                    object : KeyguardManager.KeyguardDismissCallback() {
+                        override fun onDismissSucceeded() {
+                            Log.d(TAG, "Keyguard dismissed")
+                            activityRef.clear()
+                        }
+                        override fun onDismissCancelled() {
+                            Log.d(TAG, "Keyguard dismiss cancelled")
+                            activityRef.clear()
+                        }
+                        override fun onDismissError() {
+                            Log.w(TAG, "Keyguard dismiss error")
+                            activityRef.clear()
+                        }
+                    },
+                )
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+        }
     }
 
     /**
@@ -235,6 +270,7 @@ class IncomingCallActivity : ComponentActivity() {
     private fun answerCall() {
         Log.i(TAG, "Answering call")
         stopRingtoneAndVibration()
+        dismissKeyguardIfNeeded()
         // The CallBridge will handle the actual answer via Python IPC
         // For the service-based architecture, we need to go through the protocol
         val app = applicationContext as? ColumbaApplication

@@ -98,6 +98,30 @@ class CallNotificationHelper
         }
 
         /**
+         * Check if the app has the "Display over other apps" (SYSTEM_ALERT_WINDOW) permission.
+         *
+         * This permission is required on Android 10+ to launch the incoming call screen
+         * when the app is closed and the phone is unlocked. Without it, only a heads-up
+         * notification is shown instead of the full incoming call screen.
+         *
+         * @return true if overlay permission is granted
+         */
+        fun canDrawOverlays(): Boolean {
+            return Settings.canDrawOverlays(context)
+        }
+
+        /**
+         * Get an Intent to open the system settings page where the user can grant
+         * the "Display over other apps" permission for this app.
+         */
+        fun getOverlayPermissionSettingsIntent(): Intent {
+            return Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:${context.packageName}"),
+            )
+        }
+
+        /**
          * Create notification channels for call notifications.
          */
         private fun createNotificationChannels() {

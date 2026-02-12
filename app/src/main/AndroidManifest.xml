@@ -63,6 +63,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Required to show incoming call screen over other apps when phone is unlocked -->
+    <!-- and app is closed (Android 10+ background activity launch restriction) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Companion Device Manager (Android 12+) for RNode association -->

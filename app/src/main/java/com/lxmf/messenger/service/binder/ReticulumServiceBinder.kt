@@ -1286,6 +1286,28 @@ class ReticulumServiceBinder(
                 // This wakes the device and shows UI even when app is in background
                 callNotificationHelper.showIncomingCallNotification(identityHash, callerName)
 
+                // Also launch IncomingCallActivity directly
+                // The fullScreenIntent only triggers when the device is locked.
+                // When unlocked, Android only shows a heads-up notification.
+                // Launching the Activity directly ensures the call screen always appears.
+                val callScreenIntent =
+                    android.content.Intent(
+                        context,
+                        com.lxmf.messenger.IncomingCallActivity::class.java,
+                    ).apply {
+                        action = CallNotificationHelper.ACTION_OPEN_CALL
+                        putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                        putExtra(CallNotificationHelper.EXTRA_CALLER_NAME, callerName ?: identityHash)
+                        flags =
+                            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                try {
+                    context.startActivity(callScreenIntent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "📞 Could not launch IncomingCallActivity directly: ${e.message}")
+                }
+
                 // Also broadcast to UI process
                 val callJson =
                     org.json

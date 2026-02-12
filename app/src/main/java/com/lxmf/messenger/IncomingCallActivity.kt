@@ -1,6 +1,5 @@
 package com.lxmf.messenger
 
-import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -13,7 +12,6 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -154,39 +152,6 @@ class IncomingCallActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    /**
-     * Dismiss the keyguard when the user answers the call.
-     * Uses a weak reference to avoid the native IKeyguardDismissCallback
-     * leaking this Activity after onDestroy().
-     */
-    private fun dismissKeyguardIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            if (keyguardManager.isKeyguardLocked) {
-                val activityRef = java.lang.ref.WeakReference(this)
-                keyguardManager.requestDismissKeyguard(
-                    this,
-                    object : KeyguardManager.KeyguardDismissCallback() {
-                        override fun onDismissSucceeded() {
-                            Log.d(TAG, "Keyguard dismissed")
-                            activityRef.clear()
-                        }
-                        override fun onDismissCancelled() {
-                            Log.d(TAG, "Keyguard dismiss cancelled")
-                            activityRef.clear()
-                        }
-                        override fun onDismissError() {
-                            Log.w(TAG, "Keyguard dismiss error")
-                            activityRef.clear()
-                        }
-                    },
-                )
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-        }
-    }
 
     /**
      * Start playing the default ringtone and vibrating in a phone-call pattern.
@@ -270,7 +235,6 @@ class IncomingCallActivity : ComponentActivity() {
     private fun answerCall() {
         Log.i(TAG, "Answering call")
         stopRingtoneAndVibration()
-        dismissKeyguardIfNeeded()
         // The CallBridge will handle the actual answer via Python IPC
         // For the service-based architecture, we need to go through the protocol
         val app = applicationContext as? ColumbaApplication

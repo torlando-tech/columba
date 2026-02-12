@@ -98,6 +98,8 @@ class MapViewModelTest {
         every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
         every { telemetryCollectorManager.collectorAddress } returns MutableStateFlow(null)
+        every { telemetryCollectorManager.isEnabled } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isRequestEnabled } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
     }

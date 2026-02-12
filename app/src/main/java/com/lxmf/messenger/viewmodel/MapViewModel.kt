@@ -87,6 +87,8 @@ data class MapState(
     val lastRefresh: Long = 0L,
     val mapStyleResult: MapStyleResult? = null,
     val collectorAddress: String? = null,
+    val isTelemetrySendEnabled: Boolean = false,
+    val isTelemetryRequestEnabled: Boolean = false,
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
 )
@@ -354,6 +356,16 @@ class MapViewModel
                 }
             }
             viewModelScope.launch {
+                telemetryCollectorManager.isEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetrySendEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequestEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetryRequestEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
                 telemetryCollectorManager.isSending.collect { sending ->
                     _state.update { it.copy(isSendingTelemetry = sending) }
                 }
@@ -486,12 +498,19 @@ class MapViewModel
 
         /**
          * Stop sharing location.
+         * When stopping all (destinationHash == null), also disables group telemetry sending.
          *
          * @param destinationHash Specific contact to stop sharing with, or null to stop all
          */
         fun stopSharing(destinationHash: String? = null) {
             Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
             locationSharingManager.stopSharing(destinationHash)
+            // When stopping all sharing, also disable group telemetry sending
+            if (destinationHash == null && _state.value.isTelemetrySendEnabled) {
+                viewModelScope.launch {
+                    telemetryCollectorManager.setEnabled(false)
+                }
+            }
         }
 
         /**

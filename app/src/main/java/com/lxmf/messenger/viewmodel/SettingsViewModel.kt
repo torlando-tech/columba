@@ -1458,9 +1458,15 @@ class SettingsViewModel
          * Called unconditionally to ensure settings persist across navigation.
          */
         private fun loadLocationSharingSettings() {
+            // Location sharing toggle reflects EITHER individual sharing OR group telemetry send
             viewModelScope.launch {
-                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
-                    _state.update { it.copy(locationSharingEnabled = enabled) }
+                combine(
+                    settingsRepository.locationSharingEnabledFlow,
+                    telemetryCollectorManager.isEnabled,
+                ) { individualEnabled, groupSendEnabled ->
+                    individualEnabled || groupSendEnabled
+                }.collect { combined ->
+                    _state.update { it.copy(locationSharingEnabled = combined) }
                 }
             }
             viewModelScope.launch {
@@ -1501,9 +1507,10 @@ class SettingsViewModel
                 settingsRepository.saveLocationSharingEnabled(enabled)
                 Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
 
-                // When disabled, stop all active sharing sessions
+                // When disabled, stop all active sharing sessions and group telemetry
                 if (!enabled) {
                     stopAllSharing()
+                    telemetryCollectorManager.setEnabled(false)
                 }
             }
         }

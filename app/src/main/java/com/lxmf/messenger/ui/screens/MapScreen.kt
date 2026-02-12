@@ -868,12 +868,14 @@ fun MapScreen(
             }
 
             // Bottom row: optional Send/Request Now + Share/Stop Location
+            // Group telemetry sending counts as "sharing" for the Stop button
+            val isAnySharingActive = state.isSharing || state.isTelemetrySendEnabled
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Send Now button (only when collector configured)
-                if (state.collectorAddress != null) {
+                // Send Now button (only when collector configured AND send enabled)
+                if (state.collectorAddress != null && state.isTelemetrySendEnabled) {
                     SmallFloatingActionButton(
                         onClick = {
                             if (!LocationPermissionManager.hasPermission(context)) {
@@ -897,8 +899,10 @@ fun MapScreen(
                             Icon(Icons.Default.Send, contentDescription = "Send Now")
                         }
                     }
+                }
 
-                    // Request Now button
+                // Request Now button (only when collector configured AND request enabled)
+                if (state.collectorAddress != null && state.isTelemetryRequestEnabled) {
                     SmallFloatingActionButton(
                         onClick = { viewModel.requestTelemetryNow() },
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -919,7 +923,7 @@ fun MapScreen(
                 // Share/Stop Location button
                 ExtendedFloatingActionButton(
                     onClick = {
-                        if (state.isSharing) {
+                        if (isAnySharingActive) {
                             viewModel.stopSharing()
                         } else {
                             showShareLocationSheet = true
@@ -927,19 +931,19 @@ fun MapScreen(
                     },
                     icon = {
                         Icon(
-                            if (state.isSharing) Icons.Default.Stop else Icons.Default.ShareLocation,
+                            if (isAnySharingActive) Icons.Default.Stop else Icons.Default.ShareLocation,
                             contentDescription = null,
                         )
                     },
-                    text = { Text(if (state.isSharing) "Stop Sharing" else "Share Location") },
+                    text = { Text(if (isAnySharingActive) "Stop Sharing" else "Share Location") },
                     containerColor =
-                        if (state.isSharing) {
+                        if (isAnySharingActive) {
                             MaterialTheme.colorScheme.errorContainer
                         } else {
                             MaterialTheme.colorScheme.primaryContainer
                         },
                     contentColor =
-                        if (state.isSharing) {
+                        if (isAnySharingActive) {
                             MaterialTheme.colorScheme.onErrorContainer
                         } else {
                             MaterialTheme.colorScheme.onPrimaryContainer

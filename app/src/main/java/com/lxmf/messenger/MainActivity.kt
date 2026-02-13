@@ -888,7 +888,7 @@ fun ColumbaNavigation(
     // second press within 2 seconds finishes the activity.
     val rootRoutes = screens.map { it.route }.toSet()
     val isOnRootScreen = currentRoute in rootRoutes
-    var backPressedOnce by remember { mutableStateOf(false) }
+    var backPressedOnce by remember(currentRoute) { mutableStateOf(false) }
 
     // Auto-reset the flag after 2 seconds
     LaunchedEffect(backPressedOnce) {

@@ -4,7 +4,7 @@ hyphenated icon name validation, location event buffering, and related fixes.
 
 Tests cover:
 - Accuracy clamping in pack_location_telemetry (unsigned short overflow)
-- Byte order in unpack_telemetry_stream appearance parsing (bg before fg)
+- Byte order in unpack_telemetry_stream appearance parsing (fg before bg)
 - Icon name validation allowing hyphens (MDI icon names)
 - FIELD_ICON_APPEARANCE extraction in _on_lxmf_delivery (location callback path)
 - FIELD_ICON_APPEARANCE byte order in _on_lxmf_delivery (message callback path)
@@ -186,28 +186,28 @@ class TestAccuracyClamping(unittest.TestCase):
 class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
     """Test that unpack_telemetry_stream parses appearance with correct byte order.
 
-    The appearance tuple is [icon_name, bg_bytes, fg_bytes].
-    bg_bytes is index [1] = background color, fg_bytes is index [2] = foreground color.
-    Previously these were swapped in the code.
+    The appearance tuple is [icon_name, fg_bytes, bg_bytes].
+    fg_bytes is index [1] = foreground color, bg_bytes is index [2] = background color.
+    This matches the Sideband/MeshChat wire format.
     """
 
-    def test_bg_is_first_color_fg_is_second(self):
-        """Appearance [icon_name, bg_bytes, fg_bytes] should map bg->bg, fg->fg."""
+    def test_fg_is_first_color_bg_is_second(self):
+        """Appearance [icon_name, fg_bytes, bg_bytes] should map fg->fg, bg->bg."""
         source_hash = bytes(16)
         timestamp = int(time.time())
         packed = _make_packed_telemetry()
 
-        green_bg = bytes([0, 255, 0])
         red_fg = bytes([255, 0, 0])
-        appearance = ["person", green_bg, red_fg]
+        green_bg = bytes([0, 255, 0])
+        appearance = ["person", red_fg, green_bg]
 
         stream = [[source_hash, timestamp, packed, appearance]]
         results = unpack_telemetry_stream(stream)
 
         self.assertEqual(len(results), 1)
         self.assertIn('appearance', results[0])
-        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")
         self.assertEqual(results[0]['appearance']['foreground_color'], "ff0000")
+        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")
 
     def test_appearance_name_preserved(self):
         """The icon name should be preserved in the unpacked appearance."""
@@ -215,13 +215,13 @@ class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
         timestamp = int(time.time())
         packed = _make_packed_telemetry()
 
-        appearance = ["sail-boat", bytes([0xAA, 0xBB, 0xCC]), bytes([0x11, 0x22, 0x33])]
+        appearance = ["sail-boat", bytes([0x11, 0x22, 0x33]), bytes([0xAA, 0xBB, 0xCC])]
         stream = [[source_hash, timestamp, packed, appearance]]
         results = unpack_telemetry_stream(stream)
 
         self.assertEqual(results[0]['appearance']['icon_name'], "sail-boat")
-        self.assertEqual(results[0]['appearance']['background_color'], "aabbcc")
         self.assertEqual(results[0]['appearance']['foreground_color'], "112233")
+        self.assertEqual(results[0]['appearance']['background_color'], "aabbcc")
 
     def test_appearance_absent_when_not_provided(self):
         """Entries without appearance should not have an appearance key."""
@@ -236,18 +236,18 @@ class TestTelemetryStreamAppearanceByteOrder(unittest.TestCase):
         self.assertNotIn('appearance', results[0])
 
     def test_specific_color_bytes_not_swapped(self):
-        """Verify distinct bg/fg bytes are not swapped in the output."""
+        """Verify distinct fg/bg bytes are not swapped in the output."""
         source_hash = bytes(16)
         timestamp = int(time.time())
         packed = _make_packed_telemetry()
 
-        # bg = white (ff ff ff), fg = black (00 00 00)
-        appearance = ["account", bytes([0xFF, 0xFF, 0xFF]), bytes([0x00, 0x00, 0x00])]
+        # fg = black (00 00 00), bg = white (ff ff ff)
+        appearance = ["account", bytes([0x00, 0x00, 0x00]), bytes([0xFF, 0xFF, 0xFF])]
         stream = [[source_hash, timestamp, packed, appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['background_color'], "ffffff")
         self.assertEqual(results[0]['appearance']['foreground_color'], "000000")
+        self.assertEqual(results[0]['appearance']['background_color'], "ffffff")
 
 
 class TestIconNameValidation(unittest.TestCase):
@@ -337,8 +337,8 @@ class TestOnLxmfDeliveryIconAppearanceLocationPath(unittest.TestCase):
     FIELD_ICON_APPEARANCE, the appearance should be extracted and included
     in the location_event JSON sent to the callback.
 
-    Byte order: appearance = [name, bg_bytes, fg_bytes]
-    -> JSON: background_color = bg_bytes.hex(), foreground_color = fg_bytes.hex()
+    Byte order: appearance = [name, fg_bytes, bg_bytes]
+    -> JSON: foreground_color = fg_bytes.hex(), background_color = bg_bytes.hex()
     """
 
     def setUp(self):
@@ -365,9 +365,9 @@ class TestOnLxmfDeliveryIconAppearanceLocationPath(unittest.TestCase):
         self.wrapper.kotlin_location_received_callback = lambda json_str: captured_events.append(json.loads(json_str))
 
         packed = _make_packed_telemetry(lat=37.7749, lon=-122.4194)
-        bg_bytes = bytes([0x00, 0xFF, 0x00])  # green
         fg_bytes = bytes([0xFF, 0x00, 0x00])  # red
-        icon_appearance = ["person", bg_bytes, fg_bytes]
+        bg_bytes = bytes([0x00, 0xFF, 0x00])  # green
+        icon_appearance = ["person", fg_bytes, bg_bytes]
 
         msg = _make_mock_lxmf_message(
             fields={
@@ -383,12 +383,12 @@ class TestOnLxmfDeliveryIconAppearanceLocationPath(unittest.TestCase):
         event = captured_events[0]
         self.assertIn('appearance', event)
         self.assertEqual(event['appearance']['icon_name'], "person")
-        # bg_bytes is [1] = background, fg_bytes is [2] = foreground
-        self.assertEqual(event['appearance']['background_color'], "00ff00")
+        # fg_bytes is [1] = foreground, bg_bytes is [2] = background
         self.assertEqual(event['appearance']['foreground_color'], "ff0000")
+        self.assertEqual(event['appearance']['background_color'], "00ff00")
 
     def test_location_event_appearance_byte_order(self):
-        """Verify that bg is [1] and fg is [2] in the appearance tuple."""
+        """Verify that fg is [1] and bg is [2] in the appearance tuple."""
         captured_events = []
         self.wrapper.kotlin_location_received_callback = lambda json_str: captured_events.append(json.loads(json_str))
 
@@ -408,8 +408,8 @@ class TestOnLxmfDeliveryIconAppearanceLocationPath(unittest.TestCase):
 
         self.assertEqual(len(captured_events), 1)
         event = captured_events[0]
-        self.assertEqual(event['appearance']['background_color'], "aabbcc")
-        self.assertEqual(event['appearance']['foreground_color'], "112233")
+        self.assertEqual(event['appearance']['foreground_color'], "aabbcc")
+        self.assertEqual(event['appearance']['background_color'], "112233")
 
     def test_location_event_without_appearance(self):
         """Location event without FIELD_ICON_APPEARANCE should not have appearance key."""
@@ -435,9 +435,9 @@ class TestOnLxmfDeliveryIconAppearanceMessagePath(unittest.TestCase):
     For regular messages (with text content), FIELD_ICON_APPEARANCE is parsed
     around line 3084 in the message callback path. This tests that parsing.
 
-    The format is [icon_name, bg_bytes, fg_bytes]:
-    -> background_color = bg_bytes[1].hex()
-    -> foreground_color = fg_bytes[2].hex()
+    The format is [icon_name, fg_bytes, bg_bytes]:
+    -> foreground_color = fg_bytes[1].hex()
+    -> background_color = bg_bytes[2].hex()
     """
 
     def setUp(self):
@@ -457,7 +457,7 @@ class TestOnLxmfDeliveryIconAppearanceMessagePath(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_message_path_icon_appearance_byte_order(self):
-        """Message callback path should parse bg as [1] and fg as [2]."""
+        """Message callback path should parse fg as [1] and bg as [2]."""
         # Capture the message event from the callback
         captured_events = []
         self.wrapper.kotlin_message_received_callback = lambda json_str: captured_events.append(json.loads(json_str))
@@ -474,8 +474,8 @@ class TestOnLxmfDeliveryIconAppearanceMessagePath(unittest.TestCase):
         self.assertEqual(len(captured_events), 1)
         event = captured_events[0]
         self.assertIn('icon_appearance', event)
-        self.assertEqual(event['icon_appearance']['background_color'], "aabbcc")
-        self.assertEqual(event['icon_appearance']['foreground_color'], "112233")
+        self.assertEqual(event['icon_appearance']['foreground_color'], "aabbcc")
+        self.assertEqual(event['icon_appearance']['background_color'], "112233")
         self.assertEqual(event['icon_appearance']['icon_name'], "test-icon")
 
 
@@ -685,7 +685,7 @@ class TestLocationDetectionWithoutCallback(unittest.TestCase):
 class TestSendLocationTelemetryIconAppearance(unittest.TestCase):
     """Test send_location_telemetry with icon appearance parameters.
 
-    The method should pack FIELD_ICON_APPEARANCE as [name, bg_bytes, fg_bytes]
+    The method should pack FIELD_ICON_APPEARANCE as [name, fg_bytes, bg_bytes]
     when icon params are provided.
     """
 
@@ -722,8 +722,8 @@ class TestSendLocationTelemetryIconAppearance(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         reticulum_wrapper.RETICULUM_AVAILABLE = False
 
-    def test_icon_appearance_packed_with_bg_first_fg_second(self):
-        """FIELD_ICON_APPEARANCE should be [name, bg_bytes, fg_bytes] (bg first)."""
+    def test_icon_appearance_packed_with_fg_first_bg_second(self):
+        """FIELD_ICON_APPEARANCE should be [name, fg_bytes, bg_bytes] (fg first)."""
         location_json = json.dumps({
             "lat": 37.7749, "lng": -122.4194, "acc": 10.0,
             "ts": 1703980800000,
@@ -742,9 +742,9 @@ class TestSendLocationTelemetryIconAppearance(unittest.TestCase):
         appearance = self.captured_fields[FIELD_ICON_APPEARANCE]
 
         self.assertEqual(appearance[0], "person")
-        # bg_bytes is [1], fg_bytes is [2]
-        self.assertEqual(appearance[1], bytes([0x00, 0xFF, 0x00]))  # bg = green
-        self.assertEqual(appearance[2], bytes([0xFF, 0x00, 0x00]))  # fg = red
+        # fg_bytes is [1], bg_bytes is [2]
+        self.assertEqual(appearance[1], bytes([0xFF, 0x00, 0x00]))  # fg = red
+        self.assertEqual(appearance[2], bytes([0x00, 0xFF, 0x00]))  # bg = green
 
     def test_no_icon_params_no_appearance_field(self):
         """When no icon params provided, FIELD_ICON_APPEARANCE should not be in fields."""
@@ -785,9 +785,9 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
     """Test poll_received_messages icon appearance parsing at line ~6055.
 
     When a received message has FIELD_ICON_APPEARANCE (field 4), it should
-    be parsed with byte order [icon_name, bg_rgb, fg_rgb]:
-    -> background_color = value[1].hex()
-    -> foreground_color = value[2].hex()
+    be parsed with byte order [icon_name, fg_rgb, bg_rgb]:
+    -> foreground_color = value[1].hex()
+    -> background_color = value[2].hex()
     """
 
     def setUp(self):
@@ -807,7 +807,7 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
         reticulum_wrapper.RETICULUM_AVAILABLE = False
 
     def test_poll_parses_icon_appearance_byte_order(self):
-        """poll_received_messages should parse bg as [1] and fg as [2] for field 4."""
+        """poll_received_messages should parse fg as [1] and bg as [2] for field 4."""
         icon_data = ["icon", bytes([0xAA, 0xBB, 0xCC]), bytes([0x11, 0x22, 0x33])]
 
         msg = _make_mock_lxmf_message(
@@ -824,8 +824,8 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
         result = results[0]
         self.assertIn('icon_appearance', result)
         self.assertEqual(result['icon_appearance']['icon_name'], "icon")
-        self.assertEqual(result['icon_appearance']['background_color'], "aabbcc")
-        self.assertEqual(result['icon_appearance']['foreground_color'], "112233")
+        self.assertEqual(result['icon_appearance']['foreground_color'], "aabbcc")
+        self.assertEqual(result['icon_appearance']['background_color'], "112233")
 
     def test_poll_icon_appearance_also_in_fields_dict(self):
         """poll_received_messages should also serialize icon appearance into fields['4']."""
@@ -846,8 +846,8 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
         self.assertIn('fields', result)
         self.assertIn('4', result['fields'])
         self.assertEqual(result['fields']['4']['icon_name'], "test-icon")
-        self.assertEqual(result['fields']['4']['background_color'], "112233")
-        self.assertEqual(result['fields']['4']['foreground_color'], "aabbcc")
+        self.assertEqual(result['fields']['4']['foreground_color'], "112233")
+        self.assertEqual(result['fields']['4']['background_color'], "aabbcc")
 
     def test_poll_without_icon_appearance(self):
         """poll_received_messages without field 4 should not have icon_appearance."""
@@ -868,15 +868,15 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
 class TestEndToEndByteOrder(unittest.TestCase):
     """End-to-end test verifying consistent byte order across send and receive paths.
 
-    The icon appearance format is always [name, bg_bytes, fg_bytes]:
-    - send_location_telemetry packs [name, bg_bytes, fg_bytes]
-    - _on_lxmf_delivery extracts [1]->background_color, [2]->foreground_color
-    - unpack_telemetry_stream extracts [1]->bg, [2]->fg
-    - poll_received_messages extracts [1]->background_color, [2]->foreground_color
+    The icon appearance format is always [name, fg_bytes, bg_bytes]:
+    - send_location_telemetry packs [name, fg_bytes, bg_bytes]
+    - _on_lxmf_delivery extracts [1]->foreground_color, [2]->background_color
+    - unpack_telemetry_stream extracts [1]->fg, [2]->bg
+    - poll_received_messages extracts [1]->foreground_color, [2]->background_color
     """
 
     def test_send_receive_byte_order_consistent(self):
-        """Sending bg=green, fg=red should receive bg=green, fg=red everywhere."""
+        """Sending fg=red, bg=green should receive fg=red, bg=green everywhere."""
         # Simulate what send_location_telemetry does
         icon_name = "person"
         fg_color_hex = "ff0000"  # red
@@ -884,12 +884,12 @@ class TestEndToEndByteOrder(unittest.TestCase):
         fg_bytes = bytes.fromhex(fg_color_hex)
         bg_bytes = bytes.fromhex(bg_color_hex)
 
-        # Production code packs as [name, bg_bytes, fg_bytes]
-        packed_appearance = [icon_name, bg_bytes, fg_bytes]
+        # Production code packs as [name, fg_bytes, bg_bytes]
+        packed_appearance = [icon_name, fg_bytes, bg_bytes]
 
-        # Verify the send side packs bg first, fg second
-        self.assertEqual(packed_appearance[1], bytes([0x00, 0xFF, 0x00]))  # bg = green
-        self.assertEqual(packed_appearance[2], bytes([0xFF, 0x00, 0x00]))  # fg = red
+        # Verify the send side packs fg first, bg second
+        self.assertEqual(packed_appearance[1], bytes([0xFF, 0x00, 0x00]))  # fg = red
+        self.assertEqual(packed_appearance[2], bytes([0x00, 0xFF, 0x00]))  # bg = green
 
         # Now test receive side via unpack_telemetry_stream
         source_hash = bytes(16)
@@ -898,14 +898,14 @@ class TestEndToEndByteOrder(unittest.TestCase):
         stream = [[source_hash, timestamp, telemetry, packed_appearance]]
         results = unpack_telemetry_stream(stream)
 
-        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")  # green
         self.assertEqual(results[0]['appearance']['foreground_color'], "ff0000")  # red
+        self.assertEqual(results[0]['appearance']['background_color'], "00ff00")  # green
 
     def test_stream_appearance_roundtrip_with_distinct_colors(self):
         """Test that completely distinct RGB values survive the roundtrip correctly."""
-        bg = bytes([0x12, 0x34, 0x56])
         fg = bytes([0x78, 0x9A, 0xBC])
-        appearance = ["car", bg, fg]
+        bg = bytes([0x12, 0x34, 0x56])
+        appearance = ["car", fg, bg]
 
         source_hash = bytes(16)
         timestamp = int(time.time())
@@ -914,8 +914,8 @@ class TestEndToEndByteOrder(unittest.TestCase):
         results = unpack_telemetry_stream(stream)
 
         self.assertEqual(results[0]['appearance']['icon_name'], "car")
-        self.assertEqual(results[0]['appearance']['background_color'], "123456")
         self.assertEqual(results[0]['appearance']['foreground_color'], "789abc")
+        self.assertEqual(results[0]['appearance']['background_color'], "123456")
 
 
 if __name__ == '__main__':

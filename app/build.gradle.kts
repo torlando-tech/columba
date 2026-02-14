@@ -121,8 +121,8 @@ android {
         }
 
         ndk {
-            // 64-bit ABIs supported by Python 3.11 + pycodec2 wheels
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // armeabi-v7a restored: pycodec2 removed in favor of LXST (Kotlin/C++)
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
 
@@ -257,7 +257,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "x86_64")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = true // Fallback APK containing all ABIs
         }
     }
@@ -297,7 +297,7 @@ android {
 // This keeps ABI variants close together (e.g. 801000, 801001, 801002) so they read as
 // the same release in Sentry and other tools. Safe because release builds always have
 // commitCount=0, leaving the ones place free for the ABI discriminator.
-val abiVersionCodes = mapOf("arm64-v8a" to 1, "x86_64" to 2)
+val abiVersionCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->

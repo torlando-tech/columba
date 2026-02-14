@@ -2158,16 +2158,8 @@ class ReticulumWrapper:
             app_data: Application-specific data included in the announce
             announce_packet_hash: Hash of the announce packet (optional, for future use)
         """
-        log_separator("ReticulumWrapper", "_announce_handler", "!", 60)
-        log_info("ReticulumWrapper", "_announce_handler", "🔔 _announce_handler CALLED! (CALLBACK PATH WORKING)")
-        log_info("ReticulumWrapper", "_announce_handler", f"Aspect: {aspect}")
-        log_info("ReticulumWrapper", "_announce_handler", f"Destination: {destination_hash.hex()[:16]}...")
-        log_separator("ReticulumWrapper", "_announce_handler", "!", 60)
         try:
-            log_debug("ReticulumWrapper", "_announce_handler", f"Announce received from: {destination_hash.hex()}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"Aspect: {aspect}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"Has identity: {announced_identity is not None}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"App data: {app_data}")
+            log_debug("ReticulumWrapper", "_announce_handler", f"Announce: {aspect} from {destination_hash.hex()[:16]}")
 
             # Get hop count
             hops = RNS.Transport.hops_to(destination_hash)

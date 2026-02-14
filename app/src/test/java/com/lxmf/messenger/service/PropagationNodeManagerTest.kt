@@ -142,6 +142,7 @@ class PropagationNodeManagerTest {
                 announceRepository = announceRepository,
                 reticulumProtocol = reticulumProtocol,
                 scope = testScope.backgroundScope,
+                defaultDispatcher = testDispatcher,
             )
     }
 
@@ -1007,6 +1008,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // Verify relay state starts as Loading
@@ -1056,6 +1058,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // When: Trigger sync with silent=true
@@ -1102,6 +1105,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             val mockSyncState =
@@ -2214,6 +2218,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // When: Start is called - exercises the nodeType logging code path
@@ -2252,6 +2257,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // When: Start is called - exercises the warning log code path
@@ -2287,6 +2293,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // When: Start is called (should not throw) - exercises exception handler
@@ -2333,6 +2340,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // Wait for StateFlow to emit
@@ -2385,6 +2393,7 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     reticulumProtocol = reticulumProtocol,
                     scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
                 )
 
             // Wait for StateFlow to emit

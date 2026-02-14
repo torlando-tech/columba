@@ -5,11 +5,13 @@ import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.di.ApplicationScope
+import com.lxmf.messenger.di.DefaultDispatcher
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -127,6 +130,7 @@ class PropagationNodeManager
         private val announceRepository: AnnounceRepository,
         private val reticulumProtocol: ReticulumProtocol,
         @ApplicationScope private val scope: CoroutineScope,
+        @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) {
         companion object {
             private const val TAG = "PropagationNodeManager"
@@ -786,8 +790,10 @@ class PropagationNodeManager
             // Wait for relay state to be loaded from database
             // This prevents race conditions where sync is triggered before DB query completes
             val state =
-                withTimeoutOrNull(10_000L) {
-                    currentRelayState.first { it is RelayLoadState.Loaded }
+                withContext(defaultDispatcher) {
+                    withTimeoutOrNull(10_000L) {
+                        currentRelayState.first { it is RelayLoadState.Loaded }
+                    }
                 }
             if (state == null) {
                 Log.w(TAG, "Timed out waiting for relay state to load from database")

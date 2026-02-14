@@ -66,7 +66,7 @@ sys.excepthook = _global_exception_handler
 FIELD_TELEMETRY = 0x02        # Standard telemetry field for Sideband interoperability
 FIELD_TELEMETRY_STREAM = 0x03 # Bulk telemetry stream from collector [[source_hash, timestamp, packed_telemetry, appearance], ...]
 FIELD_COLUMBA_META = 0x70     # Custom field for Columba-specific metadata (cease signals, etc.)
-FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, bg_bytes(3), fg_bytes(3)] for Sideband/MeshChat interoperability
+FIELD_ICON_APPEARANCE = 0x04  # Icon appearance [name, fg_bytes(3), bg_bytes(3)] for Sideband/MeshChat interoperability
 FIELD_FILE_ATTACHMENTS = 0x05 # LXMF standard field for file attachments
 FIELD_COMMANDS = 0x09         # LXMF standard field for commands (telemetry requests, etc.)
 FIELD_IMAGE = 0x06            # LXMF standard field for images
@@ -165,21 +165,21 @@ def appearance_from_marker_symbol(symbol_key: str) -> Optional[list]:
     """
     Build a Sideband-compatible appearance tuple from a marker symbol key.
 
-    Returns [icon_name, bg_bytes(3), fg_bytes(3)] or None if the symbol key
+    Returns [icon_name, fg_bytes(3), bg_bytes(3)] or None if the symbol key
     is not recognised.
 
     Args:
         symbol_key: The marker symbol key (e.g. "car", "rectangle")
 
     Returns:
-        Appearance list [icon_name, bg_rgb_bytes, fg_rgb_bytes] or None
+        Appearance list [icon_name, fg_rgb_bytes, bg_rgb_bytes] or None
     """
     mdi_name = MARKER_SYMBOL_REGISTRY.get(symbol_key)
     if mdi_name is None:
         return None
     bg = _color_from_symbol_key(symbol_key)
     fg = b"\xff\xff\xff"  # White foreground for readability
-    return [mdi_name, bg, fg]
+    return [mdi_name, fg, bg]
 
 
 # ============================================================================
@@ -317,7 +317,7 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
     The stream format from Sideband is:
     [[source_hash, timestamp, packed_telemetry, appearance], ...]
 
-    Where appearance is optional: [icon_name, bg_bytes(3), fg_bytes(3)]
+    Where appearance is optional: [icon_name, fg_bytes(3), bg_bytes(3)]
 
     Args:
         stream_data: List of telemetry stream entries
@@ -365,12 +365,12 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
             location_event['source_hash'] = source_hash_hex
 
             # Parse appearance if present
-            # Sideband format: [icon_name, background_rgb_bytes, foreground_rgb_bytes]
+            # Sideband format: [icon_name, foreground_rgb_bytes, background_rgb_bytes]
             if appearance and isinstance(appearance, list) and len(appearance) >= 3:
                 try:
                     icon_name = appearance[0]
-                    bg_bytes = appearance[1]
-                    fg_bytes = appearance[2]
+                    fg_bytes = appearance[1]
+                    bg_bytes = appearance[2]
 
                     # Validate icon name - alphanumeric, underscores, and hyphens only, max 50 chars
                     # MDI icon names use hyphens (e.g. "sail-boat", "access-point-network")
@@ -2822,8 +2822,8 @@ class ReticulumWrapper:
                             if isinstance(icon_data, list) and len(icon_data) >= 3:
                                 location_event['appearance'] = {
                                     'icon_name': icon_data[0],
-                                    'background_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
-                                    'foreground_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                                    'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                                    'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
                                 }
                         except Exception:
                             pass
@@ -3080,8 +3080,8 @@ class ReticulumWrapper:
                     if isinstance(icon_data, list) and len(icon_data) >= 3:
                         icon_appearance = {
                             'icon_name': icon_data[0],
-                            'background_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
-                            'foreground_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                            'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                            'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
                         }
                         log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                  f"Parsed icon appearance: {icon_appearance['icon_name']}")
@@ -3509,7 +3509,7 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, bg_bytes(3), fg_bytes(3)] - same as Sideband wire format
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
@@ -3517,8 +3517,8 @@ class ReticulumWrapper:
                 bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    bg_bytes,
-                    fg_bytes
+                    fg_bytes,
+                    bg_bytes
                 ]
                 log_info("ReticulumWrapper", "send_lxmf_message",
                         f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
@@ -3814,7 +3814,7 @@ class ReticulumWrapper:
                 try:
                     fg_bytes = bytes.fromhex(icon_fg_color)
                     bg_bytes = bytes.fromhex(icon_bg_color)
-                    fields[FIELD_ICON_APPEARANCE] = [icon_name, bg_bytes, fg_bytes]
+                    fields[FIELD_ICON_APPEARANCE] = [icon_name, fg_bytes, bg_bytes]
                     log_debug("ReticulumWrapper", "send_location_telemetry",
                               f"📎 Adding icon appearance: {icon_name}")
                 except (ValueError, TypeError) as e:
@@ -4450,7 +4450,7 @@ class ReticulumWrapper:
                         f"📎 Replying to message: {reply_to_message_id[:16]}...")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, bg_bytes(3), fg_bytes(3)] - same as Sideband wire format
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
@@ -4458,8 +4458,8 @@ class ReticulumWrapper:
                 bg_bytes = bytes.fromhex(icon_bg_color)
                 fields[FIELD_ICON_APPEARANCE] = [
                     icon_name,
-                    bg_bytes,
-                    fg_bytes
+                    fg_bytes,
+                    bg_bytes
                 ]
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
@@ -6060,12 +6060,12 @@ class ReticulumWrapper:
                                                  f"Field 16: app extensions with keys {list(value.keys())}")
 
                                 elif key == 4 and isinstance(value, list) and len(value) >= 3:
-                                    # Field 4 (FIELD_ICON_APPEARANCE): [icon_name, bg_rgb, fg_rgb]
+                                    # Field 4 (FIELD_ICON_APPEARANCE): [icon_name, fg_rgb, bg_rgb]
                                     try:
                                         icon_appearance = {
                                             'icon_name': value[0],
-                                            'background_color': value[1].hex() if isinstance(value[1], bytes) else value[1],
-                                            'foreground_color': value[2].hex() if isinstance(value[2], bytes) else value[2],
+                                            'foreground_color': value[1].hex() if isinstance(value[1], bytes) else value[1],
+                                            'background_color': value[2].hex() if isinstance(value[2], bytes) else value[2],
                                         }
                                         message_event['icon_appearance'] = icon_appearance
                                         fields_serialized['4'] = icon_appearance

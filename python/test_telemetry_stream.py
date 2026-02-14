@@ -250,11 +250,11 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
     def test_valid_appearance_parsed_correctly(self):
         """Valid appearance data should be parsed to Columba format.
 
-        Sideband format: [icon_name, bg_rgb_bytes, fg_rgb_bytes]
+        Sideband format: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
         """
         source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
         packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
-        appearance = ["person", bytes([0, 255, 0]), bytes([255, 0, 0])]  # green bg, red fg
+        appearance = ["person", bytes([255, 0, 0]), bytes([0, 255, 0])]  # red fg, green bg
 
         stream = [[source_hash, 1703980800, packed, appearance]]
         result = unpack_telemetry_stream(stream)
@@ -262,23 +262,23 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
         self.assertEqual(result[0]['appearance']['icon_name'], "person")
-        self.assertEqual(result[0]['appearance']['background_color'], "00ff00")
         self.assertEqual(result[0]['appearance']['foreground_color'], "ff0000")
+        self.assertEqual(result[0]['appearance']['background_color'], "00ff00")
 
     def test_appearance_with_different_colors(self):
         """Test appearance with various color values.
 
-        Sideband format: [icon_name, bg_rgb_bytes, fg_rgb_bytes]
+        Sideband format: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
         """
         source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
         packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
-        appearance = ["car", bytes([128, 128, 128]), bytes([0, 0, 255])]  # gray bg, blue fg
+        appearance = ["car", bytes([0, 0, 255]), bytes([128, 128, 128])]  # blue fg, gray bg
 
         stream = [[source_hash, 1703980800, packed, appearance]]
         result = unpack_telemetry_stream(stream)
 
-        self.assertEqual(result[0]['appearance']['background_color'], "808080")
         self.assertEqual(result[0]['appearance']['foreground_color'], "0000ff")
+        self.assertEqual(result[0]['appearance']['background_color'], "808080")
 
     def test_invalid_appearance_ignored(self):
         """Invalid appearance data should be ignored (not crash)."""
@@ -304,7 +304,7 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
     def test_appearance_with_non_bytes_colors_handles_gracefully(self):
         """Non-bytes color values should result in None colors.
 
-        Sideband format: [icon_name, bg_rgb_bytes, fg_rgb_bytes]
+        Sideband format: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
         """
         source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
         packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
@@ -357,8 +357,8 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
         """Valid icon names with alphanumeric, underscores, and hyphens should be accepted."""
         source_hash = bytes.fromhex("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
         packed = create_packed_telemetry(lat=37.7749, lon=-122.4194)
-        bg = bytes([0, 0, 255])
         fg = bytes([255, 0, 0])
+        bg = bytes([0, 0, 255])
 
         valid_names = [
             "icon",
@@ -372,7 +372,7 @@ class TestUnpackTelemetryStreamAppearance(unittest.TestCase):
         ]
 
         for name in valid_names:
-            appearance = [name, bg, fg]
+            appearance = [name, fg, bg]
             stream = [[source_hash, 1703980800, packed, appearance]]
             result = unpack_telemetry_stream(stream)
             self.assertEqual(len(result), 1)
@@ -489,12 +489,12 @@ class TestUnpackTelemetryStreamSidebandFormat(unittest.TestCase):
     def test_sideband_style_stream_entry(self):
         """Test unpacking a Sideband-style stream entry.
 
-        Sideband format: [icon_name, bg_rgb_bytes, fg_rgb_bytes]
+        Sideband format: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
         """
         source_hash = bytes.fromhex("deadbeefcafebabe1234567890abcdef")
         timestamp = 1703980800
         packed = create_packed_telemetry(lat=40.7128, lon=-74.0060, accuracy=10.0)
-        # Sideband appearance: [icon_name, bg_bytes, fg_bytes]
+        # Sideband appearance: [icon_name, fg_bytes, bg_bytes]
         appearance = ["runner", bytes([255, 128, 0]), bytes([0, 64, 128])]
 
         stream = [[source_hash, timestamp, packed, appearance]]
@@ -506,8 +506,8 @@ class TestUnpackTelemetryStreamSidebandFormat(unittest.TestCase):
         self.assertAlmostEqual(result[0]['lat'], 40.7128, places=6)
         self.assertAlmostEqual(result[0]['lng'], -74.0060, places=6)
         self.assertEqual(result[0]['appearance']['icon_name'], "runner")
-        self.assertEqual(result[0]['appearance']['background_color'], "ff8000")
-        self.assertEqual(result[0]['appearance']['foreground_color'], "004080")
+        self.assertEqual(result[0]['appearance']['foreground_color'], "ff8000")
+        self.assertEqual(result[0]['appearance']['background_color'], "004080")
 
     def test_multiple_peers_in_stream(self):
         """Test unpacking stream with multiple peers (real collector scenario)."""
@@ -635,17 +635,17 @@ class TestAppearanceFromMarkerSymbol(unittest.TestCase):
         result = appearance_from_marker_symbol("car")
         self.assertEqual(result[0], "car")  # MARKER_SYMBOL_REGISTRY["car"] == "car"
 
-    def test_known_symbol_has_bg_bytes(self):
-        """Second element should be 3-byte background colour."""
-        result = appearance_from_marker_symbol("rectangle")
-        self.assertIsInstance(result[1], bytes)
-        self.assertEqual(len(result[1]), 3)
-
     def test_known_symbol_has_fg_bytes(self):
-        """Third element should be 3-byte foreground (white)."""
+        """Second element should be 3-byte foreground (white)."""
         result = appearance_from_marker_symbol("person")
+        self.assertIsInstance(result[1], bytes)
+        self.assertEqual(result[1], b"\xff\xff\xff")
+
+    def test_known_symbol_has_bg_bytes(self):
+        """Third element should be 3-byte background colour."""
+        result = appearance_from_marker_symbol("rectangle")
         self.assertIsInstance(result[2], bytes)
-        self.assertEqual(result[2], b"\xff\xff\xff")
+        self.assertEqual(len(result[2]), 3)
 
     def test_unknown_symbol_returns_none(self):
         """Unknown symbol key should return None."""

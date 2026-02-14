@@ -60,7 +60,8 @@ class CodecSelectionDialogTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Choose a codec profile based on your connection speed")
+        composeTestRule
+            .onNodeWithText("Choose a codec profile based on your connection speed")
             .assertIsDisplayed()
     }
 
@@ -383,8 +384,8 @@ class CodecSelectionDialogTest {
         assertEquals(CodecProfile.QUALITY_MEDIUM, CodecProfile.fromCode(0x40))
         assertEquals(CodecProfile.QUALITY_HIGH, CodecProfile.fromCode(0x50))
         assertEquals(CodecProfile.QUALITY_MAX, CodecProfile.fromCode(0x60))
-        assertEquals(CodecProfile.LATENCY_LOW, CodecProfile.fromCode(0x70))
-        assertEquals(CodecProfile.LATENCY_ULTRA_LOW, CodecProfile.fromCode(0x80))
+        assertEquals(CodecProfile.LATENCY_LOW, CodecProfile.fromCode(0x80))
+        assertEquals(CodecProfile.LATENCY_ULTRA_LOW, CodecProfile.fromCode(0x70))
     }
 
     @Test

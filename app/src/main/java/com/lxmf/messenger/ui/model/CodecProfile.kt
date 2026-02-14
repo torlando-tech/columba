@@ -14,6 +14,7 @@ enum class CodecProfile(
     val code: Int,
     val displayName: String,
     val description: String,
+    val isExperimental: Boolean = false,
 ) {
     BANDWIDTH_ULTRA_LOW(
         code = 0x10,
@@ -49,11 +50,13 @@ enum class CodecProfile(
         code = 0x80,
         displayName = "Low Latency",
         description = "Opus - Reduced delay, 20ms frames",
+        isExperimental = true,
     ),
     LATENCY_ULTRA_LOW(
         code = 0x70,
         displayName = "Ultra Low Latency",
         description = "Opus - Minimized delay, 10ms frames",
+        isExperimental = true,
     ),
     ;
 

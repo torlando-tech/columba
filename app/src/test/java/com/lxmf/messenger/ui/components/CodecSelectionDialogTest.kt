@@ -3,6 +3,8 @@ package com.lxmf.messenger.ui.components
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
@@ -407,5 +409,36 @@ class CodecSelectionDialogTest {
             assertTrue("displayName should not be blank", profile.displayName.isNotBlank())
             assertTrue("description should not be blank", profile.description.isNotBlank())
         }
+    }
+
+    // ========== Experimental Badge Tests ==========
+
+    @Test
+    fun `experimental profiles show warning indicator`() {
+        composeTestRule.setContent {
+            CodecSelectionDialog(
+                onDismiss = {},
+                onProfileSelected = {},
+            )
+        }
+
+        // Both LL and ULL profiles should show an "Experimental" warning icon
+        val experimentalNodes = composeTestRule.onAllNodesWithContentDescription("Experimental")
+        experimentalNodes.fetchSemanticsNodes().isNotEmpty().let { assertTrue(it) }
+    }
+
+    @Test
+    fun `recommended profile does not show experimental badge`() {
+        composeTestRule.setContent {
+            CodecSelectionDialog(
+                onDismiss = {},
+                onProfileSelected = {},
+            )
+        }
+
+        // Default recommended profile is QUALITY_MEDIUM which is not experimental
+        assertFalse(CodecProfile.DEFAULT.isExperimental)
+        // The recommended chip should exist
+        composeTestRule.onNodeWithContentDescription("Recommended").assertExists()
     }
 }

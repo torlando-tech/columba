@@ -19,6 +19,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +57,7 @@ data class QualityOption<T>(
     val value: T,
     val displayName: String,
     val description: String,
+    val isExperimental: Boolean = false,
 )
 
 /**
@@ -143,6 +145,7 @@ fun <T> QualitySelectionDialog(
                                 description = option.description,
                                 isSelected = option.value == selectedValue,
                                 isRecommended = option.value == recommendedOption,
+                                isExperimental = option.isExperimental,
                                 transferTime = transferTimeEstimates?.get(option.value),
                                 onClick = { selectedValue = option.value },
                             )
@@ -231,6 +234,7 @@ fun QualityOptionRow(
     description: String,
     isSelected: Boolean,
     isRecommended: Boolean,
+    isExperimental: Boolean = false,
     transferTime: String? = null,
     onClick: () -> Unit,
 ) {
@@ -280,6 +284,11 @@ fun QualityOptionRow(
                         Spacer(modifier = Modifier.width(8.dp))
                         RecommendedChip()
                     }
+
+                    if (isExperimental && !isRecommended) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ExperimentalChip()
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -321,6 +330,19 @@ fun RecommendedChip() {
         contentDescription = "Recommended",
         modifier = Modifier.height(18.dp),
         tint = MaterialTheme.colorScheme.primary,
+    )
+}
+
+/**
+ * A warning icon indicating an experimental option that may not work well.
+ */
+@Composable
+fun ExperimentalChip() {
+    Icon(
+        imageVector = Icons.Filled.Warning,
+        contentDescription = "Experimental",
+        modifier = Modifier.height(18.dp),
+        tint = MaterialTheme.colorScheme.tertiary,
     )
 }
 
@@ -390,10 +412,9 @@ fun ScrollableOptionsContainer(
 /**
  * Format bitrate in bits per second to human-readable string.
  */
-fun formatBitrate(bps: Long): String {
-    return when {
+fun formatBitrate(bps: Long): String =
+    when {
         bps >= 1_000_000 -> String.format(Locale.US, "%.1f Mbps", bps / 1_000_000.0)
         bps >= 1_000 -> String.format(Locale.US, "%.1f kbps", bps / 1_000.0)
         else -> "$bps bps"
     }
-}

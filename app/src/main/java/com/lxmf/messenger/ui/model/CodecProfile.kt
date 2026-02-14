@@ -46,12 +46,12 @@ enum class CodecProfile(
         description = "Opus - Best audio, requires more bandwidth",
     ),
     LATENCY_LOW(
-        code = 0x70,
+        code = 0x80,
         displayName = "Low Latency",
         description = "Opus - Reduced delay, 20ms frames",
     ),
     LATENCY_ULTRA_LOW(
-        code = 0x80,
+        code = 0x70,
         displayName = "Ultra Low Latency",
         description = "Opus - Minimized delay, 10ms frames",
     ),

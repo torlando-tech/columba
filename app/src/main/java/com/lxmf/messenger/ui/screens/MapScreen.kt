@@ -515,6 +515,7 @@ fun MapScreen(
                         // 4. Fallback to 0,0 (world view)
                         val savedPos = state.lastCameraPosition
                         val defaultCenter = state.defaultRegionCenter
+                        val userLoc = state.userLocation
                         val initialLat: Double
                         val initialLng: Double
                         val initialZoom: Double
@@ -524,9 +525,9 @@ fun MapScreen(
                                 initialLng = savedPos.longitude
                                 initialZoom = savedPos.zoom
                             }
-                            state.userLocation != null -> {
-                                initialLat = state.userLocation.latitude
-                                initialLng = state.userLocation.longitude
+                            userLoc != null -> {
+                                initialLat = userLoc.latitude
+                                initialLng = userLoc.longitude
                                 initialZoom = 15.0
                             }
                             defaultCenter != null -> {
@@ -567,9 +568,10 @@ fun MapScreen(
                         // state updates during pan/zoom gestures.
                         map.addOnCameraIdleListener {
                             val pos = map.cameraPosition
+                            val target = pos.target ?: return@addOnCameraIdleListener
                             viewModel.saveCameraPosition(
-                                pos.target.latitude,
-                                pos.target.longitude,
+                                target.latitude,
+                                target.longitude,
                                 pos.zoom,
                             )
                         }

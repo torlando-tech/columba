@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions") // Room DAO — functions map 1:1 to queries
 @Dao
 interface OfflineMapRegionDao {
     /**

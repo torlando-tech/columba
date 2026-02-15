@@ -7,6 +7,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
@@ -100,8 +101,11 @@ class TelemetryCollectorManager
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        // Only initialize FusedLocationProviderClient when Google Play Services is available
+        // to avoid flooding the log with warnings on devices without GMS (issue #456)
+        private val useGms = LocationCompat.isPlayServicesAvailable(context)
+        private val fusedLocationClient: FusedLocationProviderClient? =
+            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
 
         companion object {
             private const val TAG = "TelemetryCollectorManager"
@@ -707,38 +711,51 @@ class TelemetryCollectorManager
 
         /**
          * Get the current device location.
+         * Uses FusedLocationProviderClient when GMS is available, otherwise falls back
+         * to Android's LocationManager (issue #456).
          */
         @Suppress("MissingPermission") // Permission checked at higher level
         private suspend fun getCurrentLocation(): Location? =
             suspendCancellableCoroutine { continuation ->
-                val cancellationTokenSource = CancellationTokenSource()
+                if (useGms) {
+                    val cancellationTokenSource = CancellationTokenSource()
 
-                continuation.invokeOnCancellation {
-                    cancellationTokenSource.cancel()
-                }
+                    continuation.invokeOnCancellation {
+                        cancellationTokenSource.cancel()
+                    }
 
-                // Check if already cancelled before making the request
-                if (continuation.isActive) {
-                    try {
-                        fusedLocationClient
-                            .getCurrentLocation(
-                                Priority.PRIORITY_HIGH_ACCURACY,
-                                cancellationTokenSource.token,
-                            ).addOnSuccessListener { location ->
-                                if (continuation.isActive) {
-                                    continuation.resume(location)
+                    // Check if already cancelled before making the request
+                    if (continuation.isActive) {
+                        try {
+                            fusedLocationClient!!
+                                .getCurrentLocation(
+                                    Priority.PRIORITY_HIGH_ACCURACY,
+                                    cancellationTokenSource.token,
+                                ).addOnSuccessListener { location ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(location)
+                                    }
+                                }.addOnFailureListener { exception ->
+                                    Log.e(TAG, "Failed to get location", exception)
+                                    if (continuation.isActive) {
+                                        continuation.resume(null)
+                                    }
                                 }
-                            }.addOnFailureListener { exception ->
-                                Log.e(TAG, "Failed to get location", exception)
-                                if (continuation.isActive) {
-                                    continuation.resume(null)
-                                }
+                        } catch (e: IllegalArgumentException) {
+                            // CancellationToken was already cancelled - this can happen in race conditions
+                            Log.w(TAG, "Location request cancelled before it could start", e)
+                            if (continuation.isActive) {
+                                continuation.resume(null)
                             }
-                    } catch (e: IllegalArgumentException) {
-                        // CancellationToken was already cancelled - this can happen in race conditions
-                        Log.w(TAG, "Location request cancelled before it could start", e)
-                        if (continuation.isActive) {
-                            continuation.resume(null)
+                        }
+                    }
+                } else {
+                    // Fallback to platform LocationManager
+                    if (continuation.isActive) {
+                        LocationCompat.getCurrentLocation(context) { location ->
+                            if (continuation.isActive) {
+                                continuation.resume(location)
+                            }
                         }
                     }
                 }

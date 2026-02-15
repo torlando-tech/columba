@@ -56,8 +56,12 @@ object MigrationCrypto {
         password: String,
     ): File {
         val plaintext = plaintextZip.readBytes()
-        val encrypted = encrypt(plaintext, password)
-        plaintextZip.writeBytes(encrypted)
+        try {
+            val encrypted = encrypt(plaintext, password)
+            plaintextZip.writeBytes(encrypted)
+        } finally {
+            plaintext.fill(0)
+        }
         return plaintextZip
     }
 

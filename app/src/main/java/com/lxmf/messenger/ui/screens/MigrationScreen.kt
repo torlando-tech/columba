@@ -1,7 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
 import android.Manifest
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -111,14 +110,23 @@ fun MigrationScreen(
             }
         }
 
+    // SAF file save launcher for data export
+    val exportSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ) { destinationUri: Uri? ->
+            destinationUri?.let {
+                viewModel.saveExportToFile(context.contentResolver, it)
+            }
+        }
+
     // Check if notification permission is needed (Android 13+ with notifications enabled in settings)
-    fun needsNotificationPermission(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    fun needsNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS,
             ) != PermissionChecker.PERMISSION_GRANTED
-    }
 
     // File picker for import
     val importLauncher =
@@ -134,13 +142,17 @@ fun MigrationScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is MigrationUiState.ExportComplete -> {
-                val shareIntent =
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_STREAM, state.fileUri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                context.startActivity(Intent.createChooser(shareIntent, "Export Data"))
+                val timestamp =
+                    SimpleDateFormat(
+                        "yyyy-MM-dd_HHmmss",
+                        Locale.US,
+                    ).format(Date())
+                exportSaveLauncher.launch("columba_export_$timestamp.columba")
+                viewModel.onExportSaveDialogLaunched()
+            }
+            is MigrationUiState.ExportSaved -> {
+                snackbarHostState.showSnackbar("Export saved successfully")
+                viewModel.resetState()
             }
             is MigrationUiState.ImportPreview -> {
                 pendingImportUri = state.fileUri
@@ -410,7 +422,7 @@ private fun ExportSection(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export complete! Share sheet opened.")
+                        Text("Export complete! Save dialog opened.")
                     }
                 }
                 else -> {}

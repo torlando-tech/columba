@@ -457,4 +457,110 @@ class MigrationViewModelTest {
         }
 
     // endregion
+
+    // region SAF Export Save Tests
+
+    @Test
+    fun `onExportSaveDialogLaunched sets state to Idle`() =
+        runTest {
+            val mockUri = mockk<Uri>()
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(mockUri)
+
+            // Get into ExportComplete state first
+            viewModel.exportData("testpass1")
+            advanceUntilIdle()
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is MigrationUiState.ExportComplete)
+            }
+
+            // When
+            viewModel.onExportSaveDialogLaunched()
+
+            // Then
+            viewModel.uiState.test {
+                assertEquals(MigrationUiState.Idle, awaitItem())
+            }
+        }
+
+    @Test
+    fun `saveExportToFile copies file and sets ExportSaved on success`() =
+        runTest {
+            val sourceUri = mockk<Uri>()
+            val destinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<android.content.ContentResolver>()
+            val sourceData = "export data".toByteArray()
+
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(sourceUri)
+
+            // Export first to populate _exportedFileUri
+            viewModel.exportData("testpass1")
+            advanceUntilIdle()
+
+            // Mock ContentResolver streams
+            every { mockContentResolver.openInputStream(sourceUri) } returns java.io.ByteArrayInputStream(sourceData)
+            every { mockContentResolver.openOutputStream(destinationUri) } returns java.io.ByteArrayOutputStream()
+
+            // When
+            viewModel.saveExportToFile(mockContentResolver, destinationUri)
+            // Wait for Dispatchers.IO work on real threads
+            advanceUntilIdle()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
+            advanceUntilIdle()
+
+            // Then
+            viewModel.uiState.test {
+                assertEquals(MigrationUiState.ExportSaved, awaitItem())
+            }
+        }
+
+    @Test
+    fun `saveExportToFile sets Error on failure`() =
+        runTest {
+            val sourceUri = mockk<Uri>()
+            val destinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<android.content.ContentResolver>()
+
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(sourceUri)
+
+            // Export first to populate _exportedFileUri
+            viewModel.exportData("testpass1")
+            advanceUntilIdle()
+
+            // Mock ContentResolver to fail
+            every { mockContentResolver.openInputStream(sourceUri) } returns null
+
+            // When
+            viewModel.saveExportToFile(mockContentResolver, destinationUri)
+            // Wait for Dispatchers.IO work on real threads
+            advanceUntilIdle()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
+            advanceUntilIdle()
+
+            // Then
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue("Expected Error but was $state", state is MigrationUiState.Error)
+            }
+        }
+
+    @Test
+    fun `saveExportToFile does nothing when no exported file URI`() =
+        runTest {
+            val destinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<android.content.ContentResolver>()
+
+            // Don't export first — _exportedFileUri is null
+
+            // When
+            viewModel.saveExportToFile(mockContentResolver, destinationUri)
+            advanceUntilIdle()
+
+            // Then — state should still be Idle
+            viewModel.uiState.test {
+                assertEquals(MigrationUiState.Idle, awaitItem())
+            }
+        }
+
+    // endregion
 }

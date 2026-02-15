@@ -207,6 +207,19 @@ class MessagingViewModel
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
 
+        // Recent photos for attachment panel
+        private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
+        val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
+
+        fun loadRecentPhotos(context: Context) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val photos =
+                    com.lxmf.messenger.util.MediaStoreUtils
+                        .getRecentPhotos(context)
+                _recentPhotos.value = photos
+            }
+        }
+
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
             combine(

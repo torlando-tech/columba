@@ -6,15 +6,10 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.ComponentActivity
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -51,7 +46,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -60,7 +54,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -72,7 +65,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Circle
@@ -161,6 +153,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
+import com.lxmf.messenger.ui.components.AttachmentPanel
 import com.lxmf.messenger.ui.components.CodecSelectionDialog
 import com.lxmf.messenger.ui.components.FileAttachmentCard
 import com.lxmf.messenger.ui.components.FileAttachmentOptionsSheet
@@ -177,6 +170,7 @@ import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -186,6 +180,7 @@ import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.ImageUtils
 import com.lxmf.messenger.util.LocationPermissionManager
+import com.lxmf.messenger.util.MediaPermissionManager
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.ContactToggleResult
@@ -459,11 +454,12 @@ fun MessagingScreen(
     // This ensures relative times like "Just now" update correctly after the app was paused
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshTimestamps()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshTimestamps()
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -596,6 +592,51 @@ fun MessagingScreen(
     // Track IME (keyboard) visibility
     val density = LocalDensity.current
     val imeBottomInset = WindowInsets.ime.getBottom(density)
+    val imeIsVisible = imeBottomInset > 0
+
+    // Attachment panel state machine
+    // NONE = no panel or keyboard padding; KEYBOARD = IME visible; PANEL = attachment panel shown
+    var inputPanelMode by remember { mutableStateOf(InputPanelMode.NONE) }
+    var lastKnownKeyboardHeightPx by remember { mutableStateOf(0) }
+
+    // Remember keyboard height whenever it's visible
+    if (imeIsVisible && imeBottomInset > lastKnownKeyboardHeightPx) {
+        lastKnownKeyboardHeightPx = imeBottomInset
+    }
+
+    // Track IME transitions to update panel mode
+    LaunchedEffect(imeIsVisible) {
+        if (imeIsVisible) {
+            inputPanelMode = InputPanelMode.KEYBOARD
+        } else if (inputPanelMode == InputPanelMode.KEYBOARD) {
+            // Keyboard dismissed without switching to panel — go to NONE
+            inputPanelMode = InputPanelMode.NONE
+        }
+    }
+
+    // Fallback panel height when keyboard was never opened (300dp ~ typical keyboard)
+    val fallbackPanelHeightPx = with(density) { 300.dp.roundToPx() }
+    val panelHeightPx = if (lastKnownKeyboardHeightPx > 0) lastKnownKeyboardHeightPx else fallbackPanelHeightPx
+    val panelHeightDp = with(density) { panelHeightPx.toDp() }
+
+    // Recent photos for attachment panel
+    val recentPhotos by viewModel.recentPhotos.collectAsStateWithLifecycle()
+
+    // Media permission launcher
+    val mediaPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            val granted = permissions.values.all { it }
+            if (granted) {
+                viewModel.loadRecentPhotos(context)
+            }
+        }
+
+    // Back handler: dismiss panel on back press
+    BackHandler(enabled = inputPanelMode == InputPanelMode.PANEL) {
+        inputPanelMode = InputPanelMode.NONE
+    }
 
     // Track if we've done the initial scroll for this conversation
     // Resets when switching to a different conversation
@@ -889,9 +930,7 @@ fun MessagingScreen(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        // Apply IME padding to container
-                        .imePadding(),
+                        .fillMaxWidth(),
             ) {
                 Box(
                     modifier =
@@ -904,9 +943,10 @@ fun MessagingScreen(
                     } else {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .simpleVerticalScrollbar(listState, reverseLayout = true),
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .simpleVerticalScrollbar(listState, reverseLayout = true),
                             contentPadding =
                                 PaddingValues(
                                     start = 16.dp,
@@ -1055,26 +1095,17 @@ fun MessagingScreen(
                 MessageInputBar(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding(),
-                    // Only navigation bar padding, IME is handled by parent
+                            .fillMaxWidth(),
                     messageText = messageText,
                     onMessageTextChange = { messageText = it },
                     selectedImageData = selectedImageData,
                     selectedImageIsAnimated = selectedImageIsAnimated,
-                    isProcessingImage = isProcessingImage,
-                    onImageAttachmentClick = {
-                        // Link is already established by ConversationLinkManager when entering conversation
-                        imageLauncher.launch("image/*")
-                    },
                     onImageContentReceived = { data, format, isAnimated ->
                         viewModel.selectImage(data, format, isAnimated)
                     },
                     onClearImage = { viewModel.clearSelectedImage() },
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
-                    isProcessingFile = isProcessingFile,
-                    onFileAttachmentClick = { filePickerLauncher.launch(arrayOf("*/*")) },
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
                     onSendClick = {
                         if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {
@@ -1083,7 +1114,57 @@ fun MessagingScreen(
                         }
                     },
                     isSending = isSending,
+                    onAttachmentPanelToggle = {
+                        if (inputPanelMode == InputPanelMode.PANEL) {
+                            inputPanelMode = InputPanelMode.NONE
+                        } else {
+                            inputPanelMode = InputPanelMode.PANEL
+                            keyboardController?.hide()
+                            if (MediaPermissionManager.hasPermission(context)) {
+                                viewModel.loadRecentPhotos(context)
+                            }
+                        }
+                    },
+                    isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
                 )
+
+                // Bottom space: attachment panel, keyboard spacer, or nothing
+                when (inputPanelMode) {
+                    InputPanelMode.PANEL -> {
+                        AttachmentPanel(
+                            panelHeight = panelHeightDp,
+                            recentPhotos = recentPhotos,
+                            hasMediaPermission = MediaPermissionManager.hasPermission(context),
+                            onRequestMediaPermission = {
+                                mediaPermissionLauncher.launch(
+                                    MediaPermissionManager.getRequiredPermissions().toTypedArray(),
+                                )
+                            },
+                            onPhotoSelected = { uri ->
+                                viewModel.processImageWithCompression(context, uri)
+                                inputPanelMode = InputPanelMode.NONE
+                            },
+                            onGalleryClick = {
+                                imageLauncher.launch("image/*")
+                                inputPanelMode = InputPanelMode.NONE
+                            },
+                            onFileClick = {
+                                filePickerLauncher.launch(arrayOf("*/*"))
+                                inputPanelMode = InputPanelMode.NONE
+                            },
+                            modifier = Modifier.navigationBarsPadding(),
+                        )
+                    }
+                    InputPanelMode.KEYBOARD -> {
+                        // Manual IME spacer replaces .imePadding()
+                        val imeHeightDp = with(density) { imeBottomInset.toDp() }
+                        Spacer(modifier = Modifier.height(imeHeightDp))
+                    }
+                    InputPanelMode.NONE -> {
+                        // Nav bar padding only when nothing else is showing
+                        Spacer(modifier = Modifier.navigationBarsPadding())
+                    }
+                }
             }
         }
 
@@ -1890,17 +1971,15 @@ fun MessageInputBar(
     onMessageTextChange: (String) -> Unit,
     selectedImageData: ByteArray? = null,
     selectedImageIsAnimated: Boolean = false,
-    isProcessingImage: Boolean = false,
-    onImageAttachmentClick: () -> Unit = {},
     onImageContentReceived: (ByteArray, String, Boolean) -> Unit = { _, _, _ -> },
     onClearImage: () -> Unit = {},
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
-    isProcessingFile: Boolean = false,
-    onFileAttachmentClick: () -> Unit = {},
     onRemoveFileAttachment: (Int) -> Unit = {},
     onSendClick: () -> Unit,
     isSending: Boolean = false,
+    onAttachmentPanelToggle: () -> Unit = {},
+    isAttachmentPanelActive: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2021,14 +2100,6 @@ fun MessageInputBar(
                 )
             }
 
-            var showAttachmentMenu by remember { mutableStateOf(false) }
-            val hasText = messageText.isNotEmpty()
-
-            // Dismiss dropdown if text state changes (e.g. user clears input while menu is open)
-            LaunchedEffect(hasText) {
-                showAttachmentMenu = false
-            }
-
             Row(
                 modifier =
                     Modifier
@@ -2118,112 +2189,19 @@ fun MessageInputBar(
                     )
                 }
 
-                // Attachment buttons - collapse when typing to give text field more space
-                AnimatedVisibility(
-                    visible = !hasText,
-                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
-                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start),
+                // Attachment panel toggle button - always visible
+                IconButton(
+                    onClick = onAttachmentPanelToggle,
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .padding(0.dp),
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // Image attachment button
-                        IconButton(
-                            onClick = onImageAttachmentClick,
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .padding(0.dp),
-                            enabled = !isProcessingImage,
-                        ) {
-                            if (isProcessingImage) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Image,
-                                    contentDescription = "Attach image",
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            }
-                        }
-
-                        // File attachment button
-                        IconButton(
-                            onClick = onFileAttachmentClick,
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .padding(0.dp),
-                            enabled = !isProcessingFile,
-                        ) {
-                            if (isProcessingFile) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.AttachFile,
-                                    contentDescription = "Attach file",
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Compact attachment button - appears when typing
-                AnimatedVisibility(
-                    visible = hasText,
-                    enter = fadeIn() + expandHorizontally(),
-                    exit = fadeOut() + shrinkHorizontally(),
-                ) {
-                    Box {
-                        IconButton(
-                            onClick = { showAttachmentMenu = true },
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .padding(0.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Attach",
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showAttachmentMenu,
-                            onDismissRequest = { showAttachmentMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Image") },
-                                onClick = {
-                                    showAttachmentMenu = false
-                                    onImageAttachmentClick()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Image, contentDescription = null)
-                                },
-                                enabled = !isProcessingImage,
-                            )
-                            DropdownMenuItem(
-                                text = { Text("File") },
-                                onClick = {
-                                    showAttachmentMenu = false
-                                    onFileAttachmentClick()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.AttachFile, contentDescription = null)
-                                },
-                                enabled = !isProcessingFile,
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = if (isAttachmentPanelActive) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = if (isAttachmentPanelActive) "Close attachments" else "Attach",
+                        modifier = Modifier.size(24.dp),
+                    )
                 }
 
                 FilledIconButton(
@@ -2286,6 +2264,8 @@ fun EmptyMessagesState() {
         }
     }
 }
+
+private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
 
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()

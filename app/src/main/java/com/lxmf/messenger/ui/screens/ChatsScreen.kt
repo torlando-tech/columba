@@ -75,6 +75,7 @@ import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import java.text.SimpleDateFormat
@@ -96,6 +97,7 @@ fun ChatsScreen(
 
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
 
     val listState = rememberLazyListState()
 
@@ -200,6 +202,7 @@ fun ChatsScreen(
                         var showMenu by remember { mutableStateOf(false) }
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
                         val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
+                        val pendingSharedImages by sharedImageViewModel.sharedImages.collectAsStateWithLifecycle()
 
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -209,6 +212,9 @@ fun ChatsScreen(
                                 onClick = {
                                     if (pendingSharedText != null) {
                                         sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    }
+                                    if (pendingSharedImages != null) {
+                                        sharedImageViewModel.assignToDestination(conversation.peerHash)
                                     }
                                     onChatClick(conversation.peerHash, conversation.displayName)
                                 },

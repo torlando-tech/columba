@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -56,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -88,6 +91,8 @@ fun MigrationScreen(
 
     var showImportConfirmDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingImportPassword by remember { mutableStateOf<String?>(null) }
+    var showExportPasswordDialog by remember { mutableStateOf(false) }
     var showNotificationPermissionDialog by remember { mutableStateOf(false) }
     var pendingImportComplete by remember { mutableStateOf(false) }
 
@@ -139,7 +144,11 @@ fun MigrationScreen(
             }
             is MigrationUiState.ImportPreview -> {
                 pendingImportUri = state.fileUri
+                pendingImportPassword = state.password
                 showImportConfirmDialog = true
+            }
+            is MigrationUiState.PasswordRequired, is MigrationUiState.WrongPassword -> {
+                // Handled by dialogs below
             }
             is MigrationUiState.ImportComplete -> {
                 snackbarHostState.showSnackbar(
@@ -186,7 +195,7 @@ fun MigrationScreen(
                 exportProgress = exportProgress,
                 includeAttachments = includeAttachments,
                 onIncludeAttachmentsChange = { viewModel.setIncludeAttachments(it) },
-                onExport = { viewModel.exportData() },
+                onExport = { showExportPasswordDialog = true },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -212,6 +221,49 @@ fun MigrationScreen(
         }
     }
 
+    // Export Password Dialog
+    if (showExportPasswordDialog) {
+        PasswordDialog(
+            title = "Encrypt Export",
+            description = "Choose a password to protect your export file. " +
+                "You will need this password to import the data on another device.",
+            isConfirmMode = true,
+            isWrongPassword = false,
+            onConfirm = { password ->
+                showExportPasswordDialog = false
+                viewModel.exportData(password)
+            },
+            onDismiss = {
+                showExportPasswordDialog = false
+            },
+        )
+    }
+
+    // Import Password Dialog (encrypted file detected)
+    val currentState = uiState
+    if (currentState is MigrationUiState.PasswordRequired || currentState is MigrationUiState.WrongPassword) {
+        val fileUri = when (currentState) {
+            is MigrationUiState.PasswordRequired -> currentState.fileUri
+            is MigrationUiState.WrongPassword -> currentState.fileUri
+            else -> null
+        }
+        if (fileUri != null) {
+            PasswordDialog(
+                title = "Encrypted Backup",
+                description = "This backup file is encrypted. " +
+                    "Enter the password that was used during export.",
+                isConfirmMode = false,
+                isWrongPassword = currentState is MigrationUiState.WrongPassword,
+                onConfirm = { password ->
+                    viewModel.previewImport(fileUri, password)
+                },
+                onDismiss = {
+                    viewModel.resetState()
+                },
+            )
+        }
+    }
+
     // Import Confirmation Dialog
     if (showImportConfirmDialog && uiState is MigrationUiState.ImportPreview) {
         val preview = (uiState as MigrationUiState.ImportPreview).preview
@@ -219,7 +271,7 @@ fun MigrationScreen(
             preview = preview,
             onConfirm = {
                 showImportConfirmDialog = false
-                pendingImportUri?.let { viewModel.importData(it) }
+                pendingImportUri?.let { viewModel.importData(it, pendingImportPassword) }
             },
             onDismiss = {
                 showImportConfirmDialog = false
@@ -728,6 +780,123 @@ private fun NotificationPermissionDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Not Now")
+            }
+        },
+    )
+}
+
+/**
+ * Dialog for entering (or creating + confirming) a password for export encryption / import decryption.
+ *
+ * @param title Dialog title
+ * @param description Explanatory text shown below the title
+ * @param isConfirmMode If true, shows a second "confirm password" field (used during export)
+ * @param isWrongPassword If true, shows an error message (used during import retry)
+ * @param onConfirm Called with the validated password
+ * @param onDismiss Called when the dialog is cancelled
+ */
+@Composable
+internal fun PasswordDialog(
+    title: String,
+    description: String,
+    isConfirmMode: Boolean,
+    isWrongPassword: Boolean,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(if (isWrongPassword) "Incorrect password" else null) }
+
+    val minLength = com.lxmf.messenger.migration.MigrationCrypto.MIN_PASSWORD_LENGTH
+
+    fun validate(): Boolean {
+        if (password.length < minLength) {
+            errorMessage = "Password must be at least $minLength characters"
+            return false
+        }
+        if (isConfirmMode && password != confirmPassword) {
+            errorMessage = "Passwords do not match"
+            return false
+        }
+        errorMessage = null
+        return true
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        errorMessage = null
+                    },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation =
+                        if (passwordVisible) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        TextButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Text(if (passwordVisible) "Hide" else "Show")
+                        }
+                    },
+                    isError = errorMessage != null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                if (isConfirmMode) {
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = {
+                            confirmPassword = it
+                            errorMessage = null
+                        },
+                        label = { Text("Confirm password") },
+                        singleLine = true,
+                        visualTransformation =
+                            if (passwordVisible) VisualTransformation.None
+                            else PasswordVisualTransformation(),
+                        isError = errorMessage != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                if (errorMessage != null) {
+                    Text(
+                        errorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (validate()) {
+                        onConfirm(password)
+                    }
+                },
+                enabled = password.isNotEmpty(),
+            ) {
+                Text(if (isConfirmMode) "Export" else "Unlock")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         },
     )

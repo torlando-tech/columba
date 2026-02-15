@@ -6,10 +6,10 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -55,7 +55,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -171,6 +170,7 @@ import com.lxmf.messenger.ui.components.ReplyPreviewBubble
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SwipeableMessageBubble
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -212,45 +212,52 @@ private fun LinkifiedMessageText(
         }
     val linkColor = MaterialTheme.colorScheme.primary
 
-    val annotatedText =
-        remember(text, linkColor) {
-            val matches = Patterns.WEB_URL.matcher(text)
-            buildAnnotatedString {
-                var currentIndex = 0
-                while (matches.find()) {
-                    val start = matches.start()
-                    val end = matches.end()
-                    if (start > currentIndex) {
-                        append(text.substring(currentIndex, start))
+    var annotatedText by remember(text, linkColor) {
+        mutableStateOf(buildAnnotatedString { append(text) })
+    }
+
+    LaunchedEffect(text, linkColor) {
+        val result =
+            withContext(Dispatchers.Default) {
+                val matches = Patterns.WEB_URL.matcher(text)
+                buildAnnotatedString {
+                    var currentIndex = 0
+                    while (matches.find()) {
+                        val start = matches.start()
+                        val end = matches.end()
+                        if (start > currentIndex) {
+                            append(text.substring(currentIndex, start))
+                        }
+
+                        val urlText = text.substring(start, end)
+                        val linkStart = length
+                        append(urlText)
+                        val linkEnd = length
+                        addStyle(
+                            style =
+                                SpanStyle(
+                                    color = linkColor,
+                                    textDecoration = TextDecoration.Underline,
+                                ),
+                            start = linkStart,
+                            end = linkEnd,
+                        )
+                        addStringAnnotation(
+                            tag = URL_ANNOTATION_TAG,
+                            annotation = urlText,
+                            start = linkStart,
+                            end = linkEnd,
+                        )
+                        currentIndex = end
                     }
 
-                    val urlText = text.substring(start, end)
-                    val linkStart = length
-                    append(urlText)
-                    val linkEnd = length
-                    addStyle(
-                        style =
-                            SpanStyle(
-                                color = linkColor,
-                                textDecoration = TextDecoration.Underline,
-                            ),
-                        start = linkStart,
-                        end = linkEnd,
-                    )
-                    addStringAnnotation(
-                        tag = URL_ANNOTATION_TAG,
-                        annotation = urlText,
-                        start = linkStart,
-                        end = linkEnd,
-                    )
-                    currentIndex = end
-                }
-
-                if (currentIndex < text.length) {
-                    append(text.substring(currentIndex))
+                    if (currentIndex < text.length) {
+                        append(text.substring(currentIndex))
+                    }
                 }
             }
-        }
+        annotatedText = result
+    }
 
     var layoutResult: TextLayoutResult? by remember { mutableStateOf(null) }
 
@@ -453,11 +460,12 @@ fun MessagingScreen(
     // This ensures relative times like "Just now" update correctly after the app was paused
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshTimestamps()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshTimestamps()
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -898,9 +906,10 @@ fun MessagingScreen(
                     } else {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .simpleVerticalScrollbar(listState, reverseLayout = true),
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .simpleVerticalScrollbar(listState, reverseLayout = true),
                             contentPadding =
                                 PaddingValues(
                                     start = 16.dp,

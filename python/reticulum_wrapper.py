@@ -1767,9 +1767,16 @@ class ReticulumWrapper:
 
             # Deploy TorClientInterface to RNS external interfaces directory
             # so RNS can load it when config has type = TorClientInterface
+            has_socks = any(
+                iface.get("socks_proxy_enabled", False)
+                for iface in enabled_interfaces
+            )
             try:
                 self._deploy_tor_interface()
             except Exception as tor_err:
+                if has_socks:
+                    return {"success": False,
+                            "error": f"Failed to deploy Tor interface module: {tor_err}"}
                 log_warning("ReticulumWrapper", "initialize",
                            f"Failed to deploy TorClientInterface: {tor_err}")
 

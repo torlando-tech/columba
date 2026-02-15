@@ -10,6 +10,7 @@ import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
+import com.lxmf.messenger.migration.PreviewWithData
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -220,7 +221,11 @@ class MigrationViewModelTest {
         runTest {
             val mockUri = mockk<Uri>()
             coEvery { migrationImporter.isEncryptedExport(mockUri) } returns Result.success(false)
-            coEvery { migrationImporter.previewMigration(mockUri, any()) } returns Result.success(testImportPreview)
+            coEvery { migrationImporter.previewMigration(mockUri, any()) } returns
+                Result.success(
+                    com.lxmf.messenger.migration
+                        .PreviewWithData(testImportPreview, ByteArray(0)),
+                )
 
             viewModel.previewImport(mockUri)
             advanceUntilIdle()
@@ -260,7 +265,7 @@ class MigrationViewModelTest {
     fun `importData sets state to Importing then RestartingService then ImportComplete on success`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationImporter.importData(mockUri, any(), any()) } returns testImportResult
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } returns testImportResult
 
             viewModel.importData(mockUri)
 
@@ -292,7 +297,7 @@ class MigrationViewModelTest {
         runTest {
             val mockUri = mockk<Uri>()
             val errorResult = ImportResult.Error("Database error during import")
-            coEvery { migrationImporter.importData(mockUri, any(), any()) } returns errorResult
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } returns errorResult
 
             viewModel.importData(mockUri)
             advanceUntilIdle()
@@ -308,8 +313,9 @@ class MigrationViewModelTest {
     fun `importData updates progress during import`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationImporter.importData(mockUri, any(), any()) } coAnswers {
-                val progressCallback = thirdArg<(Float) -> Unit>()
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } coAnswers {
+                @Suppress("UNCHECKED_CAST")
+                val progressCallback = args[3] as (Float) -> Unit
                 progressCallback(0.1f)
                 progressCallback(0.5f)
                 progressCallback(1.0f)

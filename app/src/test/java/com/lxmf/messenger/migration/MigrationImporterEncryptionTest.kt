@@ -3,11 +3,6 @@ package com.lxmf.messenger.migration
 import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
-import com.lxmf.messenger.data.database.InterfaceDatabase
-import com.lxmf.messenger.data.db.ColumbaDatabase
-import com.lxmf.messenger.repository.SettingsRepository
-import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -33,24 +28,26 @@ class MigrationImporterEncryptionTest {
     private lateinit var context: Context
     private lateinit var importer: MigrationImporter
 
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-    }
+    private val json =
+        Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+        }
 
     private val testPassword = "test-password-12345"
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        importer = MigrationImporter(
-            context = context,
-            database = mockk(),
-            interfaceDatabase = mockk(),
-            reticulumProtocol = mockk(),
-            settingsRepository = mockk(),
-            propagationNodeManager = mockk(),
-        )
+        importer =
+            MigrationImporter(
+                context = context,
+                database = mockk(),
+                interfaceDatabase = mockk(),
+                reticulumProtocol = mockk(),
+                settingsRepository = mockk(),
+                propagationNodeManager = mockk(),
+            )
     }
 
     // region Helper methods
@@ -59,23 +56,25 @@ class MigrationImporterEncryptionTest {
      * Create a minimal valid MigrationBundle ZIP as raw bytes.
      */
     private fun createTestZipBytes(): ByteArray {
-        val bundle = MigrationBundle(
-            identities = listOf(
-                IdentityExport(
-                    identityHash = "abc123",
-                    displayName = "Test User",
-                    destinationHash = "dest456",
-                    keyData = "dGVzdA==",
-                    createdTimestamp = 1700000000000L,
-                    lastUsedTimestamp = 1700001000000L,
-                    isActive = true,
-                ),
-            ),
-            conversations = emptyList(),
-            messages = emptyList(),
-            contacts = emptyList(),
-            settings = SettingsExport(),
-        )
+        val bundle =
+            MigrationBundle(
+                identities =
+                    listOf(
+                        IdentityExport(
+                            identityHash = "abc123",
+                            displayName = "Test User",
+                            destinationHash = "dest456",
+                            keyData = "dGVzdA==",
+                            createdTimestamp = 1700000000000L,
+                            lastUsedTimestamp = 1700001000000L,
+                            isActive = true,
+                        ),
+                    ),
+                conversations = emptyList(),
+                messages = emptyList(),
+                contacts = emptyList(),
+                settings = SettingsExport(),
+            )
         val manifestJson = json.encodeToString(bundle)
 
         val baos = ByteArrayOutputStream()
@@ -90,7 +89,10 @@ class MigrationImporterEncryptionTest {
     /**
      * Write bytes to a temp file and return a file:// Uri.
      */
-    private fun writeTempFile(bytes: ByteArray, suffix: String = ".columba"): Uri {
+    private fun writeTempFile(
+        bytes: ByteArray,
+        suffix: String = ".columba",
+    ): Uri {
         val file = File.createTempFile("migration_test_", suffix, context.cacheDir)
         file.writeBytes(bytes)
         file.deleteOnExit()
@@ -102,101 +104,109 @@ class MigrationImporterEncryptionTest {
     // region isEncryptedExport tests
 
     @Test
-    fun `isEncryptedExport returns false for plaintext ZIP`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val uri = writeTempFile(zipBytes)
+    fun `isEncryptedExport returns false for plaintext ZIP`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val uri = writeTempFile(zipBytes)
 
-        val result = importer.isEncryptedExport(uri)
+            val result = importer.isEncryptedExport(uri)
 
-        assertTrue(result.isSuccess)
-        assertFalse(result.getOrThrow())
-    }
-
-    @Test
-    fun `isEncryptedExport returns true for encrypted file`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
-        val uri = writeTempFile(encrypted)
-
-        val result = importer.isEncryptedExport(uri)
-
-        assertTrue(result.isSuccess)
-        assertTrue(result.getOrThrow())
-    }
+            assertTrue(result.isSuccess)
+            assertFalse(result.getOrThrow())
+        }
 
     @Test
-    fun `isEncryptedExport returns failure for empty file`() = runTest {
-        val uri = writeTempFile(ByteArray(0))
+    fun `isEncryptedExport returns true for encrypted file`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
+            val uri = writeTempFile(encrypted)
 
-        val result = importer.isEncryptedExport(uri)
+            val result = importer.isEncryptedExport(uri)
 
-        assertTrue(result.isFailure)
-    }
+            assertTrue(result.isSuccess)
+            assertTrue(result.getOrThrow())
+        }
 
     @Test
-    fun `isEncryptedExport returns failure for unrecognized format`() = runTest {
-        val uri = writeTempFile(byteArrayOf(0x00, 0x01, 0x02, 0x03))
+    fun `isEncryptedExport returns failure for empty file`() =
+        runTest {
+            val uri = writeTempFile(ByteArray(0))
 
-        val result = importer.isEncryptedExport(uri)
+            val result = importer.isEncryptedExport(uri)
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is InvalidExportFileException)
-    }
+            assertTrue(result.isFailure)
+        }
+
+    @Test
+    fun `isEncryptedExport returns failure for unrecognized format`() =
+        runTest {
+            val uri = writeTempFile(byteArrayOf(0x00, 0x01, 0x02, 0x03))
+
+            val result = importer.isEncryptedExport(uri)
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is InvalidExportFileException)
+        }
 
     // endregion
 
     // region previewMigration tests
 
     @Test
-    fun `previewMigration reads plaintext ZIP without password`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val uri = writeTempFile(zipBytes)
+    fun `previewMigration reads plaintext ZIP without password`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val uri = writeTempFile(zipBytes)
 
-        val result = importer.previewMigration(uri)
+            val result = importer.previewMigration(uri)
 
-        assertTrue(result.isSuccess)
-        val preview = result.getOrThrow()
-        assertEquals(1, preview.identityCount)
-        assertEquals(listOf("Test User"), preview.identityNames)
-    }
-
-    @Test
-    fun `previewMigration reads encrypted file with correct password`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
-        val uri = writeTempFile(encrypted)
-
-        val result = importer.previewMigration(uri, testPassword)
-
-        assertTrue(result.isSuccess)
-        val preview = result.getOrThrow()
-        assertEquals(1, preview.identityCount)
-        assertEquals(listOf("Test User"), preview.identityNames)
-    }
+            assertTrue(result.isSuccess)
+            val previewWithData = result.getOrThrow()
+            assertEquals(1, previewWithData.preview.identityCount)
+            assertEquals(listOf("Test User"), previewWithData.preview.identityNames)
+        }
 
     @Test
-    fun `previewMigration throws PasswordRequiredException for encrypted file without password`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
-        val uri = writeTempFile(encrypted)
+    fun `previewMigration reads encrypted file with correct password`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
+            val uri = writeTempFile(encrypted)
 
-        val result = importer.previewMigration(uri, null)
+            val result = importer.previewMigration(uri, testPassword)
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is PasswordRequiredException)
-    }
+            assertTrue(result.isSuccess)
+            val previewWithData = result.getOrThrow()
+            assertEquals(1, previewWithData.preview.identityCount)
+            assertEquals(listOf("Test User"), previewWithData.preview.identityNames)
+        }
 
     @Test
-    fun `previewMigration throws WrongPasswordException for encrypted file with wrong password`() = runTest {
-        val zipBytes = createTestZipBytes()
-        val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
-        val uri = writeTempFile(encrypted)
+    fun `previewMigration throws PasswordRequiredException for encrypted file without password`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
+            val uri = writeTempFile(encrypted)
 
-        val result = importer.previewMigration(uri, "wrong-password")
+            val result = importer.previewMigration(uri, null)
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is WrongPasswordException)
-    }
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is PasswordRequiredException)
+        }
+
+    @Test
+    fun `previewMigration throws WrongPasswordException for encrypted file with wrong password`() =
+        runTest {
+            val zipBytes = createTestZipBytes()
+            val encrypted = MigrationCrypto.encrypt(zipBytes, testPassword)
+            val uri = writeTempFile(encrypted)
+
+            val result = importer.previewMigration(uri, "wrong-password")
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is WrongPasswordException)
+        }
 
     // endregion
 }

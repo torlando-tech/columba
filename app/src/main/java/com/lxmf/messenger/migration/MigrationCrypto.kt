@@ -51,7 +51,10 @@ object MigrationCrypto {
      * @param password the user-chosen password
      * @return the same [File] reference, now containing encrypted data
      */
-    fun encryptFile(plaintextZip: File, password: String): File {
+    fun encryptFile(
+        plaintextZip: File,
+        password: String,
+    ): File {
         val plaintext = plaintextZip.readBytes()
         val encrypted = encrypt(plaintext, password)
         plaintextZip.writeBytes(encrypted)
@@ -63,7 +66,10 @@ object MigrationCrypto {
      *
      * @return the full encrypted payload including header, salt, IV, and ciphertext
      */
-    fun encrypt(plaintext: ByteArray, password: String): ByteArray {
+    fun encrypt(
+        plaintext: ByteArray,
+        password: String,
+    ): ByteArray {
         val random = SecureRandom()
 
         val salt = ByteArray(SALT_LENGTH).also { random.nextBytes(it) }
@@ -93,7 +99,10 @@ object MigrationCrypto {
      * @throws InvalidExportFileException if the file format is not recognized
      */
     @Suppress("ThrowsCount")
-    fun decrypt(encrypted: ByteArray, password: String): ByteArray {
+    fun decrypt(
+        encrypted: ByteArray,
+        password: String,
+    ): ByteArray {
         if (encrypted.isEmpty()) {
             throw InvalidExportFileException("Export file is empty")
         }
@@ -136,7 +145,10 @@ object MigrationCrypto {
      * @param password the user-provided password
      * @return an [InputStream] containing the decrypted ZIP data
      */
-    fun decryptStream(encryptedStream: InputStream, password: String): InputStream {
+    fun decryptStream(
+        encryptedStream: InputStream,
+        password: String,
+    ): InputStream {
         val encrypted = encryptedStream.readBytes()
         val decrypted = decrypt(encrypted, password)
         return ByteArrayInputStream(decrypted)
@@ -167,11 +179,22 @@ object MigrationCrypto {
     /**
      * Derive an AES-256 key from a password and salt using PBKDF2.
      */
-    private fun deriveKey(password: String, salt: ByteArray): SecretKeySpec {
+    private fun deriveKey(
+        password: String,
+        salt: ByteArray,
+    ): SecretKeySpec {
         val spec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS)
-        val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
-        val keyBytes = factory.generateSecret(spec).encoded
-        return SecretKeySpec(keyBytes, "AES")
+        return try {
+            val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
+            val keyBytes = factory.generateSecret(spec).encoded
+            try {
+                SecretKeySpec(keyBytes, "AES")
+            } finally {
+                keyBytes.fill(0)
+            }
+        } finally {
+            spec.clearPassword()
+        }
     }
 }
 

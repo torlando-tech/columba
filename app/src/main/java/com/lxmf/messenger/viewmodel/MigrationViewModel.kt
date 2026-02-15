@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.migration.ExportResult
 import com.lxmf.messenger.migration.ImportResult
-import com.lxmf.messenger.migration.MigrationCrypto
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
@@ -84,6 +83,12 @@ class MigrationViewModel
         private val _pendingImportUri = MutableStateFlow<Uri?>(null)
         val pendingImportUri: StateFlow<Uri?> = _pendingImportUri.asStateFlow()
 
+        /**
+         * Cached decrypted ZIP bytes from preview, reused during import
+         * to avoid redundant PBKDF2 key derivation and AES-GCM decryption.
+         */
+        private var cachedImportZipBytes: ByteArray? = null
+
         init {
             loadExportPreview()
         }
@@ -146,7 +151,10 @@ class MigrationViewModel
         /**
          * Preview a migration file before importing.
          */
-        fun previewImport(uri: Uri, password: String? = null) {
+        fun previewImport(
+            uri: Uri,
+            password: String? = null,
+        ) {
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "Previewing import: $uri")
@@ -165,9 +173,10 @@ class MigrationViewModel
                                 }
                             },
                             onFailure = { error ->
-                                _uiState.value = MigrationUiState.Error(
-                                    "Could not read migration file: ${error.message}",
-                                )
+                                _uiState.value =
+                                    MigrationUiState.Error(
+                                        "Could not read migration file: ${error.message}",
+                                    )
                                 return@launch
                             },
                         )
@@ -176,11 +185,13 @@ class MigrationViewModel
                     val result = migrationImporter.previewMigration(uri, password)
 
                     result.fold(
-                        onSuccess = { preview ->
-                            Log.i(TAG, "Preview loaded: ${preview.identityCount} identities")
-                            _importPreview.value = preview
+                        onSuccess = { previewWithData ->
+                            Log.i(TAG, "Preview loaded: ${previewWithData.preview.identityCount} identities")
+                            _importPreview.value = previewWithData.preview
+                            cachedImportZipBytes = previewWithData.zipBytes
                             _pendingImportUri.value = null
-                            _uiState.value = MigrationUiState.ImportPreview(preview, uri, password)
+                            _uiState.value =
+                                MigrationUiState.ImportPreview(previewWithData.preview, uri, password)
                         },
                         onFailure = { error ->
                             Log.e(TAG, "Preview failed", error)
@@ -193,9 +204,10 @@ class MigrationViewModel
                                     _uiState.value = MigrationUiState.PasswordRequired(uri)
                                 }
                                 else -> {
-                                    _uiState.value = MigrationUiState.Error(
-                                        "Could not read migration file: ${error.message}",
-                                    )
+                                    _uiState.value =
+                                        MigrationUiState.Error(
+                                            "Could not read migration file: ${error.message}",
+                                        )
                                 }
                             }
                         },
@@ -220,15 +232,20 @@ class MigrationViewModel
         /**
          * Import data from a migration file.
          */
-        fun importData(uri: Uri, password: String? = null) {
+        fun importData(
+            uri: Uri,
+            password: String? = null,
+        ) {
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "Starting import from: $uri")
                     _uiState.value = MigrationUiState.Importing
                     _importProgress.value = 0f
 
+                    val cachedBytes = cachedImportZipBytes
+                    cachedImportZipBytes = null // Release reference before long-running import
                     val result =
-                        migrationImporter.importData(uri, password) { progress ->
+                        migrationImporter.importData(uri, password, cachedBytes) { progress ->
                             _importProgress.value = progress
                         }
 
@@ -246,16 +263,14 @@ class MigrationViewModel
                             Log.i(TAG, "Restarting service after import...")
                             withContext(Dispatchers.IO) {
                                 interfaceConfigManager.applyInterfaceChanges()
+                            }.onSuccess {
+                                Log.i(TAG, "Service restarted successfully")
+                                _uiState.value = MigrationUiState.ImportComplete(result)
+                            }.onFailure { e ->
+                                Log.e(TAG, "Service restart failed", e)
+                                // Still mark as complete since import succeeded
+                                _uiState.value = MigrationUiState.ImportComplete(result)
                             }
-                                .onSuccess {
-                                    Log.i(TAG, "Service restarted successfully")
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
-                                .onFailure { e ->
-                                    Log.e(TAG, "Service restart failed", e)
-                                    // Still mark as complete since import succeeded
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
                         }
                         is ImportResult.Error -> {
                             Log.e(TAG, "Import failed: ${result.message}")
@@ -278,6 +293,7 @@ class MigrationViewModel
             _importProgress.value = 0f
             _importPreview.value = null
             _pendingImportUri.value = null
+            cachedImportZipBytes = null
         }
 
         /**
@@ -291,6 +307,7 @@ class MigrationViewModel
         override fun onCleared() {
             super.onCleared()
             cleanupExportFiles()
+            cachedImportZipBytes = null
         }
     }
 
@@ -300,27 +317,43 @@ class MigrationViewModel
 sealed class MigrationUiState {
     data object Idle : MigrationUiState()
 
-    data class Loading(val message: String) : MigrationUiState()
+    data class Loading(
+        val message: String,
+    ) : MigrationUiState()
 
     data object Exporting : MigrationUiState()
 
-    data class ExportComplete(val fileUri: Uri) : MigrationUiState()
+    data class ExportComplete(
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
     data class ImportPreview(
         val preview: MigrationPreview,
         val fileUri: Uri,
         val password: String? = null,
+    ) : MigrationUiState() {
+        override fun toString(): String = "ImportPreview(preview=$preview, fileUri=$fileUri, password=${if (password != null) "<redacted>" else "null"})"
+    }
+
+    data class PasswordRequired(
+        val fileUri: Uri,
     ) : MigrationUiState()
 
-    data class PasswordRequired(val fileUri: Uri) : MigrationUiState()
-
-    data class WrongPassword(val fileUri: Uri) : MigrationUiState()
+    data class WrongPassword(
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
     data object Importing : MigrationUiState()
 
-    data class RestartingService(val result: ImportResult.Success) : MigrationUiState()
+    data class RestartingService(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class ImportComplete(val result: ImportResult.Success) : MigrationUiState()
+    data class ImportComplete(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class Error(val message: String) : MigrationUiState()
+    data class Error(
+        val message: String,
+    ) : MigrationUiState()
 }

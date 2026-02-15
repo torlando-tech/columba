@@ -65,8 +65,9 @@ class MigrationImporter
         suspend fun isEncryptedExport(uri: Uri): Result<Boolean> =
             withContext(Dispatchers.IO) {
                 try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                        ?: return@withContext Result.failure(Exception("Cannot open file"))
+                    val inputStream =
+                        context.contentResolver.openInputStream(uri)
+                            ?: return@withContext Result.failure(Exception("Cannot open file"))
                     inputStream.use { stream ->
                         val header = ByteArray(2)
                         val bytesRead = stream.read(header)
@@ -88,28 +89,32 @@ class MigrationImporter
         suspend fun previewMigration(
             uri: Uri,
             password: String? = null,
-        ): Result<MigrationPreview> =
+        ): Result<PreviewWithData> =
             withContext(Dispatchers.IO) {
                 try {
-                    val (bundle, _) =
+                    val (bundle, zipBytes) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
                             )
 
                     Result.success(
-                        MigrationPreview(
-                            version = bundle.version,
-                            exportedAt = bundle.exportedAt,
-                            identityCount = bundle.identities.size,
-                            conversationCount = bundle.conversations.size,
-                            messageCount = bundle.messages.size,
-                            contactCount = bundle.contacts.size,
-                            announceCount = bundle.announces.size,
-                            peerIdentityCount = bundle.peerIdentities.size,
-                            interfaceCount = bundle.interfaces.size,
-                            customThemeCount = bundle.customThemes.size,
-                            identityNames = bundle.identities.map { it.displayName },
+                        PreviewWithData(
+                            preview =
+                                MigrationPreview(
+                                    version = bundle.version,
+                                    exportedAt = bundle.exportedAt,
+                                    identityCount = bundle.identities.size,
+                                    conversationCount = bundle.conversations.size,
+                                    messageCount = bundle.messages.size,
+                                    contactCount = bundle.contacts.size,
+                                    announceCount = bundle.announces.size,
+                                    peerIdentityCount = bundle.peerIdentities.size,
+                                    interfaceCount = bundle.interfaces.size,
+                                    customThemeCount = bundle.customThemes.size,
+                                    identityNames = bundle.identities.map { it.displayName },
+                                ),
+                            zipBytes = zipBytes,
                         ),
                     )
                 } catch (e: Exception) {
@@ -128,6 +133,7 @@ class MigrationImporter
         suspend fun importData(
             uri: Uri,
             password: String? = null,
+            cachedZipBytes: ByteArray? = null,
             onProgress: (Float) -> Unit = {},
         ): ImportResult =
             withContext(Dispatchers.IO) {
@@ -136,8 +142,22 @@ class MigrationImporter
                     onProgress(0.05f)
 
                     val (bundle, zipBytes) =
-                        readMigrationBundle(uri, password)
-                            ?: return@withContext ImportResult.Error("Failed to read migration file")
+                        if (cachedZipBytes != null) {
+                            // Reuse decrypted bytes from preview to avoid redundant PBKDF2 + decryption
+                            val manifestJson =
+                                extractManifestFromZip(java.io.ByteArrayInputStream(cachedZipBytes))
+                            val parsed =
+                                manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                                    ?: return@withContext ImportResult.Error(
+                                        "Failed to read migration file",
+                                    )
+                            parsed to cachedZipBytes
+                        } else {
+                            readMigrationBundle(uri, password)
+                                ?: return@withContext ImportResult.Error(
+                                    "Failed to read migration file",
+                                )
+                        }
 
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return@withContext ImportResult.Error(

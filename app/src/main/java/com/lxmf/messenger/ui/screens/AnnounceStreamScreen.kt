@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.ui.components.AudioBadge
@@ -90,6 +91,7 @@ fun AnnounceStreamScreen(
     var isSearching by remember { mutableStateOf(false) }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+    val selectedInterfaceTypes by viewModel.selectedInterfaceTypes.collectAsState()
 
     // Apply initial filter if provided (e.g., from relay settings "View All Relays...")
     LaunchedEffect(initialFilterType) {
@@ -352,10 +354,12 @@ fun AnnounceStreamScreen(
         NodeTypeFilterDialog(
             selectedTypes = selectedNodeTypes,
             showAudio = showAudioAnnounces,
+            selectedInterfaceTypes = selectedInterfaceTypes,
             onDismiss = { showFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio ->
+            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
                 viewModel.updateSelectedNodeTypes(newSelection)
                 viewModel.updateShowAudioAnnounces(newShowAudio)
+                viewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
                 showFilterDialog = false
             },
         )
@@ -396,17 +400,19 @@ fun AnnounceStreamScreen(
 fun NodeTypeFilterDialog(
     selectedTypes: Set<NodeType>,
     showAudio: Boolean,
+    selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
     onDismiss: () -> Unit,
-    onConfirm: (Set<NodeType>, Boolean) -> Unit,
+    onConfirm: (Set<NodeType>, Boolean, Set<InterfaceType>) -> Unit,
 ) {
     var tempSelection by remember { mutableStateOf(selectedTypes) }
     var tempShowAudio by remember { mutableStateOf(showAudio) }
+    var tempInterfaceSelection by remember { mutableStateOf(selectedInterfaceTypes) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Filter Node Types",
+                text = "Filter Announces",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -417,12 +423,11 @@ fun NodeTypeFilterDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Select which node types to display:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "Node Types",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 // Checkbox for each node type
                 NodeType.entries.forEach { nodeType ->
@@ -481,8 +486,6 @@ fun NodeTypeFilterDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // Audio announces filter
                 Row(
                     modifier =
@@ -518,11 +521,92 @@ fun NodeTypeFilterDialog(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Interface type filter section
+                Text(
+                    text = "Interface",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Text(
+                    text = "Filter by receiving interface (none selected = show all):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Filterable interface types (exclude UNKNOWN for cleaner UX)
+                val interfaceTypes =
+                    listOf(
+                        InterfaceType.AUTO_INTERFACE to ("Local" to "AutoInterface (IPv6 link-local)"),
+                        InterfaceType.TCP_CLIENT to ("TCP" to "TCP connections (backbone links)"),
+                        InterfaceType.ANDROID_BLE to ("Bluetooth" to "Bluetooth Low Energy"),
+                        InterfaceType.RNODE to ("RNode" to "RNode radio interface"),
+                        InterfaceType.UNKNOWN to ("Other" to "Unknown or unrecognized interfaces"),
+                    )
+
+                interfaceTypes.forEach { (interfaceType, nameDesc) ->
+                    val (displayName, description) = nameDesc
+
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    tempInterfaceSelection =
+                                        if (tempInterfaceSelection.contains(interfaceType)) {
+                                            tempInterfaceSelection - interfaceType
+                                        } else {
+                                            tempInterfaceSelection + interfaceType
+                                        }
+                                }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Checkbox(
+                            checked = tempInterfaceSelection.contains(interfaceType),
+                            onCheckedChange = { isChecked ->
+                                tempInterfaceSelection =
+                                    if (isChecked) {
+                                        tempInterfaceSelection + interfaceType
+                                    } else {
+                                        tempInterfaceSelection - interfaceType
+                                    }
+                            },
+                            colors =
+                                CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.secondary,
+                                    checkmarkColor = MaterialTheme.colorScheme.onSecondary,
+                                ),
+                        )
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(tempSelection, tempShowAudio) },
+                onClick = { onConfirm(tempSelection, tempShowAudio, tempInterfaceSelection) },
             ) {
                 Text("Apply")
             }

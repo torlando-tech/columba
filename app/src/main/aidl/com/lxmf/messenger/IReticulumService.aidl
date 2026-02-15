@@ -426,7 +426,7 @@ interface IReticulumService {
      * @param sourceIdentityPrivateKey Source identity private key bytes
      * @return JSON string with result: {"success": true, "message_hash": "...", "timestamp": ...}
      */
-    String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey);
+    String sendLocationTelemetry(in byte[] destHash, String locationJson, in byte[] sourceIdentityPrivateKey, @nullable String iconName, @nullable String iconFgColor, @nullable String iconBgColor);
 
     /**
      * Send a telemetry request to a collector via LXMF FIELD_COMMANDS.

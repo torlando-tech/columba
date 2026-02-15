@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.ui.components.AudioBadge
@@ -71,6 +73,7 @@ import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import kotlinx.coroutines.launch
 
@@ -88,6 +91,7 @@ fun AnnounceStreamScreen(
     var isSearching by remember { mutableStateOf(false) }
     val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+    val selectedInterfaceTypes by viewModel.selectedInterfaceTypes.collectAsState()
 
     // Apply initial filter if provided (e.g., from relay settings "View All Relays...")
     LaunchedEffect(initialFilterType) {
@@ -248,7 +252,8 @@ fun AnnounceStreamScreen(
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
-                            .consumeWindowInsets(paddingValues),
+                            .consumeWindowInsets(paddingValues)
+                            .simpleVerticalScrollbar(listState),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -349,10 +354,12 @@ fun AnnounceStreamScreen(
         NodeTypeFilterDialog(
             selectedTypes = selectedNodeTypes,
             showAudio = showAudioAnnounces,
+            selectedInterfaceTypes = selectedInterfaceTypes,
             onDismiss = { showFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio ->
+            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
                 viewModel.updateSelectedNodeTypes(newSelection)
                 viewModel.updateShowAudioAnnounces(newShowAudio)
+                viewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
                 showFilterDialog = false
             },
         )
@@ -393,17 +400,19 @@ fun AnnounceStreamScreen(
 fun NodeTypeFilterDialog(
     selectedTypes: Set<NodeType>,
     showAudio: Boolean,
+    selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
     onDismiss: () -> Unit,
-    onConfirm: (Set<NodeType>, Boolean) -> Unit,
+    onConfirm: (Set<NodeType>, Boolean, Set<InterfaceType>) -> Unit,
 ) {
     var tempSelection by remember { mutableStateOf(selectedTypes) }
     var tempShowAudio by remember { mutableStateOf(showAudio) }
+    var tempInterfaceSelection by remember { mutableStateOf(selectedInterfaceTypes) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Filter Node Types",
+                text = "Filter Announces",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -414,12 +423,11 @@ fun NodeTypeFilterDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Select which node types to display:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "Node Types",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 // Checkbox for each node type
                 NodeType.entries.forEach { nodeType ->
@@ -478,8 +486,6 @@ fun NodeTypeFilterDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // Audio announces filter
                 Row(
                     modifier =
@@ -515,11 +521,92 @@ fun NodeTypeFilterDialog(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Interface type filter section
+                Text(
+                    text = "Interface",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Text(
+                    text = "Filter by receiving interface (none selected = show all):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Filterable interface types (exclude UNKNOWN for cleaner UX)
+                val interfaceTypes =
+                    listOf(
+                        InterfaceType.AUTO_INTERFACE to ("Local" to "AutoInterface (IPv6 link-local)"),
+                        InterfaceType.TCP_CLIENT to ("TCP" to "TCP connections (backbone links)"),
+                        InterfaceType.ANDROID_BLE to ("Bluetooth" to "Bluetooth Low Energy"),
+                        InterfaceType.RNODE to ("RNode" to "RNode radio interface"),
+                        InterfaceType.UNKNOWN to ("Other" to "Unknown or unrecognized interfaces"),
+                    )
+
+                interfaceTypes.forEach { (interfaceType, nameDesc) ->
+                    val (displayName, description) = nameDesc
+
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    tempInterfaceSelection =
+                                        if (tempInterfaceSelection.contains(interfaceType)) {
+                                            tempInterfaceSelection - interfaceType
+                                        } else {
+                                            tempInterfaceSelection + interfaceType
+                                        }
+                                }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Checkbox(
+                            checked = tempInterfaceSelection.contains(interfaceType),
+                            onCheckedChange = { isChecked ->
+                                tempInterfaceSelection =
+                                    if (isChecked) {
+                                        tempInterfaceSelection + interfaceType
+                                    } else {
+                                        tempInterfaceSelection - interfaceType
+                                    }
+                            },
+                            colors =
+                                CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.secondary,
+                                    checkmarkColor = MaterialTheme.colorScheme.onSecondary,
+                                ),
+                        )
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(tempSelection, tempShowAudio) },
+                onClick = { onConfirm(tempSelection, tempShowAudio, tempInterfaceSelection) },
             ) {
                 Text("Apply")
             }
@@ -680,6 +767,45 @@ fun AnnounceStreamContent(
     // Scroll state
     val listState = rememberLazyListState()
 
+    // Scroll position anchor — tracks which item the user is viewing by identity (not index).
+    // When Room invalidates the PagingSource and items shift positions, we find our anchor
+    // item in the new data and scroll back to it.
+    var anchorHash by remember { mutableStateOf<String?>(null) }
+    var anchorOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            val index = listState.firstVisibleItemIndex
+            val offset = listState.firstVisibleItemScrollOffset
+            val hash =
+                if (index < pagingItems.itemCount) {
+                    pagingItems.peek(index)?.destinationHash
+                } else {
+                    null
+                }
+            Triple(index, offset, hash)
+        }.collect { (index, offset, currentHash) ->
+            if (currentHash == null) return@collect
+            val savedHash = anchorHash
+
+            if (savedHash != null && savedHash != currentHash && index > 0) {
+                // The item at our position changed identity — data refreshed under us.
+                // Find where our anchor item moved to and restore position.
+                val newIndex =
+                    pagingItems.itemSnapshotList.items
+                        .indexOfFirst { it.destinationHash == savedHash }
+                if (newIndex >= 0) {
+                    listState.scrollToItem(newIndex, anchorOffset)
+                    return@collect // Don't update anchor yet — next emission will confirm
+                }
+            }
+
+            // Normal tracking: save current position
+            anchorHash = currentHash
+            anchorOffset = offset
+        }
+    }
+
     // Check loading state - only show spinner for initial load when list is empty
     // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
@@ -694,15 +820,17 @@ fun AnnounceStreamContent(
         else -> {
             LazyColumn(
                 state = listState,
-                modifier = modifier.fillMaxSize(),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .simpleVerticalScrollbar(listState),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(
                     count = pagingItems.itemCount,
                     key = { index ->
-                        val announce = pagingItems.peek(index)
-                        if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
+                        pagingItems.peek(index)?.destinationHash ?: "placeholder_$index"
                     },
                 ) { index ->
                     val announce = pagingItems[index]

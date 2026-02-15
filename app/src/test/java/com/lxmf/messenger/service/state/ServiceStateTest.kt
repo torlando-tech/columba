@@ -129,4 +129,55 @@ class ServiceStateTest {
         assertTrue(wasActive)
         assertFalse(state.isConversationActive.get())
     }
+
+    // ================================================================
+    // Python shutdown kill switch tests (SIGSEGV prevention)
+    // ================================================================
+
+    @Test
+    fun `isPythonShutdownStarted is initially false`() {
+        assertFalse(state.isPythonShutdownStarted.get())
+    }
+
+    @Test
+    fun `isPythonCallSafe returns false when wrapper is null`() {
+        // Default state: shutdown=false, wrapper=null
+        assertFalse(state.isPythonCallSafe())
+    }
+
+    @Test
+    fun `isPythonCallSafe returns true when wrapper set and shutdown not started`() {
+        state.wrapper = io.mockk.mockk()
+        assertTrue(state.isPythonCallSafe())
+    }
+
+    @Test
+    fun `isPythonCallSafe returns false when shutdown started even with wrapper set`() {
+        state.wrapper = io.mockk.mockk()
+        state.isPythonShutdownStarted.set(true)
+        assertFalse(state.isPythonCallSafe())
+    }
+
+    @Test
+    fun `isPythonCallSafe returns false when both shutdown and wrapper null`() {
+        state.isPythonShutdownStarted.set(true)
+        assertFalse(state.isPythonCallSafe())
+    }
+
+    @Test
+    fun `clearShutdownFlag resets the flag`() {
+        state.isPythonShutdownStarted.set(true)
+        assertTrue(state.isPythonShutdownStarted.get())
+
+        state.clearShutdownFlag()
+        assertFalse(state.isPythonShutdownStarted.get())
+    }
+
+    @Test
+    fun `reset does not clear isPythonShutdownStarted`() {
+        state.isPythonShutdownStarted.set(true)
+        state.reset()
+        // Flag must survive reset — only clearShutdownFlag can clear it
+        assertTrue(state.isPythonShutdownStarted.get())
+    }
 }

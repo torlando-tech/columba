@@ -17,6 +17,7 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.InterfaceType
+import com.lxmf.messenger.data.util.HashUtils
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -34,7 +35,7 @@ import javax.inject.Singleton
 /**
  * Handles importing data from a migration bundle file.
  */
-@Suppress("TooManyFunctions") // Helper methods extracted for readability
+@Suppress("TooManyFunctions", "LargeClass") // Helper methods extracted for readability
 @Singleton
 class MigrationImporter
     @Inject
@@ -59,30 +60,61 @@ class MigrationImporter
             }
 
         /**
-         * Preview the contents of a migration file without importing.
+         * Check whether a migration file is encrypted (requires a password to import).
          */
-        suspend fun previewMigration(uri: Uri): Result<MigrationPreview> =
+        suspend fun isEncryptedExport(uri: Uri): Result<Boolean> =
             withContext(Dispatchers.IO) {
                 try {
-                    val bundle =
-                        readMigrationBundle(uri)
+                    val inputStream =
+                        context.contentResolver.openInputStream(uri)
+                            ?: return@withContext Result.failure(Exception("Cannot open file"))
+                    inputStream.use { stream ->
+                        val header = ByteArray(2)
+                        val bytesRead = stream.read(header)
+                        if (bytesRead < 1) {
+                            return@withContext Result.failure(
+                                InvalidExportFileException("Export file is empty"),
+                            )
+                        }
+                        Result.success(MigrationCrypto.isEncrypted(header))
+                    }
+                } catch (e: InvalidExportFileException) {
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to check export format", e)
+                    Result.failure(e)
+                }
+            }
+
+        suspend fun previewMigration(
+            uri: Uri,
+            password: String? = null,
+        ): Result<PreviewWithData> =
+            withContext(Dispatchers.IO) {
+                try {
+                    val (bundle, zipBytes) =
+                        readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
                             )
 
                     Result.success(
-                        MigrationPreview(
-                            version = bundle.version,
-                            exportedAt = bundle.exportedAt,
-                            identityCount = bundle.identities.size,
-                            conversationCount = bundle.conversations.size,
-                            messageCount = bundle.messages.size,
-                            contactCount = bundle.contacts.size,
-                            announceCount = bundle.announces.size,
-                            peerIdentityCount = bundle.peerIdentities.size,
-                            interfaceCount = bundle.interfaces.size,
-                            customThemeCount = bundle.customThemes.size,
-                            identityNames = bundle.identities.map { it.displayName },
+                        PreviewWithData(
+                            preview =
+                                MigrationPreview(
+                                    version = bundle.version,
+                                    exportedAt = bundle.exportedAt,
+                                    identityCount = bundle.identities.size,
+                                    conversationCount = bundle.conversations.size,
+                                    messageCount = bundle.messages.size,
+                                    contactCount = bundle.contacts.size,
+                                    announceCount = bundle.announces.size,
+                                    peerIdentityCount = bundle.peerIdentities.size,
+                                    interfaceCount = bundle.interfaces.size,
+                                    customThemeCount = bundle.customThemes.size,
+                                    identityNames = bundle.identities.map { it.displayName },
+                                ),
+                            zipBytes = zipBytes,
                         ),
                     )
                 } catch (e: Exception) {
@@ -100,6 +132,8 @@ class MigrationImporter
          */
         suspend fun importData(
             uri: Uri,
+            password: String? = null,
+            cachedZipBytes: ByteArray? = null,
             onProgress: (Float) -> Unit = {},
         ): ImportResult =
             withContext(Dispatchers.IO) {
@@ -107,9 +141,23 @@ class MigrationImporter
                     Log.i(TAG, "Starting migration import...")
                     onProgress(0.05f)
 
-                    val bundle =
-                        readMigrationBundle(uri)
-                            ?: return@withContext ImportResult.Error("Failed to read migration file")
+                    val (bundle, zipBytes) =
+                        if (cachedZipBytes != null) {
+                            // Reuse decrypted bytes from preview to avoid redundant PBKDF2 + decryption
+                            val manifestJson =
+                                extractManifestFromZip(java.io.ByteArrayInputStream(cachedZipBytes))
+                            val parsed =
+                                manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                                    ?: return@withContext ImportResult.Error(
+                                        "Failed to read migration file",
+                                    )
+                            parsed to cachedZipBytes
+                        } else {
+                            readMigrationBundle(uri, password)
+                                ?: return@withContext ImportResult.Error(
+                                    "Failed to read migration file",
+                                )
+                        }
 
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return@withContext ImportResult.Error(
@@ -140,8 +188,11 @@ class MigrationImporter
                     val interfacesImported = importInterfaces(bundle.interfaces)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri)
-                    onProgress(0.92f)
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(zipBytes)
+                    onProgress(0.90f)
+
+                    importRatchets(bundle.ratchetFiles)
+                    onProgress(0.93f)
 
                     importSettings(bundle.settings, txResult.themeIdMap)
                     onProgress(0.95f)
@@ -378,10 +429,11 @@ class MigrationImporter
                         announce.receivingInterfaceType
                             ?: InterfaceType.fromInterfaceName(announce.receivingInterface).name
 
+                    val decodedPublicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP)
                     AnnounceEntity(
                         destinationHash = announce.destinationHash,
                         peerName = announce.peerName,
-                        publicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP),
+                        publicKey = decodedPublicKey,
                         appData = announce.appData?.let { Base64.decode(it, Base64.NO_WRAP) },
                         hops = announce.hops,
                         lastSeenTimestamp = announce.lastSeenTimestamp,
@@ -391,6 +443,7 @@ class MigrationImporter
                         aspect = announce.aspect,
                         isFavorite = announce.isFavorite,
                         favoritedTimestamp = announce.favoritedTimestamp,
+                        computedIdentityHash = HashUtils.computeIdentityHash(decodedPublicKey),
                     )
                 }
             database.announceDao().insertAnnounces(entities)
@@ -415,8 +468,12 @@ class MigrationImporter
         private suspend fun importInterfaces(interfaces: List<InterfaceExport>): Int {
             var imported = 0
             val existingKeys =
-                interfaceDatabase.interfaceDao().getAllInterfaces().first()
-                    .map { "${it.name}|${it.type}" }.toSet()
+                interfaceDatabase
+                    .interfaceDao()
+                    .getAllInterfaces()
+                    .first()
+                    .map { "${it.name}|${it.type}" }
+                    .toSet()
 
             interfaces.forEach { iface ->
                 val key = "${iface.name}|${iface.type}"
@@ -439,14 +496,26 @@ class MigrationImporter
             return imported
         }
 
-        private data class ContactImportResult(val imported: Int, val relayHash: String?)
+        private data class ContactImportResult(
+            val imported: Int,
+            val relayHash: String?,
+        )
 
-        private data class ThemeImportResult(val imported: Int, val idMap: Map<Long, Long>)
+        private data class ThemeImportResult(
+            val imported: Int,
+            val idMap: Map<Long, Long>,
+        )
 
         private suspend fun importCustomThemes(themes: List<CustomThemeExport>): ThemeImportResult {
             var imported = 0
             val themeIdMap = mutableMapOf<Long, Long>()
-            val existingNames = database.customThemeDao().getAllThemes().first().map { it.name }.toSet()
+            val existingNames =
+                database
+                    .customThemeDao()
+                    .getAllThemes()
+                    .first()
+                    .map { it.name }
+                    .toSet()
 
             themes.forEach { theme ->
                 if (theme.name !in existingNames) {
@@ -528,13 +597,33 @@ class MigrationImporter
         /**
          * Read and parse the MigrationBundle from a ZIP file.
          */
-        private fun readMigrationBundle(uri: Uri): MigrationBundle? {
+        @Suppress("ThrowsCount")
+        private fun readMigrationBundle(
+            uri: Uri,
+            password: String? = null,
+        ): Pair<MigrationBundle, ByteArray>? {
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
                 inputStream.use { stream ->
-                    val manifestJson = extractManifestFromZip(stream)
-                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                    val rawBytes = stream.readBytes()
+                    val zipBytes =
+                        if (MigrationCrypto.isEncrypted(rawBytes)) {
+                            if (password == null) {
+                                throw PasswordRequiredException("This export file is encrypted")
+                            }
+                            MigrationCrypto.decrypt(rawBytes, password)
+                        } else {
+                            rawBytes
+                        }
+                    val manifestJson = extractManifestFromZip(java.io.ByteArrayInputStream(zipBytes))
+                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) to zipBytes }
                 }
+            } catch (e: WrongPasswordException) {
+                Log.e(TAG, "Wrong password for encrypted export", e)
+                throw e
+            } catch (e: PasswordRequiredException) {
+                Log.e(TAG, "Password required for encrypted export", e)
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read migration bundle", e)
                 null
@@ -640,15 +729,60 @@ class MigrationImporter
         }
 
         /**
+         * Import ratchet key files from the migration bundle.
+         * Restores forward secrecy keys so messages encrypted with ratchets
+         * can still be decrypted after migration.
+         */
+        private fun importRatchets(ratchetFiles: List<RatchetRef>): Int {
+            if (ratchetFiles.isEmpty()) return 0
+
+            val reticulumDir = File(context.filesDir, "reticulum")
+            val imported = ratchetFiles.count { importSingleRatchet(it, reticulumDir) }
+
+            Log.d(TAG, "Imported $imported ratchet files")
+            return imported
+        }
+
+        private fun importSingleRatchet(
+            ref: RatchetRef,
+            reticulumDir: File,
+        ): Boolean {
+            val subPath =
+                when (ref.type) {
+                    "own" -> "lxmf/ratchets"
+                    "peer" -> "storage/ratchets"
+                    else -> {
+                        Log.w(TAG, "Unknown ratchet type: ${ref.type}")
+                        return false
+                    }
+                }
+            val targetDir = File(reticulumDir, subPath).also { it.mkdirs() }
+
+            // Security: prevent path traversal
+            val destFile = File(targetDir, ref.filename)
+            if (!destFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator)) {
+                Log.w(TAG, "Skipping suspicious ratchet path: ${ref.filename}")
+                return false
+            }
+
+            return try {
+                destFile.writeBytes(Base64.decode(ref.data, Base64.NO_WRAP))
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to import ratchet ${ref.filename}", e)
+                false
+            }
+        }
+
+        /**
          * Import attachments from the ZIP file.
          */
-        private fun importAttachments(uri: Uri): Int {
+        private fun importAttachments(zipBytes: ByteArray): Int {
             val attachmentsDir = File(context.filesDir, "attachments")
             attachmentsDir.mkdirs()
 
             return try {
-                val inputStream = context.contentResolver.openInputStream(uri) ?: return 0
-                inputStream.use { extractAttachmentsFromZip(it, attachmentsDir) }
+                extractAttachmentsFromZip(java.io.ByteArrayInputStream(zipBytes), attachmentsDir)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import attachments", e)
                 0
@@ -669,7 +803,7 @@ class MigrationImporter
                         val destFile = File(destDir, relativePath)
 
                         // Security: Prevent path traversal attacks (e.g., "../../../sensitive_file")
-                        if (!destFile.canonicalPath.startsWith(destDirCanonical)) {
+                        if (!destFile.canonicalPath.startsWith(destDirCanonical + File.separator)) {
                             Log.w(TAG, "Skipping suspicious path (path traversal attempt): ${entry.name}")
                             entry = zipIn.nextEntry
                             continue

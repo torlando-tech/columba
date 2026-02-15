@@ -97,7 +97,7 @@ class RNodeCompanionService : CompanionDeviceService() {
         val deviceName = associationInfo.displayName ?: "Unknown"
         Log.d(TAG, "████ RNODE APPEARED ████ name=$deviceName")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val device = associationInfo.associatedDevice?.bluetoothDevice
             if (device != null) {
                 Log.d(TAG, "Device: ${device.name ?: device.address}")

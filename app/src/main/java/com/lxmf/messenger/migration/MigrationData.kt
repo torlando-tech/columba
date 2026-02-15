@@ -21,9 +21,10 @@ data class MigrationBundle(
     val customThemes: List<CustomThemeExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
+    val ratchetFiles: List<RatchetRef> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 6
+        const val CURRENT_VERSION = 7
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -305,6 +306,21 @@ data class AttachmentRef(
 )
 
 /**
+ * Reference to a ratchet key file for migration.
+ * Ratchets provide forward secrecy — without them, messages encrypted with
+ * ephemeral X25519 keys become permanently undecryptable after reinstall.
+ */
+@Serializable
+data class RatchetRef(
+    /** "own" for LXMF delivery destination ratchet keys, "peer" for learned peer ratchet public keys */
+    val type: String,
+    /** Filename (hex destination hash, possibly with .ratchets extension) */
+    val filename: String,
+    /** Base64-encoded file contents */
+    val data: String,
+)
+
+/**
  * Result of an export operation.
  */
 sealed class ExportResult {
@@ -318,7 +334,10 @@ sealed class ExportResult {
         val customThemeCount: Int,
     ) : ExportResult()
 
-    data class Error(val message: String, val cause: Throwable? = null) : ExportResult()
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+    ) : ExportResult()
 }
 
 /**
@@ -335,7 +354,10 @@ sealed class ImportResult {
         val customThemesImported: Int,
     ) : ImportResult()
 
-    data class Error(val message: String, val cause: Throwable? = null) : ImportResult()
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+    ) : ImportResult()
 }
 
 /**
@@ -353,6 +375,15 @@ data class MigrationPreview(
     val interfaceCount: Int,
     val customThemeCount: Int,
     val identityNames: List<String>,
+)
+
+/**
+ * Result of previewing a migration file, including the decrypted ZIP bytes
+ * so they can be reused during import without redundant decryption.
+ */
+class PreviewWithData(
+    val preview: MigrationPreview,
+    val zipBytes: ByteArray,
 )
 
 /**

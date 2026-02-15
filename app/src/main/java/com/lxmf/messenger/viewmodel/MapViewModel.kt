@@ -15,6 +15,7 @@ import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.model.SharingDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -85,6 +86,11 @@ data class MapState(
     val activeSessions: List<SharingSession> = emptyList(),
     val lastRefresh: Long = 0L,
     val mapStyleResult: MapStyleResult? = null,
+    val collectorAddress: String? = null,
+    val isTelemetrySendEnabled: Boolean = false,
+    val isTelemetryRequestEnabled: Boolean = false,
+    val isSendingTelemetry: Boolean = false,
+    val isRequestingTelemetry: Boolean = false,
 )
 
 /**
@@ -107,6 +113,7 @@ class MapViewModel
         private val announceDao: AnnounceDao,
         private val settingsRepository: SettingsRepository,
         private val mapTileSourceManager: MapTileSourceManager,
+        private val telemetryCollectorManager: TelemetryCollectorManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -122,6 +129,59 @@ class MapViewModel
              * @suppress VisibleForTesting
              */
             internal var enablePeriodicRefresh = true
+
+            /**
+             * Parse appearance JSON from telemetry into icon fields.
+             *
+             * @param appearanceJson JSON string with icon_name, foreground_color, background_color
+             * @return Triple of (iconName, foregroundColor, backgroundColor) or null if invalid/empty
+             */
+            internal fun parseAppearanceJson(appearanceJson: String?): Triple<String, String, String>? =
+                appearanceJson?.let { json ->
+                    try {
+                        val obj = org.json.JSONObject(json)
+                        Triple(
+                            obj.optString("icon_name", ""),
+                            obj.optString("foreground_color", ""),
+                            obj.optString("background_color", ""),
+                        ).takeIf { it.first.isNotEmpty() }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse appearanceJson", e)
+                        null
+                    }
+                }
+
+            /**
+             * Calculate the marker state based on timestamp and expiry.
+             *
+             * @param timestamp When the location was captured
+             * @param expiresAt When sharing ends (null = indefinite)
+             * @param currentTime Current time for comparison (injectable for testing)
+             * @return MarkerState indicating freshness, or null if marker should be hidden
+             */
+            internal fun calculateMarkerState(
+                timestamp: Long,
+                expiresAt: Long?,
+                currentTime: Long = System.currentTimeMillis(),
+            ): MarkerState? {
+                val age = currentTime - timestamp
+                val isExpired = expiresAt != null && expiresAt < currentTime
+                val gracePeriodEnd = (expiresAt ?: Long.MAX_VALUE) + GRACE_PERIOD_MS
+
+                return when {
+                    // Beyond grace period - should not be shown
+                    isExpired && currentTime > gracePeriodEnd -> null
+
+                    // Expired but within grace period (last known location)
+                    isExpired -> MarkerState.EXPIRED_GRACE_PERIOD
+
+                    // Not expired but stale (5+ minutes without update)
+                    age > STALE_THRESHOLD_MS -> MarkerState.STALE
+
+                    // Fresh location
+                    else -> MarkerState.FRESH
+                }
+            }
         }
 
         private val _state =
@@ -235,6 +295,9 @@ class MapViewModel
                             Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
                         }
 
+                        // Prefer appearance from telemetry message, fall back to announce
+                        val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
+
                         ContactMarker(
                             destinationHash = loc.senderHash,
                             displayName = displayName,
@@ -245,9 +308,9 @@ class MapViewModel
                             expiresAt = loc.expiresAt,
                             state = markerState,
                             approximateRadius = loc.approximateRadius,
-                            iconName = announce?.iconName,
-                            iconForegroundColor = announce?.iconForegroundColor,
-                            iconBackgroundColor = announce?.iconBackgroundColor,
+                            iconName = telemetryAppearance?.first ?: announce?.iconName,
+                            iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
+                            iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
                             publicKey = announce?.publicKey,
                         )
                     }
@@ -283,6 +346,33 @@ class MapViewModel
                         delay(REFRESH_INTERVAL_MS)
                         _refreshTrigger.value = System.currentTimeMillis()
                     }
+                }
+            }
+
+            // Collect telemetry collector state for map FABs
+            viewModelScope.launch {
+                telemetryCollectorManager.collectorAddress.collect { address ->
+                    _state.update { it.copy(collectorAddress = address) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetrySendEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequestEnabled.collect { enabled ->
+                    _state.update { it.copy(isTelemetryRequestEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isSending.collect { sending ->
+                    _state.update { it.copy(isSendingTelemetry = sending) }
+                }
+            }
+            viewModelScope.launch {
+                telemetryCollectorManager.isRequesting.collect { requesting ->
+                    _state.update { it.copy(isRequestingTelemetry = requesting) }
                 }
             }
         }
@@ -408,43 +498,48 @@ class MapViewModel
 
         /**
          * Stop sharing location.
+         * When stopping all (destinationHash == null), also disables group telemetry sending.
          *
          * @param destinationHash Specific contact to stop sharing with, or null to stop all
          */
         fun stopSharing(destinationHash: String? = null) {
             Log.d(TAG, "Stopping location sharing: ${destinationHash ?: "all"}")
             locationSharingManager.stopSharing(destinationHash)
+            // When stopping all sharing, also disable group telemetry sending
+            if (destinationHash == null && _state.value.isTelemetrySendEnabled) {
+                viewModelScope.launch {
+                    telemetryCollectorManager.setEnabled(false)
+                }
+            }
         }
 
         /**
-         * Calculate the marker state based on timestamp and expiry.
-         *
-         * @param timestamp When the location was captured
-         * @param expiresAt When sharing ends (null = indefinite)
-         * @param currentTime Current time for comparison (injectable for testing)
-         * @return MarkerState indicating freshness, or null if marker should be hidden
+         * Manually send location telemetry to the configured collector.
          */
-        internal fun calculateMarkerState(
-            timestamp: Long,
-            expiresAt: Long?,
-            currentTime: Long = System.currentTimeMillis(),
-        ): MarkerState? {
-            val age = currentTime - timestamp
-            val isExpired = expiresAt != null && expiresAt < currentTime
-            val gracePeriodEnd = (expiresAt ?: Long.MAX_VALUE) + GRACE_PERIOD_MS
+        fun sendTelemetryNow() {
+            viewModelScope.launch {
+                telemetryCollectorManager.sendTelemetryNow()
+            }
+        }
 
-            return when {
-                // Beyond grace period - should not be shown
-                isExpired && currentTime > gracePeriodEnd -> null
+        /**
+         * Manually request location telemetry from the configured collector.
+         */
+        fun requestTelemetryNow() {
+            viewModelScope.launch {
+                telemetryCollectorManager.requestTelemetryNow()
+            }
+        }
 
-                // Expired but within grace period (last known location)
-                isExpired -> MarkerState.EXPIRED_GRACE_PERIOD
-
-                // Not expired but stale (5+ minutes without update)
-                age > STALE_THRESHOLD_MS -> MarkerState.STALE
-
-                // Fresh location
-                else -> MarkerState.FRESH
+        /**
+         * Delete a stale marker by removing all stored locations for the given sender.
+         *
+         * @param destinationHash The destination hash of the contact whose marker to remove
+         */
+        fun deleteMarker(destinationHash: String) {
+            Log.d(TAG, "Deleting marker for: ${destinationHash.take(16)}")
+            viewModelScope.launch {
+                receivedLocationDao.deleteLocationsForSender(destinationHash)
             }
         }
     }

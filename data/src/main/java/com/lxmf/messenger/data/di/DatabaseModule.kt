@@ -17,6 +17,7 @@ import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
+import com.lxmf.messenger.data.util.HashUtils
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -71,6 +72,7 @@ object DatabaseModule {
             MIGRATION_33_34,
             MIGRATION_34_35,
             MIGRATION_35_36,
+            MIGRATION_36_37,
         )
     }
 
@@ -1446,10 +1448,58 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 35 to 36: Add drafts table for auto-saving message drafts
-    // Drafts are saved periodically as users type, and restored when re-opening a conversation
+    // Migration from version 35 to 36: Add pre-computed identity hash to announces table
+    // Fixes COLUMBA-28 OOM crash: findByIdentityHash() was loading ALL announces into memory
+    // to compute SHA-256 per row. This adds an indexed column so the lookup is O(1) SQL seek.
     private val MIGRATION_35_36 =
         object : Migration(35, 36) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add computedIdentityHash column (nullable for backward compat)
+                database.execSQL(
+                    "ALTER TABLE announces ADD COLUMN computedIdentityHash TEXT",
+                )
+
+                // Create index for O(1) lookup by identity hash
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_announces_computedIdentityHash ON announces(computedIdentityHash)",
+                )
+
+                // Backfill existing rows: compute SHA-256(publicKey)[:16] as hex.
+                // Uses batched LIMIT/OFFSET to bound cursor window memory usage.
+                // publicKey is always 64 bytes (Reticulum spec) but we batch defensively.
+                val batchSize = 500
+                var offset = 0
+                while (true) {
+                    val processed =
+                        database
+                            .query(
+                                "SELECT destinationHash, publicKey FROM announces ORDER BY destinationHash LIMIT $batchSize OFFSET $offset",
+                            ).use { cursor ->
+                                var count = 0
+                                while (cursor.moveToNext()) {
+                                    count++
+                                    val destinationHash = cursor.getString(0)
+                                    val publicKey = cursor.getBlob(1)
+                                    if (publicKey != null) {
+                                        val identityHash = HashUtils.computeIdentityHash(publicKey)
+                                        database.execSQL(
+                                            "UPDATE announces SET computedIdentityHash = ? WHERE destinationHash = ?",
+                                            arrayOf(identityHash, destinationHash),
+                                        )
+                                    }
+                                }
+                                count
+                            }
+                    if (processed < batchSize) break
+                    offset += batchSize
+                }
+            }
+        }
+
+    // Migration from version 36 to 37: Add drafts table for auto-saving message drafts
+    // Drafts are saved periodically as users type, and restored when re-opening a conversation
+    private val MIGRATION_36_37 =
+        object : Migration(36, 37) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     """

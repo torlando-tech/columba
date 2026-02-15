@@ -10,6 +10,7 @@ import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
+import com.lxmf.messenger.migration.PreviewWithData
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -145,9 +146,9 @@ class MigrationViewModelTest {
     fun `exportData sets state to Exporting then ExportComplete on success`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationExporter.exportData(any()) } returns Result.success(mockUri)
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(mockUri)
 
-            viewModel.exportData()
+            viewModel.exportData("testpass1")
 
             // First state should be Exporting
             viewModel.uiState.test {
@@ -174,9 +175,9 @@ class MigrationViewModelTest {
     fun `exportData sets state to Error on failure`() =
         runTest {
             val errorMessage = "Export failed: disk full"
-            coEvery { migrationExporter.exportData(any()) } returns Result.failure(Exception(errorMessage))
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.failure(Exception(errorMessage))
 
-            viewModel.exportData()
+            viewModel.exportData("testpass1")
             advanceUntilIdle()
 
             viewModel.uiState.test {
@@ -190,8 +191,8 @@ class MigrationViewModelTest {
     fun `exportData updates progress during export`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationExporter.exportData(any()) } coAnswers {
-                val progressCallback = firstArg<(Float) -> Unit>()
+            coEvery { migrationExporter.exportData(any(), any(), any()) } coAnswers {
+                val progressCallback = secondArg<(Float) -> Unit>()
                 progressCallback(0.25f)
                 progressCallback(0.50f)
                 progressCallback(0.75f)
@@ -199,7 +200,7 @@ class MigrationViewModelTest {
                 Result.success(mockUri)
             }
 
-            viewModel.exportData()
+            viewModel.exportData("testpass1")
             advanceUntilIdle()
 
             // Progress should have been updated (final value)
@@ -219,7 +220,12 @@ class MigrationViewModelTest {
     fun `previewImport sets state to Loading then ImportPreview on success`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationImporter.previewMigration(mockUri) } returns Result.success(testImportPreview)
+            coEvery { migrationImporter.isEncryptedExport(mockUri) } returns Result.success(false)
+            coEvery { migrationImporter.previewMigration(mockUri, any()) } returns
+                Result.success(
+                    com.lxmf.messenger.migration
+                        .PreviewWithData(testImportPreview, ByteArray(0)),
+                )
 
             viewModel.previewImport(mockUri)
             advanceUntilIdle()
@@ -238,7 +244,8 @@ class MigrationViewModelTest {
         runTest {
             val mockUri = mockk<Uri>()
             val errorMessage = "Invalid migration file"
-            coEvery { migrationImporter.previewMigration(mockUri) } returns Result.failure(Exception(errorMessage))
+            coEvery { migrationImporter.isEncryptedExport(mockUri) } returns Result.success(false)
+            coEvery { migrationImporter.previewMigration(mockUri, any()) } returns Result.failure(Exception(errorMessage))
 
             viewModel.previewImport(mockUri)
             advanceUntilIdle()
@@ -258,7 +265,7 @@ class MigrationViewModelTest {
     fun `importData sets state to Importing then RestartingService then ImportComplete on success`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationImporter.importData(mockUri, any()) } returns testImportResult
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } returns testImportResult
 
             viewModel.importData(mockUri)
 
@@ -290,7 +297,7 @@ class MigrationViewModelTest {
         runTest {
             val mockUri = mockk<Uri>()
             val errorResult = ImportResult.Error("Database error during import")
-            coEvery { migrationImporter.importData(mockUri, any()) } returns errorResult
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } returns errorResult
 
             viewModel.importData(mockUri)
             advanceUntilIdle()
@@ -306,8 +313,9 @@ class MigrationViewModelTest {
     fun `importData updates progress during import`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationImporter.importData(mockUri, any()) } coAnswers {
-                val progressCallback = secondArg<(Float) -> Unit>()
+            coEvery { migrationImporter.importData(mockUri, any(), any(), any()) } coAnswers {
+                @Suppress("UNCHECKED_CAST")
+                val progressCallback = args[3] as (Float) -> Unit
                 progressCallback(0.1f)
                 progressCallback(0.5f)
                 progressCallback(1.0f)
@@ -341,10 +349,10 @@ class MigrationViewModelTest {
     fun `resetState returns to Idle and clears progress`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationExporter.exportData(any()) } returns Result.success(mockUri)
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(mockUri)
 
             // First export
-            viewModel.exportData()
+            viewModel.exportData("testpass1")
             advanceUntilIdle()
 
             // Verify we're in ExportComplete
@@ -416,36 +424,36 @@ class MigrationViewModelTest {
     fun `exportData passes includeAttachments false to exporter`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(mockUri)
 
             // Set includeAttachments to false
             viewModel.setIncludeAttachments(false)
             advanceUntilIdle()
 
             // Export
-            val result = runCatching { viewModel.exportData() }
+            val result = runCatching { viewModel.exportData("testpass1") }
             advanceUntilIdle()
 
             // Assert operation completed successfully
             assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = false
-            coVerify { migrationExporter.exportData(any(), includeAttachments = false) }
+            coVerify { migrationExporter.exportData(any(), any(), includeAttachments = false) }
         }
 
     @Test
     fun `exportData passes includeAttachments true to exporter by default`() =
         runTest {
             val mockUri = mockk<Uri>()
-            coEvery { migrationExporter.exportData(any(), any()) } returns Result.success(mockUri)
+            coEvery { migrationExporter.exportData(any(), any(), any()) } returns Result.success(mockUri)
 
             // Export without changing default
-            val result = runCatching { viewModel.exportData() }
+            val result = runCatching { viewModel.exportData("testpass1") }
             advanceUntilIdle()
 
             // Assert operation completed successfully
             assertTrue("exportData should complete without throwing", result.isSuccess)
             // Verify exporter was called with includeAttachments = true
-            coVerify { migrationExporter.exportData(any(), includeAttachments = true) }
+            coVerify { migrationExporter.exportData(any(), any(), includeAttachments = true) }
         }
 
     // endregion

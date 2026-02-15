@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -105,6 +106,7 @@ import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
 import com.lxmf.messenger.ui.components.ProfileIcon
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
@@ -141,6 +143,7 @@ fun ContactsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
+    val contactsListState = rememberLazyListState()
 
     // Tab selection state - use rememberSaveable to preserve across navigation
     var selectedTab by androidx.compose.runtime.saveable
@@ -149,6 +152,7 @@ fun ContactsScreen(
     // Network tab state
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by announceViewModel.showAudioAnnounces.collectAsState()
+    val selectedInterfaceTypes by announceViewModel.selectedInterfaceTypes.collectAsState()
     val announceSearchQuery by announceViewModel.searchQuery.collectAsState()
     val announceCount by announceViewModel.announceCount.collectAsState()
     val isAnnouncing by announceViewModel.isAnnouncing.collectAsState()
@@ -168,16 +172,6 @@ fun ContactsScreen(
         announceError?.let { error ->
             Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
         }
-    }
-
-    // Debug logging
-    LaunchedEffect(contactsState) {
-        val groups = contactsState.groupedContacts
-        android.util.Log.d(
-            "ContactsScreen",
-            "UI received: relay=${groups.relay?.displayName}, pinned=${groups.pinned.size}, " +
-                "all=${groups.all.size}, isLoading=${contactsState.isLoading}",
-        )
     }
 
     var showAddContactSheet by remember { mutableStateOf(false) }
@@ -454,21 +448,18 @@ fun ContactsScreen(
                     }
                     else -> {
                         LazyColumn(
+                            state = contactsListState,
                             modifier =
                                 Modifier
                                     .fillMaxSize()
                                     .padding(paddingValues)
-                                    .consumeWindowInsets(paddingValues),
+                                    .consumeWindowInsets(paddingValues)
+                                    .simpleVerticalScrollbar(contactsListState),
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             // My Relay section (shown at top, separate from pinned)
-                            android.util.Log.d(
-                                "ContactsScreen",
-                                "LazyColumn composing, hasRelay=${contactsState.groupedContacts.relay != null}",
-                            )
                             contactsState.groupedContacts.relay?.let { relay ->
-                                android.util.Log.d("ContactsScreen", "Rendering MY RELAY section")
                                 item {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -780,31 +771,47 @@ fun ContactsScreen(
             },
             text = {
                 Text(
-                    text =
-                        "\"${currentRelayToUnset.displayName}\" will be removed from contacts. " +
-                            "A new relay will be selected automatically from available propagation nodes.",
+                    text = "\"${currentRelayToUnset.displayName}\" will be removed from contacts.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.unsetRelayAndDelete(currentRelayToUnset.destinationHash)
-                        showUnsetRelayDialog = false
-                        relayToUnset = null
-                    },
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Text("Unset Relay")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showUnsetRelayDialog = false
-                        relayToUnset = null
-                    },
-                ) {
-                    Text("Cancel")
+                    TextButton(
+                        onClick = {
+                            viewModel.unsetRelayAndDelete(
+                                currentRelayToUnset.destinationHash,
+                                autoSelectNew = true,
+                            )
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Remove & Auto-Select New")
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.unsetRelayAndDelete(
+                                currentRelayToUnset.destinationHash,
+                                autoSelectNew = false,
+                            )
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Remove Only")
+                    }
+                    TextButton(
+                        onClick = {
+                            showUnsetRelayDialog = false
+                            relayToUnset = null
+                        },
+                    ) {
+                        Text("Cancel")
+                    }
                 }
             },
         )
@@ -853,10 +860,12 @@ fun ContactsScreen(
         NodeTypeFilterDialog(
             selectedTypes = selectedNodeTypes,
             showAudio = showAudioAnnounces,
+            selectedInterfaceTypes = selectedInterfaceTypes,
             onDismiss = { showNodeTypeFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio ->
+            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
                 announceViewModel.updateSelectedNodeTypes(newSelection)
                 announceViewModel.updateShowAudioAnnounces(newShowAudio)
+                announceViewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
                 showNodeTypeFilterDialog = false
             },
         )

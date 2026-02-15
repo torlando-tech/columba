@@ -10,7 +10,6 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  actions: write  # Required for fail-fast workflow cancellation
 
 jobs:
   validate-wrapper:
@@ -221,20 +220,6 @@ jobs:
           path: app/build/outputs/apk/sentry/release/*.apk
           retention-days: 14
 
-      - name: Annotate failure before cancelling
-        if: failure()
-        run: |
-          echo "::error title=ProGuard Verification Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
-          echo "## ❌ ProGuard Verification Failed" >> $GITHUB_STEP_SUMMARY
-          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
-          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
-
-      - name: Cancel workflow on failure (fail-fast)
-        if: failure()
-        run: gh run cancel ${{ github.run_id }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   python-tests:
     name: Python Tests
     needs: [lint, validate-wrapper]
@@ -281,20 +266,6 @@ jobs:
           name: python-coverage-report
           path: python/coverage-python.xml
           retention-days: 7
-
-      - name: Annotate failure before cancelling
-        if: failure()
-        run: |
-          echo "::error title=Python Tests Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
-          echo "## ❌ Python Tests Failed" >> $GITHUB_STEP_SUMMARY
-          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
-          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
-
-      - name: Cancel workflow on failure (fail-fast)
-        if: failure()
-        run: gh run cancel ${{ github.run_id }}
-        env:
-          GH_TOKEN: ${{ github.token }}
 
   kotlin-tests:
     name: Kotlin Tests
@@ -393,20 +364,6 @@ jobs:
           path: |
             **/build/reports/jacoco/
           retention-days: 7
-
-      - name: Annotate failure before cancelling
-        if: failure()
-        run: |
-          echo "::error title=Kotlin Tests Failed::This job failed and triggered workflow cancellation. Check the logs above for details."
-          echo "## ❌ Kotlin Tests Failed" >> $GITHUB_STEP_SUMMARY
-          echo "This job failed and triggered cancellation of other jobs." >> $GITHUB_STEP_SUMMARY
-          echo "Check the job logs above for the specific failure details." >> $GITHUB_STEP_SUMMARY
-
-      - name: Cancel workflow on failure (fail-fast)
-        if: failure()
-        run: gh run cancel ${{ github.run_id }}
-        env:
-          GH_TOKEN: ${{ github.token }}
 
   instrumented-tests:
     name: Instrumented Tests

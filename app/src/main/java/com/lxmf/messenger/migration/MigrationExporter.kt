@@ -62,6 +62,7 @@ class MigrationExporter
          * @return URI to the exported file via FileProvider, or null on failure
          */
         suspend fun exportData(
+            password: String,
             onProgress: (Float) -> Unit = {},
             includeAttachments: Boolean = true,
         ): Result<Uri> =
@@ -99,6 +100,9 @@ class MigrationExporter
                     val attachmentRefs = if (includeAttachments) collectAttachments() else emptyList()
                     onProgress(0.7f)
 
+                    val ratchetRefs = collectRatchets()
+                    onProgress(0.72f)
+
                     // Create migration bundle
                     val bundle =
                         MigrationBundle(
@@ -112,10 +116,15 @@ class MigrationExporter
                             customThemes = customThemeExports,
                             settings = settingsExport,
                             attachmentManifest = attachmentRefs,
+                            ratchetFiles = ratchetRefs,
                         )
 
-                    // Create and return ZIP file
+                    // Create ZIP file, then encrypt it
                     val exportFile = createExportZip(bundle, attachmentRefs, onProgress)
+                    onProgress(0.95f)
+
+                    Log.i(TAG, "Encrypting export file...")
+                    MigrationCrypto.encryptFile(exportFile, password)
                     Log.i(TAG, "Export complete: ${exportFile.absolutePath}")
                     onProgress(1.0f)
 
@@ -163,8 +172,8 @@ class MigrationExporter
             return UserData(allConversations, allMessages, allContacts)
         }
 
-        private suspend fun exportConversationsForIdentity(identityHash: String): List<ConversationExport> {
-            return database.conversationDao().getAllConversationsList(identityHash).map { conv ->
+        private suspend fun exportConversationsForIdentity(identityHash: String): List<ConversationExport> =
+            database.conversationDao().getAllConversationsList(identityHash).map { conv ->
                 ConversationExport(
                     peerHash = conv.peerHash,
                     identityHash = conv.identityHash,
@@ -176,10 +185,9 @@ class MigrationExporter
                     lastSeenTimestamp = conv.lastSeenTimestamp,
                 )
             }
-        }
 
-        private suspend fun exportMessagesForIdentity(identityHash: String): List<MessageExport> {
-            return database.messageDao().getAllMessagesForIdentity(identityHash).map { msg ->
+        private suspend fun exportMessagesForIdentity(identityHash: String): List<MessageExport> =
+            database.messageDao().getAllMessagesForIdentity(identityHash).map { msg ->
                 MessageExport(
                     id = msg.id,
                     conversationHash = msg.conversationHash,
@@ -192,10 +200,9 @@ class MigrationExporter
                     fieldsJson = msg.fieldsJson,
                 )
             }
-        }
 
-        private suspend fun exportContactsForIdentity(identityHash: String): List<ContactExport> {
-            return database.contactDao().getAllContactsSync(identityHash).map { contact ->
+        private suspend fun exportContactsForIdentity(identityHash: String): List<ContactExport> =
+            database.contactDao().getAllContactsSync(identityHash).map { contact ->
                 ContactExport(
                     destinationHash = contact.destinationHash,
                     identityHash = contact.identityHash,
@@ -211,10 +218,9 @@ class MigrationExporter
                     isMyRelay = contact.isMyRelay,
                 )
             }
-        }
 
-        private fun exportIdentities(identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>): List<IdentityExport> {
-            return identities.map { identity ->
+        private fun exportIdentities(identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>): List<IdentityExport> =
+            identities.map { identity ->
                 val keyData = identity.keyData ?: loadIdentityKeyFromFile(identity.filePath)
                 IdentityExport(
                     identityHash = identity.identityHash,
@@ -230,7 +236,6 @@ class MigrationExporter
                     iconBackgroundColor = identity.iconBackgroundColor,
                 )
             }
-        }
 
         private suspend fun exportAnnounces(): List<AnnounceExport> {
             val announces = database.announceDao().getAllAnnouncesSync()
@@ -316,6 +321,54 @@ class MigrationExporter
             return attachmentRefs
         }
 
+        private fun collectRatchets(): List<RatchetRef> {
+            val reticulumDir = File(context.filesDir, "reticulum")
+            val refs = mutableListOf<RatchetRef>()
+
+            // Own ratchets (LXMF delivery destination ratchet private keys)
+            val ownRatchetsDir = File(reticulumDir, "lxmf/ratchets")
+            if (ownRatchetsDir.exists()) {
+                ownRatchetsDir.listFiles()?.filter { it.isFile }?.forEach { file ->
+                    try {
+                        refs.add(
+                            RatchetRef(
+                                type = "own",
+                                filename = file.name,
+                                data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
+                            ),
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read own ratchet file: ${file.name}", e)
+                    }
+                }
+            }
+
+            // Peer ratchets (known ratchet public keys from announces)
+            val peerRatchetsDir = File(reticulumDir, "storage/ratchets")
+            if (peerRatchetsDir.exists()) {
+                peerRatchetsDir.listFiles()?.filter { it.isFile }?.forEach { file ->
+                    try {
+                        refs.add(
+                            RatchetRef(
+                                type = "peer",
+                                filename = file.name,
+                                data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP),
+                            ),
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read peer ratchet file: ${file.name}", e)
+                    }
+                }
+            }
+
+            Log.d(
+                TAG,
+                "Found ${refs.size} ratchet files to export " +
+                    "(own=${refs.count { it.type == "own" }}, peer=${refs.count { it.type == "peer" }})",
+            )
+            return refs
+        }
+
         private fun createExportZip(
             bundle: MigrationBundle,
             attachmentRefs: List<AttachmentRef>,
@@ -352,8 +405,8 @@ class MigrationExporter
         /**
          * Load identity key data from a file path.
          */
-        private fun loadIdentityKeyFromFile(filePath: String): ByteArray? {
-            return try {
+        private fun loadIdentityKeyFromFile(filePath: String): ByteArray? =
+            try {
                 val file = File(filePath)
                 if (file.exists()) {
                     file.readBytes()
@@ -365,7 +418,6 @@ class MigrationExporter
                 Log.e(TAG, "Failed to load identity key from $filePath", e)
                 null
             }
-        }
 
         /**
          * Get a preview of what would be exported.
@@ -379,18 +431,25 @@ class MigrationExporter
 
                     identities.forEach { identity ->
                         messageCount +=
-                            database.messageDao()
-                                .getAllMessagesForIdentity(identity.identityHash).size
+                            database
+                                .messageDao()
+                                .getAllMessagesForIdentity(identity.identityHash)
+                                .size
                         contactCount +=
-                            database.contactDao()
-                                .getAllContactsSync(identity.identityHash).size
+                            database
+                                .contactDao()
+                                .getAllContactsSync(identity.identityHash)
+                                .size
                     }
 
                     val announceCount = database.announceDao().getAnnounceCount()
                     val peerIdentityCount = database.peerIdentityDao().getAllPeerIdentities().size
                     val interfaceCount =
-                        interfaceDatabase.interfaceDao()
-                            .getAllInterfaces().first().size
+                        interfaceDatabase
+                            .interfaceDao()
+                            .getAllInterfaces()
+                            .first()
+                            .size
                     val customThemeCount = database.customThemeDao().getThemeCount()
 
                     ExportResult.Success(

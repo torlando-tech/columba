@@ -103,7 +103,10 @@ LINK_SPEED_PROBE_DESIGN.md
 sentry-wizard
 
 # Claude Code / claude-flow tooling
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/columba-python-migration/
 .claude-flow/
 .planning/
 .swarm/

@@ -17,9 +17,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // Python 3.11 supports 64-bit ABIs
-            // TODO: x86_64 disabled until pycodec2 wheel resolution issue is fixed
-            abiFilters += listOf("arm64-v8a")
+            // armeabi-v7a restored: pycodec2 removed in favor of LXST (Kotlin/C++)
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
 

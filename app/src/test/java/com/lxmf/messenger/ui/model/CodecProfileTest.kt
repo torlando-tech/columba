@@ -3,6 +3,7 @@ package com.lxmf.messenger.ui.model
 import android.app.Application
 import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -465,8 +466,8 @@ class CodecProfileTest {
         assertEquals(CodecProfile.QUALITY_MEDIUM, CodecProfile.fromCode(0x40))
         assertEquals(CodecProfile.QUALITY_HIGH, CodecProfile.fromCode(0x50))
         assertEquals(CodecProfile.QUALITY_MAX, CodecProfile.fromCode(0x60))
-        assertEquals(CodecProfile.LATENCY_LOW, CodecProfile.fromCode(0x70))
-        assertEquals(CodecProfile.LATENCY_ULTRA_LOW, CodecProfile.fromCode(0x80))
+        assertEquals(CodecProfile.LATENCY_LOW, CodecProfile.fromCode(0x80))
+        assertEquals(CodecProfile.LATENCY_ULTRA_LOW, CodecProfile.fromCode(0x70))
     }
 
     @Test
@@ -488,5 +489,20 @@ class CodecProfileTest {
             assertTrue("displayName should not be blank", profile.displayName.isNotBlank())
             assertTrue("description should not be blank", profile.description.isNotBlank())
         }
+    }
+
+    // ========== Experimental Flag Tests ==========
+
+    @Test
+    fun `LATENCY_LOW and LATENCY_ULTRA_LOW are experimental`() {
+        assertTrue(CodecProfile.LATENCY_LOW.isExperimental)
+        assertTrue(CodecProfile.LATENCY_ULTRA_LOW.isExperimental)
+    }
+
+    @Test
+    fun `non-latency profiles are not experimental`() {
+        CodecProfile.entries
+            .filter { it != CodecProfile.LATENCY_LOW && it != CodecProfile.LATENCY_ULTRA_LOW }
+            .forEach { assertFalse("${it.name} should not be experimental", it.isExperimental) }
     }
 }

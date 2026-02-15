@@ -42,6 +42,7 @@ class TelemetryCollectorManagerTest {
     private lateinit var mockContext: Context
     private lateinit var mockSettingsRepository: SettingsRepository
     private lateinit var mockReticulumProtocol: ReticulumProtocol
+    private lateinit var mockIdentityRepository: com.lxmf.messenger.data.repository.IdentityRepository
     private lateinit var manager: TelemetryCollectorManager
 
     // Settings flows
@@ -62,6 +63,10 @@ class TelemetryCollectorManagerTest {
         mockContext = mockk(relaxed = true)
         mockSettingsRepository = mockk()
         mockReticulumProtocol = mockk()
+        mockIdentityRepository = mockk()
+
+        // Default: no active identity (no icon appearance)
+        coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
 
         // Setup settings repository flows
         every { mockSettingsRepository.telemetryCollectorAddressFlow } returns collectorAddressFlow
@@ -99,6 +104,7 @@ class TelemetryCollectorManagerTest {
             context = mockContext,
             settingsRepository = mockSettingsRepository,
             reticulumProtocol = mockReticulumProtocol,
+            identityRepository = mockIdentityRepository,
             scope = testScope,
         )
 

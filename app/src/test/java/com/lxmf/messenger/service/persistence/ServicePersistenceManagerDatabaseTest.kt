@@ -45,7 +45,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
-    private val testPublicKey = ByteArray(32) { it.toByte() }
+    private val testPublicKey = ByteArray(64) { it.toByte() }
     private val testAppData = "Test App Data".toByteArray()
 
     @Before
@@ -536,6 +536,117 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertNull("Should return null when no contact or announce", result)
         }
 
+    // ========== computedIdentityHash Tests (COLUMBA-28) ==========
+
+    @Suppress("SleepInsteadOfDelay") // Room dispatches to IO, test dispatcher can't control it
+    @Test
+    fun `persistAnnounce stores computedIdentityHash in database`() =
+        testScope.runTest {
+            val destinationHash = "announce_identity_hash_test_12345"
+
+            persistenceManager.persistAnnounce(
+                destinationHash = destinationHash,
+                peerName = "Identity Test Peer",
+                publicKey = testPublicKey,
+                appData = null,
+                hops = 1,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                propagationTransferLimitKb = null,
+            )
+            advanceUntilIdle()
+            Thread.sleep(100) // Allow Room's IO dispatcher to complete
+
+            val saved = announceDao.getAnnounce(destinationHash)
+            assertNotNull("Announce should be saved", saved)
+            assertNotNull("computedIdentityHash should be set", saved?.computedIdentityHash)
+            assertEquals("computedIdentityHash should be 32 hex chars", 32, saved?.computedIdentityHash?.length)
+            assertEquals(
+                "computedIdentityHash should be lowercase",
+                saved?.computedIdentityHash,
+                saved?.computedIdentityHash?.lowercase(),
+            )
+        }
+
+    @Suppress("SleepInsteadOfDelay") // Room dispatches to IO, test dispatcher can't control it
+    @Test
+    fun `persistAnnounce computedIdentityHash matches HashUtils output`() =
+        testScope.runTest {
+            val destinationHash = "announce_hash_match_test_12345678"
+
+            persistenceManager.persistAnnounce(
+                destinationHash = destinationHash,
+                peerName = "Hash Match Test",
+                publicKey = testPublicKey,
+                appData = null,
+                hops = 1,
+                timestamp = System.currentTimeMillis(),
+                nodeType = "LXMF_PEER",
+                receivingInterface = null,
+                receivingInterfaceType = null,
+                aspect = null,
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                propagationTransferLimitKb = null,
+            )
+            advanceUntilIdle()
+            Thread.sleep(100) // Allow Room's IO dispatcher to complete
+
+            val saved = announceDao.getAnnounce(destinationHash)
+            val expectedHash =
+                com.lxmf.messenger.data.util.HashUtils
+                    .computeIdentityHash(testPublicKey)
+            assertEquals("computedIdentityHash should match HashUtils", expectedHash, saved?.computedIdentityHash)
+        }
+
+    @Test
+    fun `lookupDisplayName finds announce by identity hash fallback`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            // Insert announce with a computedIdentityHash
+            val identityHash =
+                com.lxmf.messenger.data.util.HashUtils
+                    .computeIdentityHash(testPublicKey)
+            val announce =
+                AnnounceEntity(
+                    destinationHash = "real_dest_hash_123456789012345678",
+                    peerName = "Found Via Identity Hash",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    nodeType = "LXMF_PEER",
+                    receivingInterface = null,
+                    isFavorite = false,
+                    favoritedTimestamp = null,
+                    computedIdentityHash = identityHash,
+                )
+            announceDao.upsertAnnounce(announce)
+
+            // Look up by identity hash (NOT destination hash) — the LXST call path
+            val result = persistenceManager.lookupDisplayName(identityHash)
+
+            assertEquals("Should find peer name via identity hash", "Found Via Identity Hash", result)
+        }
+
+    @Test
+    fun `lookupDisplayName returns null when identity hash not found`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            val result = persistenceManager.lookupDisplayName("nonexistent_identity_hash_12345")
+
+            assertNull("Should return null for unknown identity hash", result)
+        }
+
     // ========== persistPeerIdentity() Tests ==========
 
     @Suppress("SleepInsteadOfDelay") // Room dispatches to IO, test dispatcher can't control it
@@ -552,7 +663,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             // Verify peer identity was saved
             val saved = peerIdentityDao.getPeerIdentity(peerHash)
             assertNotNull("Peer identity should be saved", saved)
-            assertEquals(32, saved?.publicKey?.size)
+            assertEquals(64, saved?.publicKey?.size)
         }
 
     // ========== Unread Count Edge Cases ==========

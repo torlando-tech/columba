@@ -133,7 +133,11 @@ class MessageCollectorTest {
                 )
 
             // Mock that message already exists in database (persisted by ServicePersistenceManager)
-            coEvery { conversationRepository.getMessageById("persisted_message") } returns mockk()
+            // isRead = false means the user hasn't seen it yet, so notification should fire
+            coEvery { conversationRepository.getMessageById("persisted_message") } returns
+                mockk {
+                    every { isRead } returns false
+                }
 
             // When: Start collecting and emit message
             val startResult = runCatching { messageCollector.startCollecting() }

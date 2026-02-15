@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -294,6 +295,99 @@ class AnnounceDaoTest {
                 // Both peers should be returned (null stampCostFlexibility is fine for non-propagation nodes)
                 assertEquals(2, nodes.size)
             }
+        }
+
+    // ========== getAnnounceByIdentityHash Tests (COLUMBA-28) ==========
+
+    @Test
+    fun getAnnounceByIdentityHash_returnsMatchingAnnounce() =
+        runTest {
+            val identityHash = "abcdef0123456789abcdef0123456789"
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest1", peerName = "Alice").copy(
+                    computedIdentityHash = identityHash,
+                ),
+            )
+
+            val result = dao.getAnnounceByIdentityHash(identityHash)
+
+            assertEquals("dest1", result?.destinationHash)
+            assertEquals("Alice", result?.peerName)
+        }
+
+    @Test
+    fun getAnnounceByIdentityHash_returnsNullWhenNoMatch() =
+        runTest {
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest1").copy(
+                    computedIdentityHash = "aaaa0000aaaa0000aaaa0000aaaa0000",
+                ),
+            )
+
+            val result = dao.getAnnounceByIdentityHash("bbbb1111bbbb1111bbbb1111bbbb1111")
+
+            assertEquals(null, result)
+        }
+
+    @Test
+    fun getAnnounceByIdentityHash_returnsNullWhenTableEmpty() =
+        runTest {
+            val result = dao.getAnnounceByIdentityHash("abcdef0123456789abcdef0123456789")
+
+            assertEquals(null, result)
+        }
+
+    @Test
+    fun getAnnounceByIdentityHash_returnsNullForNullComputedHash() =
+        runTest {
+            // Announce with no computedIdentityHash (e.g., pre-migration row not yet backfilled)
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest1").copy(
+                    computedIdentityHash = null,
+                ),
+            )
+
+            val result = dao.getAnnounceByIdentityHash("abcdef0123456789abcdef0123456789")
+
+            assertEquals(null, result)
+        }
+
+    @Test
+    fun getAnnounceByIdentityHash_isCaseSensitive() =
+        runTest {
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest1").copy(
+                    computedIdentityHash = "abcdef0123456789abcdef0123456789",
+                ),
+            )
+
+            // Uppercase should NOT match (identity hashes are always stored lowercase)
+            val result = dao.getAnnounceByIdentityHash("ABCDEF0123456789ABCDEF0123456789")
+
+            assertEquals(null, result)
+        }
+
+    @Test
+    fun getAnnounceByIdentityHash_returnsOneWhenMultipleExist() =
+        runTest {
+            // Two announces with the same identity hash (theoretically impossible,
+            // but LIMIT 1 should still return exactly one)
+            val identityHash = "abcdef0123456789abcdef0123456789"
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest1", peerName = "First").copy(
+                    computedIdentityHash = identityHash,
+                ),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "dest2", peerName = "Second").copy(
+                    computedIdentityHash = identityHash,
+                ),
+            )
+
+            val result = dao.getAnnounceByIdentityHash(identityHash)
+
+            // Should return exactly one result (LIMIT 1)
+            assertNotNull(result)
         }
 
     // ========== getNodeTypeCounts Tests ==========

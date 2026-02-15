@@ -97,6 +97,7 @@ class TelemetryCollectorManager
         @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
         private val reticulumProtocol: ReticulumProtocol,
+        private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
         private val fusedLocationClient: FusedLocationProviderClient =
@@ -603,12 +604,30 @@ class TelemetryCollectorManager
                 // Convert collector hash to bytes
                 val collectorBytes = collectorHash.hexToByteArray()
 
+                // Get user's icon appearance for Sideband/MeshChat interoperability
+                val iconAppearance =
+                    identityRepository.getActiveIdentitySync()?.let { activeId ->
+                        val name = activeId.iconName
+                        val fg = activeId.iconForegroundColor
+                        val bg = activeId.iconBackgroundColor
+                        if (name != null && fg != null && bg != null) {
+                            com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                                iconName = name,
+                                foregroundColor = fg,
+                                backgroundColor = bg,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+
                 // Send via protocol
                 val result =
                     reticulumProtocol.sendLocationTelemetry(
                         destinationHash = collectorBytes,
                         locationJson = locationJson,
                         sourceIdentity = sourceIdentity,
+                        iconAppearance = iconAppearance,
                     )
 
                 return if (result.isSuccess) {

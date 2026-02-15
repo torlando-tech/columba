@@ -119,6 +119,7 @@ class ServicePersistenceManager(
                         stampCostFlexibility = stampCostFlexibility,
                         peeringCost = peeringCost,
                         propagationTransferLimitKb = propagationTransferLimitKb,
+                        computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
                     )
 
                 announceDao.upsertAnnounce(entity)
@@ -407,84 +408,69 @@ class ServicePersistenceManager(
 
     /**
      * Look up display name for a peer with priority:
-     * 1. Contact's custom nickname (user-set)
-     * 2. Announce peer name (from network)
-     * 3. Announce peer name by identity hash (for LXST calls)
+     * 1. Contact's custom nickname (user-set, by destination hash)
+     * 2. Announce peer name (from network, by destination hash)
+     * 3. Announce peer name by identity hash (for LXST calls where the caller provides
+     *    an identity hash instead of a destination hash)
      * 4. null (caller should use formatted hash as fallback)
      *
-     * Uses PeerNameResolver for standard lookups, with additional identity hash fallback.
+     * @param peerHash Either a destination hash or an identity hash (32-char hex).
+     *   LXST incoming calls provide identity hashes; standard lookups use destination hashes.
      */
-    suspend fun lookupDisplayName(destinationHash: String): String? {
+    suspend fun lookupDisplayName(peerHash: String): String? {
         return try {
-            Log.d(TAG, "Looking up display name for: $destinationHash")
+            Log.d(TAG, "Looking up display name for: $peerHash")
 
             // Get active identity for contact lookup
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             Log.d(TAG, "Active identity: ${activeIdentity?.identityHash?.take(16)}")
 
-            // Use centralized resolver for standard lookups
+            // Try destination-hash-based lookups first (contact nickname, then announce name)
             val resolvedName =
                 PeerNameResolver.resolve(
-                    peerHash = destinationHash,
+                    peerHash = peerHash,
                     contactNicknameLookup = {
                         activeIdentity?.let {
-                            contactDao.getContact(destinationHash, it.identityHash)?.customNickname
+                            contactDao.getContact(peerHash, it.identityHash)?.customNickname
                         }
                     },
                     announcePeerNameLookup = {
-                        announceDao.getAnnounce(destinationHash)?.peerName
+                        announceDao.getAnnounce(peerHash)?.peerName
                     },
                 )
 
-            // If resolver found a valid name (not fallback), return it
             if (PeerNameResolver.isValidPeerName(resolvedName)) {
                 return resolvedName
             }
 
-            // For LXST calls, the hash might be the identity hash, not the destination hash.
-            // Try to find an announce by matching identity hash (computed from public key).
+            // Destination hash lookup failed — try as identity hash.
+            // This path is used by LXST incoming calls which provide identity hashes.
             Log.d(TAG, "Trying identity hash lookup...")
-            val announceByIdentity = findAnnounceByIdentityHash(destinationHash)
+            val announceByIdentity = findAnnounceByIdentityHash(peerHash)
             if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
                 Log.d(TAG, "Found by identity hash")
                 return announceByIdentity.peerName
             }
 
-            Log.d(TAG, "No display name found for $destinationHash")
+            Log.d(TAG, "No display name found for $peerHash")
             null
         } catch (e: Exception) {
-            Log.e(TAG, "Error looking up display name for $destinationHash", e)
+            Log.e(TAG, "Error looking up display name for $peerHash", e)
             null
         }
     }
 
     /**
-     * Find an announce by identity hash.
-     * Computes identity hash from each announce's public key and compares.
+     * Find an announce by identity hash using indexed column lookup.
      * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
      */
-    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? {
-        return try {
-            val allAnnounces = announceDao.getAllAnnouncesSync()
-            Log.d(TAG, "Searching ${allAnnounces.size} announces for identity hash $identityHash")
-            for (announce in allAnnounces) {
-                val computedHash = HashUtils.computeIdentityHash(announce.publicKey)
-                Log.d(
-                    TAG,
-                    "  Announce ${announce.destinationHash.take(16)}: computed=$computedHash, match=${computedHash.equals(identityHash, ignoreCase = true)}",
-                )
-                if (computedHash.equals(identityHash, ignoreCase = true)) {
-                    Log.d(TAG, "  -> MATCHED!")
-                    return announce
-                }
-            }
-            Log.d(TAG, "No announce matched identity hash $identityHash")
-            null
+    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? =
+        try {
+            announceDao.getAnnounceByIdentityHash(identityHash.lowercase())
         } catch (e: Exception) {
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
-    }
 
     /**
      * Close the database connection.

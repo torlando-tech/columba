@@ -82,6 +82,107 @@ SID_LOCATION = 0x02
 
 
 # ============================================================================
+# Marker Symbol Registry (MDI icon names for Sideband interoperability)
+# ============================================================================
+# Maps marker symbol keys to Material Design Icon names used by Sideband/MeshChat.
+# When a peer's marker metadata includes a symbol, the icon_name in the
+# appearance tuple is looked up here, and the background colour is derived
+# from the symbol key via _color_from_symbol_key().
+
+MARKER_SYMBOL_REGISTRY: Dict[str, str] = {
+    "person":    "account",
+    "car":       "car",
+    "bike":      "bike",
+    "truck":     "truck",
+    "bus":       "bus",
+    "plane":     "airplane",
+    "boat":      "sail-boat",
+    "train":     "train",
+    "helicopter":"helicopter",
+    "motorcycle":"motorbike",
+    "walking":   "walk",
+    "running":   "run",
+    "pet":       "paw",
+    "dog":       "dog",
+    "cat":       "cat",
+    "home":      "home",
+    "office":    "office-building",
+    "hospital":  "hospital-building",
+    "school":    "school",
+    "store":     "store",
+    "restaurant":"food-fork-drink",
+    "fuel":      "gas-station",
+    "parking":   "parking",
+    "camp":      "campfire",
+    "mountain":  "mountain",
+    "tree":      "tree",
+    "water":     "water",
+    "flag":      "flag",
+    "star":      "star",
+    "heart":     "heart",
+    "warning":   "alert",
+    "info":      "information",
+    "pin":       "map-marker",
+    "circle":    "circle",
+    "square":    "square",
+    "triangle":  "triangle",
+    "diamond":   "diamond",
+    "rectangle": "rectangle",
+    "cross":     "cross",
+    "anchor":    "anchor",
+    "tower":     "tower-broadcast",
+    "antenna":   "antenna",
+    "repeater":  "access-point",
+    "gateway":   "router-wireless",
+    "node":      "access-point-network",
+}
+
+
+def _color_from_symbol_key(symbol_key: str) -> bytes:
+    """
+    Derive a deterministic background RGB colour from a marker symbol key.
+
+    Uses a simple hash to map any symbol key string to a colour in the
+    mid-saturation, mid-brightness range so that white or light foreground
+    text remains readable.
+
+    Args:
+        symbol_key: The marker symbol key string (e.g. "car", "person")
+
+    Returns:
+        3-byte RGB value suitable for an appearance background field
+    """
+    import hashlib
+    h = hashlib.sha256(symbol_key.encode("utf-8")).digest()
+    # Use first 3 bytes but clamp to 40-200 range for readability
+    r = 40 + (h[0] % 161)  # 40..200
+    g = 40 + (h[1] % 161)
+    b = 40 + (h[2] % 161)
+    return bytes([r, g, b])
+
+
+def appearance_from_marker_symbol(symbol_key: str) -> Optional[list]:
+    """
+    Build a Sideband-compatible appearance tuple from a marker symbol key.
+
+    Returns [icon_name, fg_bytes(3), bg_bytes(3)] or None if the symbol key
+    is not recognised.
+
+    Args:
+        symbol_key: The marker symbol key (e.g. "car", "rectangle")
+
+    Returns:
+        Appearance list [icon_name, fg_rgb_bytes, bg_rgb_bytes] or None
+    """
+    mdi_name = MARKER_SYMBOL_REGISTRY.get(symbol_key)
+    if mdi_name is None:
+        return None
+    bg = _color_from_symbol_key(symbol_key)
+    fg = b"\xff\xff\xff"  # White foreground for readability
+    return [mdi_name, fg, bg]
+
+
+# ============================================================================
 # Telemetry Pack/Unpack Helpers (Sideband Telemeter format)
 # ============================================================================
 
@@ -119,7 +220,7 @@ def pack_location_telemetry(lat: float, lon: float, accuracy: float, timestamp_m
         struct.pack("!i", int(round(altitude, 2) * 1e2)),  # altitude in centimeters
         struct.pack("!I", int(round(speed, 2) * 1e2)),     # speed in cm/s (unsigned)
         struct.pack("!i", int(round(bearing, 2) * 1e2)),   # bearing in centi-degrees
-        struct.pack("!H", int(round(accuracy, 2) * 1e2)),  # accuracy in centimeters (unsigned short)
+        struct.pack("!H", min(int(round(accuracy, 2) * 1e2), 65535)),  # accuracy in centimeters (unsigned short, clamped)
         timestamp_s,                                        # last_update timestamp
     ]
 
@@ -165,6 +266,13 @@ def unpack_location_telemetry(packed_data: bytes) -> Optional[Dict]:
         bearing = struct.unpack("!i", loc[4])[0] / 1e2
         accuracy = struct.unpack("!H", loc[5])[0] / 1e2
         last_update = loc[6]
+
+        # Log human-readable view of decoded sensors
+        log_debug("TelemetryHelper", "unpack_location_telemetry",
+                  f"Decoded sensors: lat={lat:.6f} lon={lon:.6f} "
+                  f"alt={altitude:.1f}m spd={speed:.1f}km/h "
+                  f"bear={bearing:.1f}° acc={accuracy:.1f}m "
+                  f"t={last_update}")
 
         return {
             "type": "location_share",
@@ -257,29 +365,32 @@ def unpack_telemetry_stream(stream_data: List) -> List[Dict]:
             location_event['source_hash'] = source_hash_hex
 
             # Parse appearance if present
+            # Sideband format: [icon_name, foreground_rgb_bytes, background_rgb_bytes]
             if appearance and isinstance(appearance, list) and len(appearance) >= 3:
                 try:
                     icon_name = appearance[0]
                     fg_bytes = appearance[1]
                     bg_bytes = appearance[2]
 
-                    # Validate icon name - alphanumeric and underscores only, max 50 chars
-                    if isinstance(icon_name, str) and len(icon_name) <= 50 and icon_name.replace('_', '').isalnum():
-                        # Convert RGB bytes to hex color string
+                    # Validate icon name - alphanumeric, underscores, and hyphens only, max 50 chars
+                    # MDI icon names use hyphens (e.g. "sail-boat", "access-point-network")
+                    if isinstance(icon_name, str) and len(icon_name) <= 50 and icon_name.replace('_', '').replace('-', '').isalnum():
+                        # Convert RGB bytes to hex color string (no # prefix — Kotlin expects raw hex)
                         if isinstance(fg_bytes, bytes) and len(fg_bytes) >= 3:
-                            fg_hex = "#{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
+                            fg_hex = "{:02x}{:02x}{:02x}".format(fg_bytes[0], fg_bytes[1], fg_bytes[2])
                         else:
                             fg_hex = None
 
                         if isinstance(bg_bytes, bytes) and len(bg_bytes) >= 3:
-                            bg_hex = "#{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
+                            bg_hex = "{:02x}{:02x}{:02x}".format(bg_bytes[0], bg_bytes[1], bg_bytes[2])
                         else:
                             bg_hex = None
 
+                        # Keys must match Kotlin parser: icon_name, foreground_color, background_color
                         location_event['appearance'] = {
-                            'name': icon_name,
-                            'fg': fg_hex,
-                            'bg': bg_hex,
+                            'icon_name': icon_name,
+                            'foreground_color': fg_hex,
+                            'background_color': bg_hex,
                         }
                     else:
                         log_warning("TelemetryHelper", "unpack_telemetry_stream",
@@ -395,6 +506,8 @@ class ReticulumWrapper:
 
         # Location telemetry callback support (Phase 3 - location sharing over LXMF)
         self.kotlin_location_received_callback = None  # Callback to Kotlin when location telemetry received
+        self._pending_location_events = []  # Buffer for events arriving before callback registration
+        self._max_pending_location_events = 100  # Cap to prevent unbounded memory growth
 
         # Reaction received callback support (emoji reactions to messages)
         self.kotlin_reaction_received_callback = None  # Callback to Kotlin when reaction received
@@ -480,7 +593,7 @@ class ReticulumWrapper:
         self.telemetry_collector_enabled = False  # True when acting as host/collector
         self.collected_telemetry = {}  # {source_hash_hex: {timestamp, packed_telemetry, appearance, received_at}}
         self.telemetry_retention_seconds = 86400  # 24 hours TTL
-        self.telemetry_allowed_requesters = set()  # Empty = allow all, otherwise set of allowed identity hashes (lowercase hex)
+        self.telemetry_allowed_requesters = set()  # Empty = block all; populated = allow only listed identity hashes (lowercase hex)
 
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
@@ -592,7 +705,7 @@ class ReticulumWrapper:
                          f"Configured {count} allowed requester(s)")
             else:
                 log_info("ReticulumWrapper", "set_telemetry_allowed_requesters",
-                         "Cleared allowed requesters list (all requesters allowed)")
+                         "Allowed requesters list is empty (all requests will be blocked)")
 
             return {'success': True, 'count': count}
         except Exception as e:
@@ -642,12 +755,14 @@ class ReticulumWrapper:
                 # This handles cases where sender's clock is off or telemetry was generated earlier
                 # If timebase is None or 0, send all entries
                 if timebase is None or timebase == 0 or received_at >= timebase:
+                    entry_appearance = entry.get('appearance', None)
+
                     # Format: [source_hash_bytes, timestamp, packed_telemetry, appearance]
                     entries_to_send.append([
                         bytes.fromhex(source_hash_hex),
                         entry_timestamp,
                         entry.get('packed_telemetry', b''),
-                        entry.get('appearance', None)
+                        entry_appearance
                     ])
 
             log_info("ReticulumWrapper", "_send_telemetry_stream_response",
@@ -686,7 +801,8 @@ class ReticulumWrapper:
             import traceback
             traceback.print_exc()
 
-    def _store_telemetry_for_collector(self, source_hash_hex, packed_telemetry, timestamp, appearance=None):
+    def _store_telemetry_for_collector(self, source_hash_hex, packed_telemetry, timestamp,
+                                       appearance=None):
         """
         Store incoming telemetry data when acting as host/collector.
 
@@ -883,6 +999,17 @@ class ReticulumWrapper:
         self.kotlin_location_received_callback = callback
         log_info("ReticulumWrapper", "set_location_received_callback",
                 "✅ Location received callback registered (location sharing enabled)")
+        # Drain any location events that arrived before callback registration
+        if self._pending_location_events:
+            log_info("ReticulumWrapper", "set_location_received_callback",
+                    f"📍 Draining {len(self._pending_location_events)} buffered location event(s)")
+            for event_json in self._pending_location_events:
+                try:
+                    callback(event_json)
+                except Exception as e:
+                    log_error("ReticulumWrapper", "set_location_received_callback",
+                             f"Error draining buffered event: {e}")
+            self._pending_location_events.clear()
 
     def set_reaction_received_callback(self, callback):
         """
@@ -2031,16 +2158,8 @@ class ReticulumWrapper:
             app_data: Application-specific data included in the announce
             announce_packet_hash: Hash of the announce packet (optional, for future use)
         """
-        log_separator("ReticulumWrapper", "_announce_handler", "!", 60)
-        log_info("ReticulumWrapper", "_announce_handler", "🔔 _announce_handler CALLED! (CALLBACK PATH WORKING)")
-        log_info("ReticulumWrapper", "_announce_handler", f"Aspect: {aspect}")
-        log_info("ReticulumWrapper", "_announce_handler", f"Destination: {destination_hash.hex()[:16]}...")
-        log_separator("ReticulumWrapper", "_announce_handler", "!", 60)
         try:
-            log_debug("ReticulumWrapper", "_announce_handler", f"Announce received from: {destination_hash.hex()}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"Aspect: {aspect}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"Has identity: {announced_identity is not None}")
-            log_debug("ReticulumWrapper", "_announce_handler", f"App data: {app_data}")
+            log_debug("ReticulumWrapper", "_announce_handler", f"Announce: {aspect} from {destination_hash.hex()[:16]}")
 
             # Get hop count
             hops = RNS.Transport.hops_to(destination_hash)
@@ -2560,7 +2679,7 @@ class ReticulumWrapper:
                 elif isinstance(content, str):
                     has_text_content = len(content.strip()) > 0
 
-            if self.kotlin_location_received_callback and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
+            if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
 
                 location_event = None
                 telemetry_source = None
@@ -2613,8 +2732,13 @@ class ReticulumWrapper:
 
                             # Invoke callback for each entry in the stream
                             for stream_entry in stream_entries:
+                                entry_json = json.dumps(stream_entry)
+                                if not self.kotlin_location_received_callback:
+                                    if len(self._pending_location_events) < self._max_pending_location_events:
+                                        self._pending_location_events.append(entry_json)
+                                    continue
                                 try:
-                                    self.kotlin_location_received_callback(json.dumps(stream_entry))
+                                    self.kotlin_location_received_callback(entry_json)
                                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                                              f"✅ Stream entry callback invoked for source {stream_entry.get('source_hash', 'unknown')[:16]}...")
                                 except Exception as e:
@@ -2689,21 +2813,39 @@ class ReticulumWrapper:
                         log_info("ReticulumWrapper", "_on_lxmf_delivery",
                                 f"📍 Location-only message detected ({telemetry_source}), skipping message queue")
 
-                    # Add source hash and invoke callback
+                    # Add source hash and appearance from FIELD_ICON_APPEARANCE
                     location_event['source_hash'] = lxmf_message.source_hash.hex()
+
+                    if FIELD_ICON_APPEARANCE in lxmf_message.fields:
+                        try:
+                            icon_data = lxmf_message.fields[FIELD_ICON_APPEARANCE]
+                            if isinstance(icon_data, list) and len(icon_data) >= 3:
+                                location_event['appearance'] = {
+                                    'icon_name': icon_data[0],
+                                    'foreground_color': icon_data[1].hex() if isinstance(icon_data[1], bytes) else icon_data[1],
+                                    'background_color': icon_data[2].hex() if isinstance(icon_data[2], bytes) else icon_data[2],
+                                }
+                        except Exception:
+                            pass
 
                     log_debug("ReticulumWrapper", "_on_lxmf_delivery",
                              f"Location: lat={location_event.get('lat')}, lng={location_event.get('lng')}, cease={location_event.get('cease', False)}")
 
-                    try:
-                        self.kotlin_location_received_callback(json.dumps(location_event))
-                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                "✅ Location callback invoked successfully")
-                    except Exception as e:
-                        log_error("ReticulumWrapper", "_on_lxmf_delivery",
-                                 f"⚠️ Error invoking location callback: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    if self.kotlin_location_received_callback:
+                        try:
+                            self.kotlin_location_received_callback(json.dumps(location_event))
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    "✅ Location callback invoked successfully")
+                        except Exception as e:
+                            log_error("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"⚠️ Error invoking location callback: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                   "Location callback not yet registered, buffering location event")
+                        if len(self._pending_location_events) < self._max_pending_location_events:
+                            self._pending_location_events.append(json.dumps(location_event))
 
             # ✅ TELEMETRY COLLECTOR HOST: Handle FIELD_COMMANDS telemetry requests
             if self.telemetry_collector_enabled and hasattr(lxmf_message, 'fields') and lxmf_message.fields:
@@ -3367,7 +3509,7 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "send_lxmf_message", f"📎 Attaching {len(field_5_data)} file(s)")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}
@@ -3536,7 +3678,8 @@ class ReticulumWrapper:
 
     # ==================== LOCATION TELEMETRY ====================
 
-    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes) -> Dict:
+    def send_location_telemetry(self, dest_hash: bytes, location_json: str, source_identity_private_key: bytes,
+                                icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
         """
         Send location telemetry to a destination via LXMF FIELD_TELEMETRY (0x02).
 
@@ -3547,6 +3690,9 @@ class ReticulumWrapper:
             dest_hash: Identity hash bytes (16 bytes) of the recipient
             location_json: JSON string with location data (lat, lng, acc, ts, expires, cease)
             source_identity_private_key: Private key of sender identity
+            icon_name: Optional icon name for FIELD_ICON_APPEARANCE (Sideband/MeshChat interop)
+            icon_fg_color: Optional foreground color hex string (3 bytes RGB)
+            icon_bg_color: Optional background color hex string (3 bytes RGB)
 
         Returns:
             Dict with 'success', 'message_hash', 'timestamp' or 'error'
@@ -3662,6 +3808,18 @@ class ReticulumWrapper:
 
                 log_debug("ReticulumWrapper", "send_location_telemetry",
                           f"Sending Sideband-compatible telemetry in FIELD_TELEMETRY (0x02)")
+
+            # Attach icon appearance if provided (Sideband/MeshChat interop)
+            if icon_name and icon_fg_color and icon_bg_color:
+                try:
+                    fg_bytes = bytes.fromhex(icon_fg_color)
+                    bg_bytes = bytes.fromhex(icon_bg_color)
+                    fields[FIELD_ICON_APPEARANCE] = [icon_name, fg_bytes, bg_bytes]
+                    log_debug("ReticulumWrapper", "send_location_telemetry",
+                              f"📎 Adding icon appearance: {icon_name}")
+                except (ValueError, TypeError) as e:
+                    log_warning("ReticulumWrapper", "send_location_telemetry",
+                                f"Invalid icon color format, skipping appearance: {e}")
 
             # Create LXMF message with location telemetry
             lxmf_message = LXMF.LXMessage(
@@ -3972,14 +4130,25 @@ class ReticulumWrapper:
                     f"📡 Requesting up to {max_messages} messages from propagation node {self.active_propagation_node.hex()[:16]}...")
 
             # Reset last propagation state and progress to force callback on any change.
-            # This is critical: if heartbeat loop is in 1-second idle mode, we might miss
-            # fast state transitions. By resetting to None/0, we ensure the next state
-            # (including COMPLETE) will be detected as a change and trigger the callback.
-            self._last_propagation_state = None
+            # Use -1 sentinel (not a real LXMF state) instead of None so that the
+            # heartbeat fast-mode check (`_last_propagation_state is not None`) evaluates
+            # True, immediately switching from 1s to 100ms polling interval.
+            self._last_propagation_state = -1
             self._last_propagation_progress = 0.0
 
             # Request messages from the propagation node
             self.router.request_messages_from_propagation_node(identity, max_messages=max_messages)
+
+            # Catch fast completions that would otherwise be missed by the heartbeat loop.
+            # On fast transports with cached paths/links and no waiting messages, LXMF can
+            # complete the entire sync within milliseconds. Poll briefly to detect this.
+            for _ in range(20):  # 20 × 100ms = 2s max
+                time.sleep(0.1)
+                self._check_propagation_state_change()
+                current = self.router.propagation_transfer_state
+                # Stop polling once sync reaches a terminal state
+                if current in (0, 7) or current >= 0xf0:  # IDLE, COMPLETE, or error (NO_PATH/LINK_FAILED/TRANSFER_FAILED)
+                    break
 
             return {
                 "success": True,
@@ -4281,7 +4450,7 @@ class ReticulumWrapper:
                         f"📎 Replying to message: {reply_to_message_id[:16]}...")
 
             # Add icon appearance to outgoing messages if provided (Sideband/MeshChat interop)
-            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband
+            # Format: [icon_name, fg_bytes(3), bg_bytes(3)] - same as Sideband wire format
             if icon_name and icon_fg_color and icon_bg_color:
                 if fields is None:
                     fields = {}

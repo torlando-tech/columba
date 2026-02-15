@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
+import com.lxmf.messenger.map.OfflineStyleInliner
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -439,6 +440,14 @@ class OfflineMapDownloadViewModel
                 }
             }
 
+            // Delete cached style JSON file if it exists
+            if (dbRegionId != null) {
+                val styleFile = java.io.File(context.filesDir, "offline_styles/$dbRegionId.json")
+                if (styleFile.exists() && !styleFile.delete()) {
+                    Log.w(TAG, "Failed to delete cached style file: ${styleFile.absolutePath}")
+                }
+            }
+
             // Delete database record if it exists
             if (dbRegionId != null) {
                 viewModelScope.launch {
@@ -686,17 +695,32 @@ class OfflineMapDownloadViewModel
          * Fetch and cache the style JSON file locally for offline rendering.
          * Called after download completes successfully (while device is still online).
          *
-         * This is non-fatal - if it fails, the download is still considered successful
-         * and the map will work from HTTP cache until it expires.
+         * Resolves TileJSON URL references and inlines the tile URL templates into the
+         * cached style JSON. This is critical because OpenFreeMap's TileJSON endpoint
+         * uses date-versioned tile URLs (e.g. /planet/20260204_001001_pt/{z}/{x}/{y}.pbf)
+         * and has a 24-hour cache expiration. Without inlining, MapLibre cannot discover
+         * the tile URL templates after the TileJSON cache expires, making downloaded
+         * offline tiles unreachable.
+         *
+         * This is non-fatal - if it fails, the download is still considered successful.
          */
         private suspend fun fetchAndCacheStyleJson(regionId: Long) {
             withContext(Dispatchers.IO) {
                 try {
                     // Fetch style JSON from the same URL MapLibre uses
-                    // Use withTimeout to prevent test hangs (5 seconds should be plenty)
-                    val styleJson =
+                    val rawStyleJson =
                         kotlinx.coroutines.withTimeout(5000) {
                             java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
+                        }
+
+                    // Inline TileJSON references so the style is fully self-contained.
+                    // Without this, MapLibre needs to resolve TileJSON URLs at render time,
+                    // which fails offline after the HTTP cache expires (~24h).
+                    val styleJson =
+                        OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
+                            kotlinx.coroutines.withTimeout(5000) {
+                                java.net.URL(url).readText()
+                            }
                         }
 
                     // Save to local file: filesDir/offline_styles/{regionId}.json
@@ -708,10 +732,9 @@ class OfflineMapDownloadViewModel
                     // Persist path to database
                     offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
 
-                    Log.d(TAG, "Cached style JSON for region $regionId at ${styleFile.absolutePath}")
+                    Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
                 } catch (e: Exception) {
                     // Non-fatal: download already succeeded, tiles are saved
-                    // The style will work from HTTP cache until it expires
                     Log.w(TAG, "Failed to cache style JSON for region $regionId (non-fatal)", e)
                 }
             }

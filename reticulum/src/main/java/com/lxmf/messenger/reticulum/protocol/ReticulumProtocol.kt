@@ -316,6 +316,7 @@ interface ReticulumProtocol {
         destinationHash: ByteArray,
         locationJson: String,
         sourceIdentity: Identity,
+        iconAppearance: IconAppearance? = null,
     ): Result<MessageReceipt>
 
     /**
@@ -626,8 +627,8 @@ data class DiscoveredInterface(
             }
         }
 
-        private fun parseItem(item: org.json.JSONObject): DiscoveredInterface {
-            return DiscoveredInterface(
+        private fun parseItem(item: org.json.JSONObject): DiscoveredInterface =
+            DiscoveredInterface(
                 // Core identification
                 name = item.optString("name", "Unknown"),
                 type = item.optString("type", "Unknown"),
@@ -655,7 +656,6 @@ data class DiscoveredInterface(
                 longitude = item.optDoubleOrNull("longitude"),
                 height = item.optDoubleOrNull("height"),
             )
-        }
 
         // JSON extension helpers for nullable values
         private fun org.json.JSONObject.optIntOrNull(key: String): Int? = if (has(key) && !isNull(key)) getInt(key) else null

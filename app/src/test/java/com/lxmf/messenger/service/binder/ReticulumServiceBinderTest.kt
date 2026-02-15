@@ -94,6 +94,9 @@ class ReticulumServiceBinderTest {
         every { state.initializationGeneration } returns
             java.util.concurrent.atomic
                 .AtomicInteger(0)
+        every { state.isPythonShutdownStarted } returns
+            java.util.concurrent.atomic
+                .AtomicBoolean(false)
         every { state.isCurrentGeneration(any()) } returns true
         coEvery { wrapperManager.shutdown(any()) } just Runs
 

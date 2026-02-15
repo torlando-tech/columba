@@ -27,11 +27,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShareLocation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WifiOff
@@ -39,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -200,6 +203,8 @@ fun MapScreen(
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapStyleLoaded by remember { mutableStateOf(false) }
     var metersPerPixel by remember { mutableStateOf(1.0) }
+    // Track current marker image IDs per contact to remove stale bitmaps on appearance change
+    val markerImageIds = remember { mutableMapOf<String, String>() }
 
     // Helper function to set up map style after it loads
     // Extracted to avoid duplication between factory and LaunchedEffect callbacks
@@ -548,8 +553,18 @@ fun MapScreen(
             val screenDensity = context.resources.displayMetrics.density
 
             // Generate and register marker bitmaps for each contact
+            val currentImageIds = mutableSetOf<String>()
             state.contactMarkers.forEach { marker ->
-                val imageId = "marker-${marker.destinationHash}"
+                // Include icon identity in cache key so bitmap refreshes when appearance changes
+                val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
+                currentImageIds.add(imageId)
+                // Remove previous bitmap for this contact if appearance changed
+                val previousId = markerImageIds[marker.destinationHash]
+                if (previousId != null && previousId != imageId) {
+                    style.removeImage(previousId)
+                }
+                markerImageIds[marker.destinationHash] = imageId
                 if (style.getImage(imageId) == null) {
                     // Try profile icon first, fall back to initials
                     val bitmap =
@@ -585,7 +600,8 @@ fun MapScreen(
             // Create GeoJSON features from contact markers with state and approximateRadius properties
             val features =
                 state.contactMarkers.map { marker ->
-                    val imageId = "marker-${marker.destinationHash}"
+                    val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                    val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
                     Feature
                         .fromGeometry(
                             Point.fromLngLat(marker.longitude, marker.latitude),
@@ -851,35 +867,89 @@ fun MapScreen(
                 Icon(Icons.Default.MyLocation, contentDescription = "My location")
             }
 
-            // Share/Stop Location button
-            ExtendedFloatingActionButton(
-                onClick = {
-                    if (state.isSharing) {
-                        viewModel.stopSharing()
-                    } else {
-                        showShareLocationSheet = true
+            // Bottom row: optional Send/Request Now + Share/Stop Location
+            // Group telemetry sending counts as "sharing" for the Stop button
+            val isAnySharingActive = state.isSharing || state.isTelemetrySendEnabled
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Send Now button (only when collector configured AND send enabled)
+                if (state.collectorAddress != null && state.isTelemetrySendEnabled) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (!LocationPermissionManager.hasPermission(context)) {
+                                permissionLauncher.launch(
+                                    LocationPermissionManager.getRequiredPermissions().toTypedArray(),
+                                )
+                            } else {
+                                viewModel.sendTelemetryNow()
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ) {
+                        if (state.isSendingTelemetry) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        } else {
+                            Icon(Icons.Default.Send, contentDescription = "Send Now")
+                        }
                     }
-                },
-                icon = {
-                    Icon(
-                        if (state.isSharing) Icons.Default.Stop else Icons.Default.ShareLocation,
-                        contentDescription = null,
-                    )
-                },
-                text = { Text(if (state.isSharing) "Stop Sharing" else "Share Location") },
-                containerColor =
-                    if (state.isSharing) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        MaterialTheme.colorScheme.primaryContainer
+                }
+
+                // Request Now button (only when collector configured AND request enabled)
+                if (state.collectorAddress != null && state.isTelemetryRequestEnabled) {
+                    SmallFloatingActionButton(
+                        onClick = { viewModel.requestTelemetryNow() },
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    ) {
+                        if (state.isRequestingTelemetry) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                        } else {
+                            Icon(Icons.Default.CloudDownload, contentDescription = "Request Now")
+                        }
+                    }
+                }
+
+                // Share/Stop Location button
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        if (isAnySharingActive) {
+                            viewModel.stopSharing()
+                        } else {
+                            showShareLocationSheet = true
+                        }
                     },
-                contentColor =
-                    if (state.isSharing) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                    icon = {
+                        Icon(
+                            if (isAnySharingActive) Icons.Default.Stop else Icons.Default.ShareLocation,
+                            contentDescription = null,
+                        )
                     },
-            )
+                    text = { Text(if (isAnySharingActive) "Stop Sharing" else "Share Location") },
+                    containerColor =
+                        if (isAnySharingActive) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                    contentColor =
+                        if (isAnySharingActive) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                )
+            }
         }
 
         // Contact markers are shown directly on the map as circles
@@ -973,6 +1043,10 @@ fun MapScreen(
             onDismiss = { selectedMarker = null },
             onSendMessage = {
                 onNavigateToConversation(marker.destinationHash)
+                selectedMarker = null
+            },
+            onRemoveMarker = {
+                viewModel.deleteMarker(marker.destinationHash)
                 selectedMarker = null
             },
             sheetState = contactLocationSheetState,

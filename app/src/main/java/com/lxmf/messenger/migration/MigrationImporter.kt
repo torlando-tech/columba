@@ -577,6 +577,7 @@ class MigrationImporter
         /**
          * Read and parse the MigrationBundle from a ZIP file.
          */
+        @Suppress("ThrowsCount")
         private fun readMigrationBundle(
             uri: Uri,
             password: String? = null,

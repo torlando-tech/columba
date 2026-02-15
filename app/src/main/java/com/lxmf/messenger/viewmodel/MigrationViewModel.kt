@@ -201,8 +201,10 @@ class MigrationViewModel
                         },
                     )
                 } catch (e: WrongPasswordException) {
+                    Log.w(TAG, "Wrong password for encrypted export", e)
                     _uiState.value = MigrationUiState.WrongPassword(uri)
                 } catch (e: PasswordRequiredException) {
+                    Log.d(TAG, "Password required for encrypted export", e)
                     _pendingImportUri.value = uri
                     _uiState.value = MigrationUiState.PasswordRequired(uri)
                 } catch (e: Exception) {

@@ -212,10 +212,14 @@ class TestUnpackTelemetryStream(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     def test_parses_valid_appearance(self):
-        """Should parse valid appearance data."""
+        """Should parse valid appearance data.
+
+        Sideband format: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
+        """
         source_hash = bytes.fromhex("a1" * 16)
         timestamp = 1703980800
         packed_telemetry = self._create_valid_packed_telemetry()
+        # Sideband format: [icon_name, fg_bytes, bg_bytes]
         appearance = ["icon_name", b'\xff\x00\x00', b'\x00\xff\x00']  # Red fg, green bg
 
         stream = [[source_hash, timestamp, packed_telemetry, appearance]]
@@ -223,17 +227,17 @@ class TestUnpackTelemetryStream(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIn('appearance', result[0])
-        self.assertEqual(result[0]['appearance']['name'], 'icon_name')
-        self.assertEqual(result[0]['appearance']['fg'], '#ff0000')
-        self.assertEqual(result[0]['appearance']['bg'], '#00ff00')
+        self.assertEqual(result[0]['appearance']['icon_name'], 'icon_name')
+        self.assertEqual(result[0]['appearance']['foreground_color'], 'ff0000')
+        self.assertEqual(result[0]['appearance']['background_color'], '00ff00')
 
     def test_handles_appearance_with_invalid_icon_name(self):
-        """Should reject appearance with invalid icon name."""
+        """Should reject appearance with invalid icon name (special chars)."""
         source_hash = bytes.fromhex("a1" * 16)
         timestamp = 1703980800
         packed_telemetry = self._create_valid_packed_telemetry()
-        # Icon name with invalid characters
-        appearance = ["icon-name-with-dashes!", b'\xff\x00\x00', b'\x00\xff\x00']
+        # Icon name with invalid characters (exclamation mark)
+        appearance = ["icon-name-with-invalid!", b'\xff\x00\x00', b'\x00\xff\x00']
 
         stream = [[source_hash, timestamp, packed_telemetry, appearance]]
         result = unpack_telemetry_stream(stream)
@@ -269,8 +273,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
         self.assertEqual(len(result), 1)
         # Appearance should be set but colors should be None
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_handles_appearance_with_non_bytes_colors(self):
         """Should handle appearance with non-bytes color values."""
@@ -285,8 +289,8 @@ class TestUnpackTelemetryStream(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         if 'appearance' in result[0]:
-            self.assertIsNone(result[0]['appearance']['fg'])
-            self.assertIsNone(result[0]['appearance']['bg'])
+            self.assertIsNone(result[0]['appearance']['foreground_color'])
+            self.assertIsNone(result[0]['appearance']['background_color'])
 
     def test_processes_multiple_entries(self):
         """Should process multiple valid entries."""
@@ -921,13 +925,19 @@ class TestSendTelemetryRequestSuccess(unittest.TestCase):
         self.wrapper.local_lxmf_destination.hexhash = "a" * 32
         self.wrapper.identities = {}
 
-        # Set up RNS mock
+        # Set up RNS mock (save originals for tearDown)
+        self._original_rns = reticulum_wrapper.RNS
+        self._original_lxmf = reticulum_wrapper.LXMF
+        self._original_available = reticulum_wrapper.RETICULUM_AVAILABLE
         reticulum_wrapper.RNS = MagicMock()
         reticulum_wrapper.LXMF = MagicMock()
         reticulum_wrapper.RETICULUM_AVAILABLE = True
 
     def tearDown(self):
         """Clean up test fixtures."""
+        reticulum_wrapper.RNS = self._original_rns
+        reticulum_wrapper.LXMF = self._original_lxmf
+        reticulum_wrapper.RETICULUM_AVAILABLE = self._original_available
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_successful_send_with_immediate_identity_recall(self):

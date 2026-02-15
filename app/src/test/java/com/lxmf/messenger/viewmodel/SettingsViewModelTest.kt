@@ -105,6 +105,12 @@ class SettingsViewModelTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
 
+        // Mock TelemetryCollectorManager flows used during init
+        every { telemetryCollectorManager.isEnabled } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
+        coEvery { telemetryCollectorManager.setEnabled(any()) } just Runs
+
         // Mock locationSharingManager flows and methods
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
         coEvery { locationSharingManager.stopSharing(any()) } just Runs
@@ -2281,6 +2287,7 @@ class SettingsViewModelTest {
             assertTrue("setLocationSharingEnabled should complete successfully", result.isSuccess)
             coVerify { settingsRepository.saveLocationSharingEnabled(false) }
             coVerify { locationSharingManager.stopSharing(null) }
+            coVerify { telemetryCollectorManager.setEnabled(false) }
         }
 
     @Test

@@ -71,6 +71,7 @@ class LocationSharingManager
         private val reticulumProtocol: ReticulumProtocol,
         private val receivedLocationDao: ReceivedLocationDao,
         private val settingsRepository: SettingsRepository,
+        private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
         companion object {
@@ -430,6 +431,23 @@ class LocationSharingManager
 
                 val json = Json.encodeToString(telemetry)
 
+                // Get user's icon appearance for Sideband/MeshChat interoperability
+                val iconAppearance =
+                    identityRepository.getActiveIdentitySync()?.let { activeId ->
+                        val name = activeId.iconName
+                        val fg = activeId.iconForegroundColor
+                        val bg = activeId.iconBackgroundColor
+                        if (name != null && fg != null && bg != null) {
+                            com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                                iconName = name,
+                                foregroundColor = fg,
+                                backgroundColor = bg,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+
                 // Send to each recipient
                 sessions.forEach { session ->
                     try {
@@ -440,6 +458,7 @@ class LocationSharingManager
                                 destinationHash = destHashBytes,
                                 locationJson = json,
                                 sourceIdentity = sourceIdentity,
+                                iconAppearance = iconAppearance,
                             )
 
                         result
@@ -519,6 +538,14 @@ class LocationSharingManager
                 val expires = if (json.has("expires") && !json.isNull("expires")) json.getLong("expires") else null
                 val approxRadius = json.optInt("approxRadius", 0)
 
+                // Extract appearance data if present (from FIELD_TELEMETRY_STREAM entries)
+                val appearanceJson =
+                    if (json.has("appearance") && !json.isNull("appearance")) {
+                        json.getJSONObject("appearance").toString()
+                    } else {
+                        null
+                    }
+
                 val entity =
                     ReceivedLocationEntity(
                         id = UUID.randomUUID().toString(),
@@ -530,10 +557,11 @@ class LocationSharingManager
                         expiresAt = expires,
                         receivedAt = System.currentTimeMillis(),
                         approximateRadius = approxRadius,
+                        appearanceJson = appearanceJson,
                     )
 
                 receivedLocationDao.insert(entity)
-                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius")
+                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius appearance=${appearanceJson != null}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse/store received location: $locationJson", e)
             }

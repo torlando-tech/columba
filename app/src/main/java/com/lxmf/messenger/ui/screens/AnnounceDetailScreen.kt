@@ -407,8 +407,12 @@ fun AnnounceDetailScreen(
     if (showUnsetRelayDialog) {
         UnsetRelayConfirmationDialog(
             relayName = announce?.peerName ?: "this relay",
-            onConfirm = {
-                viewModel.unsetRelayAndDelete(destinationHash)
+            onAutoSelect = {
+                viewModel.unsetRelayAndDelete(destinationHash, autoSelectNew = true)
+                showUnsetRelayDialog = false
+            },
+            onRemoveOnly = {
+                viewModel.unsetRelayAndDelete(destinationHash, autoSelectNew = false)
                 showUnsetRelayDialog = false
             },
             onDismiss = {
@@ -461,7 +465,8 @@ private fun RemoveContactConfirmationDialog(
 @Composable
 private fun UnsetRelayConfirmationDialog(
     relayName: String,
-    onConfirm: () -> Unit,
+    onAutoSelect: () -> Unit,
+    onRemoveOnly: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -477,19 +482,22 @@ private fun UnsetRelayConfirmationDialog(
             Text("Unset as Your Relay?")
         },
         text = {
-            Text(
-                "\"$relayName\" will be removed from contacts. " +
-                    "A new relay will be selected automatically from available propagation nodes.",
-            )
+            Text("\"$relayName\" will be removed from contacts.")
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Unset Relay")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End,
+            ) {
+                TextButton(onClick = onAutoSelect) {
+                    Text("Remove & Auto-Select New")
+                }
+                TextButton(onClick = onRemoveOnly) {
+                    Text("Remove Only")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         },
     )

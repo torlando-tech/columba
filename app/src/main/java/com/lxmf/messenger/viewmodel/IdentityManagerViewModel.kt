@@ -662,6 +662,7 @@ class IdentityManagerViewModel
                     }
                     _uiState.value =
                         IdentityManagerUiState.Success("Identity exported successfully")
+                    _exportedIdentityUri = null
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to save identity file", e)
                     _uiState.value =
@@ -675,6 +676,11 @@ class IdentityManagerViewModel
          */
         fun resetUiState() {
             _uiState.value = IdentityManagerUiState.Idle
+        }
+
+        override fun onCleared() {
+            super.onCleared()
+            _exportedIdentityUri = null
         }
     }
 

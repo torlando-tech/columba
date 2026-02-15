@@ -83,7 +83,9 @@ jobs:
             for apk in "$APK_DIR/$flavor/release/"*.apk; do
               filename=$(basename "$apk")
               
-              if echo "$filename" | grep -q "arm64-v8a"; then
+              if echo "$filename" | grep -q "armeabi-v7a"; then
+                cp "$apk" "columba-${VERSION}-armeabi-v7a${suffix}.apk"
+              elif echo "$filename" | grep -q "arm64-v8a"; then
                 cp "$apk" "columba-${VERSION}-arm64${suffix}.apk"
               elif echo "$filename" | grep -q "x86_64"; then
                 cp "$apk" "columba-${VERSION}-x86_64${suffix}.apk"
@@ -136,6 +138,7 @@ jobs:
             **Architecture-specific APKs (recommended — smaller download):**
             | APK | Architecture | Devices |
             |-----|-------------|---------|
+            | `columba-${{ steps.version.outputs.version }}-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
             | `columba-${{ steps.version.outputs.version }}-arm64.apk` | arm64-v8a | Most modern Android phones & tablets |
             | `columba-${{ steps.version.outputs.version }}-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
             | `columba-${{ steps.version.outputs.version }}-universal.apk` | All | Universal fallback (larger download) |

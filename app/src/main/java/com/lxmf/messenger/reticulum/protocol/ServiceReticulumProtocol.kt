@@ -195,7 +195,7 @@ class ServiceReticulumProtocol(
     private val _propagationStateFlow =
         MutableSharedFlow<PropagationState>(
             replay = 1,
-            extraBufferCapacity = 1,
+            extraBufferCapacity = 5,
         )
     val propagationStateFlow: SharedFlow<PropagationState> = _propagationStateFlow.asSharedFlow()
 
@@ -2290,6 +2290,7 @@ class ServiceReticulumProtocol(
         destinationHash: ByteArray,
         locationJson: String,
         sourceIdentity: Identity,
+        iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> =
         runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
@@ -2301,6 +2302,9 @@ class ServiceReticulumProtocol(
                     destinationHash,
                     locationJson,
                     privateKey,
+                    iconAppearance?.iconName,
+                    iconAppearance?.foregroundColor,
+                    iconAppearance?.backgroundColor,
                 )
             val result = JSONObject(resultJson)
 

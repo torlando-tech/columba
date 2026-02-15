@@ -33,26 +33,25 @@ class MockReticulumProtocol : ReticulumProtocol {
     override val networkStatus: StateFlow<NetworkStatus> = _networkStatus.asStateFlow()
     private val random = SecureRandom()
 
-    override suspend fun initialize(config: ReticulumConfig): Result<Unit> {
-        return runCatching {
+    override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
+        runCatching {
             _networkStatus.value = NetworkStatus.INITIALIZING
             delay(500) // Simulate initialization delay
             _networkStatus.value = NetworkStatus.READY
         }
-    }
 
-    override suspend fun shutdown(): Result<Unit> {
-        return runCatching {
+    override suspend fun shutdown(): Result<Unit> =
+        runCatching {
             _networkStatus.value = NetworkStatus.SHUTDOWN
         }
-    }
 
-    override suspend fun createIdentity(): Result<Identity> {
-        return runCatching {
+    override suspend fun createIdentity(): Result<Identity> =
+        runCatching {
             val privateKey = ByteArray(32).apply { random.nextBytes(this) }
             val publicKey = ByteArray(32).apply { random.nextBytes(this) }
             val hash =
-                MessageDigest.getInstance("SHA-256")
+                MessageDigest
+                    .getInstance("SHA-256")
                     .digest(publicKey)
                     .copyOf(16) // Reticulum uses truncated hash
 
@@ -62,28 +61,25 @@ class MockReticulumProtocol : ReticulumProtocol {
                 privateKey = privateKey,
             )
         }
-    }
 
-    override suspend fun loadIdentity(path: String): Result<Identity> {
-        return Result.failure(NotImplementedError("Mock implementation"))
-    }
+    override suspend fun loadIdentity(path: String): Result<Identity> = Result.failure(NotImplementedError("Mock implementation"))
 
     override suspend fun saveIdentity(
         identity: Identity,
         path: String,
-    ): Result<Unit> {
-        return Result.success(Unit)
-    }
+    ): Result<Unit> = Result.success(Unit)
 
     override suspend fun recallIdentity(hash: ByteArray): Identity? = null
 
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> {
         // Mock implementation - generate a fake identity
         val identityHash =
-            ByteArray(16).apply { random.nextBytes(this) }
+            ByteArray(16)
+                .apply { random.nextBytes(this) }
                 .joinToString("") { "%02x".format(it) }
         val destinationHash =
-            ByteArray(16).apply { random.nextBytes(this) }
+            ByteArray(16)
+                .apply { random.nextBytes(this) }
                 .joinToString("") { "%02x".format(it) }
 
         return mapOf(
@@ -104,10 +100,12 @@ class MockReticulumProtocol : ReticulumProtocol {
     ): Map<String, Any> {
         // Mock implementation - generate a fake identity
         val identityHash =
-            ByteArray(16).apply { random.nextBytes(this) }
+            ByteArray(16)
+                .apply { random.nextBytes(this) }
                 .joinToString("") { "%02x".format(it) }
         val destinationHash =
-            ByteArray(16).apply { random.nextBytes(this) }
+            ByteArray(16)
+                .apply { random.nextBytes(this) }
                 .joinToString("") { "%02x".format(it) }
 
         return mapOf(
@@ -143,10 +141,11 @@ class MockReticulumProtocol : ReticulumProtocol {
         type: DestinationType,
         appName: String,
         aspects: List<String>,
-    ): Result<Destination> {
-        return runCatching {
+    ): Result<Destination> =
+        runCatching {
             val destHash =
-                MessageDigest.getInstance("SHA-256")
+                MessageDigest
+                    .getInstance("SHA-256")
                     .digest((appName + aspects.joinToString()).toByteArray())
                     .copyOf(16)
 
@@ -160,21 +159,18 @@ class MockReticulumProtocol : ReticulumProtocol {
                 aspects = aspects,
             )
         }
-    }
 
     override suspend fun announceDestination(
         destination: Destination,
         appData: ByteArray?,
-    ): Result<Unit> {
-        return Result.success(Unit)
-    }
+    ): Result<Unit> = Result.success(Unit)
 
     override suspend fun sendPacket(
         destination: Destination,
         data: ByteArray,
         packetType: PacketType,
-    ): Result<PacketReceipt> {
-        return runCatching {
+    ): Result<PacketReceipt> =
+        runCatching {
             delay(100) // Simulate network delay
             PacketReceipt(
                 hash = ByteArray(32).apply { random.nextBytes(this) },
@@ -182,15 +178,14 @@ class MockReticulumProtocol : ReticulumProtocol {
                 timestamp = System.currentTimeMillis(),
             )
         }
-    }
 
     override fun observePackets(): Flow<ReceivedPacket> =
         flow {
             // Mock implementation - no packets received
         }
 
-    override suspend fun establishLink(destination: Destination): Result<Link> {
-        return runCatching {
+    override suspend fun establishLink(destination: Destination): Result<Link> =
+        runCatching {
             delay(200) // Simulate link establishment delay
             Link(
                 id = random.nextInt().toString(),
@@ -200,18 +195,13 @@ class MockReticulumProtocol : ReticulumProtocol {
                 rtt = 150f,
             )
         }
-    }
 
-    override suspend fun closeLink(link: Link): Result<Unit> {
-        return Result.success(Unit)
-    }
+    override suspend fun closeLink(link: Link): Result<Unit> = Result.success(Unit)
 
     override suspend fun sendOverLink(
         link: Link,
         data: ByteArray,
-    ): Result<Unit> {
-        return Result.success(Unit)
-    }
+    ): Result<Unit> = Result.success(Unit)
 
     override fun observeLinks(): Flow<LinkEvent> =
         flow {
@@ -220,9 +210,7 @@ class MockReticulumProtocol : ReticulumProtocol {
 
     override suspend fun hasPath(destinationHash: ByteArray): Boolean = true
 
-    override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> {
-        return Result.success(Unit)
-    }
+    override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> = Result.success(Unit)
 
     override fun getHopCount(destinationHash: ByteArray): Int = 3
 
@@ -303,18 +291,15 @@ class MockReticulumProtocol : ReticulumProtocol {
             // Mock implementation - no delivery status updates
         }
 
-    override suspend fun getDebugInfo(): Map<String, Any> {
-        return mapOf(
+    override suspend fun getDebugInfo(): Map<String, Any> =
+        mapOf(
             "initialized" to (networkStatus.value == NetworkStatus.READY),
             "reticulum_available" to true,
             "storage_path" to "/mock/path",
             "interfaces" to emptyList<Map<String, Any>>(),
         )
-    }
 
-    override suspend fun getFailedInterfaces(): List<FailedInterface> {
-        return emptyList()
-    }
+    override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
 
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? {
         // Mock implementation - return basic stats
@@ -326,17 +311,11 @@ class MockReticulumProtocol : ReticulumProtocol {
         )
     }
 
-    override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> {
-        return emptyList()
-    }
+    override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> = emptyList()
 
-    override suspend fun isDiscoveryEnabled(): Boolean {
-        return false
-    }
+    override suspend fun isDiscoveryEnabled(): Boolean = false
 
-    override suspend fun getAutoconnectedEndpoints(): Set<String> {
-        return emptySet()
-    }
+    override suspend fun getAutoconnectedEndpoints(): Set<String> = emptySet()
 
     override fun setConversationActive(active: Boolean) {
         // No-op for mock implementation
@@ -395,6 +374,7 @@ class MockReticulumProtocol : ReticulumProtocol {
         destinationHash: ByteArray,
         locationJson: String,
         sourceIdentity: Identity,
+        iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> {
         // Mock implementation - return success with fake receipt
         return Result.success(

@@ -30,6 +30,7 @@ fun CodecSelectionDialog(
                 value = profile,
                 displayName = profile.displayName,
                 description = profile.description,
+                isExperimental = profile.isExperimental,
             )
         }
 

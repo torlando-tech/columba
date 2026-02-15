@@ -375,6 +375,81 @@ class ContactLocationBottomSheetTest {
         composeTestRule.onNodeWithText("Last known").assertIsDisplayed()
     }
 
+    @Test
+    fun `contactLocationBottomSheet fresh marker does not show remove button`() {
+        val marker = createTestMarker("Iris", MarkerState.FRESH)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                onRemoveMarker = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Remove from map").assertDoesNotExist()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet stale marker shows remove button`() {
+        val marker = createTestMarker("Jack", MarkerState.STALE)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                onRemoveMarker = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Remove from map").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet expired marker shows remove button`() {
+        val marker = createTestMarker("Kate", MarkerState.EXPIRED_GRACE_PERIOD)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                onRemoveMarker = {},
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Remove from map").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contactLocationBottomSheet remove button invokes callback`() {
+        var removeCalled = false
+        val marker = createTestMarker("Leo", MarkerState.STALE)
+
+        composeTestRule.setContent {
+            ContactLocationBottomSheet(
+                marker = marker,
+                userLocation = null,
+                onDismiss = {},
+                onSendMessage = {},
+                onRemoveMarker = { removeCalled = true },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            )
+        }
+
+        composeTestRule.onNodeWithText("Remove from map").performClick()
+
+        assertTrue(removeCalled)
+    }
+
     // ========== Helper Functions ==========
 
     private fun createTestLocation(

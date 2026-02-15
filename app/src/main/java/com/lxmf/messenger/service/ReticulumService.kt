@@ -151,6 +151,7 @@ class ReticulumService : Service() {
             ACTION_STOP -> {
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
+                if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
                 binder.shutdown()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -206,8 +207,14 @@ class ReticulumService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
+        // Set kill switch to prevent SIGSEGV from late Python calls
+        if (::managers.isInitialized) {
+            managers.state.isPythonShutdownStarted.set(true)
+        }
+
         // Clean up all resources (if initialized)
         if (::managers.isInitialized) {
+            managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
             managers.healthCheckManager.stop()
             managers.eventHandler.stopAll()
@@ -227,6 +234,9 @@ class ReticulumService : Service() {
      */
     private fun triggerServiceRestart() {
         Log.w(TAG, "Triggering service restart due to stale heartbeat")
+
+        // Set kill switch before shutdown to prevent SIGSEGV during teardown
+        if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
 
         // Clean up current state
         if (::binder.isInitialized) {

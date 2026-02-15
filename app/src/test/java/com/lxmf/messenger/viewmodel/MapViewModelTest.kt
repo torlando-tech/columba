@@ -13,6 +13,7 @@ import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.service.LocationSharingManager
+import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -64,6 +65,7 @@ class MapViewModelTest {
     private lateinit var announceDao: AnnounceDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var mapTileSourceManager: MapTileSourceManager
+    private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var viewModel: MapViewModel
 
     @Before
@@ -79,6 +81,7 @@ class MapViewModelTest {
         announceDao = mockk()
         settingsRepository = mockk()
         mapTileSourceManager = mockk()
+        telemetryCollectorManager = mockk()
 
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
@@ -94,6 +97,11 @@ class MapViewModelTest {
         coEvery { mapTileSourceManager.setHttpEnabled(any()) } just Runs
         every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
+        every { telemetryCollectorManager.collectorAddress } returns MutableStateFlow(null)
+        every { telemetryCollectorManager.isEnabled } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isRequestEnabled } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
+        every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
     }
 
     @After
@@ -116,6 +124,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -136,6 +145,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -156,6 +166,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -176,6 +187,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -201,6 +213,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -229,6 +242,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -257,6 +271,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             // Verify initial state has no error message
@@ -283,6 +298,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -303,6 +319,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -328,6 +345,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -397,6 +415,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -443,6 +462,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -466,6 +486,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -488,6 +509,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -508,6 +530,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val location1 = createMockLocation(37.7749, -122.4194)
             val location2 = createMockLocation(40.7128, -74.0060)
@@ -561,6 +584,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val newLocation = createMockLocation(40.7128, -74.0060) // New York
 
@@ -612,6 +636,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -655,6 +680,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -677,6 +703,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -709,6 +736,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val originalState = viewModel.state.value
@@ -736,11 +764,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - 1_000L, // 1 second ago
                     expiresAt = now + 3600_000L, // Expires in 1 hour
                     currentTime = now,
@@ -761,11 +790,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (6 * 60_000L), // 6 minutes ago
                     expiresAt = now + 3600_000L, // Not expired
                     currentTime = now,
@@ -786,11 +816,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (10 * 60_000L), // 10 minutes ago
                     expiresAt = now - (5 * 60_000L), // Expired 5 minutes ago (within 1 hour grace)
                     currentTime = now,
@@ -811,11 +842,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (3 * 3600_000L), // 3 hours ago
                     expiresAt = now - (2 * 3600_000L), // Expired 2 hours ago (past 1 hour grace)
                     currentTime = now,
@@ -836,11 +868,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (6 * 60_000L), // 6 minutes ago (stale)
                     expiresAt = null, // Indefinite
                     currentTime = now,
@@ -861,11 +894,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (5 * 60_000L), // Exactly 5 minutes ago
                     expiresAt = null,
                     currentTime = now,
@@ -887,11 +921,12 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             val now = System.currentTimeMillis()
 
             val state =
-                viewModel.calculateMarkerState(
+                MapViewModel.calculateMarkerState(
                     timestamp = now - (5 * 60_000L + 1L), // 5 minutes + 1ms ago
                     expiresAt = null,
                     currentTime = now,
@@ -914,6 +949,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val selectedContacts =
@@ -953,6 +989,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result = runCatching { viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES) }
@@ -975,6 +1012,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val selectedContacts =
@@ -1011,6 +1049,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result = runCatching { viewModel.stopSharing() }
@@ -1033,6 +1072,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result = runCatching { viewModel.stopSharing("specific_hash") }
@@ -1055,6 +1095,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result1 = runCatching { viewModel.stopSharing("hash1") }
@@ -1067,6 +1108,68 @@ class MapViewModelTest {
             verify(exactly = 1) { locationSharingManager.stopSharing("hash1") }
             verify(exactly = 1) { locationSharingManager.stopSharing("hash2") }
             verify(exactly = 1) { locationSharingManager.stopSharing(null) }
+        }
+
+    // ===== deleteMarker Tests =====
+
+    @Test
+    fun `deleteMarker removes marker from state`() =
+        runTest {
+            // Set up a location that will produce a marker
+            val locationsFlow =
+                MutableStateFlow(
+                    listOf(
+                        ReceivedLocationEntity(
+                            id = "loc1",
+                            senderHash = "stale_hash",
+                            latitude = 37.7749,
+                            longitude = -122.4194,
+                            accuracy = 10f,
+                            timestamp = System.currentTimeMillis(),
+                            expiresAt = null,
+                            receivedAt = System.currentTimeMillis(),
+                        ),
+                    ),
+                )
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        destinationHash = "stale_hash",
+                        displayName = "Stale Contact",
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
+            every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns locationsFlow
+            coEvery { receivedLocationDao.deleteLocationsForSender(any()) } coAnswers {
+                // Simulate the DB deletion by clearing the flow
+                locationsFlow.value = emptyList()
+            }
+
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                )
+
+            viewModel.state.test {
+                // Marker should be present initially
+                val initial = awaitItem()
+                assertEquals(1, initial.contactMarkers.size)
+                assertEquals("stale_hash", initial.contactMarkers[0].destinationHash)
+
+                // Delete the marker
+                viewModel.deleteMarker("stale_hash")
+
+                // Marker should be removed from state
+                val updated = awaitItem()
+                assertTrue(updated.contactMarkers.isEmpty())
+            }
         }
 
     // ===== sharing state updates Tests =====
@@ -1086,6 +1189,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1114,6 +1218,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1193,6 +1298,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1232,6 +1338,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1302,6 +1409,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1367,6 +1475,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1434,6 +1543,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1483,6 +1593,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1511,6 +1622,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1534,6 +1646,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.state.test {
@@ -1554,6 +1667,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             viewModel.dismissLocationPermissionSheet()
@@ -1579,6 +1693,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             viewModel.dismissLocationPermissionSheet()
 
@@ -1595,6 +1710,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             // Then: Permission sheet should still be dismissed
@@ -1621,6 +1737,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1643,6 +1760,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1669,6 +1787,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             // Change HTTP enabled state
@@ -1694,6 +1813,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
             viewModel.dismissPermissionCard()
 
@@ -1710,6 +1830,7 @@ class MapViewModelTest {
                     announceDao,
                     settingsRepository,
                     mapTileSourceManager,
+                    telemetryCollectorManager,
                 )
 
             // Then: Permission card should still be dismissed
@@ -1730,7 +1851,16 @@ class MapViewModelTest {
 
             // When: ViewModel is created
             viewModel =
-                MapViewModel(freshHandle, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+                MapViewModel(
+                    freshHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                )
 
             // Then: Permission card should NOT be dismissed
             viewModel.state.test {
@@ -1745,14 +1875,32 @@ class MapViewModelTest {
             // Given: First ViewModel dismisses the card
             val handle1 = SavedStateHandle()
             val vm1 =
-                MapViewModel(handle1, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+                MapViewModel(
+                    handle1,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                )
             vm1.dismissPermissionCard()
             assertTrue(vm1.state.value.isPermissionCardDismissed)
 
             // When: A completely separate ViewModel is created with a different handle
             val handle2 = SavedStateHandle()
             val vm2 =
-                MapViewModel(handle2, contactRepository, receivedLocationDao, locationSharingManager, announceDao, settingsRepository, mapTileSourceManager)
+                MapViewModel(
+                    handle2,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                )
 
             // Then: The second ViewModel should NOT have the card dismissed
             assertFalse(vm2.state.value.isPermissionCardDismissed)

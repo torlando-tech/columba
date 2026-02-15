@@ -55,8 +55,8 @@ class OfflineMapsScreenTest {
             EmptyOfflineMapsState()
         }
 
-        composeTestRule.onNodeWithText("Download map regions for offline use").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Tap + to get started").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Download or import map regions for offline use").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Tap + to download, or use the import button to load an MBTiles file").assertIsDisplayed()
     }
 
     // ========== StorageSummaryCard Tests ==========

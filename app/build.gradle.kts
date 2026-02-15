@@ -485,9 +485,9 @@ tasks.register("printVersion") {
     }
 }
 
-// Convenience task: `./gradlew install` defaults to installSentryDebug
+// Convenience task: `./gradlew install` defaults to installNoSentryDebug
 tasks.register("install") {
-    dependsOn("installSentryDebug")
-    description = "Installs the sentry debug APK (shortcut for installSentryDebug)"
+    dependsOn("installNoSentryDebug")
+    description = "Installs the noSentry debug APK (shortcut for installNoSentryDebug)"
     group = "Install"
 }

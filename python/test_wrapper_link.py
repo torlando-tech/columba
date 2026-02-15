@@ -199,17 +199,24 @@ class TestEstablishLink(unittest.TestCase):
         mock_dest.hash = dest_hash
         mock_rns.Destination.return_value = mock_dest
 
-        # Path available
+        # Path available; prevent Mock iteration on active_links
         mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.active_links = []
+
+        # Use concrete sentinel values for link status so comparisons are
+        # deterministic across Python versions (MagicMock == MagicMock is fragile)
+        mock_rns.Link.ACTIVE = "ACTIVE"
+        mock_rns.Link.CLOSED = "CLOSED"
 
         # Create mock link that becomes active
         mock_link = Mock()
-        mock_link.status = mock_rns.Link.ACTIVE
+        mock_link.status = "ACTIVE"
         mock_link.get_establishment_rate.return_value = 15000
         mock_rns.Link.return_value = mock_link
 
-        # Mock time to not actually wait
-        mock_time.time.side_effect = [0, 0, 0.1]
+        # Provide plenty of time.time() return values so extra calls don't
+        # raise StopIteration (which would silently break the polling loop)
+        mock_time.time.side_effect = [0, 0, 0.1, 0.1, 0.1, 0.1]
         mock_time.sleep = Mock()
 
         result = wrapper.establish_link(dest_hash, timeout_seconds=5)
@@ -241,12 +248,17 @@ class TestEstablishLink(unittest.TestCase):
         mock_dest.hash = dest_hash
         mock_rns.Destination.return_value = mock_dest
 
-        # Path available
+        # Path available; prevent Mock iteration on active_links
         mock_rns.Transport.has_path.return_value = True
+        mock_rns.Transport.active_links = []
+
+        # Use concrete sentinel values for link status
+        mock_rns.Link.ACTIVE = "ACTIVE"
+        mock_rns.Link.CLOSED = "CLOSED"
 
         # Create mock link that becomes active
         mock_link = Mock()
-        mock_link.status = mock_rns.Link.ACTIVE
+        mock_link.status = "ACTIVE"
         mock_link.get_establishment_rate.return_value = 15000
         mock_link.get_expected_rate.return_value = 12000
         mock_link.rtt = 0.5
@@ -254,8 +266,8 @@ class TestEstablishLink(unittest.TestCase):
         mock_rns.Link.return_value = mock_link
         mock_rns.Transport.hops_to.return_value = 2
 
-        # Mock time to not actually wait
-        mock_time.time.side_effect = [0, 0, 0.1]
+        # Provide plenty of time.time() return values
+        mock_time.time.side_effect = [0, 0, 0.1, 0.1, 0.1, 0.1]
         mock_time.sleep = Mock()
 
         result = wrapper.establish_link(dest_hash, timeout_seconds=5)

@@ -638,6 +638,15 @@ fun MessagingScreen(
         inputPanelMode = InputPanelMode.NONE
     }
 
+    // Dismiss attachment panel when message text blank state changes.
+    // This prevents the panel from staying open if a message is sent (text cleared)
+    // or if text changes externally while the panel is visible.
+    LaunchedEffect(messageText.isBlank()) {
+        if (inputPanelMode == InputPanelMode.PANEL) {
+            inputPanelMode = InputPanelMode.NONE
+        }
+    }
+
     // Track if we've done the initial scroll for this conversation
     // Resets when switching to a different conversation
     var hasScrolledToBottom by remember(destinationHash) { mutableStateOf(false) }

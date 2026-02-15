@@ -1122,6 +1122,9 @@ class ServiceReticulumProtocol(
                     iface.networkName?.let { ifaceJson.put("network_name", it) }
                     iface.passphrase?.let { ifaceJson.put("passphrase", it) }
                     ifaceJson.put("bootstrap_only", iface.bootstrapOnly)
+                    ifaceJson.put("socks_proxy_enabled", iface.socksProxyEnabled)
+                    ifaceJson.put("socks_proxy_host", iface.socksProxyHost)
+                    ifaceJson.put("socks_proxy_port", iface.socksProxyPort)
                 }
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")

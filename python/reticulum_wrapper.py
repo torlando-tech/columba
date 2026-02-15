@@ -30,6 +30,8 @@ RNS = None
 LXMF = None
 
 
+
+
 # ============================================================================
 # Global Exception Handler
 # ============================================================================
@@ -1202,6 +1204,39 @@ class ReticulumWrapper:
                         f"Error checking shared instance: {e}")
             return False
 
+    def _deploy_tor_interface(self):
+        """Deploy TorClientInterface.py to the RNS external interfaces directory.
+
+        RNS loads external interface modules from {configdir}/interfaces/.
+        When the config has type = TorClientInterface, RNS will exec this file
+        and use the interface_class variable to instantiate the interface.
+        """
+        interfaces_dir = os.path.join(self.storage_path, "interfaces")
+        os.makedirs(interfaces_dir, exist_ok=True)
+
+        dest_path = os.path.join(interfaces_dir, "TorClientInterface.py")
+
+        # Find TorClientInterface.py as a sibling of this module
+        # This works reliably in both Chaquopy and standard Python
+        source_path = os.path.join(os.path.dirname(__file__), "TorClientInterface.py")
+        if os.path.isfile(source_path):
+            shutil.copy2(source_path, dest_path)
+            log_info("ReticulumWrapper", "_deploy_tor_interface",
+                     f"Deployed TorClientInterface to {interfaces_dir}")
+        else:
+            # Fallback: try pkgutil (works when files are zipped in APK)
+            import pkgutil
+            interface_data = pkgutil.get_data(__name__.split('.')[0], "TorClientInterface.py")
+            if interface_data:
+                with open(dest_path, 'wb') as f:
+                    f.write(interface_data)
+                log_info("ReticulumWrapper", "_deploy_tor_interface",
+                         f"Deployed TorClientInterface via pkgutil to {interfaces_dir}")
+            else:
+                raise FileNotFoundError(
+                    "Could not find TorClientInterface.py via filesystem or package resources"
+                )
+
     def _create_config_file(
         self,
         interfaces: List[Dict],
@@ -1355,7 +1390,12 @@ class ReticulumWrapper:
                     config_lines.append(f"    mode = {mode}")
 
             elif iface_type == "TCPClient":
-                config_lines.append("    type = TCPClientInterface")
+                # Use TorClientInterface when SOCKS proxy is enabled
+                socks_enabled = iface.get("socks_proxy_enabled", False)
+                if socks_enabled:
+                    config_lines.append("    type = TorClientInterface")
+                else:
+                    config_lines.append("    type = TCPClientInterface")
                 config_lines.append("    enabled = yes")
 
                 target_host = iface.get("target_host", "127.0.0.1")
@@ -1363,6 +1403,13 @@ class ReticulumWrapper:
 
                 target_port = iface.get("target_port", 4242)
                 config_lines.append(f"    target_port = {target_port}")
+
+                # SOCKS5 proxy parameters (only for TorClientInterface)
+                if socks_enabled:
+                    proxy_host = iface.get("socks_proxy_host", "127.0.0.1")
+                    proxy_port = iface.get("socks_proxy_port", 9050)
+                    config_lines.append(f"    proxy_host = {proxy_host}")
+                    config_lines.append(f"    proxy_port = {proxy_port}")
 
                 kiss_framing = iface.get("kiss_framing", False)
                 if kiss_framing:
@@ -1718,6 +1765,21 @@ class ReticulumWrapper:
                 required_discovery_value=required_discovery_value,
             ):
                 return {"success": False, "error": "Failed to create config file"}
+
+            # Deploy TorClientInterface to RNS external interfaces directory
+            # so RNS can load it when config has type = TorClientInterface
+            has_socks = any(
+                iface.get("socks_proxy_enabled", False)
+                for iface in enabled_interfaces
+            )
+            try:
+                self._deploy_tor_interface()
+            except Exception as tor_err:
+                if has_socks:
+                    return {"success": False,
+                            "error": f"Failed to deploy Tor interface module: {tor_err}"}
+                log_warning("ReticulumWrapper", "initialize",
+                           f"Failed to deploy TorClientInterface: {tor_err}")
 
             # Set log level
             log_info("ReticulumWrapper", "initialize", "Setting RNS log level")

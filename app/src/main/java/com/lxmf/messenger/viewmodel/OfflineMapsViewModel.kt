@@ -56,14 +56,13 @@ data class OfflineMapsState(
     /**
      * Get a human-readable total storage string.
      */
-    fun getTotalStorageString(): String {
-        return when {
+    fun getTotalStorageString(): String =
+        when {
             totalStorageBytes < 1024 -> "$totalStorageBytes B"
             totalStorageBytes < 1024 * 1024 -> "${totalStorageBytes / 1024} KB"
             totalStorageBytes < 1024 * 1024 * 1024 -> "${totalStorageBytes / (1024 * 1024)} MB"
             else -> "%.1f GB".format(totalStorageBytes / (1024.0 * 1024.0 * 1024.0))
         }
-    }
 }
 
 /**
@@ -200,39 +199,43 @@ class OfflineMapsViewModel
                 _isImporting.value = true
                 var destFile: File? = null
                 try {
-                    destFile = withContext(Dispatchers.IO) {
-                        val offlineMapsDir = getOfflineMapsDir()
+                    // Resolve destination file path before copy so cleanup works on failure
+                    destFile =
+                        withContext(Dispatchers.IO) {
+                            val offlineMapsDir = getOfflineMapsDir()
+
+                            // Derive a filename from the URI
+                            val displayName = resolveFileName(uri) ?: "imported_${System.currentTimeMillis()}.mbtiles"
+                            val safeName =
+                                displayName.let {
+                                    if (!it.endsWith(".mbtiles")) "$it.mbtiles" else it
+                                }
+
+                            // Avoid overwriting existing files
+                            var file = File(offlineMapsDir, safeName)
+                            var counter = 1
+                            while (file.exists()) {
+                                val base = safeName.removeSuffix(".mbtiles")
+                                file = File(offlineMapsDir, "${base}_$counter.mbtiles")
+                                counter++
+                            }
+                            file
+                        }
+
+                    // Copy the content URI to the destination file
+                    withContext(Dispatchers.IO) {
                         val resolver = context.contentResolver
-
-                        // Derive a filename from the URI
-                        val displayName = resolveFileName(uri) ?: "imported_${System.currentTimeMillis()}.mbtiles"
-                        val safeName = displayName.let {
-                            if (!it.endsWith(".mbtiles")) "$it.mbtiles" else it
-                        }
-
-                        // Avoid overwriting existing files
-                        var file = File(offlineMapsDir, safeName)
-                        var counter = 1
-                        while (file.exists()) {
-                            val base = safeName.removeSuffix(".mbtiles")
-                            file = File(offlineMapsDir, "${base}_$counter.mbtiles")
-                            counter++
-                        }
-
-                        // Copy the content URI to the destination file
                         resolver.openInputStream(uri)?.use { input ->
-                            file.outputStream().use { output ->
+                            destFile.outputStream().use { output ->
                                 input.copyTo(output)
                             }
                         } ?: error("Could not open input stream for URI")
 
                         // Validate the copied file
-                        if (!OfflineMapStyleBuilder.isValidMBTiles(file.absolutePath)) {
-                            file.delete()
+                        if (!OfflineMapStyleBuilder.isValidMBTiles(destFile.absolutePath)) {
+                            destFile.delete()
                             error("File does not appear to be a valid MBTiles file")
                         }
-
-                        file
                     }
 
                     // Register in the database using existing import logic
@@ -245,7 +248,7 @@ class OfflineMapsViewModel
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to import MBTiles file", e)
                     _errorMessage.value = "Import failed: ${e.message}"
-                    // Clean up the copied file if DB registration failed
+                    // Clean up the copied file on any failure (copy or DB registration)
                     destFile?.let { file ->
                         if (file.exists() && !file.delete()) {
                             Log.w(TAG, "Failed to clean up imported file: ${file.absolutePath}")
@@ -332,9 +335,7 @@ class OfflineMapsViewModel
         /**
          * Get the offline maps directory (for legacy MBTiles files).
          */
-        fun getOfflineMapsDir(): File {
-            return File(context.filesDir, "offline_maps").also { it.mkdirs() }
-        }
+        fun getOfflineMapsDir(): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
         /**
          * Scan for orphaned files and clean up.

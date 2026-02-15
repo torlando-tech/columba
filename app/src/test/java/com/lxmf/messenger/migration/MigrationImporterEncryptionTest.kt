@@ -40,17 +40,16 @@ class MigrationImporterEncryptionTest {
 
     private val testPassword = "test-password-12345"
 
-    @Suppress("NoRelaxedMocks") // Infrastructure deps not exercised by encryption tests
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         importer = MigrationImporter(
             context = context,
-            database = mockk(relaxed = true),
-            interfaceDatabase = mockk(relaxed = true),
-            reticulumProtocol = mockk(relaxed = true),
-            settingsRepository = mockk(relaxed = true),
-            propagationNodeManager = mockk(relaxed = true),
+            database = mockk(),
+            interfaceDatabase = mockk(),
+            reticulumProtocol = mockk(),
+            settingsRepository = mockk(),
+            propagationNodeManager = mockk(),
         )
     }
 

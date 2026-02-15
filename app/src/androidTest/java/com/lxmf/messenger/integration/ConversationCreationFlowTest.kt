@@ -67,6 +67,7 @@ class ConversationCreationFlowTest {
                 peerIdentityDao = database.peerIdentityDao(),
                 localIdentityDao = database.localIdentityDao(),
                 attachmentStorage = AttachmentStorageManager(context),
+                draftDao = database.draftDao(),
             )
     }
 

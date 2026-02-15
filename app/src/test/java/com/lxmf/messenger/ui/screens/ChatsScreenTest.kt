@@ -979,6 +979,7 @@ class ChatsScreenTest {
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.isSyncing } returns MutableStateFlow(isSyncing)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
+        every { mockViewModel.draftsMap } returns MutableStateFlow(emptyMap())
 
         // Default: contacts are not saved
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)

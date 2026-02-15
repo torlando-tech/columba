@@ -87,6 +87,7 @@ class MessagingViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
+            private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 
             /**
              * Sanitize a filename to prevent path traversal attacks.
@@ -312,6 +313,16 @@ class MessagingViewModel
         // Contact toggle result events for toast notifications
         private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
         val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
+
+        // Draft state - auto-saves typed message text to database
+        private val _draftText = MutableStateFlow<String?>(null)
+        val draftText: StateFlow<String?> = _draftText.asStateFlow()
+
+        // Debounce job for draft saving - cancels previous save when new text arrives
+        private var draftSaveJob: kotlinx.coroutines.Job? = null
+
+        // Tracks the latest text from onDraftTextChanged so loadMessages can flush it on switch
+        private var lastDraftText: String = ""
 
         // Reply state - tracks which message is being replied to
         private val _pendingReplyTo = MutableStateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?>(null)
@@ -884,9 +895,21 @@ class MessagingViewModel
             destinationHash: String,
             peerName: String = "Unknown",
         ) {
+            // Flush any pending draft save for the previous conversation
+            val previousHash = _currentConversation.value
+            draftSaveJob?.cancel()
+            draftSaveJob = null
+            if (previousHash != null && previousHash != destinationHash) {
+                viewModelScope.launch {
+                    // lastDraftText holds the most recent text from onDraftTextChanged
+                    saveDraftNow(previousHash, lastDraftText)
+                }
+            }
+
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash
+            lastDraftText = ""
 
             // Register this conversation as active (suppresses notifications for this peer)
             activeConversationManager.setActive(destinationHash)
@@ -905,7 +928,56 @@ class MessagingViewModel
                 }
             }
 
+            // Restore draft for this conversation
+            viewModelScope.launch {
+                try {
+                    val draft = conversationRepository.getDraft(destinationHash)
+                    _draftText.value = draft
+                    Log.d(TAG, "Restored draft for $destinationHash: ${draft?.take(30) ?: "none"}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error restoring draft", e)
+                }
+            }
+
             Log.d(TAG, "Switched to conversation $destinationHash ($peerName)")
+        }
+
+        /**
+         * Called when the user types in the message input field.
+         * Debounces saves at 500ms to avoid excessive database writes.
+         * Re-checks the active conversation after the delay to prevent saving to the wrong chat.
+         */
+        fun onDraftTextChanged(text: String) {
+            val peerHash = _currentConversation.value ?: return
+            lastDraftText = text
+            draftSaveJob?.cancel()
+            draftSaveJob =
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
+                    // Re-check: only save if still in the same conversation
+                    if (_currentConversation.value == peerHash) {
+                        try {
+                            conversationRepository.saveDraft(peerHash, text)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error saving draft", e)
+                        }
+                    }
+                }
+        }
+
+        /**
+         * Save draft immediately without debounce.
+         * Used when navigating away from a conversation.
+         */
+        private suspend fun saveDraftNow(
+            peerHash: String,
+            text: String,
+        ) {
+            try {
+                conversationRepository.saveDraft(peerHash, text)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving draft immediately", e)
+            }
         }
 
         fun markAsRead(destinationHash: String) {
@@ -997,9 +1069,13 @@ class MessagingViewModel
 
                     result
                         .onSuccess { receipt ->
-                            // Clear pending reply after successful send
+                            // Clear pending reply and draft after successful send
                             handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
                             clearReplyTo()
+                            draftSaveJob?.cancel()
+                            lastDraftText = ""
+                            conversationRepository.clearDraft(destinationHash)
+                            _draftText.value = null
                         }.onFailure { error ->
                             handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                         }
@@ -1850,6 +1926,11 @@ class MessagingViewModel
             // and via UI layer's LaunchedEffect. Cleanup here was redundant and violated
             // Phase 1 threading policy (zero runBlocking in production code).
             // See THREADING_REDESIGN_PLAN.md Phase 1.2
+
+            // Draft saving: the 500ms debounce will have already saved the draft in nearly
+            // all cases. Any unsaved text from the final <500ms window is at most a few
+            // characters. This avoids runBlocking per the threading policy.
+            draftSaveJob?.cancel()
 
             // Links are left open to naturally close via Reticulum's stale timeout (~12 min)
             // rather than explicitly closing - this allows link reuse if user returns quickly

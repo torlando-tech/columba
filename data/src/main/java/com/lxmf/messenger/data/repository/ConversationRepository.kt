@@ -6,10 +6,12 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.Transaction
 import com.lxmf.messenger.data.db.dao.ConversationDao
+import com.lxmf.messenger.data.db.dao.DraftDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.entity.ConversationEntity
+import com.lxmf.messenger.data.db.entity.DraftEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.model.EnrichedConversation
@@ -80,6 +82,7 @@ class ConversationRepository
         private val peerIdentityDao: PeerIdentityDao,
         private val localIdentityDao: LocalIdentityDao,
         private val attachmentStorage: AttachmentStorageManager,
+        private val draftDao: DraftDao,
     ) {
         /**
          * Get all conversations for the active identity, sorted by most recent activity.
@@ -606,6 +609,59 @@ class ConversationRepository
                 firstFileName = firstFileName,
             )
         }
+
+        // --- Draft operations ---
+
+        /**
+         * Save a draft message for a conversation.
+         * If content is blank, the draft is deleted instead.
+         */
+        suspend fun saveDraft(peerHash: String, content: String) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            if (content.isBlank()) {
+                draftDao.deleteDraft(peerHash, activeIdentity.identityHash)
+            } else {
+                draftDao.insertOrReplaceDraft(
+                    DraftEntity(
+                        conversationHash = peerHash,
+                        identityHash = activeIdentity.identityHash,
+                        content = content,
+                        updatedTimestamp = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
+
+        /**
+         * Get the saved draft for a conversation, if any.
+         */
+        suspend fun getDraft(peerHash: String): String? {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
+            return draftDao.getDraft(peerHash, activeIdentity.identityHash)?.content
+        }
+
+        /**
+         * Clear the draft for a conversation (e.g., after sending a message).
+         */
+        suspend fun clearDraft(peerHash: String) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            draftDao.deleteDraft(peerHash, activeIdentity.identityHash)
+        }
+
+        /**
+         * Observe all drafts for the active identity as a map of peerHash -> draft content.
+         * Used by the conversation list to show draft previews.
+         */
+        fun observeDrafts(): Flow<Map<String, String>> =
+            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+                if (identity == null) {
+                    flowOf(emptyMap())
+                } else {
+                    draftDao.observeDraftsForIdentity(identity.identityHash).map { drafts ->
+                        drafts.associate { it.conversationHash to it.content }
+                    }
+                }
+            }
 
         /**
          * Extract the first filename from LXMF file attachments field.

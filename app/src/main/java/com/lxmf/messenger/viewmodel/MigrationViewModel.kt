@@ -198,16 +198,14 @@ class MigrationViewModel
                             Log.i(TAG, "Restarting service after import...")
                             withContext(Dispatchers.IO) {
                                 interfaceConfigManager.applyInterfaceChanges()
+                            }.onSuccess {
+                                Log.i(TAG, "Service restarted successfully")
+                                _uiState.value = MigrationUiState.ImportComplete(result)
+                            }.onFailure { e ->
+                                Log.e(TAG, "Service restart failed", e)
+                                // Still mark as complete since import succeeded
+                                _uiState.value = MigrationUiState.ImportComplete(result)
                             }
-                                .onSuccess {
-                                    Log.i(TAG, "Service restarted successfully")
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
-                                .onFailure { e ->
-                                    Log.e(TAG, "Service restart failed", e)
-                                    // Still mark as complete since import succeeded
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
                         }
                         is ImportResult.Error -> {
                             Log.e(TAG, "Import failed: ${result.message}")
@@ -219,6 +217,14 @@ class MigrationViewModel
                     _uiState.value = MigrationUiState.Error("Import failed: ${e.message}")
                 }
             }
+        }
+
+        /**
+         * Called after the SAF save dialog is launched so the UI state resets
+         * and won't re-trigger the dialog on configuration changes.
+         */
+        fun onExportSaveDialogLaunched() {
+            _uiState.value = MigrationUiState.Idle
         }
 
         /**
@@ -236,8 +242,10 @@ class MigrationViewModel
                             contentResolver.openOutputStream(destinationUri)?.use { output ->
                                 input.copyTo(output)
                             }
-                        } ?: throw Exception("Could not open export file")
+                        } ?: error("Could not open export file")
                     }
+                    _uiState.value = MigrationUiState.ExportSaved
+                    cleanupExportFiles()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to save export file", e)
                     _uiState.value =
@@ -276,19 +284,34 @@ class MigrationViewModel
 sealed class MigrationUiState {
     data object Idle : MigrationUiState()
 
-    data class Loading(val message: String) : MigrationUiState()
+    data class Loading(
+        val message: String,
+    ) : MigrationUiState()
 
     data object Exporting : MigrationUiState()
 
-    data class ExportComplete(val fileUri: Uri) : MigrationUiState()
+    data class ExportComplete(
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
-    data class ImportPreview(val preview: MigrationPreview, val fileUri: Uri) : MigrationUiState()
+    data object ExportSaved : MigrationUiState()
+
+    data class ImportPreview(
+        val preview: MigrationPreview,
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
     data object Importing : MigrationUiState()
 
-    data class RestartingService(val result: ImportResult.Success) : MigrationUiState()
+    data class RestartingService(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class ImportComplete(val result: ImportResult.Success) : MigrationUiState()
+    data class ImportComplete(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class Error(val message: String) : MigrationUiState()
+    data class Error(
+        val message: String,
+    ) : MigrationUiState()
 }

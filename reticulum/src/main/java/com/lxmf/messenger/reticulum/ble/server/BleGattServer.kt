@@ -99,6 +99,7 @@ class BleGattServer(
 
     // Peripheral keepalive jobs (prevent supervision timeout from connected centrals)
     private val peripheralKeepaliveJobs = mutableMapOf<String, Job>()
+    private val peripheralKeepaliveWriteFailures = mutableMapOf<String, Int>()
     private val keepaliveMutex = Mutex()
 
     // State
@@ -442,16 +443,12 @@ class BleGattServer(
     /**
      * Get list of connected central addresses.
      */
-    suspend fun getConnectedCentrals(): List<String> {
-        return centralsMutex.withLock { connectedCentrals.keys.toList() }
-    }
+    suspend fun getConnectedCentrals(): List<String> = centralsMutex.withLock { connectedCentrals.keys.toList() }
 
     /**
      * Get MTU for a specific central.
      */
-    suspend fun getMtu(centralAddress: String): Int? {
-        return mtuMutex.withLock { centralMtus[centralAddress] }
-    }
+    suspend fun getMtu(centralAddress: String): Int? = mtuMutex.withLock { centralMtus[centralAddress] }
 
     /**
      * Disconnect a specific central device.
@@ -501,16 +498,12 @@ class BleGattServer(
     /**
      * Check if a central is connected.
      */
-    suspend fun isConnected(centralAddress: String): Boolean {
-        return centralsMutex.withLock { connectedCentrals.containsKey(centralAddress) }
-    }
+    suspend fun isConnected(centralAddress: String): Boolean = centralsMutex.withLock { connectedCentrals.containsKey(centralAddress) }
 
     /**
      * Check if a central has completed identity handshake.
      */
-    suspend fun hasIdentity(centralAddress: String): Boolean {
-        return identityMutex.withLock { addressToIdentity.containsKey(centralAddress) }
-    }
+    suspend fun hasIdentity(centralAddress: String): Boolean = identityMutex.withLock { addressToIdentity.containsKey(centralAddress) }
 
     /**
      * Complete a peripheral connection using identity obtained from another source.
@@ -758,41 +751,41 @@ class BleGattServer(
                         )
                     }
 
-                    // 2026-01-17: Simplified identity detection - Python handles it (like Linux)
-                    // Previously, Kotlin detected 16-byte identity handshakes and called
-                    // onIdentityReceived, but Python also detected them via _handle_identity_handshake.
-                    // This created "double identity callback processing" complexity.
-                    // Now: Kotlin just passes ALL data to Python, which handles identity detection
-                    // in a single code path (matching the Linux/Bleak architecture).
+                    // Re-enabled 2026-01-30: Kotlin-side identity detection needed for dual connection handling.
+                    // When phone A connects as central to phone B, phone B receives A's identity
+                    // via the GATT server data write. This needs to populate KotlinBLEBridge.identityToAddress
+                    // so that when B tries to connect as central to A, the duplicate identity check
+                    // can detect the existing peripheral connection and allow the dual connection.
                     //
-                    // COMMENTED OUT - Kotlin-side identity detection:
-                    // val existingIdentity =
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address]
-                    //     }
-                    //
-                    // if (existingIdentity == null && value.size == 16) {
-                    //     // Likely identity handshake - store for Kotlin's address resolution
-                    //     val identityHash = value.joinToString("") { "%02x".format(it) }
-                    //     Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
-                    //
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address] = value
-                    //         identityToAddress[identityHash] = device.address
-                    //     }
-                    //
-                    //     // Notify identity callback (Python will also detect via data callback)
-                    //     onIdentityReceived?.invoke(device.address, identityHash)
-                    // }
+                    // Python ALSO detects the identity (via onDataReceived → _handle_identity_handshake),
+                    // but that's OK - both can coexist and Python handles duplicate notifications.
+                    val existingIdentity =
+                        identityMutex.withLock {
+                            addressToIdentity[device.address]
+                        }
 
-                    // Start keepalive on first data received (moved from identity detection)
+                    if (existingIdentity == null && value.size == 16) {
+                        // Likely identity handshake - store for Kotlin's address resolution
+                        val identityHash = value.joinToString("") { "%02x".format(it) }
+                        Log.d(TAG, "Received 16-byte identity handshake from ${device.address}: ${identityHash.take(16)}...")
+
+                        identityMutex.withLock {
+                            addressToIdentity[device.address] = value
+                            identityToAddress[identityHash] = device.address
+                        }
+
+                        // Notify identity callback (Python will also detect via data callback)
+                        onIdentityReceived?.invoke(device.address, identityHash)
+                    }
+
+                    // Start keepalive on first data received
                     // This prevents supervision timeout regardless of whether it's identity or data
                     val hasKeepalive = keepaliveMutex.withLock { peripheralKeepaliveJobs.containsKey(device.address) }
                     if (!hasKeepalive) {
                         startPeripheralKeepalive(device.address)
                     }
 
-                    // Pass ALL data to Python - it handles identity detection
+                    // Pass ALL data to Python - it handles identity detection (and other data)
                     onDataReceived?.invoke(device.address, value)
                 }
                 else -> {
@@ -984,8 +977,8 @@ class BleGattServer(
     /**
      * Check if BLUETOOTH_CONNECT permission is granted.
      */
-    private fun hasConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT,
@@ -993,17 +986,19 @@ class BleGattServer(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     // ========== Peripheral Mode Keepalive ==========
 
     /**
      * Start peripheral keepalive for a connected central device.
-     * Sends periodic notification packets to prevent supervision timeout.
+     * Sends periodic notification packets to prevent Android BLE idle disconnects.
      *
      * When Android is in peripheral mode (GATT server), connected centrals may
      * timeout if no data is exchanged. This keepalive sends a 1-byte notification
-     * every 15 seconds to keep the connection alive.
+     * every 7 seconds to keep the connection alive.
+     *
+     * Tracks notification failures and disconnects early if the GATT session appears
+     * degraded, rather than waiting for L2CAP cleanup.
      *
      * @param address MAC address of the connected central
      */
@@ -1012,13 +1007,12 @@ class BleGattServer(
             keepaliveMutex.withLock {
                 // Cancel any existing keepalive
                 peripheralKeepaliveJobs[address]?.cancel()
+                peripheralKeepaliveWriteFailures[address] = 0
 
                 // Start new keepalive job
                 peripheralKeepaliveJobs[address] =
                     scope.launch {
-                        // Send immediate first keepalive to prevent supervision timeout
-                        // Android BLE connections can timeout after ~20s of inactivity,
-                        // so we send immediately rather than waiting for the first interval
+                        // Send immediate first keepalive to establish bidirectional traffic
                         try {
                             val keepalivePacket = byteArrayOf(0x00)
                             val result = notifyCentrals(keepalivePacket, address)
@@ -1030,6 +1024,7 @@ class BleGattServer(
                         }
 
                         // Continue with regular interval
+                        @Suppress("LoopWithTooManyJumpStatements")
                         while (isActive) {
                             delay(BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS)
 
@@ -1040,13 +1035,40 @@ class BleGattServer(
 
                                 if (result.isSuccess) {
                                     Log.v(TAG, "Peripheral keepalive sent to $address")
+                                    // Reset failure counter on success
+                                    keepaliveMutex.withLock {
+                                        peripheralKeepaliveWriteFailures[address] = 0
+                                    }
                                 } else {
                                     val error = result.exceptionOrNull()?.message ?: "unknown"
                                     if (error.contains("No connected centrals")) {
                                         Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
                                         break // Exit loop, job ends naturally
                                     }
-                                    Log.w(TAG, "Peripheral keepalive failed for $address, connection may be dead")
+
+                                    // Track notification failures
+                                    val writeFailures =
+                                        keepaliveMutex.withLock {
+                                            val current = peripheralKeepaliveWriteFailures[address] ?: 0
+                                            peripheralKeepaliveWriteFailures[address] = current + 1
+                                            current + 1
+                                        }
+                                    Log.w(
+                                        TAG,
+                                        "Peripheral keepalive NOTIFY failed for $address ($writeFailures/${BleConstants.MAX_KEEPALIVE_WRITE_FAILURES} failures)",
+                                    )
+
+                                    // Disconnect early on notification failures
+                                    if (writeFailures >= BleConstants.MAX_KEEPALIVE_WRITE_FAILURES) {
+                                        Log.e(
+                                            TAG,
+                                            "GATT notifications to $address are failing (L2CAP may be degraded), disconnecting to allow reconnection",
+                                        )
+                                        scope.launch {
+                                            disconnectCentral(address)
+                                        }
+                                        break
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Peripheral keepalive error for $address", e)
@@ -1068,9 +1090,39 @@ class BleGattServer(
         keepaliveMutex.withLock {
             peripheralKeepaliveJobs[address]?.cancel()
             peripheralKeepaliveJobs.remove(address)
+            peripheralKeepaliveWriteFailures.remove(address)
         }
         Log.v(TAG, "Stopped peripheral keepalive for $address")
     }
+
+    /**
+     * Send an immediate keepalive to a specific central device.
+     *
+     * This is used during deduplication to keep the L2CAP link alive when
+     * closing the central connection. Android's Bluetooth stack starts a
+     * 1-second idle timer when GATT connections are closed, which can tear
+     * down the underlying ACL link even if a peripheral connection still
+     * exists. By sending traffic just before closing central, we keep the
+     * L2CAP layer active.
+     *
+     * @param address MAC address of the central to send keepalive to
+     * @return true if keepalive was sent successfully
+     */
+    suspend fun sendImmediateKeepalive(address: String): Boolean =
+        try {
+            val keepalivePacket = byteArrayOf(0x00)
+            val result = notifyCentrals(keepalivePacket, address)
+            if (result.isSuccess) {
+                Log.d(TAG, "Immediate keepalive sent to $address (deduplication)")
+                true
+            } else {
+                Log.w(TAG, "Failed to send immediate keepalive to $address")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending immediate keepalive to $address", e)
+            false
+        }
 
     /**
      * Shutdown the server.
@@ -1080,6 +1132,7 @@ class BleGattServer(
         keepaliveMutex.withLock {
             peripheralKeepaliveJobs.values.forEach { it.cancel() }
             peripheralKeepaliveJobs.clear()
+            peripheralKeepaliveWriteFailures.clear()
         }
 
         close()

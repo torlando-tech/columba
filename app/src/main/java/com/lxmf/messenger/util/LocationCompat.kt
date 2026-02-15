@@ -6,7 +6,9 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -27,9 +29,12 @@ import com.google.android.gms.common.GoogleApiAvailability
  */
 object LocationCompat {
     private const val TAG = "LocationCompat"
+    private const val SINGLE_LOCATION_TIMEOUT_MS = 10_000L
 
     @Volatile
     private var checked = false
+
+    @Volatile
     private var available = false
 
     /**
@@ -113,13 +118,22 @@ object LocationCompat {
                     onResult(location)
                 }
             } else {
-                // For older APIs, request a single update
-                @Suppress("DEPRECATION")
-                locationManager.requestSingleUpdate(
-                    provider,
+                // For older APIs, request a single update with a safety timeout.
+                // requestSingleUpdate may never invoke its callback if no GPS fix
+                // is obtained (e.g., poor signal indoors), which would leave callers
+                // stuck waiting forever.
+                val handler = Handler(Looper.getMainLooper())
+                var resultDelivered = false
+
+                val listener =
                     object : LocationListener {
                         override fun onLocationChanged(location: Location) {
-                            onResult(location)
+                            if (!resultDelivered) {
+                                resultDelivered = true
+                                handler.removeCallbacksAndMessages(this)
+                                locationManager.removeUpdates(this)
+                                onResult(location)
+                            }
                         }
 
                         @Deprecated("Deprecated in API")
@@ -132,9 +146,35 @@ object LocationCompat {
 
                         override fun onProviderEnabled(provider: String) {}
 
-                        override fun onProviderDisabled(provider: String) {}
-                    },
+                        override fun onProviderDisabled(provider: String) {
+                            if (!resultDelivered) {
+                                resultDelivered = true
+                                handler.removeCallbacksAndMessages(this)
+                                locationManager.removeUpdates(this)
+                                onResult(getLastKnownLocation(context))
+                            }
+                        }
+                    }
+
+                @Suppress("DEPRECATION")
+                locationManager.requestSingleUpdate(
+                    provider,
+                    listener,
                     Looper.getMainLooper(),
+                )
+
+                // Safety timeout: fall back to last known location
+                handler.postAtTime(
+                    {
+                        if (!resultDelivered) {
+                            resultDelivered = true
+                            locationManager.removeUpdates(listener)
+                            Log.d(TAG, "Single location request timed out, falling back to last known")
+                            onResult(getLastKnownLocation(context))
+                        }
+                    },
+                    listener, // token for removeCallbacksAndMessages
+                    SystemClock.uptimeMillis() + SINGLE_LOCATION_TIMEOUT_MS,
                 )
             }
         } catch (e: Exception) {

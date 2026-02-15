@@ -86,7 +86,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
@@ -94,6 +93,7 @@ import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.SharingStatusChip
 import com.lxmf.messenger.ui.util.MarkerBitmapFactory
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
@@ -252,9 +252,12 @@ fun MapScreen(
 
     // Location client - only create GMS client when Play Services is available (issue #456)
     val useGms = remember { LocationCompat.isPlayServicesAvailable(context) }
-    val fusedLocationClient = remember {
-        if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
-    }
+    val fusedLocationClient =
+        remember {
+            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
+        }
+    // Platform LocationListener for cleanup when not using GMS (issue #456)
+    var platformLocationListener by remember { mutableStateOf<android.location.LocationListener?>(null) }
 
     // Permission launcher
     val permissionLauncher =
@@ -264,7 +267,8 @@ fun MapScreen(
             val granted = permissions.values.all { it }
             viewModel.onPermissionResult(granted)
             if (granted) {
-                startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
+                platformLocationListener?.let { LocationCompat.removeLocationUpdates(context, it) }
+                platformLocationListener = startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
             }
         }
 
@@ -273,7 +277,7 @@ fun MapScreen(
         MapLibre.getInstance(context)
         if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
-            startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
+            platformLocationListener = startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
         }
         // Permission sheet visibility is now managed by ViewModel state
     }
@@ -404,6 +408,15 @@ fun MapScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Clean up platform location listener when leaving composition (issue #456)
+    DisposableEffect(Unit) {
+        onDispose {
+            platformLocationListener?.let {
+                LocationCompat.removeLocationUpdates(context, it)
+            }
         }
     }
 
@@ -1521,7 +1534,7 @@ private fun startLocationUpdates(
     fusedLocationClient: FusedLocationProviderClient?,
     useGms: Boolean,
     viewModel: MapViewModel,
-) {
+): android.location.LocationListener? {
     if (useGms && fusedLocationClient != null) {
         val locationRequest =
             LocationRequest
@@ -1558,17 +1571,19 @@ private fun startLocationUpdates(
         } catch (e: SecurityException) {
             Log.e("MapScreen", "Location permission not granted", e)
         }
+        return null
     } else {
         // Fallback to platform LocationManager
         try {
             LocationCompat.getLastKnownLocation(context)?.let { location ->
                 viewModel.updateUserLocation(location)
             }
-            LocationCompat.requestLocationUpdates(context, 30_000L) { location ->
+            return LocationCompat.requestLocationUpdates(context, 30_000L) { location ->
                 viewModel.updateUserLocation(location)
             }
         } catch (e: SecurityException) {
             Log.e("MapScreen", "Location permission not granted", e)
+            return null
         }
     }
 }

@@ -35,5 +35,3 @@ ignore:
   # These components have extensive Robolectric tests but @Preview functions inflate totals
   - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentCard.kt"
   - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentPreviewRow.kt"
-  # Compose UI screen with password dialogs - no business logic to unit test
-  - "app/src/main/java/com/lxmf/messenger/ui/screens/MigrationScreen.kt"

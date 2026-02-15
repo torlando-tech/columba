@@ -796,7 +796,7 @@ private fun NotificationPermissionDialog(
  * @param onDismiss Called when the dialog is cancelled
  */
 @Composable
-private fun PasswordDialog(
+internal fun PasswordDialog(
     title: String,
     description: String,
     isConfirmMode: Boolean,

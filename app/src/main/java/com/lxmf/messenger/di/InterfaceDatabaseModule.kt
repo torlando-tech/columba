@@ -20,7 +20,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Provider
 import javax.inject.Qualifier
@@ -32,6 +34,13 @@ import javax.inject.Singleton
 @Retention(AnnotationRetention.RUNTIME)
 @Qualifier
 annotation class ApplicationScope
+
+/**
+ * Qualifier for the default coroutine dispatcher (testable alternative to hardcoding Dispatchers.Default).
+ */
+@Retention(AnnotationRetention.RUNTIME)
+@Qualifier
+annotation class DefaultDispatcher
 
 /**
  * Hilt module for providing the Interface database and related DAOs.
@@ -46,6 +55,13 @@ object InterfaceDatabaseModule {
     @Provides
     @Singleton
     fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob())
+
+    /**
+     * Provides the default dispatcher for background work that needs to be off the Main thread.
+     */
+    @DefaultDispatcher
+    @Provides
+    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 
     /**
      * Provides the Interface database singleton.

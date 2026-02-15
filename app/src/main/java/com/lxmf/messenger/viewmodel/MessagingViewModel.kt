@@ -933,24 +933,28 @@ class MessagingViewModel
             val peerHash = _currentConversation.value ?: return
             lastDraftText = text
             draftSaveJob?.cancel()
-            draftSaveJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
-                // Re-check: only save if still in the same conversation
-                if (_currentConversation.value == peerHash) {
-                    try {
-                        conversationRepository.saveDraft(peerHash, text)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error saving draft", e)
+            draftSaveJob =
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
+                    // Re-check: only save if still in the same conversation
+                    if (_currentConversation.value == peerHash) {
+                        try {
+                            conversationRepository.saveDraft(peerHash, text)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error saving draft", e)
+                        }
                     }
                 }
-            }
         }
 
         /**
          * Save draft immediately without debounce.
          * Used when navigating away from a conversation.
          */
-        private suspend fun saveDraftNow(peerHash: String, text: String) {
+        private suspend fun saveDraftNow(
+            peerHash: String,
+            text: String,
+        ) {
             try {
                 conversationRepository.saveDraft(peerHash, text)
             } catch (e: Exception) {
@@ -1042,6 +1046,7 @@ class MessagingViewModel
                             handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
                             clearReplyTo()
                             draftSaveJob?.cancel()
+                            lastDraftText = ""
                             conversationRepository.clearDraft(destinationHash)
                             _draftText.value = null
                         }.onFailure { error ->

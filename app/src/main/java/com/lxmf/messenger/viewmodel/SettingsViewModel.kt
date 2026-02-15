@@ -196,6 +196,9 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        // Track group telemetry state before toggle-off so we can restore it on toggle-on
+        private var groupTelemetryWasEnabled = false
+
         // Track when we first noticed shared instance disconnected
         private var sharedInstanceDisconnectedTime: Long? = null
         private var sharedInstanceMonitorJob: Job? = null
@@ -1458,9 +1461,15 @@ class SettingsViewModel
          * Called unconditionally to ensure settings persist across navigation.
          */
         private fun loadLocationSharingSettings() {
+            // Location sharing toggle reflects EITHER individual sharing OR group telemetry send
             viewModelScope.launch {
-                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
-                    _state.update { it.copy(locationSharingEnabled = enabled) }
+                combine(
+                    settingsRepository.locationSharingEnabledFlow,
+                    telemetryCollectorManager.isEnabled,
+                ) { individualEnabled, groupSendEnabled ->
+                    individualEnabled || groupSendEnabled
+                }.collect { combined ->
+                    _state.update { it.copy(locationSharingEnabled = combined) }
                 }
             }
             viewModelScope.launch {
@@ -1498,13 +1507,18 @@ class SettingsViewModel
          */
         fun setLocationSharingEnabled(enabled: Boolean) {
             viewModelScope.launch {
+                if (!enabled) {
+                    // Save group telemetry state before disabling so we can restore on re-enable
+                    groupTelemetryWasEnabled = telemetryCollectorManager.isEnabled.value
+                    stopAllSharing()
+                    telemetryCollectorManager.setEnabled(false)
+                } else if (groupTelemetryWasEnabled) {
+                    // Restore group telemetry if it was enabled before the toggle was turned off
+                    telemetryCollectorManager.setEnabled(true)
+                    groupTelemetryWasEnabled = false
+                }
                 settingsRepository.saveLocationSharingEnabled(enabled)
                 Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
-
-                // When disabled, stop all active sharing sessions
-                if (!enabled) {
-                    stopAllSharing()
-                }
             }
         }
 

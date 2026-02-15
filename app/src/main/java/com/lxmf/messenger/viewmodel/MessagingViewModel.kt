@@ -41,6 +41,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -207,6 +208,23 @@ class MessagingViewModel
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
+
+        // Recent photos for attachment panel
+        private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
+        val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
+
+        private var loadPhotosJob: Job? = null
+
+        fun loadRecentPhotos(context: Context) {
+            loadPhotosJob?.cancel()
+            loadPhotosJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    val photos =
+                        com.lxmf.messenger.util.MediaStoreUtils
+                            .getRecentPhotos(context.applicationContext)
+                    _recentPhotos.value = photos
+                }
+        }
 
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
@@ -970,6 +988,15 @@ class MessagingViewModel
                     Log.e(TAG, "Error marking conversation as read", e)
                 }
             }
+        }
+
+        /**
+         * Refresh the messages list to update relative timestamps.
+         * Called when the app resumes from background to ensure timestamps like
+         * "Just now" are recalculated based on the current time.
+         */
+        fun refreshTimestamps() {
+            _messagesRefreshTrigger.value++
         }
 
         fun sendMessage(

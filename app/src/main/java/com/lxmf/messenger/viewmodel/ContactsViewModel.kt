@@ -258,23 +258,20 @@ class ContactsViewModel
         }
 
         /**
-         * Unset a relay contact and delete it, then trigger auto-selection of a new relay.
-         * This should be called when the user confirms removing their current relay.
+         * Unset a relay contact and delete it.
+         * @param autoSelectNew If true, auto-select a new relay (excluding the deleted one).
          */
-        fun unsetRelayAndDelete(destinationHash: String) {
+        fun unsetRelayAndDelete(
+            destinationHash: String,
+            autoSelectNew: Boolean,
+        ) {
             viewModelScope.launch {
                 try {
-                    // IMPORTANT: Set exclusion BEFORE delete to prevent immediate re-selection
-                    // The delete triggers a Room Flow emission that could cause auto-selection
-                    // before onRelayDeleted() is called
-                    propagationNodeManager.excludeFromAutoSelect(destinationHash)
-
-                    // Delete the contact (this also clears isMyRelay flag in database)
                     contactRepository.deleteContact(destinationHash)
-
-                    // Notify PropagationNodeManager to trigger auto-selection of new relay
-                    propagationNodeManager.onRelayDeleted()
-
+                    propagationNodeManager.onRelayDeleted(
+                        autoSelectNew = autoSelectNew,
+                        excludeHash = destinationHash,
+                    )
                     Log.d(TAG, "Unset relay and deleted: $destinationHash")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to unset relay: $destinationHash", e)

@@ -187,6 +187,46 @@ class ServicePersistenceManagerTest {
         }
 
     @Test
+    fun `persistAnnounce sets computedIdentityHash from publicKey`() =
+        runTest {
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
+
+            val result =
+                runCatching {
+                    persistenceManager.persistAnnounce(
+                        destinationHash = testDestinationHash,
+                        peerName = "Test Peer",
+                        publicKey = testPublicKey,
+                        appData = null,
+                        hops = 1,
+                        timestamp = System.currentTimeMillis(),
+                        nodeType = "LXMF_PEER",
+                        receivingInterface = null,
+                        receivingInterfaceType = null,
+                        aspect = null,
+                        stampCost = null,
+                        stampCostFlexibility = null,
+                        peeringCost = null,
+                        propagationTransferLimitKb = null,
+                    )
+                }
+
+            testScope.advanceUntilIdle()
+
+            assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
+            coVerify {
+                announceDao.upsertAnnounce(
+                    match { entity ->
+                        entity.computedIdentityHash != null &&
+                            entity.computedIdentityHash!!.length == 32 &&
+                            entity.computedIdentityHash == entity.computedIdentityHash!!.lowercase()
+                    },
+                )
+            }
+        }
+
+    @Test
     fun `persistAnnounce handles database exception gracefully`() =
         runTest {
             coEvery { announceDao.getAnnounce(any()) } throws RuntimeException("Database error")

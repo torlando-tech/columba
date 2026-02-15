@@ -175,6 +175,43 @@ class MigrationDataTest {
             darkOutlineVariant = 0xFF43474E.toInt(),
         )
 
+    private fun createTestRatchetRef(
+        type: String = "own",
+        filename: String = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+    ) = RatchetRef(
+        type = type,
+        filename = filename,
+        data = "cmF0Y2hldEtleURhdGE=", // Base64 "ratchetKeyData"
+    )
+
+    // endregion
+
+    // region RatchetRef Tests
+
+    @Test
+    fun `RatchetRef round-trip preserves all fields`() {
+        val ref = createTestRatchetRef()
+
+        val jsonString = json.encodeToString(ref)
+        val decoded = json.decodeFromString<RatchetRef>(jsonString)
+
+        assertEquals(ref, decoded)
+        assertEquals("own", decoded.type)
+        assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", decoded.filename)
+        assertEquals("cmF0Y2hldEtleURhdGE=", decoded.data)
+    }
+
+    @Test
+    fun `RatchetRef peer type serializes correctly`() {
+        val ref = createTestRatchetRef(type = "peer", filename = "f0e1d2c3b4a5f0e1.ratchets")
+
+        val jsonString = json.encodeToString(ref)
+        val decoded = json.decodeFromString<RatchetRef>(jsonString)
+
+        assertEquals("peer", decoded.type)
+        assertEquals("f0e1d2c3b4a5f0e1.ratchets", decoded.filename)
+    }
+
     // endregion
 
     // region MigrationBundle Tests
@@ -191,7 +228,7 @@ class MigrationDataTest {
             )
 
         assertEquals(MigrationBundle.CURRENT_VERSION, bundle.version)
-        assertEquals(6, bundle.version)
+        assertEquals(7, bundle.version)
     }
 
     @Test
@@ -238,6 +275,7 @@ class MigrationDataTest {
         assertEquals(emptyList<InterfaceExport>(), decoded.interfaces)
         assertEquals(emptyList<CustomThemeExport>(), decoded.customThemes)
         assertEquals(emptyList<AttachmentRef>(), decoded.attachmentManifest)
+        assertEquals(emptyList<RatchetRef>(), decoded.ratchetFiles)
     }
 
     @Test
@@ -274,6 +312,62 @@ class MigrationDataTest {
         assertEquals(bundle.interfaces, decoded.interfaces)
         assertEquals(bundle.customThemes, decoded.customThemes)
         assertEquals(bundle.attachmentManifest, decoded.attachmentManifest)
+    }
+
+    @Test
+    fun `MigrationBundle with ratchetFiles serializes correctly`() {
+        val ownRatchet = createTestRatchetRef(type = "own", filename = "a1b2c3d4e5f6")
+        val peerRatchet = createTestRatchetRef(type = "peer", filename = "f0e1d2c3.ratchets")
+
+        val bundle =
+            MigrationBundle(
+                identities = listOf(createTestIdentity()),
+                conversations = emptyList(),
+                messages = emptyList(),
+                contacts = emptyList(),
+                settings = createTestSettings(),
+                ratchetFiles = listOf(ownRatchet, peerRatchet),
+            )
+
+        val jsonString = json.encodeToString(bundle)
+        val decoded = json.decodeFromString<MigrationBundle>(jsonString)
+
+        assertEquals(2, decoded.ratchetFiles.size)
+        assertEquals("own", decoded.ratchetFiles[0].type)
+        assertEquals("peer", decoded.ratchetFiles[1].type)
+        assertEquals(bundle.ratchetFiles, decoded.ratchetFiles)
+    }
+
+    @Test
+    fun `MigrationBundle backward compatibility with v6 JSON without ratchetFiles`() {
+        // v6 exports won't have the ratchetFiles field — it should default to empty
+        val v6Json =
+            """
+            {
+                "version": 6,
+                "exportedAt": 1700000000000,
+                "identities": [],
+                "conversations": [],
+                "messages": [],
+                "contacts": [],
+                "settings": {
+                    "notificationsEnabled": true,
+                    "notificationReceivedMessage": true,
+                    "notificationReceivedMessageFavorite": false,
+                    "notificationHeardAnnounce": false,
+                    "notificationBleConnected": false,
+                    "notificationBleDisconnected": false,
+                    "autoAnnounceEnabled": true,
+                    "autoAnnounceIntervalMinutes": 5,
+                    "themePreference": "preset:VIBRANT"
+                }
+            }
+            """.trimIndent()
+
+        val decoded = json.decodeFromString<MigrationBundle>(v6Json)
+
+        assertEquals(6, decoded.version)
+        assertEquals(emptyList<RatchetRef>(), decoded.ratchetFiles)
     }
 
     // endregion

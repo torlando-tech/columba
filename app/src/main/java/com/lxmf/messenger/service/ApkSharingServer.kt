@@ -45,10 +45,10 @@ class ApkSharingServer {
         private fun findWifiAddress(): String? {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
             for (iface in interfaces) {
-                if (!isUsableInterface(iface)) continue
-                if (!isWifiInterface(iface)) continue
-                val addr = firstIpv4Address(iface)
-                if (addr != null) return addr
+                if (isUsableInterface(iface) && isWifiInterface(iface)) {
+                    val addr = firstIpv4Address(iface)
+                    if (addr != null) return addr
+                }
             }
             return null
         }
@@ -63,8 +63,7 @@ class ApkSharingServer {
             return null
         }
 
-        private fun isUsableInterface(iface: NetworkInterface): Boolean =
-            !iface.isLoopback && iface.isUp
+        private fun isUsableInterface(iface: NetworkInterface): Boolean = !iface.isLoopback && iface.isUp
 
         private fun isWifiInterface(iface: NetworkInterface): Boolean =
             iface.name.startsWith("wlan") ||
@@ -86,23 +85,32 @@ class ApkSharingServer {
 
     /**
      * Deferred that completes with the bound port once the server socket is ready,
-     * or with 0 if binding failed. This allows the caller to await actual readiness
-     * rather than using a fixed delay.
+     * or with 0 if binding failed. Callers obtain this via [prepareStart] to guarantee
+     * they await on the same instance that [start] completes.
      */
+    @Volatile
     private var portReady = CompletableDeferred<Int>()
 
     val port: Int
         get() = serverSocket?.localPort ?: 0
 
     /**
-     * Await the server binding and return the port number.
-     * Returns 0 if the server failed to bind.
+     * Prepare a fresh readiness signal **and** launch [start] in one atomic step,
+     * returning the [CompletableDeferred] the caller should await. This eliminates
+     * the race where [awaitPort] could observe a stale or reassigned deferred.
      */
-    suspend fun awaitPort(): Int = portReady.await()
+    fun prepareStart(): CompletableDeferred<Int> {
+        val deferred = CompletableDeferred<Int>()
+        portReady = deferred
+        return deferred
+    }
 
     /**
      * Start the HTTP server and serve the given APK file.
      * This suspends and runs the accept loop until [stop] is called.
+     *
+     * Callers must call [prepareStart] before launching this method to obtain the
+     * [CompletableDeferred] that will be completed with the bound port.
      *
      * @param apkFile The APK file to serve
      */
@@ -112,13 +120,12 @@ class ApkSharingServer {
             return
         }
 
-        portReady = CompletableDeferred()
-
         withContext(Dispatchers.IO) {
             try {
-                serverSocket = ServerSocket(0).also {
-                    it.reuseAddress = true
-                }
+                serverSocket =
+                    ServerSocket(0).also {
+                        it.reuseAddress = true
+                    }
                 val boundPort = serverSocket?.localPort ?: 0
                 Log.i(TAG, "APK sharing server started on port $boundPort")
                 portReady.complete(boundPort)
@@ -158,7 +165,10 @@ class ApkSharingServer {
      * Serves the APK file for GET /columba.apk,
      * and returns a simple HTML download page for the root path.
      */
-    private fun handleClient(clientSocket: Socket, apkFile: File) {
+    private fun handleClient(
+        clientSocket: Socket,
+        apkFile: File,
+    ) {
         try {
             clientSocket.soTimeout = CLIENT_TIMEOUT_MS
             clientSocket.use { socket ->
@@ -193,21 +203,25 @@ class ApkSharingServer {
         }
     }
 
-    private fun serveApkFile(output: BufferedOutputStream, apkFile: File) {
+    private fun serveApkFile(
+        output: BufferedOutputStream,
+        apkFile: File,
+    ) {
         if (!apkFile.exists()) {
             serveNotFound(output)
             return
         }
 
         val fileSize = apkFile.length()
-        val headers = buildString {
-            append("HTTP/1.1 200 OK\r\n")
-            append("Content-Type: application/vnd.android.package-archive\r\n")
-            append("Content-Disposition: attachment; filename=\"columba.apk\"\r\n")
-            append("Content-Length: $fileSize\r\n")
-            append("Connection: close\r\n")
-            append("\r\n")
-        }
+        val headers =
+            buildString {
+                append("HTTP/1.1 200 OK\r\n")
+                append("Content-Type: application/vnd.android.package-archive\r\n")
+                append("Content-Disposition: attachment; filename=\"columba.apk\"\r\n")
+                append("Content-Length: $fileSize\r\n")
+                append("Connection: close\r\n")
+                append("\r\n")
+            }
 
         output.write(headers.toByteArray())
 
@@ -223,7 +237,8 @@ class ApkSharingServer {
     }
 
     private fun serveDownloadPage(output: BufferedOutputStream) {
-        val html = """
+        val html =
+            """
             <!DOCTYPE html>
             <html>
             <head>
@@ -277,16 +292,17 @@ class ApkSharingServer {
                 </div>
             </body>
             </html>
-        """.trimIndent()
+            """.trimIndent()
 
         val body = html.toByteArray()
-        val headers = buildString {
-            append("HTTP/1.1 200 OK\r\n")
-            append("Content-Type: text/html; charset=utf-8\r\n")
-            append("Content-Length: ${body.size}\r\n")
-            append("Connection: close\r\n")
-            append("\r\n")
-        }
+        val headers =
+            buildString {
+                append("HTTP/1.1 200 OK\r\n")
+                append("Content-Type: text/html; charset=utf-8\r\n")
+                append("Content-Length: ${body.size}\r\n")
+                append("Connection: close\r\n")
+                append("\r\n")
+            }
 
         output.write(headers.toByteArray())
         output.write(body)
@@ -294,13 +310,14 @@ class ApkSharingServer {
 
     private fun serveNotFound(output: BufferedOutputStream) {
         val body = "Not Found"
-        val headers = buildString {
-            append("HTTP/1.1 404 Not Found\r\n")
-            append("Content-Type: text/plain\r\n")
-            append("Content-Length: ${body.length}\r\n")
-            append("Connection: close\r\n")
-            append("\r\n")
-        }
+        val headers =
+            buildString {
+                append("HTTP/1.1 404 Not Found\r\n")
+                append("Content-Type: text/plain\r\n")
+                append("Content-Length: ${body.length}\r\n")
+                append("Connection: close\r\n")
+                append("\r\n")
+            }
 
         output.write(headers.toByteArray())
         output.write(body.toByteArray())

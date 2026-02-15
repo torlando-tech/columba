@@ -1211,23 +1211,30 @@ class ReticulumWrapper:
         When the config has type = TorClientInterface, RNS will exec this file
         and use the interface_class variable to instantiate the interface.
         """
-        import pkgutil
-
         interfaces_dir = os.path.join(self.storage_path, "interfaces")
         os.makedirs(interfaces_dir, exist_ok=True)
 
         dest_path = os.path.join(interfaces_dir, "TorClientInterface.py")
 
-        # Read from bundled Python module (Chaquopy packages it alongside reticulum_wrapper)
-        interface_data = pkgutil.get_data(__name__.split('.')[0], "TorClientInterface.py")
-        if interface_data:
-            with open(dest_path, 'wb') as f:
-                f.write(interface_data)
+        # Find TorClientInterface.py as a sibling of this module
+        # This works reliably in both Chaquopy and standard Python
+        source_path = os.path.join(os.path.dirname(__file__), "TorClientInterface.py")
+        if os.path.isfile(source_path):
+            shutil.copy2(source_path, dest_path)
             log_info("ReticulumWrapper", "_deploy_tor_interface",
                      f"Deployed TorClientInterface to {interfaces_dir}")
         else:
-            log_warning("ReticulumWrapper", "_deploy_tor_interface",
-                        "Could not find TorClientInterface.py in package resources")
+            # Fallback: try pkgutil (works when files are zipped in APK)
+            import pkgutil
+            interface_data = pkgutil.get_data(__name__.split('.')[0], "TorClientInterface.py")
+            if interface_data:
+                with open(dest_path, 'wb') as f:
+                    f.write(interface_data)
+                log_info("ReticulumWrapper", "_deploy_tor_interface",
+                         f"Deployed TorClientInterface via pkgutil to {interfaces_dir}")
+            else:
+                log_warning("ReticulumWrapper", "_deploy_tor_interface",
+                            "Could not find TorClientInterface.py in package resources")
 
     def _create_config_file(
         self,

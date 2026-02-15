@@ -62,6 +62,7 @@ class MigrationExporter
          * @return URI to the exported file via FileProvider, or null on failure
          */
         suspend fun exportData(
+            password: String,
             onProgress: (Float) -> Unit = {},
             includeAttachments: Boolean = true,
         ): Result<Uri> =
@@ -118,8 +119,12 @@ class MigrationExporter
                             ratchetFiles = ratchetRefs,
                         )
 
-                    // Create and return ZIP file
+                    // Create ZIP file, then encrypt it
                     val exportFile = createExportZip(bundle, attachmentRefs, onProgress)
+                    onProgress(0.95f)
+
+                    Log.i(TAG, "Encrypting export file...")
+                    MigrationCrypto.encryptFile(exportFile, password)
                     Log.i(TAG, "Export complete: ${exportFile.absolutePath}")
                     onProgress(1.0f)
 

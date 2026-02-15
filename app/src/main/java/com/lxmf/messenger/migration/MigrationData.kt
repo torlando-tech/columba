@@ -378,6 +378,15 @@ data class MigrationPreview(
 )
 
 /**
+ * Result of previewing a migration file, including the decrypted ZIP bytes
+ * so they can be reused during import without redundant decryption.
+ */
+class PreviewWithData(
+    val preview: MigrationPreview,
+    val zipBytes: ByteArray,
+)
+
+/**
  * Convert a CustomThemeEntity to CustomThemeExport for migration.
  */
 fun CustomThemeEntity.toExport(): CustomThemeExport =

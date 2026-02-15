@@ -192,6 +192,31 @@ class NotificationHelper
         }
 
         /**
+         * Determine whether an announce notification should be shown, based on
+         * the master toggle, per-type preference, direct-only / TCP filters,
+         * and runtime permission.
+         */
+        private suspend fun shouldNotifyAnnounce(
+            hops: Int,
+            interfaceType: InterfaceType,
+        ): Boolean {
+            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
+            val announceEnabled = settingsRepository.notificationHeardAnnounceFlow.first()
+            val directOnly = settingsRepository.notificationAnnounceDirectOnlyFlow.first()
+            val excludeTcp = settingsRepository.notificationAnnounceExcludeTcpFlow.first()
+
+            val passesFilters =
+                notificationsEnabled &&
+                    announceEnabled &&
+                    // Direct-only: hops == 1 means direct neighbor
+                    !(directOnly && hops != 1) &&
+                    // TCP exclusion filter
+                    !(excludeTcp && interfaceType == InterfaceType.TCP_CLIENT)
+
+            return passesFilters && hasNotificationPermission()
+        }
+
+        /**
          * Post a notification for a heard announce.
          *
          * @param destinationHash The destination hash of the announcing peer
@@ -207,25 +232,7 @@ class NotificationHelper
             hops: Int = 0,
             interfaceType: InterfaceType = InterfaceType.UNKNOWN,
         ) {
-            // Check master notification toggle
-            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
-            if (!notificationsEnabled) return
-
-            // Check specific notification preference
-            val announceNotificationsEnabled = settingsRepository.notificationHeardAnnounceFlow.first()
-            if (!announceNotificationsEnabled) return
-
-            // Check direct-only filter: when enabled, only notify for 1-hop (direct neighbor) announces
-            // hops == 0 means unknown (Python fallback), hops == 1 means direct neighbor, hops >= 2 means multi-hop
-            val directOnly = settingsRepository.notificationAnnounceDirectOnlyFlow.first()
-            if (directOnly && hops != 1) return
-
-            // Check TCP exclusion filter: when enabled, skip announces received via TCP interfaces
-            val excludeTcp = settingsRepository.notificationAnnounceExcludeTcpFlow.first()
-            if (excludeTcp && interfaceType == InterfaceType.TCP_CLIENT) return
-
-            // Check permission
-            if (!hasNotificationPermission()) return
+            if (!shouldNotifyAnnounce(hops, interfaceType)) return
 
             // Create intent to open announce detail
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)

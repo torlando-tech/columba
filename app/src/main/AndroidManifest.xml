@@ -138,6 +138,7 @@
         <!-- System binds this service when associated RNode is in range/connected -->
         <service
             android:name=".service.RNodeCompanionService"
+            android:enabled="@bool/enable_companion_service"
             android:exported="true"
             android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
             <intent-filter>

@@ -107,7 +107,9 @@ jobs:
               [ -f "$apk" ] || continue
               filename=$(basename "$apk")
               
-              if echo "$filename" | grep -q "arm64-v8a"; then
+              if echo "$filename" | grep -q "armeabi-v7a"; then
+                cp "$apk" "columba-armeabi-v7a${suffix}.apk"
+              elif echo "$filename" | grep -q "arm64-v8a"; then
                 cp "$apk" "columba-arm64${suffix}.apk"
               elif echo "$filename" | grep -q "x86_64"; then
                 cp "$apk" "columba-x86_64${suffix}.apk"
@@ -171,11 +173,13 @@ jobs:
             - No debug features
 
             **APKs by architecture (standard build with crash reporting):**
+            - `columba-armeabi-v7a.apk` — Older 32-bit ARM phones (armeabi-v7a)
             - `columba-arm64.apk` — Most Android phones (arm64-v8a)
             - `columba-x86_64.apk` — Chromebooks & emulators (x86_64)
             - `columba-universal.apk` — Universal fallback (all architectures)
 
             **No-telemetry variants (privacy-focused, no Sentry):**
+            - `columba-armeabi-v7a-no-sentry.apk`
             - `columba-arm64-no-sentry.apk`
             - `columba-x86_64-no-sentry.apk`
             - `columba-universal-no-sentry.apk`

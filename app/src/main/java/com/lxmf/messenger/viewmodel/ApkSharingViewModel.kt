@@ -47,13 +47,13 @@ class ApkSharingViewModel
         companion object {
             private const val TAG = "ApkSharingViewModel"
             private const val APK_CACHE_DIR = "apk_share"
-            private const val APK_FILE_NAME = "columba.apk"
+            private val APK_FILE_NAME = "columba-${com.lxmf.messenger.BuildConfig.VERSION_NAME}.apk"
         }
 
         private val _state = MutableStateFlow(ApkSharingState())
         val state: StateFlow<ApkSharingState> = _state.asStateFlow()
 
-        private val server = ApkSharingServer()
+        private val server = ApkSharingServer().apply { downloadFileName = APK_FILE_NAME }
         private var serverJob: Job? = null
         private var cachedApkFile: File? = null
 

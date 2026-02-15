@@ -83,6 +83,9 @@ class ApkSharingServer {
         }
     }
 
+    /** Filename used in the Content-Disposition header when serving the APK. */
+    var downloadFileName: String = "columba.apk"
+
     private var serverSocket: ServerSocket? = null
     private val isRunning = AtomicBoolean(false)
     private var clientExecutor: ExecutorService? = null
@@ -224,7 +227,7 @@ class ApkSharingServer {
             buildString {
                 append("HTTP/1.1 200 OK\r\n")
                 append("Content-Type: application/vnd.android.package-archive\r\n")
-                append("Content-Disposition: attachment; filename=\"columba.apk\"\r\n")
+                append("Content-Disposition: attachment; filename=\"$downloadFileName\"\r\n")
                 append("Content-Length: $fileSize\r\n")
                 append("Connection: close\r\n")
                 append("\r\n")

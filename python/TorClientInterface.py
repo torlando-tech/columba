@@ -42,13 +42,6 @@ class TorClientInterface(TCPClientInterface):
         self.proxy_host = c.get('proxy_host', '127.0.0.1')
         self.proxy_port = int(c.get('proxy_port', 9050))
 
-        target_host = c.get('target_host', '')
-        if len(target_host.encode('utf-8')) > 255:
-            raise ValueError(
-                f"Target hostname too long for SOCKS5 "
-                f"({len(target_host.encode('utf-8'))} bytes, max 255)"
-            )
-
         super().__init__(owner, configuration, connected_socket)
 
     def connect(self, initial=False):
@@ -164,6 +157,11 @@ class TorClientInterface(TCPClientInterface):
         # Connect request with domain name (ATYP=0x03)
         # Proxy resolves the hostname — required for .onion addresses
         dest_host_bytes = self.target_ip.encode('utf-8')
+        if len(dest_host_bytes) > 255:
+            raise ConnectionError(
+                f"Target hostname too long for SOCKS5 "
+                f"({len(dest_host_bytes)} bytes, max 255)"
+            )
         dest_port_bytes = struct.pack('!H', self.target_port)
         connect_req = (
             b'\x05\x01\x00\x03'
@@ -203,6 +201,10 @@ class TorClientInterface(TCPClientInterface):
             self._recv_exact(domain_len + 2)
         elif atyp == 0x04:      # IPv6: 16 addr + 2 port
             self._recv_exact(18)
+        else:
+            raise ConnectionError(
+                f"SOCKS5 proxy returned unsupported address type: 0x{atyp:02x}"
+            )
 
         # Socket is now tunneled through SOCKS5 to the target
 

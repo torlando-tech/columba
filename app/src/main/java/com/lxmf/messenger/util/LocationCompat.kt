@@ -141,10 +141,9 @@ object LocationCompat {
                             provider: String?,
                             status: Int,
                             extras: android.os.Bundle?,
-                        ) {
-                        }
+                        ) = Unit
 
-                        override fun onProviderEnabled(provider: String) {}
+                        override fun onProviderEnabled(provider: String) = Unit
 
                         override fun onProviderDisabled(provider: String) {
                             if (!resultDelivered) {
@@ -213,12 +212,11 @@ object LocationCompat {
                     provider: String?,
                     status: Int,
                     extras: android.os.Bundle?,
-                ) {
-                }
+                ) = Unit
 
-                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderEnabled(provider: String) = Unit
 
-                override fun onProviderDisabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) = Unit
             }
 
         // Request from GPS if available

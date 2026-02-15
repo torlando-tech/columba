@@ -41,6 +41,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -211,13 +212,17 @@ class MessagingViewModel
         private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
         val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
 
+        private var loadPhotosJob: Job? = null
+
         fun loadRecentPhotos(context: Context) {
-            viewModelScope.launch(Dispatchers.IO) {
-                val photos =
-                    com.lxmf.messenger.util.MediaStoreUtils
-                        .getRecentPhotos(context)
-                _recentPhotos.value = photos
-            }
+            loadPhotosJob?.cancel()
+            loadPhotosJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    val photos =
+                        com.lxmf.messenger.util.MediaStoreUtils
+                            .getRecentPhotos(context.applicationContext)
+                    _recentPhotos.value = photos
+                }
         }
 
         // Expose current conversation's link state for UI

@@ -600,8 +600,10 @@ fun MessagingScreen(
     var lastKnownKeyboardHeightPx by remember { mutableStateOf(0) }
 
     // Remember keyboard height whenever it's visible
-    if (imeIsVisible && imeBottomInset > lastKnownKeyboardHeightPx) {
-        lastKnownKeyboardHeightPx = imeBottomInset
+    LaunchedEffect(imeBottomInset) {
+        if (imeIsVisible && imeBottomInset > lastKnownKeyboardHeightPx) {
+            lastKnownKeyboardHeightPx = imeBottomInset
+        }
     }
 
     // Track IME transitions to update panel mode
@@ -642,7 +644,7 @@ fun MessagingScreen(
     // This prevents the panel from staying open if a message is sent (text cleared)
     // or if text changes externally while the panel is visible.
     LaunchedEffect(messageText.isBlank()) {
-        if (inputPanelMode == InputPanelMode.PANEL) {
+        if (messageText.isBlank() && inputPanelMode == InputPanelMode.PANEL) {
             inputPanelMode = InputPanelMode.NONE
         }
     }

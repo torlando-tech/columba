@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -1080,6 +1081,168 @@ class IdentityManagerViewModelTest {
             .use { it.write(data) }
         return bos.toByteArray()
     }
+
+    // ========== SAF Export Save Tests ==========
+
+    @Test
+    fun exportIdentity_storesExportedUriForSAFSave() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given
+            val fileData = "identity_data".toByteArray()
+            val mockUri = mockk<Uri>()
+
+            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(mockUri)
+
+            // When
+            viewModel.exportIdentity("id1", "/test/path")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then — state is ExportReady (URI stored internally for subsequent SAF save)
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue(state is IdentityManagerUiState.ExportReady)
+                assertEquals(mockUri, (state as IdentityManagerUiState.ExportReady).uri)
+            }
+        }
+
+    @Test
+    fun saveExportedIdentityToFile_success_copiesFileAndSetsSuccess() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — export first to populate _exportedIdentityUri
+            val fileData = "identity_data".toByteArray()
+            val sourceUri = mockk<Uri>()
+            val destinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+
+            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
+
+            viewModel.exportIdentity("id1", "/test/path")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Mock ContentResolver streams for the save operation
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(sourceUri) } returns ByteArrayInputStream(fileData)
+            every { mockContentResolver.openOutputStream(destinationUri) } returns java.io.ByteArrayOutputStream()
+
+            // When
+            viewModel.saveExportedIdentityToFile(destinationUri)
+            // Wait for Dispatchers.IO work on real threads
+            testDispatcher.scheduler.advanceUntilIdle()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue("Expected Success but was $state", state is IdentityManagerUiState.Success)
+                assertEquals(
+                    "Identity exported successfully",
+                    (state as IdentityManagerUiState.Success).message,
+                )
+            }
+        }
+
+    @Test
+    fun saveExportedIdentityToFile_failure_setsErrorState() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — export first to populate _exportedIdentityUri
+            val fileData = "identity_data".toByteArray()
+            val sourceUri = mockk<Uri>()
+            val destinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+
+            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
+
+            viewModel.exportIdentity("id1", "/test/path")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Mock ContentResolver to return null (simulates file open failure)
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(sourceUri) } returns null
+
+            // When
+            viewModel.saveExportedIdentityToFile(destinationUri)
+            // Wait for Dispatchers.IO work on real threads
+            testDispatcher.scheduler.advanceUntilIdle()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            viewModel.uiState.test {
+                val state = awaitItem()
+                assertTrue("Expected Error but was $state", state is IdentityManagerUiState.Error)
+                assertTrue((state as IdentityManagerUiState.Error).message.contains("Failed to save identity"))
+            }
+        }
+
+    @Test
+    fun saveExportedIdentityToFile_noExportedUri_doesNothing() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            val destinationUri = mockk<Uri>()
+
+            // When — no prior export, so _exportedIdentityUri is null
+            viewModel.saveExportedIdentityToFile(destinationUri)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then — state remains Idle
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
+            }
+        }
+
+    @Test
+    fun saveExportedIdentityToFile_clearsUriAfterSuccess() =
+        runTest {
+            val viewModel = createTestViewModel()
+
+            // Given — export first
+            val fileData = "identity_data".toByteArray()
+            val sourceUri = mockk<Uri>()
+            val destinationUri = mockk<Uri>()
+            val secondDestinationUri = mockk<Uri>()
+            val mockContentResolver = mockk<ContentResolver>()
+
+            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
+
+            viewModel.exportIdentity("id1", "/test/path")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            every { mockContext.contentResolver } returns mockContentResolver
+            every { mockContentResolver.openInputStream(sourceUri) } returns ByteArrayInputStream(fileData)
+            every { mockContentResolver.openOutputStream(destinationUri) } returns java.io.ByteArrayOutputStream()
+
+            // Save once — should succeed
+            viewModel.saveExportedIdentityToFile(destinationUri)
+            // Wait for Dispatchers.IO work on real threads
+            testDispatcher.scheduler.advanceUntilIdle()
+            withContext(Dispatchers.Default) { kotlinx.coroutines.delay(200) }
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Success)
+            }
+
+            // When — try to save again (URI should be cleared)
+            viewModel.saveExportedIdentityToFile(secondDestinationUri)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then — state stays Success (no-op because URI was nulled)
+            viewModel.uiState.test {
+                assertTrue(awaitItem() is IdentityManagerUiState.Success)
+            }
+        }
 
     // ========== Reset UI State Tests ==========
 

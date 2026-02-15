@@ -132,6 +132,16 @@ fun IdentityManagerScreen(
             }
         }
 
+    // SAF file save launcher for identity export
+    val exportSaveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ) { destinationUri: Uri? ->
+            destinationUri?.let {
+                viewModel.saveExportedIdentityToFile(it)
+            }
+        }
+
     // Auto-show paste dialog when navigated with a pre-filled key
     LaunchedEffect(prefilledBase32Key) {
         if (prefilledBase32Key != null) {
@@ -158,14 +168,8 @@ fun IdentityManagerScreen(
                 // No longer used - identity switch now restarts service without app restart
             }
             is IdentityManagerUiState.ExportReady -> {
-                // Launch share sheet for binary export
-                val shareIntent =
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_STREAM, state.uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                context.startActivity(Intent.createChooser(shareIntent, "Export Identity"))
+                // Launch SAF file save dialog for binary export
+                exportSaveLauncher.launch("identity.rnsidentity")
                 viewModel.resetUiState()
             }
             is IdentityManagerUiState.ExportTextReady -> {

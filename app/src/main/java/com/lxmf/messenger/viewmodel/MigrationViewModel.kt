@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -285,6 +286,41 @@ class MigrationViewModel
         }
 
         /**
+         * Called after the SAF save dialog is launched so the UI state resets
+         * and won't re-trigger the dialog on configuration changes.
+         */
+        fun onExportSaveDialogLaunched() {
+            _uiState.value = MigrationUiState.Idle
+        }
+
+        /**
+         * Save the exported file to a user-chosen destination via SAF.
+         */
+        fun saveExportToFile(
+            contentResolver: ContentResolver,
+            destinationUri: Uri,
+        ) {
+            val sourceUri = _exportedFileUri.value ?: return
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        contentResolver.openInputStream(sourceUri)?.use { input ->
+                            contentResolver.openOutputStream(destinationUri)?.use { output ->
+                                input.copyTo(output)
+                            }
+                        } ?: error("Could not open export file")
+                    }
+                    _uiState.value = MigrationUiState.ExportSaved
+                    cleanupExportFiles()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save export file", e)
+                    _uiState.value =
+                        MigrationUiState.Error("Failed to save export: ${e.message}")
+                }
+            }
+        }
+
+        /**
          * Reset state to idle.
          */
         fun resetState() {
@@ -326,6 +362,8 @@ sealed class MigrationUiState {
     data class ExportComplete(
         val fileUri: Uri,
     ) : MigrationUiState()
+
+    data object ExportSaved : MigrationUiState()
 
     data class ImportPreview(
         val preview: MigrationPreview,

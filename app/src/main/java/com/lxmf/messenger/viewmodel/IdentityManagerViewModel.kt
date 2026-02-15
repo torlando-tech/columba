@@ -65,6 +65,11 @@ class IdentityManagerViewModel
         val uiState: StateFlow<IdentityManagerUiState> = _uiState.asStateFlow()
 
         /**
+         * URI of the exported identity file (cache), used for SAF save.
+         */
+        private var _exportedIdentityUri: Uri? = null
+
+        /**
          * Create a new identity with the given display name.
          */
         fun createNewIdentity(displayName: String) {
@@ -406,6 +411,7 @@ class IdentityManagerViewModel
                     identityRepository
                         .exportIdentity(identityHash, fileData)
                         .onSuccess { uri ->
+                            _exportedIdentityUri = uri
                             _uiState.value = IdentityManagerUiState.ExportReady(uri)
                         }.onFailure { e ->
                             _uiState.value =
@@ -641,10 +647,40 @@ class IdentityManagerViewModel
         }
 
         /**
+         * Save the exported identity file to a user-chosen destination via SAF.
+         */
+        fun saveExportedIdentityToFile(destinationUri: Uri) {
+            val sourceUri = _exportedIdentityUri ?: return
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                            context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+                                input.copyTo(output)
+                            }
+                        } ?: error("Could not open identity file")
+                    }
+                    _uiState.value =
+                        IdentityManagerUiState.Success("Identity exported successfully")
+                    _exportedIdentityUri = null
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save identity file", e)
+                    _uiState.value =
+                        IdentityManagerUiState.Error("Failed to save identity: ${e.message}")
+                }
+            }
+        }
+
+        /**
          * Reset UI state to idle.
          */
         fun resetUiState() {
             _uiState.value = IdentityManagerUiState.Idle
+        }
+
+        override fun onCleared() {
+            super.onCleared()
+            _exportedIdentityUri = null
         }
     }
 

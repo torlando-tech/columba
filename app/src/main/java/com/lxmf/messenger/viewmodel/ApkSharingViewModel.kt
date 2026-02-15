@@ -101,48 +101,58 @@ class ApkSharingViewModel
             // Guard against duplicate launches while a server job is already in progress
             if (serverJob?.isActive == true) return
 
-            serverJob = viewModelScope.launch {
-                val apkFile = prepareApkFile()
-                if (apkFile == null) {
-                    _state.value = _state.value.copy(
-                        errorMessage = "Could not prepare APK file for sharing",
-                    )
-                    return@launch
+            serverJob =
+                viewModelScope.launch {
+                    val apkFile = prepareApkFile()
+                    if (apkFile == null) {
+                        _state.value =
+                            _state.value.copy(
+                                errorMessage = "Could not prepare APK file for sharing",
+                            )
+                        return@launch
+                    }
+                    cachedApkFile = apkFile
+
+                    val localIp = ApkSharingServer.getLocalIpAddress()
+                    if (localIp == null) {
+                        _state.value =
+                            _state.value.copy(
+                                errorMessage =
+                                    "No WiFi connection detected. " +
+                                        "Both devices must be on the same WiFi network, " +
+                                        "or use the \"Share via...\" option below.",
+                            )
+                        return@launch
+                    }
+
+                    // Obtain the readiness signal before launching so both the
+                    // caller and the server use the same CompletableDeferred instance.
+                    val portDeferred = server.prepareStart()
+
+                    // Launch the accept loop in a child coroutine
+                    launch { server.start(apkFile) }
+
+                    // Await actual server readiness instead of using a fixed delay
+                    val port = portDeferred.await()
+                    if (port == 0) {
+                        _state.value =
+                            _state.value.copy(
+                                errorMessage = "Failed to start sharing server",
+                            )
+                        return@launch
+                    }
+
+                    val downloadUrl = "http://$localIp:$port"
+                    Log.i(TAG, "APK sharing server ready at: $downloadUrl")
+
+                    _state.value =
+                        ApkSharingState(
+                            isServerRunning = true,
+                            downloadUrl = downloadUrl,
+                            localIp = localIp,
+                            apkSizeBytes = apkFile.length(),
+                        )
                 }
-                cachedApkFile = apkFile
-
-                val localIp = ApkSharingServer.getLocalIpAddress()
-                if (localIp == null) {
-                    _state.value = _state.value.copy(
-                        errorMessage = "No WiFi connection detected. " +
-                            "Both devices must be on the same WiFi network, " +
-                            "or use the \"Share via...\" option below.",
-                    )
-                    return@launch
-                }
-
-                // Launch the accept loop in a child coroutine
-                launch { server.start(apkFile) }
-
-                // Await actual server readiness instead of using a fixed delay
-                val port = server.awaitPort()
-                if (port == 0) {
-                    _state.value = _state.value.copy(
-                        errorMessage = "Failed to start sharing server",
-                    )
-                    return@launch
-                }
-
-                val downloadUrl = "http://$localIp:$port"
-                Log.i(TAG, "APK sharing server ready at: $downloadUrl")
-
-                _state.value = ApkSharingState(
-                    isServerRunning = true,
-                    downloadUrl = downloadUrl,
-                    localIp = localIp,
-                    apkSizeBytes = apkFile.length(),
-                )
-            }
         }
 
         /**
@@ -169,11 +179,12 @@ class ApkSharingViewModel
             cachedApkFile = apkFile
 
             return try {
-                val uri = FileProvider.getUriForFile(
-                    application,
-                    "${application.packageName}.fileprovider",
-                    apkFile,
-                )
+                val uri =
+                    FileProvider.getUriForFile(
+                        application,
+                        "${application.packageName}.fileprovider",
+                        apkFile,
+                    )
 
                 Intent(Intent.ACTION_SEND).apply {
                     type = "application/vnd.android.package-archive"

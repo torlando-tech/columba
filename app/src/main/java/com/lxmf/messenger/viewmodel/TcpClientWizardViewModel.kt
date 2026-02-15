@@ -232,7 +232,11 @@ class TcpClientWizardViewModel
          * Toggle SOCKS5 proxy (Tor/Orbot) for this connection.
          */
         fun toggleSocksProxy(enabled: Boolean) {
-            _state.update { it.copy(socksProxyEnabled = enabled) }
+            _state.update {
+                // Prevent disabling SOCKS for .onion addresses (they require Tor)
+                val isOnion = it.targetHost.trim().endsWith(".onion")
+                it.copy(socksProxyEnabled = enabled || isOnion)
+            }
         }
 
         /**

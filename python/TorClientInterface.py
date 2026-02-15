@@ -69,7 +69,6 @@ class TorClientInterface(TCPClientInterface):
             self._socks5_handshake()
 
             self.socket.settimeout(None)
-            self.online = True
 
             if initial:
                 RNS.log(

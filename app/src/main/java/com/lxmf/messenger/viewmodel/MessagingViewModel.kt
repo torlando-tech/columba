@@ -1601,6 +1601,7 @@ class MessagingViewModel
 
             viewModelScope.launch {
                 _isProcessingImage.value = true
+                _isSending.value = true
                 try {
                     for (uri in uris) {
                         val result =
@@ -1617,6 +1618,7 @@ class MessagingViewModel
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing shared images", e)
                 } finally {
+                    _isSending.value = false
                     _isProcessingImage.value = false
                 }
             }
@@ -1631,7 +1633,6 @@ class MessagingViewModel
             imageData: ByteArray,
             imageFormat: String,
         ) {
-            _isSending.value = true
             try {
                 val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
                 val destHashBytes = validateDestinationHash(destinationHash) ?: return
@@ -1685,8 +1686,6 @@ class MessagingViewModel
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
-            } finally {
-                _isSending.value = false
             }
         }
 

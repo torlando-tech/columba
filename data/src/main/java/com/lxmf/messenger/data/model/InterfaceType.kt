@@ -3,12 +3,14 @@ package com.lxmf.messenger.data.model
 /**
  * Represents the type of network interface through which an announce was received.
  */
-enum class InterfaceType {
-    AUTO_INTERFACE,
-    TCP_CLIENT,
-    ANDROID_BLE,
-    RNODE,
-    UNKNOWN,
+enum class InterfaceType(
+    val displayLabel: String,
+) {
+    AUTO_INTERFACE("Local"),
+    TCP_CLIENT("TCP"),
+    ANDROID_BLE("BLE"),
+    RNODE("RNode"),
+    UNKNOWN("Unknown"),
     ;
 
     companion object {

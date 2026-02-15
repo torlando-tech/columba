@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
+import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -104,8 +105,8 @@ class NotificationHelper
         /**
          * Check if we have notification permission (Android 13+).
          */
-        private fun hasNotificationPermission(): Boolean {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        private fun hasNotificationPermission(): Boolean =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.POST_NOTIFICATIONS,
@@ -113,7 +114,6 @@ class NotificationHelper
             } else {
                 true // No permission needed for Android 12 and below
             }
-        }
 
         /**
          * Post a notification for a received message.
@@ -172,8 +172,9 @@ class NotificationHelper
 
             // Create notification
             val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
-                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_MESSAGES)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle(peerName)
                     .setContentText(messagePreview)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -191,27 +192,66 @@ class NotificationHelper
         }
 
         /**
+         * Extract a user-friendly interface label from the raw interface name.
+         * Prefers the user-configured name from brackets (e.g. "TCPClientInterface[Backbone]" -> "Backbone"),
+         * falling back to the InterfaceType display label.
+         */
+        private fun extractInterfaceLabel(
+            receivingInterface: String?,
+            interfaceType: InterfaceType,
+        ): String {
+            if (receivingInterface != null) {
+                val bracketStart = receivingInterface.indexOf('[')
+                val bracketEnd = receivingInterface.indexOf(']')
+                if (bracketStart in 0 until bracketEnd) {
+                    return receivingInterface.substring(bracketStart + 1, bracketEnd)
+                }
+            }
+            return interfaceType.displayLabel
+        }
+
+        /**
+         * Determine whether an announce notification should be shown, based on
+         * the master toggle, per-type preference, direct-only / TCP filters,
+         * and runtime permission.
+         */
+        private suspend fun shouldNotifyAnnounce(
+            hops: Int,
+            interfaceType: InterfaceType,
+        ): Boolean {
+            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
+            val announceEnabled = settingsRepository.notificationHeardAnnounceFlow.first()
+            val directOnly = settingsRepository.notificationAnnounceDirectOnlyFlow.first()
+            val excludeTcp = settingsRepository.notificationAnnounceExcludeTcpFlow.first()
+
+            val passesFilters =
+                notificationsEnabled &&
+                    announceEnabled &&
+                    // Direct-only: hops == 1 means direct neighbor
+                    !(directOnly && hops != 1) &&
+                    // TCP exclusion filter
+                    !(excludeTcp && interfaceType == InterfaceType.TCP_CLIENT)
+
+            return passesFilters && hasNotificationPermission()
+        }
+
+        /**
          * Post a notification for a heard announce.
          *
          * @param destinationHash The destination hash of the announcing peer
          * @param peerName The display name of the announcing peer
-         * @param appData Optional app data from the announce
+         * @param hops Number of hops to the announcing peer (1 = direct neighbor)
+         * @param interfaceType The type of interface the announce was received on
+         * @param receivingInterface Raw interface name string (e.g. "TCPClientInterface[Backbone]")
          */
         suspend fun notifyAnnounceHeard(
             destinationHash: String,
             peerName: String,
-            appData: String? = null,
+            hops: Int = 0,
+            interfaceType: InterfaceType = InterfaceType.UNKNOWN,
+            receivingInterface: String? = null,
         ) {
-            // Check master notification toggle
-            val notificationsEnabled = settingsRepository.notificationsEnabledFlow.first()
-            if (!notificationsEnabled) return
-
-            // Check specific notification preference
-            val announceNotificationsEnabled = settingsRepository.notificationHeardAnnounceFlow.first()
-            if (!announceNotificationsEnabled) return
-
-            // Check permission
-            if (!hasNotificationPermission()) return
+            if (!shouldNotifyAnnounce(hops, interfaceType)) return
 
             // Create intent to open announce detail
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)
@@ -230,18 +270,16 @@ class NotificationHelper
                     PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            // Build notification text
-            val contentText =
-                if (appData != null) {
-                    "Announce received with data"
-                } else {
-                    "Announce received"
-                }
+            // Build notification text with interface info
+            val interfaceLabel = extractInterfaceLabel(receivingInterface, interfaceType)
+            val hopsText = if (hops == 1) "1 hop" else "$hops hops"
+            val contentText = "via $interfaceLabel \u00b7 $hopsText"
 
             // Create notification
             val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID_ANNOUNCES)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_ANNOUNCES)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("Announce from $peerName")
                     .setContentText(contentText)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -285,8 +323,9 @@ class NotificationHelper
 
             // Create notification
             val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID_BLE_EVENTS)
-                    .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_BLE_EVENTS)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("BLE Peer Connected")
                     .setContentText("Connected to $displayName")
                     .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -329,8 +368,9 @@ class NotificationHelper
 
             // Create notification
             val notification =
-                NotificationCompat.Builder(context, CHANNEL_ID_BLE_EVENTS)
-                    .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_BLE_EVENTS)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("BLE Peer Disconnected")
                     .setContentText("Disconnected from $displayName")
                     .setPriority(NotificationCompat.PRIORITY_LOW)

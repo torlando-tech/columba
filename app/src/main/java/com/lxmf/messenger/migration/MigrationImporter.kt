@@ -91,7 +91,7 @@ class MigrationImporter
         ): Result<MigrationPreview> =
             withContext(Dispatchers.IO) {
                 try {
-                    val bundle =
+                    val (bundle, _) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
@@ -135,7 +135,7 @@ class MigrationImporter
                     Log.i(TAG, "Starting migration import...")
                     onProgress(0.05f)
 
-                    val bundle =
+                    val (bundle, zipBytes) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext ImportResult.Error("Failed to read migration file")
 
@@ -168,7 +168,7 @@ class MigrationImporter
                     val interfacesImported = importInterfaces(bundle.interfaces)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri, password)
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(zipBytes)
                     onProgress(0.90f)
 
                     importRatchets(bundle.ratchetFiles)
@@ -580,22 +580,22 @@ class MigrationImporter
         private fun readMigrationBundle(
             uri: Uri,
             password: String? = null,
-        ): MigrationBundle? {
+        ): Pair<MigrationBundle, ByteArray>? {
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
                 inputStream.use { stream ->
                     val rawBytes = stream.readBytes()
-                    val zipStream =
+                    val zipBytes =
                         if (MigrationCrypto.isEncrypted(rawBytes)) {
                             if (password == null) {
                                 throw PasswordRequiredException("This export file is encrypted")
                             }
-                            java.io.ByteArrayInputStream(MigrationCrypto.decrypt(rawBytes, password))
+                            MigrationCrypto.decrypt(rawBytes, password)
                         } else {
-                            java.io.ByteArrayInputStream(rawBytes)
+                            rawBytes
                         }
-                    val manifestJson = extractManifestFromZip(zipStream)
-                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                    val manifestJson = extractManifestFromZip(java.io.ByteArrayInputStream(zipBytes))
+                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) to zipBytes }
                 }
             } catch (e: WrongPasswordException) {
                 Log.e(TAG, "Wrong password for encrypted export", e)
@@ -756,26 +756,12 @@ class MigrationImporter
         /**
          * Import attachments from the ZIP file.
          */
-        private fun importAttachments(uri: Uri, password: String? = null): Int {
+        private fun importAttachments(zipBytes: ByteArray): Int {
             val attachmentsDir = File(context.filesDir, "attachments")
             attachmentsDir.mkdirs()
 
             return try {
-                val inputStream = context.contentResolver.openInputStream(uri) ?: return 0
-                inputStream.use { stream ->
-                    val rawBytes = stream.readBytes()
-                    val zipStream =
-                        if (MigrationCrypto.isEncrypted(rawBytes)) {
-                            if (password == null) {
-                                Log.e(TAG, "Encrypted file but no password for attachments")
-                                return 0
-                            }
-                            java.io.ByteArrayInputStream(MigrationCrypto.decrypt(rawBytes, password))
-                        } else {
-                            java.io.ByteArrayInputStream(rawBytes)
-                        }
-                    extractAttachmentsFromZip(zipStream, attachmentsDir)
-                }
+                extractAttachmentsFromZip(java.io.ByteArrayInputStream(zipBytes), attachmentsDir)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import attachments", e)
                 0

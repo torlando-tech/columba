@@ -60,13 +60,39 @@ class MigrationImporter
             }
 
         /**
-         * Preview the contents of a migration file without importing.
+         * Check whether a migration file is encrypted (requires a password to import).
          */
-        suspend fun previewMigration(uri: Uri): Result<MigrationPreview> =
+        suspend fun isEncryptedExport(uri: Uri): Result<Boolean> =
+            withContext(Dispatchers.IO) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                        ?: return@withContext Result.failure(Exception("Cannot open file"))
+                    inputStream.use { stream ->
+                        val header = ByteArray(2)
+                        val bytesRead = stream.read(header)
+                        if (bytesRead < 1) {
+                            return@withContext Result.failure(
+                                InvalidExportFileException("Export file is empty"),
+                            )
+                        }
+                        Result.success(MigrationCrypto.isEncrypted(header))
+                    }
+                } catch (e: InvalidExportFileException) {
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to check export format", e)
+                    Result.failure(e)
+                }
+            }
+
+        suspend fun previewMigration(
+            uri: Uri,
+            password: String? = null,
+        ): Result<MigrationPreview> =
             withContext(Dispatchers.IO) {
                 try {
                     val bundle =
-                        readMigrationBundle(uri)
+                        readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
                             )
@@ -101,6 +127,7 @@ class MigrationImporter
          */
         suspend fun importData(
             uri: Uri,
+            password: String? = null,
             onProgress: (Float) -> Unit = {},
         ): ImportResult =
             withContext(Dispatchers.IO) {
@@ -109,7 +136,7 @@ class MigrationImporter
                     onProgress(0.05f)
 
                     val bundle =
-                        readMigrationBundle(uri)
+                        readMigrationBundle(uri, password)
                             ?: return@withContext ImportResult.Error("Failed to read migration file")
 
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
@@ -141,7 +168,7 @@ class MigrationImporter
                     val interfacesImported = importInterfaces(bundle.interfaces)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri)
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri, password)
                     onProgress(0.90f)
 
                     importRatchets(bundle.ratchetFiles)
@@ -550,13 +577,32 @@ class MigrationImporter
         /**
          * Read and parse the MigrationBundle from a ZIP file.
          */
-        private fun readMigrationBundle(uri: Uri): MigrationBundle? {
+        private fun readMigrationBundle(
+            uri: Uri,
+            password: String? = null,
+        ): MigrationBundle? {
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
                 inputStream.use { stream ->
-                    val manifestJson = extractManifestFromZip(stream)
+                    val rawBytes = stream.readBytes()
+                    val zipStream =
+                        if (MigrationCrypto.isEncrypted(rawBytes)) {
+                            if (password == null) {
+                                throw PasswordRequiredException("This export file is encrypted")
+                            }
+                            java.io.ByteArrayInputStream(MigrationCrypto.decrypt(rawBytes, password))
+                        } else {
+                            java.io.ByteArrayInputStream(rawBytes)
+                        }
+                    val manifestJson = extractManifestFromZip(zipStream)
                     manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
                 }
+            } catch (e: WrongPasswordException) {
+                Log.e(TAG, "Wrong password for encrypted export", e)
+                throw e
+            } catch (e: PasswordRequiredException) {
+                Log.e(TAG, "Password required for encrypted export", e)
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read migration bundle", e)
                 null
@@ -710,13 +756,26 @@ class MigrationImporter
         /**
          * Import attachments from the ZIP file.
          */
-        private fun importAttachments(uri: Uri): Int {
+        private fun importAttachments(uri: Uri, password: String? = null): Int {
             val attachmentsDir = File(context.filesDir, "attachments")
             attachmentsDir.mkdirs()
 
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return 0
-                inputStream.use { extractAttachmentsFromZip(it, attachmentsDir) }
+                inputStream.use { stream ->
+                    val rawBytes = stream.readBytes()
+                    val zipStream =
+                        if (MigrationCrypto.isEncrypted(rawBytes)) {
+                            if (password == null) {
+                                Log.e(TAG, "Encrypted file but no password for attachments")
+                                return 0
+                            }
+                            java.io.ByteArrayInputStream(MigrationCrypto.decrypt(rawBytes, password))
+                        } else {
+                            java.io.ByteArrayInputStream(rawBytes)
+                        }
+                    extractAttachmentsFromZip(zipStream, attachmentsDir)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import attachments", e)
                 0

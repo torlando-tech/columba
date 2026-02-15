@@ -92,6 +92,7 @@ object MigrationCrypto {
      * @throws WrongPasswordException if the password is incorrect (GCM auth tag mismatch)
      * @throws InvalidExportFileException if the file format is not recognized
      */
+    @Suppress("ThrowsCount")
     fun decrypt(encrypted: ByteArray, password: String): ByteArray {
         if (encrypted.isEmpty()) {
             throw InvalidExportFileException("Export file is empty")
@@ -100,7 +101,7 @@ object MigrationCrypto {
         if (encrypted[0] != ENCRYPTED_VERSION) {
             throw InvalidExportFileException(
                 "Unrecognized export format (version byte: 0x${
-                    String.format("%02X", encrypted[0])
+                    String.format(java.util.Locale.ROOT, "%02X", encrypted[0])
                 })",
             )
         }
@@ -158,7 +159,7 @@ object MigrationCrypto {
         }
         throw InvalidExportFileException(
             "Unrecognized export file format (starts with 0x${
-                String.format("%02X", header[0])
+                String.format(java.util.Locale.ROOT, "%02X", header[0])
             })",
         )
     }

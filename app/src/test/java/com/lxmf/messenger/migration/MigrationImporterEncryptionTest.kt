@@ -40,6 +40,7 @@ class MigrationImporterEncryptionTest {
 
     private val testPassword = "test-password-12345"
 
+    @Suppress("NoRelaxedMocks") // Infrastructure deps not exercised by encryption tests
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()

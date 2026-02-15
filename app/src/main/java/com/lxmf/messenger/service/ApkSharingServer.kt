@@ -12,6 +12,8 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -29,6 +31,7 @@ class ApkSharingServer {
     companion object {
         private const val TAG = "ApkSharingServer"
         private const val CLIENT_TIMEOUT_MS = 30_000
+        private const val MAX_CONCURRENT_CLIENTS = 4
 
         /**
          * Get the device's local WiFi IP address.
@@ -82,6 +85,7 @@ class ApkSharingServer {
 
     private var serverSocket: ServerSocket? = null
     private val isRunning = AtomicBoolean(false)
+    private var clientExecutor: ExecutorService? = null
 
     /**
      * Deferred that completes with the bound port once the server socket is ready,
@@ -122,6 +126,7 @@ class ApkSharingServer {
 
         withContext(Dispatchers.IO) {
             try {
+                clientExecutor = Executors.newFixedThreadPool(MAX_CONCURRENT_CLIENTS)
                 serverSocket =
                     ServerSocket(0).also {
                         it.reuseAddress = true
@@ -135,6 +140,8 @@ class ApkSharingServer {
                 Log.e(TAG, "Server error", e)
                 portReady.complete(0)
             } finally {
+                clientExecutor?.shutdownNow()
+                clientExecutor = null
                 isRunning.set(false)
                 Log.i(TAG, "APK sharing server stopped")
             }
@@ -153,10 +160,10 @@ class ApkSharingServer {
                 return
             }
 
-            // Handle each client on its own thread so the accept loop is not blocked
-            Thread {
+            // Handle each client in a bounded thread pool so we don't exhaust threads
+            clientExecutor?.execute {
                 handleClient(clientSocket, apkFile)
-            }.start()
+            }
         }
     }
 

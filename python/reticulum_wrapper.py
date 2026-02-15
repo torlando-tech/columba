@@ -1233,8 +1233,9 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "_deploy_tor_interface",
                          f"Deployed TorClientInterface via pkgutil to {interfaces_dir}")
             else:
-                log_warning("ReticulumWrapper", "_deploy_tor_interface",
-                            "Could not find TorClientInterface.py in package resources")
+                raise FileNotFoundError(
+                    "Could not find TorClientInterface.py via filesystem or package resources"
+                )
 
     def _create_config_file(
         self,

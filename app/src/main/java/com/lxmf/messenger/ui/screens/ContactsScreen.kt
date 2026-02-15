@@ -152,6 +152,7 @@ fun ContactsScreen(
     // Network tab state
     val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
     val showAudioAnnounces by announceViewModel.showAudioAnnounces.collectAsState()
+    val selectedInterfaceTypes by announceViewModel.selectedInterfaceTypes.collectAsState()
     val announceSearchQuery by announceViewModel.searchQuery.collectAsState()
     val announceCount by announceViewModel.announceCount.collectAsState()
     val isAnnouncing by announceViewModel.isAnnouncing.collectAsState()
@@ -859,10 +860,12 @@ fun ContactsScreen(
         NodeTypeFilterDialog(
             selectedTypes = selectedNodeTypes,
             showAudio = showAudioAnnounces,
+            selectedInterfaceTypes = selectedInterfaceTypes,
             onDismiss = { showNodeTypeFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio ->
+            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
                 announceViewModel.updateSelectedNodeTypes(newSelection)
                 announceViewModel.updateShowAudioAnnounces(newShowAudio)
+                announceViewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
                 showNodeTypeFilterDialog = false
             },
         )

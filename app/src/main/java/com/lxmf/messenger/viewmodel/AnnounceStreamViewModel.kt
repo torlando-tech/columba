@@ -53,6 +53,13 @@ class AnnounceStreamViewModel
             internal var updateIntervalMs = 30_000L
         }
 
+        private data class FilterParams(
+            val query: String,
+            val selectedTypes: Set<NodeType>,
+            val showAudio: Boolean,
+            val selectedInterfaces: Set<InterfaceType>,
+        )
+
         // Search query state
         val searchQuery = MutableStateFlow("")
 
@@ -64,6 +71,10 @@ class AnnounceStreamViewModel
         private val _showAudioAnnounces = MutableStateFlow(false)
         val showAudioAnnounces: StateFlow<Boolean> = _showAudioAnnounces.asStateFlow()
 
+        // Interface type filter state - empty set means show all (no interface filter)
+        private val _selectedInterfaceTypes = MutableStateFlow<Set<InterfaceType>>(emptySet())
+        val selectedInterfaceTypes: StateFlow<Set<InterfaceType>> = _selectedInterfaceTypes.asStateFlow()
+
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
             announceRepository
@@ -74,15 +85,21 @@ class AnnounceStreamViewModel
                     initialValue = 0,
                 )
 
-        // Announces with pagination support, filtered by node types, audio filter, AND search query
+        // Announces with pagination support, filtered by node types, audio filter,
+        // interface types, AND search query
         val announces: Flow<PagingData<com.lxmf.messenger.data.repository.Announce>> =
             combine(
                 searchQuery,
                 _selectedNodeTypes,
                 _showAudioAnnounces,
-            ) { query, selectedTypes, showAudio ->
-                Triple(query, selectedTypes, showAudio)
-            }.flatMapLatest { (query, selectedTypes, showAudio) ->
+                _selectedInterfaceTypes,
+            ) { query, selectedTypes, showAudio, selectedInterfaces ->
+                FilterParams(query, selectedTypes, showAudio, selectedInterfaces)
+            }.flatMapLatest { params ->
+                val query = params.query
+                val selectedTypes = params.selectedTypes
+                val showAudio = params.showAudio
+                val selectedInterfaces = params.selectedInterfaces
                 // Build type list for database query
                 // If showAudio is true but PEER is not selected, still include PEER in DB query
                 // (because audio announces have nodeType=PEER), then filter by aspect in memory
@@ -104,7 +121,7 @@ class AnnounceStreamViewModel
                             nodeTypes = typeStrings,
                             searchQuery = query.trim(),
                         ).map { pagingData ->
-                            // Apply in-memory filters for nodeType and audio aspect
+                            // Apply in-memory filters for nodeType, audio aspect, and interface type
                             pagingData.filter { announce ->
                                 // Filter by nodeType
                                 // (exclude PEER if user didn't select it and we only added it for audio)
@@ -112,10 +129,17 @@ class AnnounceStreamViewModel
                                     selectedTypes.map { it.name }.contains(announce.nodeType)
                                 val isAudioAnnounce = announce.aspect == "call.audio"
 
-                                // Show announce if:
-                                // - It matches selected nodeType AND (showAudio OR not audio announce)
-                                // - OR it's audio announce AND showAudio is true
-                                (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+                                val matchesTypeOrAudio =
+                                    (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
+
+                                // Filter by interface type (empty set = show all)
+                                val matchesInterface =
+                                    selectedInterfaces.isEmpty() ||
+                                        selectedInterfaces.contains(
+                                            InterfaceType.fromInterfaceName(announce.receivingInterface),
+                                        )
+
+                                matchesTypeOrAudio && matchesInterface
                             }
                         }
                 }
@@ -341,6 +365,10 @@ class AnnounceStreamViewModel
 
         fun updateShowAudioAnnounces(show: Boolean) {
             _showAudioAnnounces.value = show
+        }
+
+        fun updateSelectedInterfaceTypes(types: Set<InterfaceType>) {
+            _selectedInterfaceTypes.value = types
         }
 
         /**

@@ -87,8 +87,9 @@ class ChatsViewModelTest {
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
 
-        // Default: no conversations
+        // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
+        every { conversationRepository.observeDrafts() } returns flowOf(emptyMap())
 
         // Default: not syncing
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -120,6 +121,7 @@ class ChatsViewModelTest {
             val repository: ConversationRepository = mockk()
             val testConversations = listOf(testConversation1, testConversation2)
             every { repository.getConversations() } returns flowOf(testConversations)
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
@@ -149,6 +151,7 @@ class ChatsViewModelTest {
                     testConversation1, // 1000L (oldest)
                 )
             every { repository.getConversations() } returns flowOf(sortedConversations)
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
@@ -217,6 +220,7 @@ class ChatsViewModelTest {
             val repository: ConversationRepository = mockk()
             val conversationsFlow = MutableStateFlow<List<Conversation>>(emptyList())
             every { repository.getConversations() } returns conversationsFlow
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
@@ -255,6 +259,7 @@ class ChatsViewModelTest {
                     testConversation3.copy(unreadCount = 10),
                 )
             every { repository.getConversations() } returns flowOf(conversations)
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
@@ -283,6 +288,7 @@ class ChatsViewModelTest {
                     testConversation3.copy(peerPublicKey = null),
                 )
             every { repository.getConversations() } returns flowOf(conversations)
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
             val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)

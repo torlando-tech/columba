@@ -102,6 +102,8 @@ class MessagingScreenTest {
         every { mockViewModel.currentLinkState } returns MutableStateFlow(null)
         // Conversation link state mock
         every { mockViewModel.conversationLinkState } returns MutableStateFlow(null)
+        // Draft text mock
+        every { mockViewModel.draftText } returns MutableStateFlow(null)
     }
 
     // ========== Empty State Tests ==========

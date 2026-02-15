@@ -319,8 +319,20 @@ fun MessagingScreen(
     val listState = rememberLazyListState()
 
     var messageText by remember { mutableStateOf("") }
+    // Track whether the initial draft has been restored to avoid overwriting user typing
+    // Keyed to destinationHash so it resets when switching between conversations
+    var draftRestored by remember(destinationHash) { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Restore draft text when opening a conversation
+    val draftText by viewModel.draftText.collectAsStateWithLifecycle()
+    LaunchedEffect(draftText, destinationHash) {
+        if (!draftRestored && draftText != null) {
+            messageText = draftText ?: ""
+            draftRestored = true
+        }
+    }
 
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
     val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
@@ -1115,7 +1127,10 @@ fun MessagingScreen(
                         Modifier
                             .fillMaxWidth(),
                     messageText = messageText,
-                    onMessageTextChange = { messageText = it },
+                    onMessageTextChange = {
+                        messageText = it
+                        viewModel.onDraftTextChanged(it)
+                    },
                     selectedImageData = selectedImageData,
                     selectedImageIsAnimated = selectedImageIsAnimated,
                     onImageContentReceived = { data, format, isAnimated ->

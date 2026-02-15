@@ -47,28 +47,42 @@ class NotificationSettingsViewModel
         private fun loadSettings() {
             viewModelScope.launch {
                 try {
-                    // Combine all notification preference flows
+                    // Combine all notification preference flows using nested
+                    // typed combines to avoid fragile index-based access
                     combine(
-                        settingsRepository.notificationsEnabledFlow,
-                        settingsRepository.notificationReceivedMessageFlow,
-                        settingsRepository.notificationReceivedMessageFavoriteFlow,
-                        settingsRepository.notificationHeardAnnounceFlow,
-                        settingsRepository.notificationAnnounceDirectOnlyFlow,
-                        settingsRepository.notificationAnnounceExcludeTcpFlow,
-                        settingsRepository.notificationBleConnectedFlow,
-                        settingsRepository.notificationBleDisconnectedFlow,
-                        settingsRepository.hasRequestedNotificationPermissionFlow,
-                    ) { values: Array<Boolean> ->
-                        NotificationSettingsState(
-                            notificationsEnabled = values[0],
-                            receivedMessage = values[1],
-                            receivedMessageFavorite = values[2],
-                            heardAnnounce = values[3],
-                            announceDirectOnly = values[4],
-                            announceExcludeTcp = values[5],
-                            bleConnected = values[6],
-                            bleDisconnected = values[7],
-                            hasRequestedNotificationPermission = values[8],
+                        combine(
+                            settingsRepository.notificationsEnabledFlow,
+                            settingsRepository.notificationReceivedMessageFlow,
+                            settingsRepository.notificationReceivedMessageFavoriteFlow,
+                            settingsRepository.notificationHeardAnnounceFlow,
+                        ) { enabled, msg, fav, announce ->
+                            NotificationSettingsState(
+                                notificationsEnabled = enabled,
+                                receivedMessage = msg,
+                                receivedMessageFavorite = fav,
+                                heardAnnounce = announce,
+                            )
+                        },
+                        combine(
+                            settingsRepository.notificationAnnounceDirectOnlyFlow,
+                            settingsRepository.notificationAnnounceExcludeTcpFlow,
+                            settingsRepository.notificationBleConnectedFlow,
+                        ) { directOnly, excludeTcp, bleConn ->
+                            Triple(directOnly, excludeTcp, bleConn)
+                        },
+                        combine(
+                            settingsRepository.notificationBleDisconnectedFlow,
+                            settingsRepository.hasRequestedNotificationPermissionFlow,
+                        ) { bleDisconn, permRequested ->
+                            Pair(bleDisconn, permRequested)
+                        },
+                    ) { base, (directOnly, excludeTcp, bleConn), (bleDisconn, permRequested) ->
+                        base.copy(
+                            announceDirectOnly = directOnly,
+                            announceExcludeTcp = excludeTcp,
+                            bleConnected = bleConn,
+                            bleDisconnected = bleDisconn,
+                            hasRequestedNotificationPermission = permRequested,
                             isLoading = false,
                         )
                     }.distinctUntilChanged().collect { newState ->

@@ -86,6 +86,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.ui.components.ContactLocationBottomSheet
@@ -249,8 +250,11 @@ fun MapScreen(
         mapStyleLoaded = true
     }
 
-    // Location client
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    // Location client - only create GMS client when Play Services is available (issue #456)
+    val useGms = remember { LocationCompat.isPlayServicesAvailable(context) }
+    val fusedLocationClient = remember {
+        if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
+    }
 
     // Permission launcher
     val permissionLauncher =
@@ -260,7 +264,7 @@ fun MapScreen(
             val granted = permissions.values.all { it }
             viewModel.onPermissionResult(granted)
             if (granted) {
-                startLocationUpdates(fusedLocationClient, viewModel)
+                startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
             }
         }
 
@@ -269,7 +273,7 @@ fun MapScreen(
         MapLibre.getInstance(context)
         if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
-            startLocationUpdates(fusedLocationClient, viewModel)
+            startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
         }
         // Permission sheet visibility is now managed by ViewModel state
     }
@@ -1508,47 +1512,64 @@ internal fun NoMapSourceOverlay(
 }
 
 /**
- * Start location updates using FusedLocationProviderClient.
+ * Start location updates using FusedLocationProviderClient when available,
+ * falling back to Android LocationManager when Google Play Services is not installed (issue #456).
  */
 @SuppressLint("MissingPermission")
 private fun startLocationUpdates(
-    fusedLocationClient: FusedLocationProviderClient,
+    context: Context,
+    fusedLocationClient: FusedLocationProviderClient?,
+    useGms: Boolean,
     viewModel: MapViewModel,
 ) {
-    val locationRequest =
-        LocationRequest
-            .Builder(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                // 30 seconds
-                30_000L,
-            ).apply {
-                setMinUpdateIntervalMillis(15_000L) // min interval
-                setMaxUpdateDelayMillis(60_000L) // max delay
-            }.build()
+    if (useGms && fusedLocationClient != null) {
+        val locationRequest =
+            LocationRequest
+                .Builder(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    // 30 seconds
+                    30_000L,
+                ).apply {
+                    setMinUpdateIntervalMillis(15_000L) // min interval
+                    setMaxUpdateDelayMillis(60_000L) // max delay
+                }.build()
 
-    val locationCallback =
-        object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    viewModel.updateUserLocation(location)
+        val locationCallback =
+            object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { location ->
+                        viewModel.updateUserLocation(location)
+                    }
                 }
             }
-        }
 
-    try {
-        // Get last known location first for faster initial display
-        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            location?.let { viewModel.updateUserLocation(it) }
-        }
+        try {
+            // Get last known location first for faster initial display
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let { viewModel.updateUserLocation(it) }
+            }
 
-        // Then start continuous updates
-        fusedLocationClient.requestLocationUpdates(
-            locationRequest,
-            locationCallback,
-            Looper.getMainLooper(),
-        )
-    } catch (e: SecurityException) {
-        Log.e("MapScreen", "Location permission not granted", e)
+            // Then start continuous updates
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper(),
+            )
+        } catch (e: SecurityException) {
+            Log.e("MapScreen", "Location permission not granted", e)
+        }
+    } else {
+        // Fallback to platform LocationManager
+        try {
+            LocationCompat.getLastKnownLocation(context)?.let { location ->
+                viewModel.updateUserLocation(location)
+            }
+            LocationCompat.requestLocationUpdates(context, 30_000L) { location ->
+                viewModel.updateUserLocation(location)
+            }
+        } catch (e: SecurityException) {
+            Log.e("MapScreen", "Location permission not granted", e)
+        }
     }
 }
 

@@ -658,8 +658,10 @@ class IdentityManagerViewModel
                             context.contentResolver.openOutputStream(destinationUri)?.use { output ->
                                 input.copyTo(output)
                             }
-                        } ?: throw Exception("Could not open identity file")
+                        } ?: error("Could not open identity file")
                     }
+                    _uiState.value =
+                        IdentityManagerUiState.Success("Identity exported successfully")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to save identity file", e)
                     _uiState.value =

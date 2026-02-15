@@ -116,13 +116,12 @@ fun MigrationScreen(
         }
 
     // Check if notification permission is needed (Android 13+ with notifications enabled in settings)
-    fun needsNotificationPermission(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    fun needsNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS,
             ) != PermissionChecker.PERMISSION_GRANTED
-    }
 
     // File picker for import
     val importLauncher =
@@ -138,11 +137,17 @@ fun MigrationScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is MigrationUiState.ExportComplete -> {
-                val timestamp = SimpleDateFormat(
-                    "yyyy-MM-dd_HHmmss",
-                    Locale.US,
-                ).format(Date())
+                val timestamp =
+                    SimpleDateFormat(
+                        "yyyy-MM-dd_HHmmss",
+                        Locale.US,
+                    ).format(Date())
                 exportSaveLauncher.launch("columba_export_$timestamp.columba")
+                viewModel.onExportSaveDialogLaunched()
+            }
+            is MigrationUiState.ExportSaved -> {
+                snackbarHostState.showSnackbar("Export saved successfully")
+                viewModel.resetState()
             }
             is MigrationUiState.ImportPreview -> {
                 pendingImportUri = state.fileUri

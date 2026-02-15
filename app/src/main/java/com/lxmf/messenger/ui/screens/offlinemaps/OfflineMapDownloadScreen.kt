@@ -67,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.viewmodel.AddressSearchResult
 import com.lxmf.messenger.viewmodel.DownloadProgress
@@ -290,22 +291,32 @@ fun LocationSelectionStep(
 
             if (hasPermission) {
                 isGettingLocation = true
-                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-                try {
-                    fusedClient.getCurrentLocation(
-                        Priority.PRIORITY_HIGH_ACCURACY,
-                        CancellationTokenSource().token,
-                    ).addOnSuccessListener { location ->
+                if (LocationCompat.isPlayServicesAvailable(context)) {
+                    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+                    try {
+                        fusedClient.getCurrentLocation(
+                            Priority.PRIORITY_HIGH_ACCURACY,
+                            CancellationTokenSource().token,
+                        ).addOnSuccessListener { location ->
+                            isGettingLocation = false
+                            if (location != null) {
+                                onCurrentLocationRequest(location)
+                            }
+                        }.addOnFailureListener {
+                            isGettingLocation = false
+                        }
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "Location permission denied", e)
+                        isGettingLocation = false
+                    }
+                } else {
+                    // Fallback to platform LocationManager (issue #456)
+                    LocationCompat.getCurrentLocation(context) { location ->
                         isGettingLocation = false
                         if (location != null) {
                             onCurrentLocationRequest(location)
                         }
-                    }.addOnFailureListener {
-                        isGettingLocation = false
                     }
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Location permission denied", e)
-                    isGettingLocation = false
                 }
             }
         }

@@ -251,6 +251,9 @@ class OfflineMapsViewModel
                     val region = offlineMapRegionRepository.getRegionById(regionId)
                     val regionName = region?.name ?: destFile.nameWithoutExtension
 
+                    // Generate and cache the style JSON for this MBTiles file
+                    cacheStyleForRegion(regionId, destFile, regionName)
+
                     Log.i(TAG, "Imported MBTiles file: ${destFile.name} as region $regionId ($regionName)")
                     _importSuccessMessage.value = "Imported \"$regionName\""
                 } catch (e: Exception) {
@@ -376,6 +379,34 @@ class OfflineMapsViewModel
         fun getOfflineMapsDir(): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
         /**
+         * Generate and cache a style JSON file for an imported MBTiles region.
+         * Detects raster vs vector format and builds the appropriate style.
+         */
+        private suspend fun cacheStyleForRegion(
+            regionId: Long,
+            mbtilesFile: File,
+            regionName: String,
+        ) {
+            try {
+                withContext(Dispatchers.IO) {
+                    val styleJson =
+                        OfflineMapStyleBuilder.buildAutoOfflineStyle(
+                            mbtilesPath = mbtilesFile.absolutePath,
+                            name = regionName,
+                        )
+                    val styleDir = File(context.filesDir, "offline_styles")
+                    styleDir.mkdirs()
+                    val styleFile = File(styleDir, "$regionId.json")
+                    styleFile.writeText(styleJson)
+                    offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
+                    Log.d(TAG, "Cached style JSON for imported region $regionId at ${styleFile.absolutePath}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to cache style JSON for imported region $regionId (non-fatal)", e)
+            }
+        }
+
+        /**
          * Scan for orphaned files and clean up.
          *
          * This handles:
@@ -389,7 +420,9 @@ class OfflineMapsViewModel
                 val orphanedFiles = offlineMapRegionRepository.findOrphanedFiles(getOfflineMapsDir())
                 for (file in orphanedFiles) {
                     Log.i(TAG, "Recovering orphaned MBTiles file: ${file.name}")
-                    offlineMapRegionRepository.importOrphanedFile(file)
+                    val regionId = offlineMapRegionRepository.importOrphanedFile(file)
+                    val region = offlineMapRegionRepository.getRegionById(regionId)
+                    cacheStyleForRegion(regionId, file, region?.name ?: file.nameWithoutExtension)
                 }
                 if (orphanedFiles.isNotEmpty()) {
                     Log.i(TAG, "Recovered ${orphanedFiles.size} orphaned MBTiles file(s)")

@@ -193,6 +193,112 @@ object OfflineMapStyleBuilder {
     }
 
     /**
+     * Build a style JSON string for a raster MBTiles source (e.g., PNG/JPEG tiles).
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @param name Display name for the source
+     * @return Style JSON string ready for MapLibre
+     */
+    fun buildRasterOfflineStyle(
+        mbtilesPath: String,
+        name: String = "Offline Map",
+    ): String {
+        val style =
+            JSONObject().apply {
+                put("version", 8)
+                put("name", name)
+                put(
+                    "sources",
+                    JSONObject().apply {
+                        put(
+                            "raster-tiles",
+                            JSONObject().apply {
+                                put("type", "raster")
+                                put("url", "mbtiles://$mbtilesPath")
+                                put("tileSize", 256)
+                            },
+                        )
+                    },
+                )
+                put(
+                    "layers",
+                    JSONArray().apply {
+                        put(
+                            JSONObject().apply {
+                                put("id", "background")
+                                put("type", "background")
+                                put("paint", JSONObject().put("background-color", "#f8f4f0"))
+                            },
+                        )
+                        put(
+                            JSONObject().apply {
+                                put("id", "raster-layer")
+                                put("type", "raster")
+                                put("source", "raster-tiles")
+                            },
+                        )
+                    },
+                )
+            }
+        val json = style.toString()
+        Log.d("OfflineMapStyleBuilder", "Generated raster style JSON: $json")
+        return json
+    }
+
+    /**
+     * Build the appropriate style (raster or vector) based on the MBTiles tile format.
+     * Reads the format from the MBTiles metadata table.
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @param name Display name for the source
+     * @return Style JSON string ready for MapLibre
+     */
+    fun buildAutoOfflineStyle(
+        mbtilesPath: String,
+        name: String = "Offline Map",
+    ): String {
+        val format = getTileFormat(mbtilesPath)
+        Log.d("OfflineMapStyleBuilder", "Detected tile format '$format' for $mbtilesPath")
+        return if (format == "pbf") {
+            buildOfflineStyle(mbtilesPath, name)
+        } else {
+            buildRasterOfflineStyle(mbtilesPath, name)
+        }
+    }
+
+    /**
+     * Read the tile format from an MBTiles file's metadata table.
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @return The format string (e.g., "pbf", "png", "jpg"), or "png" as default
+     */
+    fun getTileFormat(mbtilesPath: String): String {
+        var db: android.database.sqlite.SQLiteDatabase? = null
+        return try {
+            db =
+                android.database.sqlite.SQLiteDatabase.openDatabase(
+                    mbtilesPath,
+                    null,
+                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY,
+                )
+            db
+                .rawQuery(
+                    "SELECT value FROM metadata WHERE name = 'format'",
+                    null,
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else "png"
+                }
+        } catch (
+            @Suppress("SwallowedException") e: Exception,
+        ) {
+            Log.w("OfflineMapStyleBuilder", "Failed to read tile format from $mbtilesPath", e)
+            "png"
+        } finally {
+            db?.close()
+        }
+    }
+
+    /**
      * Build a hybrid style that uses offline tiles with online fallback.
      *
      * Note: This creates a style with both sources. MapLibre doesn't support
@@ -227,9 +333,7 @@ object OfflineMapStyleBuilder {
     /**
      * Get the offline maps directory.
      */
-    fun getOfflineMapsDir(context: Context): File {
-        return File(context.filesDir, "offline_maps").also { it.mkdirs() }
-    }
+    fun getOfflineMapsDir(context: Context): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
     /**
      * List all MBTiles files in the offline maps directory.

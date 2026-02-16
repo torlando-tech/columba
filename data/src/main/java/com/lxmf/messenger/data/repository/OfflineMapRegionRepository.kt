@@ -365,19 +365,24 @@ class OfflineMapRegionRepository
                     }
                 }
 
-                // Parse center (format: "lon,lat,zoom")
-                val center = metadata["center"]?.split(",")
-                val centerLon = center?.getOrNull(0)?.toDoubleOrNull() ?: 0.0
-                val centerLat = center?.getOrNull(1)?.toDoubleOrNull() ?: 0.0
-
                 // Parse bounds (format: "west,south,east,north")
                 val bounds = metadata["bounds"]?.split(",")
+                val west = bounds?.getOrNull(0)?.toDoubleOrNull()
+                val south = bounds?.getOrNull(1)?.toDoubleOrNull()
+                val east = bounds?.getOrNull(2)?.toDoubleOrNull()
+                val north = bounds?.getOrNull(3)?.toDoubleOrNull()
+
+                // Parse center (format: "lon,lat,zoom"), falling back to bounds midpoint
+                val center = metadata["center"]?.split(",")
+                val centerLon =
+                    center?.getOrNull(0)?.toDoubleOrNull()
+                        ?: if (west != null && east != null) (west + east) / 2.0 else 0.0
+                val centerLat =
+                    center?.getOrNull(1)?.toDoubleOrNull()
+                        ?: if (south != null && north != null) (south + north) / 2.0 else 0.0
+
                 val radiusKm =
-                    if (bounds != null && bounds.size == 4) {
-                        val west = bounds[0].toDoubleOrNull() ?: 0.0
-                        val east = bounds[2].toDoubleOrNull() ?: 0.0
-                        // Approximate radius from bounds width with latitude correction
-                        // (111km per degree at equator, less at higher latitudes)
+                    if (west != null && east != null) {
                         val lonDegToKm = 111.0 * kotlin.math.cos(Math.toRadians(centerLat))
                         ((east - west) * lonDegToKm / 2).toInt().coerceIn(10, 200)
                     } else {

@@ -284,7 +284,8 @@ fun MapScreen(
 
     // Center map on user location once when both map and location are ready
     // Key on both so we catch whichever becomes available last, but only center once
-    var hasInitiallyCentered by remember { mutableStateOf(false) }
+    // If viewport was restored from a saved camera position, skip re-centering
+    var hasInitiallyCentered by remember { mutableStateOf(state.lastCameraPosition != null) }
 
     // If focus coordinates are provided, center on them instead of user location
     LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
@@ -529,14 +530,44 @@ fun MapScreen(
                             true
                         }
 
-                        // Set initial camera position (use last known location if available)
-                        val initialLat = state.userLocation?.latitude ?: 37.7749
-                        val initialLng = state.userLocation?.longitude ?: -122.4194
+                        // Set initial camera position priority:
+                        // 1. Saved camera position (restored from tab switch)
+                        // 2. User's GPS location
+                        // 3. Default offline map region center
+                        // 4. Fallback to 0,0 (world view)
+                        val savedPos = state.lastCameraPosition
+                        val defaultCenter = state.defaultRegionCenter
+                        val userLoc = state.userLocation
+                        val initialLat: Double
+                        val initialLng: Double
+                        val initialZoom: Double
+                        when {
+                            savedPos != null -> {
+                                initialLat = savedPos.latitude
+                                initialLng = savedPos.longitude
+                                initialZoom = savedPos.zoom
+                            }
+                            userLoc != null -> {
+                                initialLat = userLoc.latitude
+                                initialLng = userLoc.longitude
+                                initialZoom = 15.0
+                            }
+                            defaultCenter != null -> {
+                                initialLat = defaultCenter.latitude
+                                initialLng = defaultCenter.longitude
+                                initialZoom = defaultCenter.zoom
+                            }
+                            else -> {
+                                initialLat = 0.0
+                                initialLng = 0.0
+                                initialZoom = 2.0
+                            }
+                        }
                         val initialPosition =
                             CameraPosition
                                 .Builder()
                                 .target(LatLng(initialLat, initialLng))
-                                .zoom(if (state.userLocation != null) 15.0 else 12.0)
+                                .zoom(initialZoom)
                                 .build()
                         map.cameraPosition = initialPosition
                         metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
@@ -552,6 +583,19 @@ fun MapScreen(
                             val latLng2 = map.projection.fromScreenLocation(point2)
                             val distance = latLng1.distanceTo(latLng2) // meters
                             metersPerPixel = distance / 100.0 // 100 pixels between points
+                        }
+
+                        // Save viewport when user stops interacting (issue #333)
+                        // Uses onCameraIdle instead of onCameraMove to avoid excessive
+                        // state updates during pan/zoom gestures.
+                        map.addOnCameraIdleListener {
+                            val pos = map.cameraPosition
+                            val target = pos.target ?: return@addOnCameraIdleListener
+                            viewModel.saveCameraPosition(
+                                target.latitude,
+                                target.longitude,
+                                pos.zoom,
+                            )
                         }
                     }
                 }

@@ -308,6 +308,12 @@ class OfflineMapRegionRepository
         }
 
         /**
+         * Get all completed regions that have MBTiles files on disk.
+         */
+        suspend fun getCompletedRegionsWithMbtiles(): List<OfflineMapRegion> =
+            offlineMapRegionDao.getCompletedRegionsWithMbtiles().map { it.toOfflineMapRegion() }
+
+        /**
          * Import an orphaned MBTiles file into the database.
          * Attempts to extract center/bounds from MBTiles metadata.
          * @return The ID of the imported region

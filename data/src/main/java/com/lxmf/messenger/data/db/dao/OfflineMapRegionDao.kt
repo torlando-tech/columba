@@ -255,4 +255,11 @@ interface OfflineMapRegionDao {
         clearDefaultRegion()
         setDefaultRegionById(id)
     }
+
+    /**
+     * Get all completed regions that have an MBTiles file on disk.
+     * Used to build a combined multi-region offline style.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' AND mbtilesPath IS NOT NULL ORDER BY createdAt DESC")
+    suspend fun getCompletedRegionsWithMbtiles(): List<OfflineMapRegionEntity>
 }

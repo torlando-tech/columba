@@ -1,11 +1,13 @@
 package com.lxmf.messenger.map
 
+import android.content.Context
 import android.util.Log
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.data.repository.RmspServer
 import com.lxmf.messenger.data.repository.RmspServerRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -69,6 +71,7 @@ sealed class MapStyleResult {
 class MapTileSourceManager
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
         private val rmspServerRepository: RmspServerRepository,
         private val settingsRepository: SettingsRepository,
@@ -140,16 +143,22 @@ class MapTileSourceManager
                     MapStyleResult.Online(DEFAULT_STYLE_URL)
                 }
                 hasOffline -> {
-                    // Check if any completed region has a locally cached style JSON
-                    val regionWithStyle = offlineMapRegionRepository.getFirstCompletedRegionWithStyle()
-                    val stylePath = regionWithStyle?.localStylePath
+                    // Get all completed regions with MBTiles files
+                    val regions = offlineMapRegionRepository.getCompletedRegionsWithMbtiles()
+                    val mbtilesPaths = regions.mapNotNull { it.mbtilesPath }
 
-                    if (stylePath != null && java.io.File(stylePath).exists()) {
-                        Log.d(TAG, "Using offline maps with local style JSON: $stylePath")
-                        MapStyleResult.OfflineWithLocalStyle(stylePath)
+                    if (mbtilesPaths.isNotEmpty()) {
+                        // Build a combined style from all regions
+                        val combinedStyleJson = OfflineMapStyleBuilder.buildCombinedOfflineStyle(mbtilesPaths)
+                        val styleDir = java.io.File(context.filesDir, "offline_styles")
+                        styleDir.mkdirs()
+                        val combinedStyleFile = java.io.File(styleDir, "combined.json")
+                        combinedStyleFile.writeText(combinedStyleJson)
+                        Log.d(TAG, "Built combined offline style from ${mbtilesPaths.size} region(s)")
+                        MapStyleResult.OfflineWithLocalStyle(combinedStyleFile.absolutePath)
                     } else {
                         // Fallback to HTTP style URL (works if HTTP cache hasn't expired)
-                        Log.w(TAG, "No local style JSON found, falling back to HTTP style URL")
+                        Log.w(TAG, "No MBTiles files found, falling back to HTTP style URL")
                         MapStyleResult.Offline(DEFAULT_STYLE_URL)
                     }
                 }

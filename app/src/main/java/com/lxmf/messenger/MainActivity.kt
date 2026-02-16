@@ -68,6 +68,7 @@ import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
+import com.lxmf.messenger.ui.screens.ApkSharingScreen
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
 import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
@@ -1213,6 +1214,9 @@ fun ColumbaNavigation(
                             onNavigateToMigration = {
                                 navController.navigate("migration")
                             },
+                            onNavigateToApkSharing = {
+                                navController.navigate("apk_sharing")
+                            },
                             onNavigateToAnnounces = { filterType ->
                                 selectedTab = 1 // Announces tab
                                 val route =
@@ -1626,6 +1630,12 @@ fun ColumbaNavigation(
                                     popUpTo(0) { inclusive = true }
                                 }
                             },
+                        )
+                    }
+
+                    composable("apk_sharing") {
+                        ApkSharingScreen(
+                            onNavigateBack = { navController.popBackStack() },
                         )
                     }
 

@@ -516,23 +516,34 @@ class CallManager:
         # The remote will send STATUS_AVAILABLE, then we identify
 
     def __link_closed(self, link):
-        """Handle link closed (remote hung up or link failure)."""
+        """Handle link closed (remote hung up or link failure).
+
+        Kotlin callbacks are invoked OUTSIDE the lock to prevent deadlock:
+        _send_signal_to_kotlin(STATUS_AVAILABLE) triggers Kotlin hangup()
+        synchronously, which runs NativePlaybackEngine.destroy() (blocking
+        Oboe stream close). If this ran inside the lock, _call_handler_lock
+        would be held for the entire duration, blocking any subsequent call().
+        """
+        should_notify = False
+        identity = None
         with self._call_handler_lock:
             if link == self.active_call:
                 RNS.log("Link closed, call ended", RNS.LOG_DEBUG)
                 self.active_call = None
-
-                # Notify Kotlin
-                self._send_signal_to_kotlin(STATUS_AVAILABLE)
-
-                if self._kotlin_call_bridge is not None:
-                    try:
-                        self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
-                    except Exception as e:
-                        RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
-
+                identity = self._active_call_identity
                 self._active_call_identity = None
                 self._call_start_time = None
+                should_notify = True
+
+        # Notify Kotlin OUTSIDE lock (same pattern as hangup())
+        if should_notify:
+            self._send_signal_to_kotlin(STATUS_AVAILABLE)
+
+            if self._kotlin_call_bridge is not None:
+                try:
+                    self._kotlin_call_bridge.onCallEnded(identity)
+                except Exception as e:
+                    RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
 
     # ===== Packet Handling =====
 

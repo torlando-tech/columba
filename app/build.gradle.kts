@@ -268,6 +268,9 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Restart JVM periodically to prevent Robolectric/Compose resource
+                // exhaustion that causes PagingData rendering failures in large suites.
+                it.setForkEvery(100)
                 // Enable JaCoCo coverage for Robolectric tests
                 it.extensions.configure<JacocoTaskExtension> {
                     isIncludeNoLocationClasses = true

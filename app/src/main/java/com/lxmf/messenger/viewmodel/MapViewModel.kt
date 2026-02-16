@@ -241,22 +241,7 @@ class MapViewModel
             resolveMapStyle(null, null)
 
             // Load default offline map region center as fallback for initial map position
-            viewModelScope.launch {
-                val defaultRegion = offlineMapRegionRepository.getDefaultRegion()
-                if (defaultRegion != null) {
-                    _state.update {
-                        it.copy(
-                            defaultRegionCenter =
-                                SavedCameraPosition(
-                                    latitude = defaultRegion.centerLatitude,
-                                    longitude = defaultRegion.centerLongitude,
-                                    zoom = 12.0,
-                                ),
-                        )
-                    }
-                    Log.d(TAG, "Default region loaded: ${defaultRegion.name} at ${defaultRegion.centerLatitude}, ${defaultRegion.centerLongitude}")
-                }
-            }
+            refreshDefaultRegion()
 
             // Refresh map style when offline map availability changes (e.g., after download)
             viewModelScope.launch {
@@ -445,6 +430,28 @@ class MapViewModel
         fun refreshMapStyle() {
             val location = _state.value.userLocation
             resolveMapStyle(location?.latitude, location?.longitude)
+        }
+
+        /**
+         * Re-fetch the default offline map region and update camera target.
+         * Called on init and when returning to the map screen after changing the favorite.
+         */
+        fun refreshDefaultRegion() {
+            viewModelScope.launch {
+                val defaultRegion = offlineMapRegionRepository.getDefaultRegion()
+                val newCenter =
+                    defaultRegion?.let {
+                        SavedCameraPosition(
+                            latitude = it.centerLatitude,
+                            longitude = it.centerLongitude,
+                            zoom = it.minZoom.toDouble().coerceAtLeast(10.0),
+                        )
+                    }
+                _state.update { it.copy(defaultRegionCenter = newCenter) }
+                if (defaultRegion != null) {
+                    Log.d(TAG, "Default region loaded: ${defaultRegion.name} at ${defaultRegion.centerLatitude}, ${defaultRegion.centerLongitude}")
+                }
+            }
         }
 
         /**

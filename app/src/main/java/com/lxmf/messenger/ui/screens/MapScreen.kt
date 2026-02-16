@@ -319,6 +319,21 @@ fun MapScreen(
         }
     }
 
+    // Animate camera to default region center when it changes (e.g., after setting a favorite)
+    LaunchedEffect(state.defaultRegionCenter, mapLibreMap) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val center = state.defaultRegionCenter ?: return@LaunchedEffect
+        if (hasInitiallyCentered) {
+            val cameraPosition =
+                CameraPosition
+                    .Builder()
+                    .target(LatLng(center.latitude, center.longitude))
+                    .zoom(center.zoom)
+                    .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+        }
+    }
+
     // Enable location component when permission is granted
     @SuppressLint("MissingPermission")
     LaunchedEffect(state.hasLocationPermission, mapLibreMap) {
@@ -391,7 +406,10 @@ fun MapScreen(
                 val view = mapView ?: return@LifecycleEventObserver
                 when (event) {
                     Lifecycle.Event.ON_START -> view.onStart()
-                    Lifecycle.Event.ON_RESUME -> view.onResume()
+                    Lifecycle.Event.ON_RESUME -> {
+                        view.onResume()
+                        viewModel.refreshDefaultRegion()
+                    }
                     Lifecycle.Event.ON_PAUSE -> view.onPause()
                     Lifecycle.Event.ON_STOP -> view.onStop()
                     Lifecycle.Event.ON_DESTROY -> {

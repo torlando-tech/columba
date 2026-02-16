@@ -268,10 +268,14 @@ jobs:
           retention-days: 7
 
   kotlin-tests:
-    name: Kotlin Tests
+    name: Kotlin Tests (Shard ${{ matrix.shard }}/4)
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
 
     steps:
       - name: Checkout code
@@ -320,19 +324,22 @@ jobs:
             robolectric-4.16-
             robolectric-
 
-      - name: Run unit tests and generate coverage report
+      - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
         # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
         # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
-        # For other modules (reticulum, data), run their standard debug tests.
-        run: ./gradlew :app:testNoSentryDebugUnitTest :reticulum:testDebugUnitTest :data:testDebugUnitTest jacocoTestReport --stacktrace --max-workers=4
+        run: ./gradlew :app:testNoSentryDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
+
+      - name: Run reticulum and data module tests
+        if: matrix.shard == 0
+        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: kotlin-test-results
+          name: kotlin-test-results-shard-${{ matrix.shard }}
           path: |
             **/build/test-results/test*/*.xml
             **/build/test-results/test*/*.html
@@ -342,7 +349,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: kotlin-test-reports
+          name: kotlin-test-reports-shard-${{ matrix.shard }}
           path: |
             **/build/reports/tests/
 
@@ -350,9 +357,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          files: ./**/build/reports/jacoco/**/*.xml
           flags: unittests
-          name: codecov-umbrella
+          name: codecov-shard-${{ matrix.shard }}
           fail_ci_if_error: false
           verbose: true
 
@@ -360,7 +367,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: kotlin-coverage-reports
+          name: kotlin-coverage-reports-shard-${{ matrix.shard }}
           path: |
             **/build/reports/jacoco/
           retention-days: 7

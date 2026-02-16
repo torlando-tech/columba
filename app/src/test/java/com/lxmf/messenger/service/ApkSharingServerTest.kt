@@ -4,7 +4,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -12,15 +14,19 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+/**
+ * Tests for ApkSharingServer.
+ *
+ * This test does NOT use Robolectric — the server is pure Java networking
+ * (ServerSocket, HttpURLConnection) with no Android framework dependencies
+ * beyond android.util.Log (which returns defaults via isReturnDefaultValues).
+ * Running outside Robolectric avoids polluting the shared Robolectric
+ * environment with leaked server threads/sockets.
+ */
 class ApkSharingServerTest {
     private lateinit var server: ApkSharingServer
     private lateinit var apkFile: File
@@ -40,6 +46,12 @@ class ApkSharingServerTest {
     @After
     fun teardown() {
         server.stop()
+        // Wait for the server coroutine to fully terminate so leaked threads
+        // don't corrupt the Robolectric environment for subsequent test classes.
+        runBlocking {
+            serverScope.coroutineContext.job.children
+                .forEach { it.join() }
+        }
         serverScope.cancel()
         apkFile.delete()
     }

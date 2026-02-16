@@ -117,6 +117,7 @@ data class MapState(
  * - Location sharing state
  * - Location permission state
  */
+@Suppress("TooManyFunctions")
 @HiltViewModel
 class MapViewModel
     @Inject
@@ -444,7 +445,7 @@ class MapViewModel
                         SavedCameraPosition(
                             latitude = it.centerLatitude,
                             longitude = it.centerLongitude,
-                            zoom = it.minZoom.toDouble().coerceAtLeast(10.0),
+                            zoom = it.maxZoom.toDouble().coerceIn(2.0, 14.0),
                         )
                     }
                 _state.update { it.copy(defaultRegionCenter = newCenter) }

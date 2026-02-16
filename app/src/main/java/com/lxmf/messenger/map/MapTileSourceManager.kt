@@ -148,14 +148,16 @@ class MapTileSourceManager
                     val mbtilesPaths = regions.mapNotNull { it.mbtilesPath }
 
                     if (mbtilesPaths.isNotEmpty()) {
-                        // Build a combined style from all regions
-                        val combinedStyleJson = OfflineMapStyleBuilder.buildCombinedOfflineStyle(mbtilesPaths)
-                        val styleDir = java.io.File(context.filesDir, "offline_styles")
-                        styleDir.mkdirs()
-                        val combinedStyleFile = java.io.File(styleDir, "combined.json")
-                        combinedStyleFile.writeText(combinedStyleJson)
-                        Log.d(TAG, "Built combined offline style from ${mbtilesPaths.size} region(s)")
-                        MapStyleResult.OfflineWithLocalStyle(combinedStyleFile.absolutePath)
+                        // Build combined style on IO thread (SQLite reads + file write)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            val combinedStyleJson = OfflineMapStyleBuilder.buildCombinedOfflineStyle(mbtilesPaths)
+                            val styleDir = java.io.File(context.filesDir, "offline_styles")
+                            styleDir.mkdirs()
+                            val combinedStyleFile = java.io.File(styleDir, "combined.json")
+                            combinedStyleFile.writeText(combinedStyleJson)
+                            Log.d(TAG, "Built combined offline style from ${mbtilesPaths.size} region(s)")
+                            MapStyleResult.OfflineWithLocalStyle(combinedStyleFile.absolutePath)
+                        }
                     } else {
                         // Fallback to HTTP style URL (works if HTTP cache hasn't expired)
                         Log.w(TAG, "No MBTiles files found, falling back to HTTP style URL")

@@ -150,11 +150,7 @@ class OfflineMapStyleBuilderTest {
 
     @Test
     fun `buildCombinedOfflineStyle returns valid JSON`() {
-        val paths =
-            mapOf(
-                "source1" to "/path/to/map1.mbtiles",
-                "source2" to "/path/to/map2.mbtiles",
-            )
+        val paths = listOf("/path/to/map1.mbtiles", "/path/to/map2.mbtiles")
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)
@@ -165,53 +161,48 @@ class OfflineMapStyleBuilderTest {
 
     @Test
     fun `buildCombinedOfflineStyle creates multiple sources`() {
-        val paths =
-            mapOf(
-                "region1" to "/path/to/region1.mbtiles",
-                "region2" to "/path/to/region2.mbtiles",
-            )
+        val paths = listOf("/path/to/region1.mbtiles", "/path/to/region2.mbtiles")
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)
         val sources = json.getJSONObject("sources")
 
-        assertTrue(sources.has("region1"))
-        assertTrue(sources.has("region2"))
+        // Non-existent files default to raster format
+        assertTrue(sources.has("raster-0"))
+        assertTrue(sources.has("raster-1"))
 
-        val source1 = sources.getJSONObject("region1")
-        assertEquals("mbtiles:///path/to/region1.mbtiles", source1.getString("url"))
+        val source0 = sources.getJSONObject("raster-0")
+        assertEquals("mbtiles:///path/to/region1.mbtiles", source0.getString("url"))
     }
 
     @Test
-    fun `buildCombinedOfflineStyle updates layers to use first source`() {
-        val paths =
-            mapOf(
-                "primary" to "/path/to/primary.mbtiles",
-                "secondary" to "/path/to/secondary.mbtiles",
-            )
+    fun `buildCombinedOfflineStyle creates raster layers for non-existent files`() {
+        val paths = listOf("/path/to/primary.mbtiles", "/path/to/secondary.mbtiles")
 
         val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(paths)
         val json = JSONObject(style)
         val layers = json.getJSONArray("layers")
 
-        // Find a layer that has a source (not background)
+        // Non-existent files default to raster, so layers should include raster-layer-0
+        var hasRasterLayer = false
         for (i in 0 until layers.length()) {
             val layer = layers.getJSONObject(i)
-            if (layer.has("source")) {
-                // Should be updated to use the primary source
-                assertEquals("primary", layer.getString("source"))
+            if (layer.getString("id") == "raster-layer-0") {
+                hasRasterLayer = true
+                assertEquals("raster", layer.getString("type"))
                 break
             }
         }
+        assertTrue("Should have raster layer for first source", hasRasterLayer)
     }
 
     @Test
-    fun `buildCombinedOfflineStyle handles empty map`() {
-        val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(emptyMap())
+    fun `buildCombinedOfflineStyle handles empty list`() {
+        val style = OfflineMapStyleBuilder.buildCombinedOfflineStyle(emptyList())
         val json = JSONObject(style)
 
         assertNotNull(json)
-        assertEquals("Offline Map", json.getString("name"))
+        assertEquals("Offline Maps", json.getString("name"))
     }
 
     // ========== buildHybridStyle() Tests ==========

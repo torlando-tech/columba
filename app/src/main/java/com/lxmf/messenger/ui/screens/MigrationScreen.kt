@@ -56,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -856,6 +858,7 @@ internal fun PasswordDialog(
                     },
                     label = { Text("Password") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     visualTransformation =
                         if (passwordVisible) VisualTransformation.None
                         else PasswordVisualTransformation(),
@@ -877,6 +880,7 @@ internal fun PasswordDialog(
                         },
                         label = { Text("Confirm password") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         visualTransformation =
                             if (passwordVisible) VisualTransformation.None
                             else PasswordVisualTransformation(),

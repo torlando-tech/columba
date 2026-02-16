@@ -76,6 +76,7 @@ import com.composables.icons.lucide.TreePine
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
 import com.lxmf.messenger.ui.components.SortModeSelector
@@ -125,16 +126,25 @@ fun DiscoveredInterfacesScreen(
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
         if (hasCoarsePermission || hasFinePermission) {
-            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            fusedClient
-                .getCurrentLocation(
-                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                    CancellationTokenSource().token,
-                ).addOnSuccessListener { location ->
+            if (LocationCompat.isPlayServicesAvailable(context)) {
+                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+                fusedClient
+                    .getCurrentLocation(
+                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                        CancellationTokenSource().token,
+                    ).addOnSuccessListener { location ->
+                        location?.let {
+                            viewModel.setUserLocation(it.latitude, it.longitude)
+                        }
+                    }
+            } else {
+                // Fallback to platform LocationManager (issue #456)
+                LocationCompat.getCurrentLocation(context) { location ->
                     location?.let {
                         viewModel.setUserLocation(it.latitude, it.longitude)
                     }
                 }
+            }
         }
     }
 

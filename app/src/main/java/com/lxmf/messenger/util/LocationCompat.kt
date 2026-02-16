@@ -45,11 +45,19 @@ object LocationCompat {
         if (!checked) {
             synchronized(this) {
                 if (!checked) {
-                    val result =
-                        GoogleApiAvailability
-                            .getInstance()
-                            .isGooglePlayServicesAvailable(context)
-                    available = (result == ConnectionResult.SUCCESS)
+                    available =
+                        try {
+                            val result =
+                                GoogleApiAvailability
+                                    .getInstance()
+                                    .isGooglePlayServicesAvailable(context)
+                            result == ConnectionResult.SUCCESS
+                        } catch (e: Exception) {
+                            // GoogleApiAvailability can throw (e.g. missing manifest metadata
+                            // in unit tests or corrupted GMS state on-device). Treat as unavailable.
+                            Log.w(TAG, "Failed to check Google Play Services availability", e)
+                            false
+                        }
                     checked = true
 
                     if (available) {
@@ -201,10 +209,20 @@ object LocationCompat {
         val locationManager =
             context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
+        // When both GPS and network providers are enabled, both are registered with
+        // the same listener, which can deliver duplicate callbacks for the same time
+        // period. Deduplicate by ignoring updates that arrive within 1 second of the
+        // last delivered update.
         val listener =
             object : LocationListener {
+                private var lastDeliveredTime = 0L
+
                 override fun onLocationChanged(location: Location) {
-                    onLocation(location)
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastDeliveredTime > 1000) {
+                        lastDeliveredTime = now
+                        onLocation(location)
+                    }
                 }
 
                 @Deprecated("Deprecated in API")

@@ -7,12 +7,12 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
-import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -750,7 +750,9 @@ class TelemetryCollectorManager
                         }
                     }
                 } else {
-                    // Fallback to platform LocationManager
+                    // Fallback to platform LocationManager.
+                    // Note: cancellation is not forwarded to LocationCompat; the platform
+                    // request will self-clean via its internal 10s timeout if cancelled.
                     if (continuation.isActive) {
                         LocationCompat.getCurrentLocation(context) { location ->
                             if (continuation.isActive) {

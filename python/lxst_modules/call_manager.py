@@ -184,6 +184,17 @@ class CallManager:
     ANNOUNCE_INTERVAL = 60*60*3  # Re-announce every 3 hours
     ANNOUNCE_INTERVAL_MIN = 60*5 # Minimum 5 minutes between announces
 
+    # Maximum frames to accumulate before sending as a batch.
+    # Batching reduces GIL contention by cutting RNS.Packet.send() calls
+    # from ~16.7/sec (one per 60ms MQ frame) to ~5.6/sec (one per 3 frames).
+    # Each send() acquires GIL for encryption + transport dispatch; batching
+    # amortizes this overhead across multiple frames.
+    TX_BATCH_SIZE = 3
+
+    # Maximum time (seconds) to wait for a full batch before flushing.
+    # Prevents stale audio when packet production is intermittent.
+    TX_BATCH_TIMEOUT = 0.150  # 150ms — 2.5 MQ frames
+
     def __init__(self, identity):
         self.identity = identity
         self.active_call = None  # RNS.Link instance
@@ -198,6 +209,12 @@ class CallManager:
         self._call_handler_lock = threading.Lock()
         self._cancel_event = threading.Event()
         self._last_announce = 0  # Epoch 0 → first announce fires immediately
+
+        # TX batching state
+        self._tx_batch = []           # Accumulated frames awaiting send
+        self._tx_batch_start = 0.0    # time.time() of first frame in current batch
+        self._tx_batch_count = 0      # Diagnostic: total batches sent
+        self._tx_send_time_sum = 0.0  # Diagnostic: cumulative RNS.Packet.send() time
 
     def initialize(self, kotlin_call_bridge=None, kotlin_network_bridge=None):
         """Initialize Reticulum destination for incoming calls.
@@ -414,6 +431,19 @@ class CallManager:
         RNS.log("hangup() called", RNS.LOG_INFO)
         self._cancel_event.set()
 
+        # Flush any remaining batched frames before tearing down
+        link = self.active_call
+        if link is not None and self._tx_batch:
+            try:
+                self._flush_tx_batch(link)
+            except Exception:
+                pass  # Best-effort flush before hangup
+
+        # Reset batch state
+        self._tx_batch = []
+        self._tx_batch_count = 0
+        self._tx_send_time_sum = 0.0
+
         # Extract link reference under lock, then teardown OUTSIDE lock.
         # Link.teardown() can trigger __link_closed() synchronously on the
         # same thread, which also acquires _call_handler_lock. Since
@@ -516,23 +546,34 @@ class CallManager:
         # The remote will send STATUS_AVAILABLE, then we identify
 
     def __link_closed(self, link):
-        """Handle link closed (remote hung up or link failure)."""
+        """Handle link closed (remote hung up or link failure).
+
+        Kotlin callbacks are invoked OUTSIDE the lock to prevent deadlock:
+        _send_signal_to_kotlin(STATUS_AVAILABLE) triggers Kotlin hangup()
+        synchronously, which runs NativePlaybackEngine.destroy() (blocking
+        Oboe stream close). If this ran inside the lock, _call_handler_lock
+        would be held for the entire duration, blocking any subsequent call().
+        """
+        should_notify = False
+        identity = None
         with self._call_handler_lock:
             if link == self.active_call:
                 RNS.log("Link closed, call ended", RNS.LOG_DEBUG)
                 self.active_call = None
-
-                # Notify Kotlin
-                self._send_signal_to_kotlin(STATUS_AVAILABLE)
-
-                if self._kotlin_call_bridge is not None:
-                    try:
-                        self._kotlin_call_bridge.onCallEnded(self._active_call_identity)
-                    except Exception as e:
-                        RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
-
+                identity = self._active_call_identity
                 self._active_call_identity = None
                 self._call_start_time = None
+                should_notify = True
+
+        # Notify Kotlin OUTSIDE lock (same pattern as hangup())
+        if should_notify:
+            self._send_signal_to_kotlin(STATUS_AVAILABLE)
+
+            if self._kotlin_call_bridge is not None:
+                try:
+                    self._kotlin_call_bridge.onCallEnded(identity)
+                except Exception as e:
+                    RNS.log(f"Error notifying Kotlin of link close: {e}", RNS.LOG_ERROR)
 
     # ===== Packet Handling =====
 
@@ -610,10 +651,15 @@ class CallManager:
     _rx_packet_count = 0  # TEMP: diagnostic counter
 
     def receive_audio_packet(self, packet_data):
-        """Receive encoded audio from Kotlin, send to remote via Reticulum.
+        """Receive encoded audio from Kotlin, batch and send to remote.
 
         Called by Kotlin Packetizer (via NetworkPacketBridge.sendPacket → Python).
-        Wraps in LXST-compatible msgpack and sends over active link.
+        Accumulates frames into a batch to reduce per-second RNS.Packet.send()
+        calls, which are the main source of GIL contention (each call holds the
+        GIL for encryption + transport dispatch).
+
+        Batching 3 frames per send cuts crypto overhead by ~67%. The LXST wire
+        format already supports frame lists: {0x01: [frame1, frame2, ...]}.
 
         Args:
             packet_data: bytes (codec header byte + encoded frame)
@@ -637,14 +683,56 @@ class CallManager:
             if not isinstance(packet_data, bytes):
                 packet_data = bytes(packet_data)
 
-            frame_data = {FIELD_FRAMES: packet_data}
-            packed = umsgpack.packb(frame_data)
-            RNS.Packet(link, packed, create_receipt=False).send()
+            # Accumulate frame into batch
+            now = time.time()
+            if not self._tx_batch:
+                self._tx_batch_start = now
+            self._tx_batch.append(packet_data)
 
-            if self._rx_packet_count <= 5 or self._rx_packet_count % 100 == 0:
-                RNS.log(f"receive_audio_packet #{self._rx_packet_count}: sent {len(packed)} bytes to remote", RNS.LOG_DEBUG)
+            # Flush when batch is full or timeout elapsed
+            if (len(self._tx_batch) >= self.TX_BATCH_SIZE or
+                    (now - self._tx_batch_start) >= self.TX_BATCH_TIMEOUT):
+                self._flush_tx_batch(link)
+
         except Exception as e:
-            RNS.log(f"Error sending audio to remote #{self._rx_packet_count}: {e}", RNS.LOG_ERROR)
+            RNS.log(f"Error in receive_audio_packet #{self._rx_packet_count}: {e}", RNS.LOG_ERROR)
+
+    def _flush_tx_batch(self, link):
+        """Send accumulated audio frames as a single RNS.Packet.
+
+        Uses LXST wire format: {0x01: [frame1, frame2, ...]} for batches,
+        or {0x01: frame} for single frames (receiver handles both).
+        """
+        if not self._tx_batch:
+            return
+
+        batch = self._tx_batch
+        self._tx_batch = []
+
+        try:
+            # Single frame: send as-is (no list wrapper) for compatibility
+            frames = batch if len(batch) > 1 else batch[0]
+            frame_data = {FIELD_FRAMES: frames}
+            packed = umsgpack.packb(frame_data)
+
+            t0 = time.time()
+            RNS.Packet(link, packed, create_receipt=False).send()
+            send_time = time.time() - t0
+
+            self._tx_batch_count += 1
+            self._tx_send_time_sum += send_time
+
+            if self._tx_batch_count <= 5 or self._tx_batch_count % 50 == 0:
+                avg_send = (self._tx_send_time_sum / self._tx_batch_count) * 1000
+                RNS.log(
+                    f"TX batch #{self._tx_batch_count}: {len(batch)} frames, "
+                    f"{len(packed)} bytes, send={send_time*1000:.1f}ms "
+                    f"(avg={avg_send:.1f}ms), "
+                    f"total_rx={self._rx_packet_count}",
+                    RNS.LOG_DEBUG
+                )
+        except Exception as e:
+            RNS.log(f"Error sending TX batch #{self._tx_batch_count}: {e}", RNS.LOG_ERROR)
 
     def receive_signal(self, signal):
         """Receive signal from Kotlin, send to remote via Reticulum.

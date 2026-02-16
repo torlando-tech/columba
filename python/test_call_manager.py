@@ -429,7 +429,7 @@ class TestCallManagerPacketForwarding:
         manager.receive_audio_packet(b'\x40\x00\x01')  # should not raise
 
     def test_receive_audio_packet_sends_to_remote(self):
-        """receive_audio_packet() should send msgpack-wrapped audio to remote."""
+        """receive_audio_packet() should send msgpack-wrapped audio to remote after batch fills."""
         mock_identity = MagicMock()
         manager = CallManager(mock_identity)
         mock_link = MagicMock()
@@ -438,7 +438,9 @@ class TestCallManagerPacketForwarding:
 
         with patch('lxst_modules.call_manager.RNS') as mock_rns:
             mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
-            manager.receive_audio_packet(b'\x40\x00\x01')
+            # Send TX_BATCH_SIZE packets to trigger batch flush
+            for _ in range(CallManager.TX_BATCH_SIZE):
+                manager.receive_audio_packet(b'\x40\x00\x01')
             mock_rns.Packet.assert_called_once()
 
     def test_receive_signal_drops_when_no_active_call(self):
@@ -901,14 +903,16 @@ class TestReceiveAudioPacketFull:
     """Test receive_audio_packet with active link (wire format)."""
 
     def test_sends_msgpack_wrapped_audio(self):
-        """Should wrap audio in LXST wire format and send via RNS.Packet."""
+        """Should wrap audio in LXST wire format and send via RNS.Packet after batch fills."""
         manager = _make_initialized_manager()
         link = _make_active_link()
         manager.active_call = link
 
         with patch('lxst_modules.call_manager.RNS') as mock_rns:
             mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
-            manager.receive_audio_packet(b'\x40\x00\x01')
+            # Send TX_BATCH_SIZE packets to trigger batch flush
+            for _ in range(CallManager.TX_BATCH_SIZE):
+                manager.receive_audio_packet(b'\x40\x00\x01')
 
             mock_rns.Packet.assert_called_once()
             call_args = mock_rns.Packet.call_args
@@ -927,15 +931,16 @@ class TestReceiveAudioPacketFull:
             mock_rns.Packet.assert_not_called()
 
     def test_converts_non_bytes_to_bytes(self):
-        """Should handle non-bytes input (Chaquopy jarray)."""
+        """Should handle non-bytes input (Chaquopy jarray) and send after batch fills."""
         manager = _make_initialized_manager()
         link = _make_active_link()
         manager.active_call = link
 
         with patch('lxst_modules.call_manager.RNS') as mock_rns:
             mock_rns.Link.ACTIVE = RNS.Link.ACTIVE
-            # Pass a list (simulates jarray)
-            manager.receive_audio_packet([0x40, 0x00, 0x01])
+            # Pass lists (simulates jarray) — TX_BATCH_SIZE to trigger flush
+            for _ in range(CallManager.TX_BATCH_SIZE):
+                manager.receive_audio_packet([0x40, 0x00, 0x01])
             mock_rns.Packet.assert_called_once()
 
     def test_handles_send_exception(self):

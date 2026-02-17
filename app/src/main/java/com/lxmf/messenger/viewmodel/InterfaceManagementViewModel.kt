@@ -131,6 +131,7 @@ data class InterfaceConfigState(
 /**
  * ViewModel for managing Reticulum network interface configurations.
  */
+@Suppress("LargeClass")
 @HiltViewModel
 class InterfaceManagementViewModel
     @Inject

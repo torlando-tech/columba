@@ -332,12 +332,20 @@ class IdentityRepository
                             "attempting recovery",
                     )
 
-                    val keyData = identity.keyData
+                    // Try legacy plaintext keyData first, then fall back to decrypting encryptedKeyData
+                    @Suppress("DEPRECATION")
+                    val keyData =
+                        identity.keyData
+                            ?: if (identity.encryptedKeyData != null) {
+                                keyProvider.getDecryptedKeyData(identity.identityHash).getOrNull()
+                            } else {
+                                null
+                            }
                     if (keyData == null || keyData.size != 64) {
                         Log.e(
                             TAG,
                             "Cannot recover identity ${identity.identityHash}: " +
-                                "keyData is null or invalid size (${keyData?.size})",
+                                "no valid key data available (size=${keyData?.size})",
                         )
                         return@withContext Result.failure(
                             IllegalStateException("Identity file missing and no valid keyData backup available"),

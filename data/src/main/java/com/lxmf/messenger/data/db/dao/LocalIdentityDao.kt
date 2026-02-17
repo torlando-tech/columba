@@ -162,6 +162,26 @@ interface LocalIdentityDao {
     )
 
     /**
+     * Downgrade from password protection to device-only encryption.
+     * Updates key data and clears all password-related fields.
+     */
+    @Query(
+        """
+        UPDATE local_identities
+        SET encryptedKeyData = :encryptedKeyData,
+            keyEncryptionVersion = :version,
+            passwordSalt = NULL,
+            passwordVerificationHash = NULL
+        WHERE identityHash = :identityHash
+        """,
+    )
+    suspend fun clearPasswordProtection(
+        identityHash: String,
+        encryptedKeyData: ByteArray,
+        version: Int,
+    )
+
+    /**
      * Update all encryption-related fields for password protection.
      */
     @Query(

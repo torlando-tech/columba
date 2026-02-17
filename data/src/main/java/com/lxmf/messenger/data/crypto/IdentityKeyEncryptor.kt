@@ -509,7 +509,12 @@ class IdentityKeyEncryptor
         }
 
         /**
-         * Securely wipe a byte array by overwriting with random data.
+         * Securely wipe a byte array by overwriting with random data then zeroing.
+         *
+         * Note: When called on `SecretKeySpec.getEncoded()`, JCA returns a clone of the
+         * internal key material, so this only wipes the copy. The original key bytes inside
+         * the SecretKeySpec remain until GC. This is a known JVM/JCA limitation — there is
+         * no reliable way to wipe SecretKey internals on the JVM.
          */
         fun secureWipe(data: ByteArray) {
             secureRandom.nextBytes(data)

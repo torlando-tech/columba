@@ -205,6 +205,10 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
+        // Shared image compression error events for UI feedback
+        private val _sharedImageError = MutableSharedFlow<String>()
+        val sharedImageError: SharedFlow<String> = _sharedImageError.asSharedFlow()
+
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
@@ -226,7 +230,9 @@ class MessagingViewModel
                 }
         }
 
-        // Multi-image share state: URIs pending compression+send after quality selection
+        // Multi-image share state: URIs pending compression+send after quality selection.
+        // These are plain vars (not StateFlows) because they are always written before
+        // _qualitySelectionState triggers recomposition, so no reactive subscription is needed.
         private var pendingSharedImageUris: List<Uri> = emptyList()
         private var pendingSharedImageDestHash: String? = null
 
@@ -1706,6 +1712,7 @@ class MessagingViewModel
             viewModelScope.launch {
                 _isProcessingImage.value = true
                 _isSending.value = true
+                var failedCount = 0
                 try {
                     for (uri in uris) {
                         val result =
@@ -1714,6 +1721,7 @@ class MessagingViewModel
                             }
                         if (result == null) {
                             Log.e(TAG, "Failed to compress shared image: $uri")
+                            failedCount++
                             continue
                         }
                         Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
@@ -1724,6 +1732,15 @@ class MessagingViewModel
                 } finally {
                     _isSending.value = false
                     _isProcessingImage.value = false
+                    if (failedCount > 0) {
+                        val msg =
+                            if (failedCount == uris.size) {
+                                "All $failedCount images failed to compress"
+                            } else {
+                                "$failedCount of ${uris.size} images failed to compress"
+                            }
+                        _sharedImageError.emit(msg)
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.MutableState
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.util.Base32
+import com.lxmf.messenger.util.FileUtils
 
 class MainActivityIntentHandler(
     private val activity: MainActivity,
@@ -199,8 +200,19 @@ class MainActivityIntentHandler(
     }
 
     private fun triggerSharedImages(uris: List<Uri>) {
+        // Eagerly copy content:// URIs to app-private temp files while permissions
+        // are still valid. Content URIs from ACTION_SEND are ephemeral — the sender
+        // may revoke access once our Activity is paused during destination selection.
+        val stableUris =
+            uris.mapIndexedNotNull { index, uri ->
+                FileUtils.copyUriToTempFile(activity, uri, index)
+            }
+        if (stableUris.isEmpty()) {
+            Log.w(logTag, "All shared image URIs failed to copy to temp files")
+            return
+        }
         pendingNavigation.value = null
-        pendingNavigation.value = PendingNavigation.SharedImage(uris)
+        pendingNavigation.value = PendingNavigation.SharedImage(stableUris)
     }
 
     private fun handleOpenCall(intent: Intent) {

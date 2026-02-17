@@ -62,13 +62,22 @@ fun ImageQualitySelectionDialog(
             "Send"
         }
 
+    // For multi-image shares, append " each" to transfer time estimates so the user
+    // understands the time shown is per-image, not total.
+    val displayEstimates =
+        if (imageCount > 1) {
+            transferTimeEstimates.mapValues { (_, time) -> time?.let { "$it each" } }
+        } else {
+            transferTimeEstimates
+        }
+
     QualitySelectionDialog(
         title = title,
         options = options,
         initialSelection = recommendedPreset,
         recommendedOption = recommendedPreset,
         linkState = linkState,
-        transferTimeEstimates = transferTimeEstimates,
+        transferTimeEstimates = displayEstimates,
         confirmButtonText = confirmText,
         onConfirm = onSelect,
         onDismiss = onDismiss,

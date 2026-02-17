@@ -24,7 +24,7 @@ class SharedImageViewModelTest {
 
     @Before
     fun setup() {
-        viewModel = SharedImageViewModel()
+        viewModel = SharedImageViewModel(org.robolectric.RuntimeEnvironment.getApplication())
     }
 
     // ========== Initial State ==========
@@ -50,11 +50,12 @@ class SharedImageViewModelTest {
 
     @Test
     fun setImages_multipleUris_storesAllUris() {
-        val uris = listOf(
-            Uri.parse("content://media/external/images/1"),
-            Uri.parse("content://media/external/images/2"),
-            Uri.parse("content://media/external/images/3"),
-        )
+        val uris =
+            listOf(
+                Uri.parse("content://media/external/images/1"),
+                Uri.parse("content://media/external/images/2"),
+                Uri.parse("content://media/external/images/3"),
+            )
         viewModel.setImages(uris)
 
         val pending = viewModel.sharedImages.value
@@ -117,10 +118,11 @@ class SharedImageViewModelTest {
 
     @Test
     fun consumeForDestination_matchingHash_returnsUrisAndClears() {
-        val uris = listOf(
-            Uri.parse("content://media/external/images/1"),
-            Uri.parse("content://media/external/images/2"),
-        )
+        val uris =
+            listOf(
+                Uri.parse("content://media/external/images/1"),
+                Uri.parse("content://media/external/images/2"),
+            )
         viewModel.setImages(uris)
         viewModel.assignToDestination("dest_hash_abc")
 

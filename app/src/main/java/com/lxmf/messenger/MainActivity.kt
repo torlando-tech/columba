@@ -445,7 +445,9 @@ sealed class PendingNavigation {
         val text: String,
     ) : PendingNavigation()
 
-    data class SharedImage(val uris: List<android.net.Uri>) : PendingNavigation()
+    data class SharedImage(
+        val uris: List<Uri>,
+    ) : PendingNavigation()
 
     data class IncomingCall(
         val identityHash: String,

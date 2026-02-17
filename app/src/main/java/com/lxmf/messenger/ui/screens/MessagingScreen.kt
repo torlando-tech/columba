@@ -363,7 +363,10 @@ fun MessagingScreen(
         }
     }
 
-    // Consume shared images from external share intent
+    // Consume shared images from external share intent.
+    // For a single image, processImageWithCompression reads _currentConversation which may
+    // not be set yet from the loadMessages LaunchedEffect — it falls back to the saved
+    // compression preset, which is functionally safe (just skips link-based recommendation).
     LaunchedEffect(destinationHash, sharedImagesFromViewModel) {
         val pendingUris = sharedImageViewModel.consumeForDestination(destinationHash)
         if (!pendingUris.isNullOrEmpty()) {
@@ -483,6 +486,13 @@ fun MessagingScreen(
     // Observe file attachment errors and show Toast
     LaunchedEffect(Unit) {
         viewModel.fileAttachmentError.collect { errorMessage ->
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Observe shared image compression errors and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.sharedImageError.collect { errorMessage ->
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
         }
     }

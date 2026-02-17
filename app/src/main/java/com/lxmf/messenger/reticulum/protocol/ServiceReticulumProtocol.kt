@@ -539,6 +539,11 @@ class ServiceReticulumProtocol(
                     tech.torlando.lxst.core.CallCoordinator
                         .getInstance()
                         .onIncomingCall(callerHash)
+
+                    // NOTE: IncomingCallActivity is launched by the foreground service
+                    // (ReticulumServiceBinder) which has SYSTEM_ALERT_WINDOW permission,
+                    // and by the notification's fullScreenIntent when the device is locked.
+                    // We intentionally do NOT launch it here to avoid duplicate screens.
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling incoming call callback", e)
                 }

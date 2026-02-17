@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Columba</string>
+
+    <!-- Incoming call screen -->
+    <string name="incoming_voice_call">Incoming Voice Call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_answer_content_description">Answer call</string>
+    <string name="call_decline_content_description">Decline call</string>
 </resources>

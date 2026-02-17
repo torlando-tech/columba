@@ -63,6 +63,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.RNodeFlasherCard
 import com.lxmf.messenger.ui.screens.settings.cards.ShareColumbaCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
+import com.lxmf.messenger.ui.screens.settings.cards.VoiceCallPermissionsCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
@@ -233,6 +234,11 @@ fun SettingsScreen(
                     notificationsEnabled = state.notificationsEnabled,
                     onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
                     onManageClick = onNavigateToNotifications,
+                )
+
+                VoiceCallPermissionsCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.VOICE_CALL_PERMISSIONS.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.VOICE_CALL_PERMISSIONS, it) },
                 )
 
                 AutoAnnounceCard(

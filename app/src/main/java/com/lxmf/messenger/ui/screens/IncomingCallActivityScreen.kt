@@ -43,9 +43,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.lxmf.messenger.R
+
+private val AnswerCallGreen = Color(0xFF4CAF50)
 
 /**
  * Standalone incoming call screen composable for IncomingCallActivity.
@@ -183,7 +187,7 @@ fun IncomingCallActivityScreen(
 
                 // "Incoming Voice Call" label
                 Text(
-                    text = "Incoming Voice Call",
+                    text = stringResource(R.string.incoming_voice_call),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -209,7 +213,7 @@ fun IncomingCallActivityScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CallEnd,
-                            contentDescription = "Decline call",
+                            contentDescription = stringResource(R.string.call_decline_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.onError,
                         )
@@ -218,7 +222,7 @@ fun IncomingCallActivityScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Decline",
+                        text = stringResource(R.string.call_decline),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -235,13 +239,13 @@ fun IncomingCallActivityScreen(
                         modifier = Modifier.size(72.dp),
                         colors =
                             IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color(0xFF4CAF50),
+                                containerColor = AnswerCallGreen,
                             ),
                         shape = CircleShape,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
-                            contentDescription = "Answer call",
+                            contentDescription = stringResource(R.string.call_answer_content_description),
                             modifier = Modifier.size(32.dp),
                             tint = Color.White,
                         )
@@ -250,7 +254,7 @@ fun IncomingCallActivityScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Answer",
+                        text = stringResource(R.string.call_answer),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -1294,29 +1294,30 @@ class ReticulumServiceBinder(
                 if (android.provider.Settings.canDrawOverlays(context)) {
                     try {
                         val callScreenIntent =
-                            android.content.Intent(
-                                context,
-                                com.lxmf.messenger.IncomingCallActivity::class.java,
-                            ).apply {
-                                action = CallNotificationHelper.ACTION_OPEN_CALL
-                                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-                                putExtra(
-                                    CallNotificationHelper.EXTRA_CALLER_NAME,
-                                    callerName ?: identityHash,
-                                )
-                                flags =
-                                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content
+                                .Intent(
+                                    context,
+                                    com.lxmf.messenger.IncomingCallActivity::class.java,
+                                ).apply {
+                                    action = CallNotificationHelper.ACTION_OPEN_CALL
+                                    putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                                    putExtra(
+                                        CallNotificationHelper.EXTRA_CALLER_NAME,
+                                        callerName,
+                                    )
+                                    flags =
+                                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
                                         android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            }
+                                }
                         context.startActivity(callScreenIntent)
-                        Log.i(TAG, "📞 Launched IncomingCallActivity directly (overlay permission granted)")
+                        Log.i(TAG, "Launched IncomingCallActivity directly (overlay permission granted)")
                     } catch (e: Exception) {
-                        Log.w(TAG, "📞 Could not launch IncomingCallActivity: ${e.message}")
+                        Log.w(TAG, "Could not launch IncomingCallActivity: ${e.message}")
                     }
                 } else {
                     Log.w(
                         TAG,
-                        "📞 Cannot launch IncomingCallActivity - overlay permission not granted. " +
+                        "Cannot launch IncomingCallActivity - overlay permission not granted. " +
                             "Falling back to notification only.",
                     )
                 }

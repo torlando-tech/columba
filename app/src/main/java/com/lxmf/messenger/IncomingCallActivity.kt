@@ -1,6 +1,5 @@
 package com.lxmf.messenger
 
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -26,13 +25,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.lxmf.messenger.notifications.CallNotificationHelper
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
 import com.lxmf.messenger.ui.screens.IncomingCallActivityScreen
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.core.CallState
 
 /**
  * Lightweight Activity that displays the incoming call screen over the lock screen.
@@ -97,10 +96,11 @@ class IncomingCallActivity : ComponentActivity() {
                         }
                         is CallState.Ended,
                         is CallState.Rejected,
+                        is CallState.Busy,
                         is CallState.Idle,
                         -> {
                             // Call ended or declined - close this activity
-                            Log.i(TAG, "Call ended/rejected/idle, finishing activity")
+                            Log.i(TAG, "Call ended/rejected/busy/idle, finishing activity")
                             finish()
                         }
                         else -> {}
@@ -170,7 +170,6 @@ class IncomingCallActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-
     /**
      * Start playing the default ringtone and vibrating in a phone-call pattern.
      * Respects the device's ringer mode (silent/vibrate/normal).
@@ -183,25 +182,29 @@ class IncomingCallActivity : ComponentActivity() {
         if (ringerMode == AudioManager.RINGER_MODE_NORMAL) {
             try {
                 val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                ringtone = RingtoneManager.getRingtone(this, ringtoneUri)?.apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        isLooping = true
+                ringtone =
+                    RingtoneManager.getRingtone(this, ringtoneUri)?.apply {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            isLooping = true
+                        }
+                        audioAttributes =
+                            AudioAttributes
+                                .Builder()
+                                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build()
+                        play()
                     }
-                    audioAttributes = AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                    play()
-                }
                 // On pre-P devices, isLooping is not available; manually restart
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && ringtone != null) {
-                    ringtoneLoopJob = lifecycleScope.launch {
-                        val rt = ringtone ?: return@launch
-                        while (isActive) {
-                            delay(1000)
-                            if (!rt.isPlaying) rt.play()
+                    ringtoneLoopJob =
+                        lifecycleScope.launch {
+                            val rt = ringtone ?: return@launch
+                            while (isActive) {
+                                delay(1000)
+                                if (!rt.isPlaying) rt.play()
+                            }
                         }
-                    }
                 }
                 Log.d(TAG, "Ringtone started")
             } catch (e: Exception) {
@@ -212,13 +215,14 @@ class IncomingCallActivity : ComponentActivity() {
         // Vibrate (in normal or vibrate mode, not silent)
         if (ringerMode != AudioManager.RINGER_MODE_SILENT) {
             try {
-                vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                    vibratorManager.defaultVibrator
-                } else {
-                    @Suppress("DEPRECATION")
-                    getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                }
+                vibrator =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                        vibratorManager.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    }
 
                 // Phone-call vibration pattern: wait 0ms, vibrate 1s, pause 1s, repeat
                 val pattern = longArrayOf(0, 1000, 1000)
@@ -315,11 +319,12 @@ class IncomingCallActivity : ComponentActivity() {
         // Cancel the incoming call notification
         CallNotificationHelper(this).cancelIncomingCallNotification()
 
-        val intent = Intent(this, MainActivity::class.java).apply {
-            action = CallNotificationHelper.ACTION_ANSWER_CALL
-            putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
+        val intent =
+            Intent(this, MainActivity::class.java).apply {
+                action = CallNotificationHelper.ACTION_ANSWER_CALL
+                putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
         startActivity(intent)
         finish()
     }

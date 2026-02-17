@@ -96,7 +96,10 @@ class IncomingCallActivityTest {
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
         controller.setup()
 
-        val flags = controller.get().window.attributes.flags
+        val flags =
+            controller
+                .get()
+                .window.attributes.flags
         assertTrue(
             "Should have FLAG_KEEP_SCREEN_ON",
             flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0,
@@ -202,5 +205,16 @@ class IncomingCallActivityTest {
         callStateFlow.value = CallState.Rejected
 
         assertTrue("Activity should finish on Rejected", controller.get().isFinishing)
+    }
+
+    @Test
+    fun `activity finishes when call state becomes Busy`() {
+        val intent = buildCallIntent()
+        val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
+        controller.setup()
+
+        callStateFlow.value = CallState.Busy
+
+        assertTrue("Activity should finish on Busy", controller.get().isFinishing)
     }
 }

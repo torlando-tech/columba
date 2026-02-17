@@ -157,7 +157,7 @@ class IncomingCallActivity : ComponentActivity() {
             // NOTE: Do NOT call requestDismissKeyguard() here.
             // It captures `this` Activity in a native IKeyguardDismissCallback that
             // persists as a GC root, causing a memory leak after onDestroy().
-            // The keyguard is dismissed only when the user answers (see dismissKeyguardIfNeeded).
+            // The keyguard is dismissed in answerCall() -> dismissKeyguardAndAnswer().
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
@@ -265,12 +265,52 @@ class IncomingCallActivity : ComponentActivity() {
 
     /**
      * Answer the incoming call via CallCoordinator and navigate to MainActivity.
+     *
+     * Dismisses the keyguard first (if locked) so the mic is accessible.
+     * requestDismissKeyguard() is called here — not in onCreate() — to avoid
+     * the IKeyguardDismissCallback leak that occurs when the callback outlives
+     * the Activity.
      */
     private fun answerCall() {
         Log.i(TAG, "Answering call")
         stopRingtoneAndVibration()
-        // The CallCoordinator will handle the actual answer via Python IPC
-        // For the service-based architecture, we need to go through the protocol
+        dismissKeyguardAndAnswer()
+    }
+
+    /**
+     * Dismiss the keyguard (if showing) then proceed to answer the call.
+     * If the keyguard is not showing, answers immediately.
+     */
+    private fun dismissKeyguardAndAnswer() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                keyguardManager.requestDismissKeyguard(
+                    this,
+                    object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                        override fun onDismissSucceeded() {
+                            Log.i(TAG, "Keyguard dismissed, answering call")
+                            performAnswer()
+                        }
+
+                        override fun onDismissCancelled() {
+                            Log.w(TAG, "Keyguard dismiss cancelled, answering anyway")
+                            performAnswer()
+                        }
+
+                        override fun onDismissError() {
+                            Log.e(TAG, "Keyguard dismiss error, answering anyway")
+                            performAnswer()
+                        }
+                    },
+                )
+                return
+            }
+        }
+        performAnswer()
+    }
+
+    private fun performAnswer() {
         val app = applicationContext as? ColumbaApplication
         if (app != null) {
             lifecycleScope.launch {
@@ -278,12 +318,10 @@ class IncomingCallActivity : ComponentActivity() {
                     app.reticulumProtocol.answerCall()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error answering call via protocol", e)
-                    // Fallback: try CallCoordinator directly (works if in same process)
                     callCoordinator.answerCall()
                 }
             }
         } else {
-            // Fallback
             callCoordinator.answerCall()
         }
     }
@@ -323,9 +361,16 @@ class IncomingCallActivity : ComponentActivity() {
             Intent(this, MainActivity::class.java).apply {
                 action = CallNotificationHelper.ACTION_ANSWER_CALL
                 putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                // NO_ANIMATION suppresses the slide transition — the user is already
+                // on a call screen so a visual transition feels redundant and jarring.
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION
             }
         startActivity(intent)
         finish()
+        // Also suppress the exit animation on this activity
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
     }
 }

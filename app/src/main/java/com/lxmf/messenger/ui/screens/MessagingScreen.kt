@@ -185,6 +185,7 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -337,6 +338,9 @@ fun MessagingScreen(
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
     val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
+    val sharedImagesFromViewModel by sharedImageViewModel.sharedImages.collectAsStateWithLifecycle()
+
     LaunchedEffect(destinationHash, sharedTextFromViewModel) {
         val pending = sharedTextViewModel.consumeForDestination(destinationHash)
         if (!pending.isNullOrBlank()) {
@@ -356,6 +360,23 @@ fun MessagingScreen(
                         messageText.trimEnd() + "\n" + trimmed
                     }
                 }
+        }
+    }
+
+    // Consume shared images from external share intent.
+    // For a single image, processImageWithCompression reads _currentConversation which may
+    // not be set yet from the loadMessages LaunchedEffect — it falls back to the saved
+    // compression preset, which is functionally safe (just skips link-based recommendation).
+    LaunchedEffect(destinationHash, sharedImagesFromViewModel) {
+        val pendingUris = sharedImageViewModel.consumeForDestination(destinationHash)
+        if (!pendingUris.isNullOrEmpty()) {
+            if (pendingUris.size == 1) {
+                // Single image: use existing flow (preview in composer, user sends manually)
+                viewModel.processImageWithCompression(context, pendingUris.first())
+            } else {
+                // Multiple images: show one quality dialog, then compress+send each as a message
+                viewModel.processSharedImages(context, pendingUris, destinationHash)
+            }
         }
     }
 
@@ -465,6 +486,13 @@ fun MessagingScreen(
     // Observe file attachment errors and show Toast
     LaunchedEffect(Unit) {
         viewModel.fileAttachmentError.collect { errorMessage ->
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Observe shared image compression errors and show Toast
+    LaunchedEffect(Unit) {
+        viewModel.sharedImageError.collect { errorMessage ->
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
         }
     }
@@ -1433,12 +1461,20 @@ fun MessagingScreen(
 
     // Image quality selection dialog
     qualitySelectionState?.let { state ->
+        val sharedImageCount = viewModel.pendingSharedImageCount()
         ImageQualitySelectionDialog(
             recommendedPreset = state.recommendedPreset,
             linkState = currentLinkState,
             transferTimeEstimates = state.transferTimeEstimates,
-            onSelect = { preset -> viewModel.selectImageQuality(preset) },
+            onSelect = { preset ->
+                if (sharedImageCount > 1) {
+                    viewModel.selectImageQualityForSharedImages(preset)
+                } else {
+                    viewModel.selectImageQuality(preset)
+                }
+            },
             onDismiss = { viewModel.dismissQualitySelection() },
+            imageCount = sharedImageCount,
         )
     }
 

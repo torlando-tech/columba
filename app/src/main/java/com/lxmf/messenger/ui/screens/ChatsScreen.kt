@@ -75,12 +75,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.ProfileIcon
-import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
-import com.lxmf.messenger.viewmodel.SharedTextViewModel
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.ChatsViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -101,8 +102,14 @@ fun ChatsScreen(
 
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
 
     val listState = rememberLazyListState()
+
+    // Hoist shared-content state above LazyColumn so it's collected once at screen level
+    // rather than per-item inside the items{} lambda (avoids redundant subscriptions).
+    val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
+    val pendingSharedImages by sharedImageViewModel.sharedImages.collectAsStateWithLifecycle()
 
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
@@ -204,7 +211,6 @@ fun ChatsScreen(
                         val hapticFeedback = LocalHapticFeedback.current
                         var showMenu by remember { mutableStateOf(false) }
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
-                        val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
 
                         val draftText = draftsMap[conversation.peerHash]
 
@@ -217,6 +223,9 @@ fun ChatsScreen(
                                 onClick = {
                                     if (pendingSharedText != null) {
                                         sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    }
+                                    if (pendingSharedImages != null) {
+                                        sharedImageViewModel.assignToDestination(conversation.peerHash)
                                     }
                                     onChatClick(conversation.peerHash, conversation.displayName)
                                 },
@@ -411,23 +420,24 @@ fun ConversationCard(
                     // Last message preview (or draft indicator)
                     if (draftText != null) {
                         Text(
-                            text = buildAnnotatedString {
-                                withStyle(
-                                    SpanStyle(
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontStyle = FontStyle.Italic,
-                                    ),
-                                ) {
-                                    append("Draft: ")
-                                }
-                                withStyle(
-                                    SpanStyle(
-                                        fontStyle = FontStyle.Italic,
-                                    ),
-                                ) {
-                                    append(draftText)
-                                }
-                            },
+                            text =
+                                buildAnnotatedString {
+                                    withStyle(
+                                        SpanStyle(
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontStyle = FontStyle.Italic,
+                                        ),
+                                    ) {
+                                        append("Draft: ")
+                                    }
+                                    withStyle(
+                                        SpanStyle(
+                                            fontStyle = FontStyle.Italic,
+                                        ),
+                                    ) {
+                                        append(draftText)
+                                    }
+                                },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,

@@ -7,72 +7,82 @@ import org.json.JSONObject
  * Used by InterfaceRepository and InterfaceDatabase for serialization.
  */
 @Suppress("CyclomaticComplexMethod")
-fun InterfaceConfig.toJsonString(): String {
-    return when (this) {
+fun InterfaceConfig.toJsonString(): String =
+    when (this) {
         is InterfaceConfig.AutoInterface ->
-            JSONObject().apply {
-                put("group_id", groupId)
-                put("discovery_scope", discoveryScope)
-                discoveryPort?.let { put("discovery_port", it) }
-                dataPort?.let { put("data_port", it) }
-                put("mode", mode)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("group_id", groupId)
+                    put("discovery_scope", discoveryScope)
+                    discoveryPort?.let { put("discovery_port", it) }
+                    dataPort?.let { put("data_port", it) }
+                    put("mode", mode)
+                }.toString()
 
         is InterfaceConfig.TCPClient ->
-            JSONObject().apply {
-                put("target_host", targetHost)
-                put("target_port", targetPort)
-                put("kiss_framing", kissFraming)
-                put("mode", mode)
-                networkName?.let { put("network_name", it) }
-                passphrase?.let { put("passphrase", it) }
-                if (bootstrapOnly) put("bootstrap_only", true)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("target_host", targetHost)
+                    put("target_port", targetPort)
+                    put("kiss_framing", kissFraming)
+                    put("mode", mode)
+                    networkName?.let { put("network_name", it) }
+                    passphrase?.let { put("passphrase", it) }
+                    if (bootstrapOnly) put("bootstrap_only", true)
+                    // Always serialize SOCKS proxy fields so custom host/port
+                    // values are preserved even when the proxy is disabled
+                    put("socks_proxy_enabled", socksProxyEnabled)
+                    put("socks_proxy_host", socksProxyHost)
+                    put("socks_proxy_port", socksProxyPort)
+                }.toString()
 
         is InterfaceConfig.RNode ->
-            JSONObject().apply {
-                put("target_device_name", targetDeviceName)
-                put("connection_mode", connectionMode)
-                tcpHost?.let { put("tcp_host", it) }
-                put("tcp_port", tcpPort)
-                usbDeviceId?.let { put("usb_device_id", it) }
-                usbVendorId?.let { put("usb_vendor_id", it) }
-                usbProductId?.let { put("usb_product_id", it) }
-                put("frequency", frequency)
-                put("bandwidth", bandwidth)
-                put("tx_power", txPower)
-                put("spreading_factor", spreadingFactor)
-                put("coding_rate", codingRate)
-                stAlock?.let { put("st_alock", it) }
-                ltAlock?.let { put("lt_alock", it) }
-                put("mode", mode)
-                put("enable_framebuffer", enableFramebuffer)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("target_device_name", targetDeviceName)
+                    put("connection_mode", connectionMode)
+                    tcpHost?.let { put("tcp_host", it) }
+                    put("tcp_port", tcpPort)
+                    usbDeviceId?.let { put("usb_device_id", it) }
+                    usbVendorId?.let { put("usb_vendor_id", it) }
+                    usbProductId?.let { put("usb_product_id", it) }
+                    put("frequency", frequency)
+                    put("bandwidth", bandwidth)
+                    put("tx_power", txPower)
+                    put("spreading_factor", spreadingFactor)
+                    put("coding_rate", codingRate)
+                    stAlock?.let { put("st_alock", it) }
+                    ltAlock?.let { put("lt_alock", it) }
+                    put("mode", mode)
+                    put("enable_framebuffer", enableFramebuffer)
+                }.toString()
 
         is InterfaceConfig.UDP ->
-            JSONObject().apply {
-                put("listen_ip", listenIp)
-                put("listen_port", listenPort)
-                put("forward_ip", forwardIp)
-                put("forward_port", forwardPort)
-                put("mode", mode)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("listen_ip", listenIp)
+                    put("listen_port", listenPort)
+                    put("forward_ip", forwardIp)
+                    put("forward_port", forwardPort)
+                    put("mode", mode)
+                }.toString()
 
         is InterfaceConfig.AndroidBLE ->
-            JSONObject().apply {
-                put("device_name", deviceName)
-                put("max_connections", maxConnections)
-                put("mode", mode)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("device_name", deviceName)
+                    put("max_connections", maxConnections)
+                    put("mode", mode)
+                }.toString()
 
         is InterfaceConfig.TCPServer ->
-            JSONObject().apply {
-                put("listen_ip", listenIp)
-                put("listen_port", listenPort)
-                put("mode", mode)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("listen_ip", listenIp)
+                    put("listen_port", listenPort)
+                    put("mode", mode)
+                }.toString()
     }
-}
 
 /**
  * Get the type name string for this InterfaceConfig.

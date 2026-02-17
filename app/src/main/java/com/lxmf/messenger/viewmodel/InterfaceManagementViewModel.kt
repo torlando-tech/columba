@@ -80,6 +80,10 @@ data class InterfaceConfigState(
     val networkName: String = "",
     val passphrase: String = "",
     val passphraseVisible: Boolean = false,
+    // SOCKS5 proxy fields (for Tor/.onion connectivity)
+    val socksProxyEnabled: Boolean = false,
+    val socksProxyHost: String = "127.0.0.1",
+    val socksProxyPort: String = "9050",
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
@@ -120,11 +124,14 @@ data class InterfaceConfigState(
     val codingRateError: String? = null,
     val listenIpError: String? = null,
     val listenPortError: String? = null,
+    val socksProxyHostError: String? = null,
+    val socksProxyPortError: String? = null,
 )
 
 /**
  * ViewModel for managing Reticulum network interface configurations.
  */
+@Suppress("LargeClass")
 @HiltViewModel
 class InterfaceManagementViewModel
     @Inject
@@ -190,8 +197,7 @@ class InterfaceManagementViewModel
                     .onStart {
                         // Fetch initial status before first event arrives
                         fetchInterfaceStatus()
-                    }
-                    .collect { statusJson ->
+                    }.collect { statusJson ->
                         Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Received: $statusJson")
                         try {
                             parseAndUpdateInterfaceStatus(statusJson)
@@ -655,6 +661,31 @@ class InterfaceManagementViewModel
                             _configState.value = _configState.value.copy(targetPortError = null)
                         }
                     }
+
+                    // VALIDATION: Validate SOCKS proxy fields when enabled
+                    if (config.socksProxyEnabled) {
+                        when (val proxyHostResult = InputValidator.validateHostname(config.socksProxyHost)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(socksProxyHostError = proxyHostResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(socksProxyHostError = null)
+                            }
+                        }
+
+                        when (val proxyPortResult = InputValidator.validatePort(config.socksProxyPort)) {
+                            is ValidationResult.Error -> {
+                                _configState.value = _configState.value.copy(socksProxyPortError = proxyPortResult.message)
+                                isValid = false
+                            }
+                            is ValidationResult.Success -> {
+                                _configState.value = _configState.value.copy(socksProxyPortError = null)
+                            }
+                        }
+                    } else {
+                        _configState.value = _configState.value.copy(socksProxyHostError = null, socksProxyPortError = null)
+                    }
                 }
 
                 "AutoInterface" -> {
@@ -770,6 +801,9 @@ class InterfaceManagementViewModel
                         targetPort = config.targetPort.toString(),
                         networkName = config.networkName.orEmpty(),
                         passphrase = config.passphrase.orEmpty(),
+                        socksProxyEnabled = config.socksProxyEnabled,
+                        socksProxyHost = config.socksProxyHost,
+                        socksProxyPort = config.socksProxyPort.toString(),
                         mode = config.mode,
                     )
 
@@ -817,8 +851,8 @@ class InterfaceManagementViewModel
         /**
          * Convert InterfaceConfigState to InterfaceConfig for saving.
          */
-        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig {
-            return when (state.type) {
+        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig =
+            when (state.type) {
                 "AutoInterface" ->
                     InterfaceConfig.AutoInterface(
                         name = state.name.trim(),
@@ -841,6 +875,9 @@ class InterfaceManagementViewModel
                         mode = state.mode,
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.ifEmpty { null },
+                        socksProxyEnabled = state.socksProxyEnabled,
+                        socksProxyHost = state.socksProxyHost.trim(),
+                        socksProxyPort = state.socksProxyPort.toIntOrNull() ?: 9050,
                     )
 
                 "AndroidBLE" ->
@@ -879,7 +916,6 @@ class InterfaceManagementViewModel
 
                 else -> throw IllegalArgumentException("Unsupported interface type: ${state.type}")
             }
-        }
 
         /**
          * Apply pending interface configuration changes to the running Reticulum instance.
@@ -905,22 +941,20 @@ class InterfaceManagementViewModel
                     // Run on IO dispatcher to avoid blocking UI with IPC calls
                     withContext(kotlinx.coroutines.Dispatchers.IO) {
                         configManager.applyInterfaceChanges()
+                    }.onSuccess {
+                        _state.value =
+                            _state.value.copy(
+                                hasPendingChanges = false,
+                                isApplyingChanges = false,
+                            )
+                        showSuccess("Configuration applied successfully")
+                    }.onFailure { error ->
+                        _state.value =
+                            _state.value.copy(
+                                isApplyingChanges = false,
+                                applyChangesError = error.message ?: "Failed to apply changes",
+                            )
                     }
-                        .onSuccess {
-                            _state.value =
-                                _state.value.copy(
-                                    hasPendingChanges = false,
-                                    isApplyingChanges = false,
-                                )
-                            showSuccess("Configuration applied successfully")
-                        }
-                        .onFailure { error ->
-                            _state.value =
-                                _state.value.copy(
-                                    isApplyingChanges = false,
-                                    applyChangesError = error.message ?: "Failed to apply changes",
-                                )
-                        }
                 } catch (e: Exception) {
                     // Catch any unexpected exceptions to ensure UI state is reset
                     _state.value =

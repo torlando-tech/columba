@@ -10,9 +10,11 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -905,6 +907,29 @@ fun ColumbaNavigation(
             Screen.Map,
             Screen.Settings,
         )
+
+    // Double-back-to-exit: when on a root tab, first back press shows a toast,
+    // second press within 2 seconds finishes the activity.
+    val rootRoutes = screens.map { it.route }.toSet()
+    val isOnRootScreen = currentRoute in rootRoutes
+    var backPressedOnce by remember(currentRoute) { mutableStateOf(false) }
+
+    // Auto-reset the flag after 2 seconds
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            kotlinx.coroutines.delay(2000)
+            backPressedOnce = false
+        }
+    }
+
+    BackHandler(enabled = isOnRootScreen) {
+        if (backPressedOnce) {
+            (context as? ComponentActivity)?.finish()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     ColumbaTheme(selectedTheme = settingsState.selectedTheme) {
         Surface(

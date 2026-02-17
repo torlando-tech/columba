@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
+import com.lxmf.messenger.data.crypto.IdentityKeyProvider
 import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.repository.SettingsRepository
@@ -30,6 +32,10 @@ import javax.inject.Singleton
  * The export creates a .columba file (ZIP archive) containing:
  * - manifest.json: Serialized MigrationBundle with all data
  * - attachments/: Directory with message attachments
+ *
+ * Key encryption:
+ * - If a password is provided, identity keys are encrypted with PBKDF2 + AES-256-GCM
+ * - This allows the export to be safely shared and only opened with the password
  */
 @Suppress("TooManyFunctions") // Helper methods extracted for readability
 @Singleton
@@ -40,6 +46,8 @@ class MigrationExporter
         private val database: ColumbaDatabase,
         private val interfaceDatabase: InterfaceDatabase,
         private val settingsRepository: SettingsRepository,
+        private val keyEncryptor: IdentityKeyEncryptor,
+        private val keyProvider: IdentityKeyProvider,
     ) {
         companion object {
             private const val TAG = "MigrationExporter"
@@ -59,16 +67,19 @@ class MigrationExporter
          *
          * @param onProgress Callback for progress updates (0.0 to 1.0)
          * @param includeAttachments Whether to include file/image attachments in the export
+         * @param exportPassword Optional password to encrypt identity keys in the export.
+         *                       If null, keys are exported in plaintext (legacy format).
          * @return URI to the exported file via FileProvider, or null on failure
          */
         suspend fun exportData(
             password: String,
             onProgress: (Float) -> Unit = {},
             includeAttachments: Boolean = true,
+            exportPassword: CharArray? = null,
         ): Result<Uri> =
             withContext(Dispatchers.IO) {
                 try {
-                    Log.i(TAG, "Starting migration export...")
+                    Log.i(TAG, "Starting migration export (encrypted: ${exportPassword != null})...")
                     onProgress(0.05f)
 
                     // Collect all data
@@ -79,7 +90,8 @@ class MigrationExporter
                     val (conversations, messages, contacts) = collectUserData(identities, onProgress)
                     onProgress(0.5f)
 
-                    val identityExports = exportIdentities(identities)
+                    val identityExports = exportIdentities(identities, exportPassword)
+                    val keysEncrypted = exportPassword != null
                     onProgress(0.55f)
 
                     val announceExports = exportAnnounces()
@@ -117,6 +129,7 @@ class MigrationExporter
                             settings = settingsExport,
                             attachmentManifest = attachmentRefs,
                             ratchetFiles = ratchetRefs,
+                            keysEncrypted = keysEncrypted,
                         )
 
                     // Create ZIP file, then encrypt it
@@ -219,23 +232,72 @@ class MigrationExporter
                 )
             }
 
-        private fun exportIdentities(identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>): List<IdentityExport> =
-            identities.map { identity ->
-                val keyData = identity.keyData ?: loadIdentityKeyFromFile(identity.filePath)
-                IdentityExport(
-                    identityHash = identity.identityHash,
-                    displayName = identity.displayName,
-                    destinationHash = identity.destinationHash,
-                    keyData = keyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) }.orEmpty(),
-                    createdTimestamp = identity.createdTimestamp,
-                    lastUsedTimestamp = identity.lastUsedTimestamp,
-                    isActive = identity.isActive,
-                    // Profile icon data
-                    iconName = identity.iconName,
-                    iconForegroundColor = identity.iconForegroundColor,
-                    iconBackgroundColor = identity.iconBackgroundColor,
-                )
+        private suspend fun exportIdentities(
+            identities: List<com.lxmf.messenger.data.db.entity.LocalIdentityEntity>,
+            exportPassword: CharArray? = null,
+        ): List<IdentityExport> {
+            return identities.map { identity ->
+                // Get decrypted key data (from encrypted storage or file)
+                val plainKeyData = getDecryptedKeyData(identity)
+
+                if (plainKeyData != null && exportPassword != null) {
+                    // Encrypt for export with password
+                    val encryptedForExport = keyEncryptor.encryptForExport(plainKeyData, exportPassword)
+                    IdentityExport(
+                        identityHash = identity.identityHash,
+                        displayName = identity.displayName,
+                        destinationHash = identity.destinationHash,
+                        keyData = "", // Empty for encrypted exports
+                        encryptedKeyData = Base64.encodeToString(encryptedForExport, Base64.NO_WRAP),
+                        isKeyEncrypted = true,
+                        createdTimestamp = identity.createdTimestamp,
+                        lastUsedTimestamp = identity.lastUsedTimestamp,
+                        isActive = identity.isActive,
+                        iconName = identity.iconName,
+                        iconForegroundColor = identity.iconForegroundColor,
+                        iconBackgroundColor = identity.iconBackgroundColor,
+                    )
+                } else {
+                    // Legacy unencrypted format
+                    IdentityExport(
+                        identityHash = identity.identityHash,
+                        displayName = identity.displayName,
+                        destinationHash = identity.destinationHash,
+                        keyData = plainKeyData?.let { Base64.encodeToString(it, Base64.NO_WRAP) }.orEmpty(),
+                        encryptedKeyData = null,
+                        isKeyEncrypted = false,
+                        createdTimestamp = identity.createdTimestamp,
+                        lastUsedTimestamp = identity.lastUsedTimestamp,
+                        isActive = identity.isActive,
+                        iconName = identity.iconName,
+                        iconForegroundColor = identity.iconForegroundColor,
+                        iconBackgroundColor = identity.iconBackgroundColor,
+                    )
+                }
             }
+        }
+
+        /**
+         * Get decrypted key data for an identity.
+         * Handles both encrypted (new) and unencrypted (legacy) storage.
+         */
+        @Suppress("DEPRECATION")
+        private suspend fun getDecryptedKeyData(
+            identity: com.lxmf.messenger.data.db.entity.LocalIdentityEntity,
+        ): ByteArray? {
+            // Try to get from encrypted storage first
+            if (identity.keyEncryptionVersion > 0 && identity.encryptedKeyData != null) {
+                return try {
+                    keyProvider.getDecryptedKeyData(identity.identityHash).getOrNull()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to decrypt key from encrypted storage", e)
+                    null
+                }
+            }
+
+            // Fall back to legacy unencrypted sources
+            return identity.keyData ?: loadIdentityKeyFromFile(identity.filePath)
+        }
 
         private suspend fun exportAnnounces(): List<AnnounceExport> {
             val announces = database.announceDao().getAllAnnouncesSync()

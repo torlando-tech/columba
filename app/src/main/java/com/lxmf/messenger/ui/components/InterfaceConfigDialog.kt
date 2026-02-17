@@ -366,6 +366,80 @@ fun TCPClientFields(
             )
         },
     )
+
+    Divider()
+
+    // SOCKS5 Proxy Toggle
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "SOCKS5 Proxy",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                "Route through a SOCKS5 proxy (e.g., Orbot for Tor). Required for .onion addresses.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = configState.socksProxyEnabled,
+            onCheckedChange = { onConfigUpdate(configState.copy(socksProxyEnabled = it)) },
+        )
+    }
+
+    AnimatedVisibility(visible = configState.socksProxyEnabled) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = configState.socksProxyHost,
+                onValueChange = { host ->
+                    onConfigUpdate(configState.copy(socksProxyHost = host.trim()))
+                },
+                label = { Text("Proxy Host") },
+                placeholder = { Text("127.0.0.1") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = configState.socksProxyHostError != null,
+                supportingText = {
+                    val error = configState.socksProxyHostError
+                    if (error != null) {
+                        Text(error)
+                    } else {
+                        Text(
+                            "SOCKS5 proxy address. Use 127.0.0.1 for Orbot running on this device.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+
+            OutlinedTextField(
+                value = configState.socksProxyPort,
+                onValueChange = { onConfigUpdate(configState.copy(socksProxyPort = it)) },
+                label = { Text("Proxy Port") },
+                placeholder = { Text("9050") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = configState.socksProxyPortError != null,
+                supportingText = {
+                    val error = configState.socksProxyPortError
+                    if (error != null) {
+                        Text(error)
+                    } else {
+                        Text(
+                            "Orbot default: 9050.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

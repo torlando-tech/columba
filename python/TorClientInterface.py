@@ -53,6 +53,14 @@ class TorClientInterface(TCPClientInterface):
                     RNS.LOG_DEBUG
                 )
 
+            # Close previous socket to prevent resource leak during reconnect
+            if self.socket is not None:
+                try:
+                    self.socket.close()
+                except Exception:
+                    pass
+                self.socket = None
+
             # Resolve the proxy address (supports both IPv4 and IPv6 proxies)
             proxy_info = socket.getaddrinfo(
                 self.proxy_host, self.proxy_port, proto=socket.IPPROTO_TCP

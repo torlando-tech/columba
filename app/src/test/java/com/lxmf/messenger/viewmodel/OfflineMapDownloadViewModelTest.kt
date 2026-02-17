@@ -18,8 +18,10 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -86,6 +88,7 @@ class OfflineMapDownloadViewModelTest {
         coEvery { offlineMapRegionRepository.markError(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.updateLocalStylePath(any(), any()) } just Runs
+        coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
 
         // Setup MapLibreOfflineManager mock behavior
         every { mockMapLibreOfflineManager.estimateTileCount(any(), any(), any()) } returns 100L
@@ -114,6 +117,9 @@ class OfflineMapDownloadViewModelTest {
 
     @After
     fun tearDown() {
+        if (::viewModel.isInitialized) {
+            viewModel.viewModelScope.cancel()
+        }
         Dispatchers.resetMain()
         clearAllMocks()
     }

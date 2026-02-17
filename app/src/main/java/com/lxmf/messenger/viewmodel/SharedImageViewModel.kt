@@ -1,11 +1,15 @@
 package com.lxmf.messenger.viewmodel
 
+import android.app.Application
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
+import com.lxmf.messenger.util.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class SharedImageViewModel : ViewModel() {
+class SharedImageViewModel(
+    application: Application,
+) : AndroidViewModel(application) {
     data class PendingSharedImages(
         val uris: List<Uri>,
         val targetDestinationHash: String? = null,
@@ -39,5 +43,13 @@ class SharedImageViewModel : ViewModel() {
 
     fun clear() {
         _sharedImages.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Clean up any unconsumed temp files from incoming shares.
+        // If the user backed out without picking a destination, the temp
+        // copies would otherwise linger until cleanupAllTempFiles() runs.
+        FileUtils.cleanupIncomingShares(getApplication())
     }
 }

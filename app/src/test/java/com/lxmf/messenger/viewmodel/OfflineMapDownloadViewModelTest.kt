@@ -425,16 +425,10 @@ class OfflineMapDownloadViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            viewModel.state.test {
-                var state = awaitItem()
-                assertEquals(DownloadWizardStep.LOCATION, state.step)
+            assertEquals(DownloadWizardStep.LOCATION, viewModel.state.value.step)
 
-                viewModel.nextStep()
-                state = awaitItem()
-                assertEquals(DownloadWizardStep.RADIUS, state.step)
-
-                cancelAndConsumeRemainingEvents()
-            }
+            viewModel.nextStep()
+            assertEquals(DownloadWizardStep.RADIUS, viewModel.state.value.step)
         }
 
     @Test

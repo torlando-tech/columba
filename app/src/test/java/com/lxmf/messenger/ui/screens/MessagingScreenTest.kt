@@ -104,6 +104,10 @@ class MessagingScreenTest {
         every { mockViewModel.conversationLinkState } returns MutableStateFlow(null)
         // Draft text mock
         every { mockViewModel.draftText } returns MutableStateFlow(null)
+        // Shared image error mock (share pictures feature)
+        every { mockViewModel.sharedImageError } returns MutableSharedFlow()
+        // Recent photos mock (share pictures feature)
+        every { mockViewModel.recentPhotos } returns MutableStateFlow(emptyList())
     }
 
     // ========== Empty State Tests ==========

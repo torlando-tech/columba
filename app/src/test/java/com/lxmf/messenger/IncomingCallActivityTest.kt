@@ -10,7 +10,12 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -28,17 +33,30 @@ import tech.torlando.lxst.core.CallState
  * Unit tests for IncomingCallActivity.
  *
  * Tests lifecycle behavior, window configuration, intent handling,
- * and ringtone/vibration management using Robolectric.
+ * and call state observation using Robolectric.
+ *
+ * IMPORTANT: We use controller.create().start() instead of controller.setup()
+ * because setup() calls visible() which idles the Robolectric main looper.
+ * The Compose UI contains rememberInfiniteTransition animations that cause
+ * an infinite Choreographer frame loop when the looper drains, hanging the
+ * test runner indefinitely.
+ *
+ * UnconfinedTestDispatcher overrides Dispatchers.Main so that lifecycleScope
+ * coroutines (repeatOnLifecycle + StateFlow.collect) dispatch eagerly on the
+ * current thread rather than posting to the looper.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class IncomingCallActivityTest {
+    private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var context: Application
     private lateinit var callStateFlow: MutableStateFlow<CallState>
     private lateinit var mockCallCoordinator: CallCoordinator
 
     @Before
     fun setup() {
+        Dispatchers.setMain(testDispatcher)
         context = RuntimeEnvironment.getApplication()
 
         // Mock CallCoordinator singleton so the activity sees Incoming state
@@ -55,6 +73,7 @@ class IncomingCallActivityTest {
 
     @After
     fun tearDown() {
+        Dispatchers.resetMain()
         unmockkObject(CallCoordinator.Companion)
     }
 
@@ -74,7 +93,7 @@ class IncomingCallActivityTest {
     fun `finishes immediately when no identity hash provided`() {
         val intent = Intent(context, IncomingCallActivity::class.java)
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create()
 
         assertTrue("Activity should be finishing", controller.get().isFinishing)
     }
@@ -83,7 +102,7 @@ class IncomingCallActivityTest {
     fun `does not finish when identity hash is provided`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create().start()
 
         assertTrue("Activity should not be finishing", !controller.get().isFinishing)
     }
@@ -94,7 +113,7 @@ class IncomingCallActivityTest {
     fun `configures FLAG_KEEP_SCREEN_ON`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create()
 
         val flags =
             controller
@@ -113,7 +132,7 @@ class IncomingCallActivityTest {
         val intent = buildCallIntent(identityHash = "original_hash", callerName = "Original")
         callStateFlow.value = CallState.Incoming("original_hash")
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create()
 
         val newIntent = buildCallIntent(identityHash = "new_hash", callerName = "New Caller")
         controller.newIntent(newIntent)
@@ -136,7 +155,7 @@ class IncomingCallActivityTest {
         val intent = buildCallIntent(identityHash = "original_hash", callerName = "Original")
         callStateFlow.value = CallState.Incoming("original_hash")
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create()
 
         // Send a new intent without identity hash — should not crash
         val newIntent = Intent(context, IncomingCallActivity::class.java)
@@ -151,7 +170,7 @@ class IncomingCallActivityTest {
     fun `onDestroy does not crash`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create()
 
         // Should not throw
         controller.destroy()
@@ -161,10 +180,8 @@ class IncomingCallActivityTest {
     fun `full lifecycle does not crash`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
-        controller.pause()
-        controller.stop()
-        controller.destroy()
+        controller.create().start().resume()
+        controller.pause().stop().destroy()
 
         // If we reach here, the full lifecycle completed without exceptions
         assertTrue("Full lifecycle completed", true)
@@ -176,12 +193,11 @@ class IncomingCallActivityTest {
     fun `activity finishes when call state becomes Idle`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create().start()
 
-        // Simulate call ending
+        // UnconfinedTestDispatcher ensures immediate dispatch to the collector
         callStateFlow.value = CallState.Idle
 
-        // Robolectric processes the coroutine; activity should finish
         assertTrue("Activity should finish on Idle", controller.get().isFinishing)
     }
 
@@ -189,7 +205,7 @@ class IncomingCallActivityTest {
     fun `activity finishes when call state becomes Ended`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create().start()
 
         callStateFlow.value = CallState.Ended
 
@@ -200,7 +216,7 @@ class IncomingCallActivityTest {
     fun `activity finishes when call state becomes Rejected`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create().start()
 
         callStateFlow.value = CallState.Rejected
 
@@ -211,7 +227,7 @@ class IncomingCallActivityTest {
     fun `activity finishes when call state becomes Busy`() {
         val intent = buildCallIntent()
         val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
-        controller.setup()
+        controller.create().start()
 
         callStateFlow.value = CallState.Busy
 

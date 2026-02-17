@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens.tcpclient
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -150,6 +151,71 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
                     checked = state.bootstrapOnly,
                     onCheckedChange = { viewModel.toggleBootstrapOnly(it) },
                 )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Tor/Orbot SOCKS proxy toggle
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Connect via Tor (Orbot)",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            "Route through SOCKS5 proxy. Required for .onion addresses. " +
+                                "Orbot must be installed and connected.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Switch(
+                        checked = state.socksProxyEnabled,
+                        onCheckedChange = { viewModel.toggleSocksProxy(it) },
+                    )
+                }
+
+                // Show proxy host/port fields when enabled
+                AnimatedVisibility(visible = state.socksProxyEnabled) {
+                    Column(
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = state.socksProxyHost,
+                            onValueChange = { viewModel.updateSocksProxyHost(it) },
+                            label = { Text("SOCKS5 Proxy Host") },
+                            placeholder = { Text("127.0.0.1") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = state.socksProxyPort,
+                            onValueChange = { viewModel.updateSocksProxyPort(it) },
+                            label = { Text("SOCKS5 Proxy Port") },
+                            placeholder = { Text("9050") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                }
             }
         }
 

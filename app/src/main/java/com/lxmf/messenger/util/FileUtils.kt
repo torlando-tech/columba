@@ -307,6 +307,7 @@ object FileUtils {
 
     private const val TEMP_ATTACHMENTS_DIR = "attachments"
     private const val SHARE_IMAGES_DIR = "share_images"
+    private const val INCOMING_SHARE_DIR = "incoming_shares"
 
     /**
      * Write file data to a temporary file for large file transfer.
@@ -381,7 +382,7 @@ object FileUtils {
         maxAgeMs: Long = 60 * 60 * 1000,
     ): Int {
         val cutoffTime = System.currentTimeMillis() - maxAgeMs
-        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR)
+        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR, INCOMING_SHARE_DIR)
 
         val cleanedCount =
             dirsToClean.sumOf { dirName ->
@@ -392,6 +393,72 @@ object FileUtils {
             Log.d(TAG, "Cleaned up $cleanedCount old temp file(s)")
         }
         return cleanedCount
+    }
+
+    /**
+     * Copy a content:// URI to a stable temp file in cache/incoming_shares/.
+     *
+     * Content URIs from ACTION_SEND are ephemeral — the sending app may revoke
+     * read permission once our Activity is paused or recreated. Copying the bytes
+     * immediately while permissions are valid produces a file:// URI that remains
+     * readable for the entire image-sharing flow.
+     *
+     * @param context Android context for ContentResolver and cache directory
+     * @param uri The content URI to copy
+     * @param index Ordinal used as filename prefix to preserve share order
+     * @return A file:// URI pointing to the temp copy, or null on failure
+     */
+    fun copyUriToTempFile(
+        context: Context,
+        uri: Uri,
+        index: Int,
+    ): Uri? =
+        try {
+            val dir = File(context.cacheDir, INCOMING_SHARE_DIR)
+            if (!dir.exists()) dir.mkdirs()
+
+            val extension =
+                run {
+                    val filename = getFilename(context, uri)
+                    if (filename != null && filename.contains('.')) {
+                        ".${filename.substringAfterLast('.')}"
+                    } else {
+                        val mimeType = context.contentResolver.getType(uri)
+                        when {
+                            mimeType == null -> ".jpg"
+                            mimeType.contains("png") -> ".png"
+                            mimeType.contains("gif") -> ".gif"
+                            mimeType.contains("webp") -> ".webp"
+                            else -> ".jpg"
+                        }
+                    }
+                }
+            val tempFile = File(dir, "${index}_${System.currentTimeMillis()}$extension")
+
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: run {
+                Log.w(TAG, "Could not open input stream for URI: $uri")
+                return null
+            }
+
+            Log.d(TAG, "Copied shared URI to temp file: ${tempFile.name} (${tempFile.length()} bytes)")
+            Uri.fromFile(tempFile)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy URI to temp file: $uri", e)
+            null
+        }
+
+    /**
+     * Delete all files in the incoming_shares directory.
+     * Called from SharedImageViewModel.onCleared() to clean up unconsumed temp files.
+     */
+    fun cleanupIncomingShares(context: Context) {
+        val dir = File(context.cacheDir, INCOMING_SHARE_DIR)
+        if (!dir.exists()) return
+        dir.listFiles()?.forEach { it.delete() }
     }
 
     /**

@@ -9,12 +9,12 @@ import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,8 +51,9 @@ class IdentityKeyProvider
         // In-memory cache of decrypted keys (identityHash -> keyData)
         private val keyCache = ConcurrentHashMap<String, ByteArray>()
 
-        // Mutex for thread-safe cache operations
-        private val cacheMutex = Mutex()
+        // Lock for thread-safe cache operations (ReentrantLock works from both
+        // suspend and non-suspend contexts, unlike coroutine Mutex)
+        private val cacheLock = ReentrantLock()
 
         // Track active temp files for cleanup
         private val activeTempFiles = ConcurrentHashMap<String, File>()
@@ -76,9 +77,11 @@ class IdentityKeyProvider
             password: CharArray? = null,
         ): Result<ByteArray> =
             withContext(Dispatchers.IO) {
-                // Check cache first
-                keyCache[identityHash]?.let { cachedKey ->
-                    return@withContext Result.success(cachedKey.copyOf())
+                // Check cache first (under lock to prevent onStop from wiping mid-copy)
+                cacheLock.withLock {
+                    keyCache[identityHash]?.let { cachedKey ->
+                        return@withContext Result.success(cachedKey.copyOf())
+                    }
                 }
 
                 try {
@@ -91,7 +94,7 @@ class IdentityKeyProvider
                     val keyData = decryptIdentityKey(identity, password)
                     if (keyData != null) {
                         // Cache the key (a copy, so we can wipe the cache independently)
-                        cacheMutex.withLock {
+                        cacheLock.withLock {
                             keyCache[identityHash] = keyData.copyOf()
                         }
                         Result.success(keyData)
@@ -227,8 +230,8 @@ class IdentityKeyProvider
                     // Remove password protection
                     val deviceOnlyEncrypted = encryptor.removePasswordProtection(encryptedData, currentPassword)
 
-                    // Update database (clear password-related fields)
-                    identityDao.updateEncryptedKeyData(
+                    // Update database: set device-only key data and clear password metadata
+                    identityDao.clearPasswordProtection(
                         identityHash = identityHash,
                         encryptedKeyData = deviceOnlyEncrypted,
                         version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
@@ -347,7 +350,7 @@ class IdentityKeyProvider
          * Clear a specific key from the cache.
          */
         suspend fun clearCachedKey(identityHash: String) {
-            cacheMutex.withLock {
+            cacheLock.withLock {
                 keyCache.remove(identityHash)?.let { keyData ->
                     encryptor.secureWipe(keyData)
                 }
@@ -358,23 +361,29 @@ class IdentityKeyProvider
          * Clear all cached keys (called when app goes to background).
          */
         suspend fun clearAllCachedKeys() {
-            cacheMutex.withLock {
-                clearCacheInternal()
+            cacheLock.withLock {
+                wipeCacheUnsafe()
             }
         }
 
         /**
-         * Synchronously clear all cached keys.
-         * Used by lifecycle callbacks where suspend is not available.
-         * Safe to call without mutex for cleanup scenarios since ConcurrentHashMap
-         * handles concurrent access and we're doing a full clear.
+         * Clear all cached keys under the lock.
+         * Callable from non-suspend contexts (e.g., lifecycle callbacks)
+         * since ReentrantLock works from any thread.
          */
         private fun clearCacheInternal() {
+            cacheLock.withLock {
+                wipeCacheUnsafe()
+            }
+            Log.d(TAG, "Cleared all cached keys")
+        }
+
+        /** Wipe and clear cache entries. Caller must hold [cacheLock]. */
+        private fun wipeCacheUnsafe() {
             keyCache.values.forEach { keyData ->
                 encryptor.secureWipe(keyData)
             }
             keyCache.clear()
-            Log.d(TAG, "Cleared all cached keys")
         }
 
         /**

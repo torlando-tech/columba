@@ -64,6 +64,11 @@ class IdentityKeyMigratorTest {
 
         // Setup Encryptor mock
         every { encryptor.encryptWithDeviceKey(any()) } returns ENCRYPTED_KEY_DATA
+        every { encryptor.secureWipe(any()) } returns Unit
+
+        // Setup DAO mutation stubs (non-relaxed mock requires explicit stubs)
+        coEvery { identityDao.updateEncryptedKeyData(any(), any(), any()) } returns Unit
+        coEvery { identityDao.clearUnencryptedKeyData(any()) } returns Unit
 
         migrator = IdentityKeyMigrator(context, identityDao, encryptor)
     }

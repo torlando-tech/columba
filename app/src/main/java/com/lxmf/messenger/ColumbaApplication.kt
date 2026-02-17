@@ -154,6 +154,15 @@ class ColumbaApplication : Application() {
                 .cleanupAllTempFiles(this@ColumbaApplication)
         }
 
+        // Migrate unencrypted identity keys to encrypted storage (one-time, idempotent)
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                identityRepository.runEncryptionMigration()
+            } catch (e: Exception) {
+                android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+            }
+        }
+
         // Register existing companion device associations (Android 12+)
         // This ensures RNodeCompanionService is bound when associated devices connect,
         // even for associations created before this code was added

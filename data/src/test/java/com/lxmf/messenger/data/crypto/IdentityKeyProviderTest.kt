@@ -341,6 +341,15 @@ class IdentityKeyProviderTest {
             coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
             every { encryptor.addPasswordProtection(ENCRYPTED_KEY_DATA, TEST_PASSWORD) } returns newPasswordEncrypted
             every { encryptor.createPasswordVerificationHash(any(), any()) } returns newVerificationHash
+            coEvery {
+                identityDao.updatePasswordProtection(
+                    identityHash = any(),
+                    encryptedKeyData = any(),
+                    version = any(),
+                    passwordSalt = any(),
+                    passwordVerificationHash = any(),
+                )
+            } returns Unit
 
             val result = keyProvider.enablePasswordProtection(TEST_IDENTITY_HASH, TEST_PASSWORD)
 
@@ -415,12 +424,19 @@ class IdentityKeyProviderTest {
 
             coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
             every { encryptor.removePasswordProtection(PASSWORD_ENCRYPTED_DATA, TEST_PASSWORD) } returns ENCRYPTED_KEY_DATA
+            coEvery {
+                identityDao.clearPasswordProtection(
+                    identityHash = any(),
+                    encryptedKeyData = any(),
+                    version = any(),
+                )
+            } returns Unit
 
             val result = keyProvider.disablePasswordProtection(TEST_IDENTITY_HASH, TEST_PASSWORD)
 
             assertTrue(result.isSuccess)
             coVerify {
-                identityDao.updateEncryptedKeyData(
+                identityDao.clearPasswordProtection(
                     identityHash = TEST_IDENTITY_HASH,
                     encryptedKeyData = ENCRYPTED_KEY_DATA,
                     version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
@@ -513,6 +529,15 @@ class IdentityKeyProviderTest {
                 encryptor.changePassword(PASSWORD_ENCRYPTED_DATA, TEST_PASSWORD, newPassword)
             } returns newEncryptedData
             every { encryptor.createPasswordVerificationHash(any(), any()) } returns ByteArray(32)
+            coEvery {
+                identityDao.updatePasswordProtection(
+                    identityHash = any(),
+                    encryptedKeyData = any(),
+                    version = any(),
+                    passwordSalt = any(),
+                    passwordVerificationHash = any(),
+                )
+            } returns Unit
 
             val result = keyProvider.changePassword(TEST_IDENTITY_HASH, TEST_PASSWORD, newPassword)
 

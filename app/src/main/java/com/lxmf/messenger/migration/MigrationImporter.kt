@@ -645,6 +645,9 @@ class MigrationImporter
                     val manifestJson = extractManifestFromZip(java.io.ByteArrayInputStream(zipBytes))
                     manifestJson?.let { json.decodeFromString<MigrationBundle>(it) to zipBytes }
                 }
+            } catch (e: com.lxmf.messenger.migration.WrongPasswordException) {
+                Log.e(TAG, "Wrong password for encrypted export", e)
+                throw e
             } catch (e: WrongPasswordException) {
                 Log.e(TAG, "Wrong password for encrypted export", e)
                 throw e

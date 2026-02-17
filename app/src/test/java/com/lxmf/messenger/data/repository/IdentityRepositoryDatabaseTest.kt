@@ -46,6 +46,7 @@ import kotlin.io.path.createTempDirectory
 class IdentityRepositoryDatabaseTest : DatabaseTest() {
     private lateinit var repository: IdentityRepository
     private lateinit var mockContext: Context
+    private lateinit var mockKeyEncryptor: IdentityKeyEncryptor
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var tempDir: File
 
@@ -62,13 +63,19 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
         every { mockContext.cacheDir } returns tempDir
         every { mockContext.packageName } returns "com.lxmf.messenger"
 
+        mockKeyEncryptor = mockk()
+        every { mockKeyEncryptor.encryptWithDeviceKey(any()) } answers {
+            // Return a recognizable encrypted blob for verification
+            byteArrayOf(0x01) + firstArg<ByteArray>()
+        }
+
         repository =
             IdentityRepository(
                 identityDao = localIdentityDao,
                 database = database,
                 context = mockContext,
                 ioDispatcher = testDispatcher,
-                keyEncryptor = mockk(),
+                keyEncryptor = mockKeyEncryptor,
                 keyMigrator = mockk(),
                 keyProvider = mockk(),
             )
@@ -106,7 +113,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
         }
 
     @Test
-    fun `createIdentity with keyData stores key data`() =
+    fun `createIdentity with keyData stores encrypted key data`() =
         runTest {
             val keyData = ByteArray(64) { it.toByte() }
 
@@ -123,8 +130,12 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             assertTrue(result.isSuccess)
 
             val saved = localIdentityDao.getIdentity("key_identity")
-            assertNotNull(saved?.keyData)
-            assertEquals(64, saved?.keyData?.size)
+            assertNotNull("Encrypted key data should be stored", saved?.encryptedKeyData)
+            assertNull("Plaintext keyData should be null", saved?.keyData)
+            assertEquals(
+                IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                saved?.keyEncryptionVersion,
+            )
         }
 
     // ========== Get Identity Tests ==========

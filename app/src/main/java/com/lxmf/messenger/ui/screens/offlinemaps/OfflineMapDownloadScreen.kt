@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -107,11 +108,12 @@ fun OfflineMapDownloadScreen(
     val context = LocalContext.current
     LaunchedEffect(state.httpAutoDisabled) {
         if (state.httpAutoDisabled) {
-            android.widget.Toast.makeText(
-                context,
-                "HTTP disabled. Your offline maps are ready.",
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
+            android.widget.Toast
+                .makeText(
+                    context,
+                    "HTTP disabled. Your offline maps are ready.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
             viewModel.dismissHttpAutoDisabledMessage()
         }
     }
@@ -292,17 +294,18 @@ fun LocationSelectionStep(
                 isGettingLocation = true
                 val fusedClient = LocationServices.getFusedLocationProviderClient(context)
                 try {
-                    fusedClient.getCurrentLocation(
-                        Priority.PRIORITY_HIGH_ACCURACY,
-                        CancellationTokenSource().token,
-                    ).addOnSuccessListener { location ->
-                        isGettingLocation = false
-                        if (location != null) {
-                            onCurrentLocationRequest(location)
+                    fusedClient
+                        .getCurrentLocation(
+                            Priority.PRIORITY_HIGH_ACCURACY,
+                            CancellationTokenSource().token,
+                        ).addOnSuccessListener { location ->
+                            isGettingLocation = false
+                            if (location != null) {
+                                onCurrentLocationRequest(location)
+                            }
+                        }.addOnFailureListener {
+                            isGettingLocation = false
                         }
-                    }.addOnFailureListener {
-                        isGettingLocation = false
-                    }
                 } catch (e: SecurityException) {
                     Log.w(TAG, "Location permission denied", e)
                     isGettingLocation = false
@@ -314,105 +317,65 @@ fun LocationSelectionStep(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .imePadding()
+                .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Warning banner when HTTP is disabled
-        if (!httpEnabled) {
-            HttpDisabledWarningBanner(
-                onEnableHttp = onEnableHttp,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        Text(
-            text = "Choose the center point for your offline map region.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Use current location button
-        FilledTonalButton(
-            onClick = {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                    ),
-                )
-            },
-            enabled = !isGettingLocation,
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (isGettingLocation) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
+            // Warning banner when HTTP is disabled
+            if (!httpEnabled) {
+                HttpDisabledWarningBanner(
+                    onEnableHttp = onEnableHttp,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MyLocation,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-                Text("Use Current Location")
+                Spacer(modifier = Modifier.height(16.dp))
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Choose the center point for your offline map region.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+            )
 
-        Text(
-            text = "- or -",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Manual coordinate entry
-        var latText by remember(latitude) { mutableStateOf(latitude?.toString() ?: "") }
-        var lonText by remember(longitude) { mutableStateOf(longitude?.toString() ?: "") }
-
-        OutlinedTextField(
-            value = latText,
-            onValueChange = {
-                latText = it
-                val lat = it.toDoubleOrNull()
-                val lon = lonText.toDoubleOrNull()
-                if (lat != null && lon != null) {
-                    onLocationSet(lat, lon)
+            // Use current location button
+            FilledTonalButton(
+                onClick = {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ),
+                    )
+                },
+                enabled = !isGettingLocation,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isGettingLocation) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.MyLocation,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    Text("Use Current Location")
                 }
-            },
-            label = { Text("Latitude") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
+            }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = lonText,
-            onValueChange = {
-                lonText = it
-                val lat = latText.toDoubleOrNull()
-                val lon = it.toDoubleOrNull()
-                if (lat != null && lon != null) {
-                    onLocationSet(lat, lon)
-                }
-            },
-            label = { Text("Longitude") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Address/City search - only show if geocoder is available (requires Google Play Services)
-        if (isGeocoderAvailable) {
             Text(
                 text = "- or -",
                 style = MaterialTheme.typography.bodyMedium,
@@ -421,143 +384,192 @@ fun LocationSelectionStep(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Manual coordinate entry
+            var latText by remember(latitude) { mutableStateOf(latitude?.toString() ?: "") }
+            var lonText by remember(longitude) { mutableStateOf(longitude?.toString() ?: "") }
+
             OutlinedTextField(
-                value = addressQuery,
-                onValueChange = onAddressQueryChange,
-                label = { Text("Search City or Address") },
+                value = latText,
+                onValueChange = {
+                    latText = it
+                    val lat = it.toDoubleOrNull()
+                    val lon = lonText.toDoubleOrNull()
+                    if (lat != null && lon != null) {
+                        onLocationSet(lat, lon)
+                    }
+                },
+                label = { Text("Latitude") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearchAddress() }),
-                trailingIcon = {
-                    if (isSearchingAddress) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else if (addressQuery.isNotEmpty()) {
-                        IconButton(onClick = onSearchAddress) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                            )
-                        }
-                    }
-                },
-                supportingText = {
-                    addressSearchError?.let { error ->
-                        Text(error, color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                isError = addressSearchError != null,
             )
 
-            // Search results
-            if (addressSearchResults.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = lonText,
+                onValueChange = {
+                    lonText = it
+                    val lat = latText.toDoubleOrNull()
+                    val lon = it.toDoubleOrNull()
+                    if (lat != null && lon != null) {
+                        onLocationSet(lat, lon)
+                    }
+                },
+                label = { Text("Longitude") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Address/City search - only show if geocoder is available (requires Google Play Services)
+            if (isGeocoderAvailable) {
+                Text(
+                    text = "- or -",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = addressQuery,
+                    onValueChange = onAddressQueryChange,
+                    label = { Text("Search City or Address") },
                     modifier = Modifier.fillMaxWidth(),
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        addressSearchResults.forEach { result ->
-                            TextButton(
-                                onClick = { onSelectAddressResult(result) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = result.displayName,
-                                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearchAddress() }),
+                    trailingIcon = {
+                        if (isSearchingAddress) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else if (addressQuery.isNotEmpty()) {
+                            IconButton(onClick = onSearchAddress) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
                                 )
+                            }
+                        }
+                    },
+                    supportingText = {
+                        addressSearchError?.let { error ->
+                            Text(error, color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    isError = addressSearchError != null,
+                )
+
+                // Search results
+                if (addressSearchResults.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            addressSearchResults.forEach { result ->
+                                TextButton(
+                                    onClick = { onSelectAddressResult(result) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        text = result.displayName,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
                             }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+            Text(
+                text = "- or -",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-        Text(
-            text = "- or -",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Geohash entry
+            var geohashText by remember { mutableStateOf("") }
+            var geohashError by remember { mutableStateOf<String?>(null) }
+
+            OutlinedTextField(
+                value = geohashText,
+                onValueChange = { input ->
+                    geohashText = input
+                    if (input.isNotEmpty()) {
+                        val coords = TileDownloadManager.decodeGeohashCenter(input)
+                        if (coords != null) {
+                            geohashError = null
+                            latText = String.format(Locale.US, "%.6f", coords.first)
+                            lonText = String.format(Locale.US, "%.6f", coords.second)
+                            onLocationSet(coords.first, coords.second)
+                        } else {
+                            geohashError = "Invalid geohash"
+                        }
+                    } else {
+                        geohashError = null
+                    }
+                },
+                label = { Text("Geohash") },
+                placeholder = { Text("e.g., dqcjq") },
+                supportingText = {
+                    if (geohashError != null) {
+                        Text(geohashError!!, color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text("Enter a geohash to set the location")
+                    }
+                },
+                isError = geohashError != null,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            if (hasLocation) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
+                ) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text =
+                                "Location set: ${String.format(Locale.US, "%.4f", latitude)}, " +
+                                    String.format(Locale.US, "%.4f", longitude),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Geohash entry
-        var geohashText by remember { mutableStateOf("") }
-        var geohashError by remember { mutableStateOf<String?>(null) }
-
-        OutlinedTextField(
-            value = geohashText,
-            onValueChange = { input ->
-                geohashText = input
-                if (input.isNotEmpty()) {
-                    val coords = TileDownloadManager.decodeGeohashCenter(input)
-                    if (coords != null) {
-                        geohashError = null
-                        latText = String.format(Locale.US, "%.6f", coords.first)
-                        lonText = String.format(Locale.US, "%.6f", coords.second)
-                        onLocationSet(coords.first, coords.second)
-                    } else {
-                        geohashError = "Invalid geohash"
-                    }
-                } else {
-                    geohashError = null
-                }
-            },
-            label = { Text("Geohash") },
-            placeholder = { Text("e.g., dqcjq") },
-            supportingText = {
-                if (geohashError != null) {
-                    Text(geohashError!!, color = MaterialTheme.colorScheme.error)
-                } else {
-                    Text("Enter a geohash to set the location")
-                }
-            },
-            isError = geohashError != null,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-
-        if (hasLocation) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Card(
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text =
-                            "Location set: ${String.format(Locale.US, "%.4f", latitude)}, " +
-                                String.format(Locale.US, "%.4f", longitude),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
 
         Button(
             onClick = onNext,
@@ -607,8 +619,7 @@ fun RadiusSelectionStep(
                                 selected = radiusOption == option,
                                 onClick = { onRadiusChange(option) },
                                 role = Role.RadioButton,
-                            )
-                            .padding(vertical = 8.dp),
+                            ).padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(

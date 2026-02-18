@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -173,8 +172,7 @@ fun QrScannerScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .consumeWindowInsets(paddingValues),
+                    .padding(paddingValues),
         ) {
             when {
                 !hasCameraPermission -> {
@@ -576,6 +574,7 @@ private class QrCodeAnalyzer(
             val hints =
                 mapOf(
                     DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                    DecodeHintType.TRY_HARDER to true,
                 )
             setHints(hints)
         }
@@ -600,10 +599,15 @@ private class QrCodeAnalyzer(
             val data = ByteArray(buffer.remaining())
             buffer.get(data)
 
+            // Use rowStride as dataWidth — on some devices (e.g. LineageOS/Xperia)
+            // the row stride includes padding bytes beyond the image width, and using
+            // imageProxy.width would misalign every row after the first.
+            val rowStride = plane.rowStride
+
             val source =
                 PlanarYUVLuminanceSource(
                     data,
-                    imageProxy.width,
+                    rowStride,
                     imageProxy.height,
                     0,
                     0,

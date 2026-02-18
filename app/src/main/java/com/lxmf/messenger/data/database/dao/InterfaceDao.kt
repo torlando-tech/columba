@@ -107,11 +107,10 @@ interface InterfaceDao {
      *
      * @return Flow emitting true if any Bluetooth-requiring interface is enabled
      */
-    fun hasEnabledBluetoothInterface(): Flow<Boolean> {
-        return getEnabledBluetoothCandidates().map { interfaces ->
+    fun hasEnabledBluetoothInterface(): Flow<Boolean> =
+        getEnabledBluetoothCandidates().map { interfaces ->
             interfaces.any { it.requiresBluetooth() }
         }
-    }
 
     @Query("SELECT * FROM interfaces WHERE enabled = 1 AND (type = 'AndroidBLE' OR type = 'RNode')")
     fun getEnabledBluetoothCandidates(): Flow<List<InterfaceEntity>>
@@ -188,15 +187,17 @@ interface InterfaceDao {
 
 /**
  * Check if this interface requires Bluetooth permissions.
+ * RNode USB and TCP connections do not need Bluetooth.
  */
 @Suppress("SwallowedException")
-private fun InterfaceEntity.requiresBluetooth(): Boolean {
-    return when (type) {
+private fun InterfaceEntity.requiresBluetooth(): Boolean =
+    when (type) {
         "AndroidBLE" -> true
         "RNode" -> {
             try {
                 val json = JSONObject(configJson)
-                json.optString("connection_mode") != "tcp"
+                val mode = json.optString("connection_mode")
+                mode != "tcp" && mode != "usb"
             } catch (e: JSONException) {
                 // Malformed JSON defaults to requiring Bluetooth (conservative fallback)
                 true
@@ -204,4 +205,3 @@ private fun InterfaceEntity.requiresBluetooth(): Boolean {
         }
         else -> false
     }
-}

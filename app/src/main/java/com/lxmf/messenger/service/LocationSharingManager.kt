@@ -3,6 +3,7 @@ package com.lxmf.messenger.service
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
+import android.location.LocationListener
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -10,6 +11,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.LocationTelemetry
@@ -82,8 +84,11 @@ class LocationSharingManager
             private const val CLEANUP_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
         }
 
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        // Only initialize FusedLocationProviderClient when Google Play Services is available
+        // to avoid flooding the log with warnings on devices without GMS (issue #456)
+        private val useGms = LocationCompat.isPlayServicesAvailable(context)
+        private val fusedLocationClient: FusedLocationProviderClient? =
+            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
 
         // Active outgoing sharing sessions
         private val _activeSessions = MutableStateFlow<List<SharingSession>>(emptyList())
@@ -103,7 +108,10 @@ class LocationSharingManager
         private var maintenanceJob: Job? = null
         private var lastLocation: Location? = null
 
-        // Location callback for updates
+        // Platform LocationManager listener (used when GMS is not available)
+        private var platformLocationListener: LocationListener? = null
+
+        // Location callback for GMS updates
         private val locationCallback =
             object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
@@ -159,10 +167,17 @@ class LocationSharingManager
             Log.d(TAG, "Started sharing with ${newSessions.size} contacts, duration=$duration")
 
             // Send last known location immediately (don't wait for first GPS update)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                location?.let {
-                    Log.d(TAG, "Sending immediate location to new recipients")
-                    sendLocationToRecipients(it)
+            if (useGms) {
+                fusedLocationClient!!.lastLocation.addOnSuccessListener { location ->
+                    location?.let {
+                        Log.d(TAG, "Sending immediate location to new recipients")
+                        sendLocationToRecipients(it)
+                    }
+                }
+            } else {
+                LocationCompat.getLastKnownLocation(context)?.let { location ->
+                    Log.d(TAG, "Sending immediate location to new recipients (platform)")
+                    sendLocationToRecipients(location)
                 }
             }
 
@@ -198,13 +213,22 @@ class LocationSharingManager
             if (lastLocation != null) {
                 Log.d(TAG, "Sending immediate update with cached location")
                 sendLocationToRecipients(lastLocation!!)
-            } else {
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            } else if (useGms) {
+                fusedLocationClient!!.lastLocation.addOnSuccessListener { location ->
                     location?.let {
                         Log.d(TAG, "Sending immediate update with fresh location")
                         lastLocation = it
                         sendLocationToRecipients(it)
                     } ?: Log.w(TAG, "No location available for immediate update")
+                }
+            } else {
+                val location = LocationCompat.getLastKnownLocation(context)
+                if (location != null) {
+                    Log.d(TAG, "Sending immediate update with fresh location (platform)")
+                    lastLocation = location
+                    sendLocationToRecipients(location)
+                } else {
+                    Log.w(TAG, "No location available for immediate update")
                 }
             }
         }
@@ -310,20 +334,31 @@ class LocationSharingManager
             locationUpdateJob =
                 scope.launch {
                     try {
-                        val locationRequest =
-                            LocationRequest
-                                .Builder(
-                                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                                    LOCATION_UPDATE_INTERVAL_MS,
-                                ).apply {
-                                    setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
-                                }.build()
+                        if (useGms) {
+                            val locationRequest =
+                                LocationRequest
+                                    .Builder(
+                                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                        LOCATION_UPDATE_INTERVAL_MS,
+                                    ).apply {
+                                        setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
+                                    }.build()
 
-                        fusedLocationClient.requestLocationUpdates(
-                            locationRequest,
-                            locationCallback,
-                            context.mainLooper,
-                        )
+                            fusedLocationClient!!.requestLocationUpdates(
+                                locationRequest,
+                                locationCallback,
+                                context.mainLooper,
+                            )
+                        } else {
+                            platformLocationListener =
+                                LocationCompat.requestLocationUpdates(
+                                    context,
+                                    LOCATION_UPDATE_INTERVAL_MS,
+                                ) { location ->
+                                    lastLocation = location
+                                    sendLocationToRecipients(location)
+                                }
+                        }
 
                         Log.d(TAG, "Location updates started")
                     } catch (e: SecurityException) {
@@ -336,7 +371,14 @@ class LocationSharingManager
         private fun stopLocationUpdates() {
             locationUpdateJob?.cancel()
             locationUpdateJob = null
-            fusedLocationClient.removeLocationUpdates(locationCallback)
+            if (useGms) {
+                fusedLocationClient!!.removeLocationUpdates(locationCallback)
+            } else {
+                platformLocationListener?.let {
+                    LocationCompat.removeLocationUpdates(context, it)
+                    platformLocationListener = null
+                }
+            }
             Log.d(TAG, "Location updates stopped")
         }
 

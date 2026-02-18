@@ -60,8 +60,10 @@ import com.lxmf.messenger.ui.screens.settings.cards.NetworkCard
 import com.lxmf.messenger.ui.screens.settings.cards.NotificationSettingsCard
 import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.RNodeFlasherCard
+import com.lxmf.messenger.ui.screens.settings.cards.ShareColumbaCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
+import com.lxmf.messenger.ui.screens.settings.cards.VoiceCallPermissionsCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
 import com.lxmf.messenger.ui.screens.settings.dialogs.CrashReportDialog
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
@@ -90,6 +92,7 @@ fun SettingsScreen(
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
+    onNavigateToApkSharing: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -231,6 +234,11 @@ fun SettingsScreen(
                     notificationsEnabled = state.notificationsEnabled,
                     onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
                     onManageClick = onNavigateToNotifications,
+                )
+
+                VoiceCallPermissionsCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.VOICE_CALL_PERMISSIONS.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.VOICE_CALL_PERMISSIONS, it) },
                 )
 
                 AutoAnnounceCard(
@@ -382,6 +390,12 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.DATA_MIGRATION.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.DATA_MIGRATION, it) },
                     onNavigateToMigration = onNavigateToMigration,
+                )
+
+                ShareColumbaCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.SHARE_COLUMBA.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.SHARE_COLUMBA, it) },
+                    onNavigateToApkSharing = onNavigateToApkSharing,
                 )
 
                 RNodeFlasherCard(

@@ -42,6 +42,7 @@ enum class SettingsCardId {
     IDENTITY,
     PRIVACY,
     NOTIFICATIONS,
+    VOICE_CALL_PERMISSIONS,
     AUTO_ANNOUNCE,
     LOCATION_SHARING,
     MAP_SOURCES,
@@ -51,6 +52,7 @@ enum class SettingsCardId {
     BATTERY,
     DATA_MIGRATION,
     RNODE_FLASHER,
+    SHARE_COLUMBA,
     ABOUT,
     SHARED_INSTANCE_BANNER,
 }

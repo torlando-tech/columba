@@ -10,9 +10,11 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -68,6 +70,7 @@ import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
+import com.lxmf.messenger.ui.screens.ApkSharingScreen
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
 import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
@@ -102,6 +105,7 @@ import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -443,6 +447,10 @@ sealed class PendingNavigation {
         val text: String,
     ) : PendingNavigation()
 
+    data class SharedImage(
+        val uris: List<Uri>,
+    ) : PendingNavigation()
+
     data class IncomingCall(
         val identityHash: String,
     ) : PendingNavigation()
@@ -519,8 +527,9 @@ fun ColumbaNavigation(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
 
-    // Clear pending shared text deterministically if the user leaves Chats/Contacts
+    // Clear pending shared text/images deterministically if the user leaves Chats/Contacts
     // without selecting a destination.
     var lastRoute by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(navController) {
@@ -531,6 +540,7 @@ fun ColumbaNavigation(
 
             if (wasInPickDestinationFlow && !isInPickDestinationFlow) {
                 sharedTextViewModel.clearIfUnassigned()
+                sharedImageViewModel.clearIfUnassigned()
             }
 
             lastRoute = route
@@ -640,6 +650,22 @@ fun ColumbaNavigation(
                         }
                     }
                     Log.d("ColumbaNavigation", "Handled shared text intent")
+                }
+                is PendingNavigation.SharedImage -> {
+                    sharedImageViewModel.setImages(navigation.uris)
+
+                    selectedTab = 0
+                    val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
+                    if (!poppedToChats) {
+                        navController.navigate(Screen.Chats.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                    Log.d("ColumbaNavigation", "Handled shared image intent (${navigation.uris.size} images)")
                 }
                 is PendingNavigation.IncomingCall -> {
                     // Navigate to incoming call screen
@@ -881,6 +907,29 @@ fun ColumbaNavigation(
             Screen.Map,
             Screen.Settings,
         )
+
+    // Double-back-to-exit: when on a root tab, first back press shows a toast,
+    // second press within 2 seconds finishes the activity.
+    val rootRoutes = screens.map { it.route }.toSet()
+    val isOnRootScreen = currentRoute in rootRoutes
+    var backPressedOnce by remember(currentRoute) { mutableStateOf(false) }
+
+    // Auto-reset the flag after 2 seconds
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            kotlinx.coroutines.delay(2000)
+            backPressedOnce = false
+        }
+    }
+
+    BackHandler(enabled = isOnRootScreen) {
+        if (backPressedOnce) {
+            (context as? ComponentActivity)?.finish()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     ColumbaTheme(selectedTheme = settingsState.selectedTheme) {
         Surface(
@@ -1212,6 +1261,9 @@ fun ColumbaNavigation(
                             },
                             onNavigateToMigration = {
                                 navController.navigate("migration")
+                            },
+                            onNavigateToApkSharing = {
+                                navController.navigate("apk_sharing")
                             },
                             onNavigateToAnnounces = { filterType ->
                                 selectedTab = 1 // Announces tab
@@ -1626,6 +1678,12 @@ fun ColumbaNavigation(
                                     popUpTo(0) { inclusive = true }
                                 }
                             },
+                        )
+                    }
+
+                    composable("apk_sharing") {
+                        ApkSharingScreen(
+                            onNavigateBack = { navController.popBackStack() },
                         )
                     }
 

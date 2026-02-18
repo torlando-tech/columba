@@ -28,6 +28,7 @@ fun ImageQualitySelectionDialog(
     transferTimeEstimates: Map<ImageCompressionPreset, String?>,
     onSelect: (ImageCompressionPreset) -> Unit,
     onDismiss: () -> Unit,
+    imageCount: Int = 1,
 ) {
     // Show presets in order: LOW, MEDIUM, HIGH, ORIGINAL (skip AUTO)
     val presets =
@@ -47,14 +48,37 @@ fun ImageQualitySelectionDialog(
             )
         }
 
+    val title =
+        if (imageCount > 1) {
+            "Send $imageCount Images"
+        } else {
+            "Choose Image Quality"
+        }
+
+    val confirmText =
+        if (imageCount > 1) {
+            "Send $imageCount Images"
+        } else {
+            "Send"
+        }
+
+    // For multi-image shares, append " each" to transfer time estimates so the user
+    // understands the time shown is per-image, not total.
+    val displayEstimates =
+        if (imageCount > 1) {
+            transferTimeEstimates.mapValues { (_, time) -> time?.let { "$it each" } }
+        } else {
+            transferTimeEstimates
+        }
+
     QualitySelectionDialog(
-        title = "Choose Image Quality",
+        title = title,
         options = options,
         initialSelection = recommendedPreset,
         recommendedOption = recommendedPreset,
         linkState = linkState,
-        transferTimeEstimates = transferTimeEstimates,
-        confirmButtonText = "Send",
+        transferTimeEstimates = displayEstimates,
+        confirmButtonText = confirmText,
         onConfirm = onSelect,
         onDismiss = onDismiss,
     )

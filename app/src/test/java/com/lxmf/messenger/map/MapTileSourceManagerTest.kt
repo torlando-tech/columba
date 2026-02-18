@@ -22,6 +22,7 @@ import org.junit.Test
  * Tests the map style resolution logic and source priority.
  */
 class MapTileSourceManagerTest {
+    private lateinit var context: android.content.Context
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
     private lateinit var rmspServerRepository: RmspServerRepository
     private lateinit var settingsRepository: SettingsRepository
@@ -29,6 +30,7 @@ class MapTileSourceManagerTest {
 
     @Before
     fun setup() {
+        context = mockk(relaxed = true)
         // All methods are explicitly stubbed below, no need for relaxed mocks
         offlineMapRegionRepository = mockk()
         rmspServerRepository = mockk()
@@ -36,6 +38,7 @@ class MapTileSourceManagerTest {
 
         // Default: no offline regions, no RMSP servers
         every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(emptyList())
+        coEvery { offlineMapRegionRepository.getCompletedRegionsWithMbtiles() } returns emptyList()
         coEvery { offlineMapRegionRepository.getFirstCompletedRegionWithStyle() } returns null
         every { rmspServerRepository.getAllServers() } returns flowOf(emptyList())
         every { rmspServerRepository.getNearestServers(any()) } returns flowOf(emptyList())
@@ -49,6 +52,7 @@ class MapTileSourceManagerTest {
 
         mapTileSourceManager =
             MapTileSourceManager(
+                context,
                 offlineMapRegionRepository,
                 rmspServerRepository,
                 settingsRepository,
@@ -231,6 +235,7 @@ class MapTileSourceManagerTest {
             // Re-create manager with new mocks
             mapTileSourceManager =
                 MapTileSourceManager(
+                    context,
                     offlineMapRegionRepository,
                     rmspServerRepository,
                     settingsRepository,

@@ -41,6 +41,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +87,7 @@ class MessagingViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
+            private const val DRAFT_SAVE_DEBOUNCE_MS = 500L
 
             /**
              * Sanitize a filename to prevent path traversal attacks.
@@ -203,9 +205,36 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
+        // Shared image compression error events for UI feedback
+        private val _sharedImageError = MutableSharedFlow<String>()
+        val sharedImageError: SharedFlow<String> = _sharedImageError.asSharedFlow()
+
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
+
+        // Recent photos for attachment panel
+        private val _recentPhotos = MutableStateFlow<List<Uri>>(emptyList())
+        val recentPhotos: StateFlow<List<Uri>> = _recentPhotos.asStateFlow()
+
+        private var loadPhotosJob: Job? = null
+
+        fun loadRecentPhotos(context: Context) {
+            loadPhotosJob?.cancel()
+            loadPhotosJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    val photos =
+                        com.lxmf.messenger.util.MediaStoreUtils
+                            .getRecentPhotos(context.applicationContext)
+                    _recentPhotos.value = photos
+                }
+        }
+
+        // Multi-image share state: URIs pending compression+send after quality selection.
+        // These are plain vars (not StateFlows) because they are always written before
+        // _qualitySelectionState triggers recomposition, so no reactive subscription is needed.
+        private var pendingSharedImageUris: List<Uri> = emptyList()
+        private var pendingSharedImageDestHash: String? = null
 
         // Expose current conversation's link state for UI
         val currentLinkState: StateFlow<ConversationLinkManager.LinkState?> =
@@ -294,6 +323,16 @@ class MessagingViewModel
         // Contact toggle result events for toast notifications
         private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
         val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
+
+        // Draft state - auto-saves typed message text to database
+        private val _draftText = MutableStateFlow<String?>(null)
+        val draftText: StateFlow<String?> = _draftText.asStateFlow()
+
+        // Debounce job for draft saving - cancels previous save when new text arrives
+        private var draftSaveJob: kotlinx.coroutines.Job? = null
+
+        // Tracks the latest text from onDraftTextChanged so loadMessages can flush it on switch
+        private var lastDraftText: String = ""
 
         // Reply state - tracks which message is being replied to
         private val _pendingReplyTo = MutableStateFlow<com.lxmf.messenger.ui.model.ReplyPreviewUi?>(null)
@@ -866,9 +905,21 @@ class MessagingViewModel
             destinationHash: String,
             peerName: String = "Unknown",
         ) {
+            // Flush any pending draft save for the previous conversation
+            val previousHash = _currentConversation.value
+            draftSaveJob?.cancel()
+            draftSaveJob = null
+            if (previousHash != null && previousHash != destinationHash) {
+                viewModelScope.launch {
+                    // lastDraftText holds the most recent text from onDraftTextChanged
+                    saveDraftNow(previousHash, lastDraftText)
+                }
+            }
+
             // Set current conversation - this triggers the reactive Flow to load messages
             currentPeerName = peerName
             _currentConversation.value = destinationHash
+            lastDraftText = ""
 
             // Register this conversation as active (suppresses notifications for this peer)
             activeConversationManager.setActive(destinationHash)
@@ -887,7 +938,56 @@ class MessagingViewModel
                 }
             }
 
+            // Restore draft for this conversation
+            viewModelScope.launch {
+                try {
+                    val draft = conversationRepository.getDraft(destinationHash)
+                    _draftText.value = draft
+                    Log.d(TAG, "Restored draft for $destinationHash: ${draft?.take(30) ?: "none"}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error restoring draft", e)
+                }
+            }
+
             Log.d(TAG, "Switched to conversation $destinationHash ($peerName)")
+        }
+
+        /**
+         * Called when the user types in the message input field.
+         * Debounces saves at 500ms to avoid excessive database writes.
+         * Re-checks the active conversation after the delay to prevent saving to the wrong chat.
+         */
+        fun onDraftTextChanged(text: String) {
+            val peerHash = _currentConversation.value ?: return
+            lastDraftText = text
+            draftSaveJob?.cancel()
+            draftSaveJob =
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
+                    // Re-check: only save if still in the same conversation
+                    if (_currentConversation.value == peerHash) {
+                        try {
+                            conversationRepository.saveDraft(peerHash, text)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error saving draft", e)
+                        }
+                    }
+                }
+        }
+
+        /**
+         * Save draft immediately without debounce.
+         * Used when navigating away from a conversation.
+         */
+        private suspend fun saveDraftNow(
+            peerHash: String,
+            text: String,
+        ) {
+            try {
+                conversationRepository.saveDraft(peerHash, text)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving draft immediately", e)
+            }
         }
 
         fun markAsRead(destinationHash: String) {
@@ -979,9 +1079,13 @@ class MessagingViewModel
 
                     result
                         .onSuccess { receipt ->
-                            // Clear pending reply after successful send
+                            // Clear pending reply and draft after successful send
                             handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
                             clearReplyTo()
+                            draftSaveJob?.cancel()
+                            lastDraftText = ""
+                            conversationRepository.clearDraft(destinationHash)
+                            _draftText.value = null
                         }.onFailure { error ->
                             handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                         }
@@ -1529,7 +1633,188 @@ class MessagingViewModel
         fun dismissQualitySelection() {
             Log.d(TAG, "Dismissing quality selection dialog")
             _qualitySelectionState.value = null
+            pendingSharedImageUris = emptyList()
+            pendingSharedImageDestHash = null
         }
+
+        /**
+         * Show quality selection dialog for externally shared images.
+         * When the user picks a preset, all images are compressed and sent
+         * as individual messages via [selectImageQualityForSharedImages].
+         */
+        fun processSharedImages(
+            context: Context,
+            uris: List<Uri>,
+            destinationHash: String,
+        ) {
+            if (uris.isEmpty()) return
+
+            // Dismiss any in-progress quality dialog to avoid sending the wrong images
+            if (_qualitySelectionState.value != null) {
+                dismissQualitySelection()
+            }
+
+            pendingSharedImageUris = uris
+            pendingSharedImageDestHash = destinationHash
+
+            // Show quality dialog using the explicit destinationHash for link probing.
+            // We await the probe result (up to 5s) so transfer-time estimates are accurate.
+            viewModelScope.launch {
+                conversationLinkManager.openConversationLink(destinationHash)
+
+                // Wait for the link probe to finish (active or failed), reading directly
+                // from linkStates with the explicit destinationHash
+                val linkState =
+                    withTimeoutOrNull(5_000L) {
+                        conversationLinkManager.linkStates
+                            .map { it[destinationHash] }
+                            .first { state -> state != null && !state.isEstablishing }
+                    }
+
+                val recommendedPreset =
+                    if (linkState != null && linkState.isActive) {
+                        linkState.recommendPreset()
+                    } else {
+                        val savedPreset = settingsRepository.getImageCompressionPreset()
+                        if (savedPreset == ImageCompressionPreset.AUTO) {
+                            ImageCompressionPreset.MEDIUM
+                        } else {
+                            savedPreset
+                        }
+                    }
+
+                val transferTimeEstimates = calculateTransferTimeEstimates(linkState, context, uris.first())
+
+                _qualitySelectionState.value =
+                    QualitySelectionState(
+                        imageUri = uris.first(),
+                        context = context,
+                        recommendedPreset = recommendedPreset,
+                        transferTimeEstimates = transferTimeEstimates,
+                    )
+            }
+        }
+
+        /**
+         * User selected a quality preset for shared images.
+         * Compresses each image with the chosen preset and sends each as a separate message.
+         * Bypasses the single-image StateFlows to avoid race conditions.
+         */
+        fun selectImageQualityForSharedImages(preset: ImageCompressionPreset) {
+            val state = _qualitySelectionState.value ?: return
+            val uris = pendingSharedImageUris.toList()
+            val destHash = pendingSharedImageDestHash ?: return
+
+            _qualitySelectionState.value = null
+            pendingSharedImageUris = emptyList()
+            pendingSharedImageDestHash = null
+
+            viewModelScope.launch {
+                _isProcessingImage.value = true
+                _isSending.value = true
+                var failedCount = 0
+                try {
+                    for (uri in uris) {
+                        val result =
+                            withContext(Dispatchers.IO) {
+                                ImageUtils.compressImageWithPreset(state.context, uri, preset)
+                            }
+                        if (result == null) {
+                            Log.e(TAG, "Failed to compress shared image: $uri")
+                            failedCount++
+                            continue
+                        }
+                        Log.d(TAG, "Shared image compressed to ${result.compressedImage.data.size} bytes")
+                        sendImageMessageDirect(destHash, result.compressedImage.data, result.compressedImage.format)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing shared images", e)
+                } finally {
+                    _isSending.value = false
+                    _isProcessingImage.value = false
+                    if (failedCount > 0) {
+                        val msg =
+                            if (failedCount == uris.size) {
+                                "All $failedCount images failed to compress"
+                            } else {
+                                "$failedCount of ${uris.size} images failed to compress"
+                            }
+                        _sharedImageError.emit(msg)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Send a message with an image directly, bypassing the single-image StateFlows.
+         * Used by multi-image share to send each image as a separate message.
+         */
+        private suspend fun sendImageMessageDirect(
+            destinationHash: String,
+            imageData: ByteArray,
+            imageFormat: String,
+        ) {
+            try {
+                val sanitized = validateAndSanitizeContent("", imageData, emptyList()) ?: return
+                val destHashBytes = validateDestinationHash(destinationHash) ?: return
+                val identity =
+                    loadIdentityIfNeeded() ?: run {
+                        Log.e(TAG, "Failed to load source identity")
+                        return
+                    }
+
+                val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+                val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+                val deliveryMethod = determineDeliveryMethod(sanitized, imageData, emptyList(), defaultMethod)
+                val deliveryMethodString = deliveryMethod.toStorageString()
+
+                val iconAppearance =
+                    identityRepository.getActiveIdentitySync()?.let { activeId ->
+                        val name = activeId.iconName
+                        val fg = activeId.iconForegroundColor
+                        val bg = activeId.iconBackgroundColor
+                        if (name != null && fg != null && bg != null) {
+                            com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                                iconName = name,
+                                foregroundColor = fg,
+                                backgroundColor = bg,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+
+                Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
+
+                val result =
+                    reticulumProtocol.sendLxmfMessageWithMethod(
+                        destinationHash = destHashBytes,
+                        content = sanitized,
+                        sourceIdentity = identity,
+                        deliveryMethod = deliveryMethod,
+                        tryPropagationOnFail = tryPropOnFail,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = null,
+                        replyToMessageId = null,
+                        iconAppearance = iconAppearance,
+                    )
+
+                result
+                    .onSuccess { receipt ->
+                        handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
+                    }.onFailure { error ->
+                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending shared image message", e)
+            }
+        }
+
+        /**
+         * Number of pending shared images (0 if not in multi-image share mode).
+         */
+        fun pendingSharedImageCount(): Int = pendingSharedImageUris.size
 
         /**
          * Load an image attachment asynchronously.
@@ -1832,6 +2117,11 @@ class MessagingViewModel
             // and via UI layer's LaunchedEffect. Cleanup here was redundant and violated
             // Phase 1 threading policy (zero runBlocking in production code).
             // See THREADING_REDESIGN_PLAN.md Phase 1.2
+
+            // Draft saving: the 500ms debounce will have already saved the draft in nearly
+            // all cases. Any unsaved text from the final <500ms window is at most a few
+            // characters. This avoids runBlocking per the threading policy.
+            draftSaveJob?.cancel()
 
             // Links are left open to naturally close via Reticulum's stale timeout (~12 min)
             // rather than explicitly closing - this allows link reuse if user returns quickly

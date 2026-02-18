@@ -8,6 +8,7 @@ import io.mockk.mockkConstructor
 import io.mockk.unmockkConstructor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -802,19 +803,22 @@ class TileDownloadManagerRobolectricTest {
 
             val manager = TileDownloadManager(context, source)
             val observedStatuses = mutableListOf<TileDownloadManager.DownloadProgress.Status>()
+            val collectorReady = kotlinx.coroutines.CompletableDeferred<Unit>()
 
             // Collect progress updates
             val collectJob =
                 launch {
-                    manager.progress.collect { progress ->
-                        if (progress.status !in observedStatuses) {
-                            observedStatuses.add(progress.status)
+                    manager.progress
+                        .onStart { collectorReady.complete(Unit) }
+                        .collect { progress ->
+                            if (progress.status !in observedStatuses) {
+                                observedStatuses.add(progress.status)
+                            }
                         }
-                    }
                 }
 
-            // Yield to ensure collector is subscribed before starting download
-            yield()
+            // Wait for collector to actually be subscribed before starting download
+            collectorReady.await()
 
             manager.downloadRegion(
                 centerLat = 37.7749,

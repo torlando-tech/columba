@@ -60,6 +60,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                 peerIdentityDao = peerIdentityDao,
                 localIdentityDao = localIdentityDao,
                 attachmentStorage = mockAttachmentStorage,
+                draftDao = draftDao,
             )
     }
 

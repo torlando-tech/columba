@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.EnrichedAnnounce
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
@@ -66,6 +67,7 @@ class MapViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
+    private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
     private lateinit var viewModel: MapViewModel
 
     @Before
@@ -82,6 +84,7 @@ class MapViewModelTest {
         settingsRepository = mockk()
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
+        offlineMapRegionRepository = mockk()
 
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
@@ -102,6 +105,7 @@ class MapViewModelTest {
         every { telemetryCollectorManager.isRequestEnabled } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
+        coEvery { offlineMapRegionRepository.getDefaultRegion() } returns null
     }
 
     @After
@@ -125,6 +129,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -146,6 +151,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -167,6 +173,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -188,6 +195,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -214,6 +222,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -243,6 +252,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -272,6 +282,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Verify initial state has no error message
@@ -299,6 +310,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -320,6 +332,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -346,6 +359,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -416,6 +430,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -463,6 +478,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -487,6 +503,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -510,6 +527,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -531,6 +549,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val location1 = createMockLocation(37.7749, -122.4194)
             val location2 = createMockLocation(40.7128, -74.0060)
@@ -585,6 +604,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val newLocation = createMockLocation(40.7128, -74.0060) // New York
 
@@ -637,6 +657,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -681,6 +702,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -704,6 +726,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -737,6 +760,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val originalState = viewModel.state.value
@@ -765,6 +789,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -791,6 +816,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -817,6 +843,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -843,6 +870,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -869,6 +897,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -895,6 +924,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -922,6 +952,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             val now = System.currentTimeMillis()
 
@@ -950,6 +981,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val selectedContacts =
@@ -990,6 +1022,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result = runCatching { viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES) }
@@ -1013,6 +1046,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val selectedContacts =
@@ -1050,6 +1084,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result = runCatching { viewModel.stopSharing() }
@@ -1073,6 +1108,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result = runCatching { viewModel.stopSharing("specific_hash") }
@@ -1096,6 +1132,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result1 = runCatching { viewModel.stopSharing("hash1") }
@@ -1155,6 +1192,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1190,6 +1228,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1219,6 +1258,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1299,6 +1339,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1339,6 +1380,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1410,6 +1452,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1476,6 +1519,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1544,6 +1588,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1594,6 +1639,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1623,6 +1669,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1647,6 +1694,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.state.test {
@@ -1668,6 +1716,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             viewModel.dismissLocationPermissionSheet()
@@ -1694,6 +1743,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             viewModel.dismissLocationPermissionSheet()
 
@@ -1711,6 +1761,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Then: Permission sheet should still be dismissed
@@ -1738,6 +1789,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1761,6 +1813,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1788,6 +1841,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Change HTTP enabled state
@@ -1814,6 +1868,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             viewModel.dismissPermissionCard()
 
@@ -1831,6 +1886,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Then: Permission card should still be dismissed
@@ -1860,6 +1916,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Then: Permission card should NOT be dismissed
@@ -1884,6 +1941,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
             vm1.dismissPermissionCard()
             assertTrue(vm1.state.value.isPermissionCardDismissed)
@@ -1900,6 +1958,7 @@ class MapViewModelTest {
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
+                    offlineMapRegionRepository,
                 )
 
             // Then: The second ViewModel should NOT have the card dismissed

@@ -35,6 +35,11 @@ object TcpCommunityServers {
             // Regular community servers
             TcpCommunityServer("g00n.cloud Hub", "dfw.us.g00n.cloud", 6969),
             TcpCommunityServer("interloper node", "intr.cx", 4242),
+            TcpCommunityServer(
+                "interloper node (Tor)",
+                "intrcxv4fa72e5ovler5dpfwsiyuo34tkcwfy5snzstxkhec75okowqd.onion",
+                4242,
+            ),
             TcpCommunityServer("Jon's Node", "rns.jlamothe.net", 4242),
             TcpCommunityServer("noDNS1", "202.61.243.41", 4965),
             TcpCommunityServer("noDNS2", "193.26.158.230", 4965),

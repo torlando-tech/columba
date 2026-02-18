@@ -8,9 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.lxmf.messenger.IncomingCallActivity
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -55,6 +58,67 @@ class CallNotificationHelper
 
         init {
             createNotificationChannels()
+        }
+
+        /**
+         * Check if the app can use full-screen intents.
+         *
+         * On Android 14+ (API 34), USE_FULL_SCREEN_INTENT is a special permission
+         * that must be granted by the user in system settings. Without it, the
+         * fullScreenIntent on notifications is silently ignored and the user only
+         * sees a heads-up notification instead of the full incoming call screen.
+         *
+         * @return true if full-screen intents are available
+         */
+        fun canUseFullScreenIntent(): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.canUseFullScreenIntent()
+            } else {
+                // Before Android 14, all apps with USE_FULL_SCREEN_INTENT in manifest get it
+                true
+            }
+        }
+
+        /**
+         * Get an Intent to open the system settings page where the user can grant
+         * the full-screen intent permission for this app.
+         *
+         * Only relevant on Android 14+ (API 34). On older versions returns null.
+         */
+        fun getFullScreenIntentSettingsIntent(): Intent? {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                Intent(
+                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    android.net.Uri.parse("package:${context.packageName}"),
+                )
+            } else {
+                null
+            }
+        }
+
+        /**
+         * Check if the app has the "Display over other apps" (SYSTEM_ALERT_WINDOW) permission.
+         *
+         * This permission is required on Android 10+ to launch the incoming call screen
+         * when the app is closed and the phone is unlocked. Without it, only a heads-up
+         * notification is shown instead of the full incoming call screen.
+         *
+         * @return true if overlay permission is granted
+         */
+        fun canDrawOverlays(): Boolean {
+            return Settings.canDrawOverlays(context)
+        }
+
+        /**
+         * Get an Intent to open the system settings page where the user can grant
+         * the "Display over other apps" permission for this app.
+         */
+        fun getOverlayPermissionSettingsIntent(): Intent {
+            return Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:${context.packageName}"),
+            )
         }
 
         /**
@@ -107,9 +171,20 @@ class CallNotificationHelper
         ) {
             val displayName = callerName ?: formatIdentityHash(identityHash)
 
+            // Warn if full-screen intent permission is not granted (Android 14+)
+            if (!canUseFullScreenIntent()) {
+                Log.w(
+                    "CallNotificationHelper",
+                    "USE_FULL_SCREEN_INTENT permission not granted - " +
+                        "incoming call will only show as heads-up notification, not full screen",
+                )
+            }
+
             // Full-screen intent to open incoming call screen
+            // Uses IncomingCallActivity (lightweight) instead of MainActivity (heavy)
+            // This ensures the call screen shows instantly over the lock screen
             val fullScreenIntent =
-                Intent(context, MainActivity::class.java).apply {
+                Intent(context, IncomingCallActivity::class.java).apply {
                     action = ACTION_OPEN_CALL
                     putExtra(EXTRA_IDENTITY_HASH, identityHash)
                     putExtra(EXTRA_CALLER_NAME, displayName)
@@ -160,11 +235,12 @@ class CallNotificationHelper
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle("Incoming Voice Call")
                     .setContentText(displayName)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_CALL)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setOngoing(true)
                     .setAutoCancel(false)
+                    .setContentIntent(fullScreenPendingIntent)
                     .setFullScreenIntent(fullScreenPendingIntent, true)
                     .addAction(
                         android.R.drawable.ic_menu_close_clear_cancel,

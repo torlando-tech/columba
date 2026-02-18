@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
+import com.lxmf.messenger.data.db.dao.DraftDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
@@ -73,6 +74,7 @@ abstract class DatabaseTest {
     protected val conversationDao: ConversationDao get() = database.conversationDao()
     protected val localIdentityDao: LocalIdentityDao get() = database.localIdentityDao()
     protected val peerIdentityDao: PeerIdentityDao get() = database.peerIdentityDao()
+    protected val draftDao: DraftDao get() = database.draftDao()
 
     companion object {
         // Standard test values for identity-scoped operations

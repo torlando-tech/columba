@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.room.withTransaction
+import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
+import com.lxmf.messenger.data.crypto.WrongPasswordException
 import com.lxmf.messenger.data.database.InterfaceDatabase
 import com.lxmf.messenger.data.database.entity.InterfaceEntity
 import com.lxmf.messenger.data.db.ColumbaDatabase
@@ -34,6 +36,10 @@ import javax.inject.Singleton
 
 /**
  * Handles importing data from a migration bundle file.
+ *
+ * Key decryption:
+ * - For encrypted exports (v7+), identity keys are decrypted with the provided password
+ * - After decryption, keys are re-encrypted with the device key for secure storage
  */
 @Suppress("TooManyFunctions", "LargeClass") // Helper methods extracted for readability
 @Singleton
@@ -46,6 +52,7 @@ class MigrationImporter
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val keyEncryptor: IdentityKeyEncryptor,
     ) {
         companion object {
             private const val TAG = "MigrationImporter"
@@ -60,30 +67,61 @@ class MigrationImporter
             }
 
         /**
-         * Preview the contents of a migration file without importing.
+         * Check whether a migration file is encrypted (requires a password to import).
          */
-        suspend fun previewMigration(uri: Uri): Result<MigrationPreview> =
+        suspend fun isEncryptedExport(uri: Uri): Result<Boolean> =
             withContext(Dispatchers.IO) {
                 try {
-                    val bundle =
-                        readMigrationBundle(uri)
+                    val inputStream =
+                        context.contentResolver.openInputStream(uri)
+                            ?: return@withContext Result.failure(Exception("Cannot open file"))
+                    inputStream.use { stream ->
+                        val header = ByteArray(2)
+                        val bytesRead = stream.read(header)
+                        if (bytesRead < 1) {
+                            return@withContext Result.failure(
+                                InvalidExportFileException("Export file is empty"),
+                            )
+                        }
+                        Result.success(MigrationCrypto.isEncrypted(header))
+                    }
+                } catch (e: InvalidExportFileException) {
+                    Result.failure(e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to check export format", e)
+                    Result.failure(e)
+                }
+            }
+
+        suspend fun previewMigration(
+            uri: Uri,
+            password: String? = null,
+        ): Result<PreviewWithData> =
+            withContext(Dispatchers.IO) {
+                try {
+                    val (bundle, zipBytes) =
+                        readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
                             )
 
                     Result.success(
-                        MigrationPreview(
-                            version = bundle.version,
-                            exportedAt = bundle.exportedAt,
-                            identityCount = bundle.identities.size,
-                            conversationCount = bundle.conversations.size,
-                            messageCount = bundle.messages.size,
-                            contactCount = bundle.contacts.size,
-                            announceCount = bundle.announces.size,
-                            peerIdentityCount = bundle.peerIdentities.size,
-                            interfaceCount = bundle.interfaces.size,
-                            customThemeCount = bundle.customThemes.size,
-                            identityNames = bundle.identities.map { it.displayName },
+                        PreviewWithData(
+                            preview =
+                                MigrationPreview(
+                                    version = bundle.version,
+                                    exportedAt = bundle.exportedAt,
+                                    identityCount = bundle.identities.size,
+                                    conversationCount = bundle.conversations.size,
+                                    messageCount = bundle.messages.size,
+                                    contactCount = bundle.contacts.size,
+                                    announceCount = bundle.announces.size,
+                                    peerIdentityCount = bundle.peerIdentities.size,
+                                    interfaceCount = bundle.interfaces.size,
+                                    customThemeCount = bundle.customThemes.size,
+                                    identityNames = bundle.identities.map { it.displayName },
+                                ),
+                            zipBytes = zipBytes,
                         ),
                     )
                 } catch (e: Exception) {
@@ -93,24 +131,51 @@ class MigrationImporter
             }
 
         /**
+         * Check if an import file requires a password.
+         */
+        suspend fun requiresPassword(uri: Uri): Boolean =
+            withContext(Dispatchers.IO) {
+                val (bundle, _) = readMigrationBundle(uri) ?: return@withContext false
+                bundle.keysEncrypted
+            }
+
+        /**
          * Import data from a migration bundle file.
          *
          * @param uri URI to the .columba file
          * @param onProgress Callback for progress updates (0.0 to 1.0)
+         * @param importPassword Password to decrypt identity keys (required if keysEncrypted=true)
          * @return ImportResult indicating success or failure
          */
         suspend fun importData(
             uri: Uri,
+            password: String? = null,
+            cachedZipBytes: ByteArray? = null,
             onProgress: (Float) -> Unit = {},
+            importPassword: CharArray? = null,
         ): ImportResult =
             withContext(Dispatchers.IO) {
                 try {
                     Log.i(TAG, "Starting migration import...")
                     onProgress(0.05f)
 
-                    val bundle =
-                        readMigrationBundle(uri)
-                            ?: return@withContext ImportResult.Error("Failed to read migration file")
+                    val (bundle, zipBytes) =
+                        if (cachedZipBytes != null) {
+                            // Reuse decrypted bytes from preview to avoid redundant PBKDF2 + decryption
+                            val manifestJson =
+                                extractManifestFromZip(java.io.ByteArrayInputStream(cachedZipBytes))
+                            val parsed =
+                                manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                                    ?: return@withContext ImportResult.Error(
+                                        "Failed to read migration file",
+                                    )
+                            parsed to cachedZipBytes
+                        } else {
+                            readMigrationBundle(uri, password)
+                                ?: return@withContext ImportResult.Error(
+                                    "Failed to read migration file",
+                                )
+                        }
 
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
                         return@withContext ImportResult.Error(
@@ -126,6 +191,13 @@ class MigrationImporter
                                 "Minimum supported version is ${MigrationBundle.MINIMUM_VERSION}.",
                         )
                     }
+
+                    // Check if password is required but not provided
+                    if (bundle.keysEncrypted && importPassword == null) {
+                        return@withContext ImportResult.Error(
+                            "This export file is password-protected. Please provide the password.",
+                        )
+                    }
                     onProgress(0.1f)
 
                     // Track successfully imported identities to filter dependent data
@@ -134,14 +206,14 @@ class MigrationImporter
                     // Wrap main database operations in a transaction for atomicity
                     val txResult =
                         database.withTransaction {
-                            importDatabaseData(bundle, importedIdentityHashes, onProgress)
+                            importDatabaseData(bundle, importedIdentityHashes, onProgress, importPassword)
                         }
 
                     // Interface database is separate, import outside main transaction
                     val interfacesImported = importInterfaces(bundle.interfaces)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(uri)
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(zipBytes)
                     onProgress(0.90f)
 
                     importRatchets(bundle.ratchetFiles)
@@ -194,8 +266,9 @@ class MigrationImporter
             bundle: MigrationBundle,
             importedIdentityHashes: MutableSet<String>,
             onProgress: (Float) -> Unit,
+            importPassword: CharArray?,
         ): TransactionResult {
-            val identities = importIdentities(bundle.identities, importedIdentityHashes, onProgress)
+            val identities = importIdentities(bundle.identities, importedIdentityHashes, onProgress, importPassword)
             onProgress(0.4f)
 
             // Filter to only import data for valid identities
@@ -248,13 +321,14 @@ class MigrationImporter
             identities: List<IdentityExport>,
             importedIdentityHashes: MutableSet<String>,
             onProgress: (Float) -> Unit,
+            importPassword: CharArray?,
         ): Int {
             var imported = 0
             val activeIdentityFromExport = identities.find { it.isActive }?.identityHash
 
             identities.forEachIndexed { index, identityExport ->
                 try {
-                    if (importIdentity(identityExport)) {
+                    if (importIdentity(identityExport, importPassword)) {
                         imported++
                         importedIdentityHashes.add(identityExport.identityHash)
                     } else if (database.localIdentityDao().identityExists(identityExport.identityHash)) {
@@ -550,13 +624,36 @@ class MigrationImporter
         /**
          * Read and parse the MigrationBundle from a ZIP file.
          */
-        private fun readMigrationBundle(uri: Uri): MigrationBundle? {
+        @Suppress("ThrowsCount")
+        private fun readMigrationBundle(
+            uri: Uri,
+            password: String? = null,
+        ): Pair<MigrationBundle, ByteArray>? {
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
                 inputStream.use { stream ->
-                    val manifestJson = extractManifestFromZip(stream)
-                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
+                    val rawBytes = stream.readBytes()
+                    val zipBytes =
+                        if (MigrationCrypto.isEncrypted(rawBytes)) {
+                            if (password == null) {
+                                throw PasswordRequiredException("This export file is encrypted")
+                            }
+                            MigrationCrypto.decrypt(rawBytes, password)
+                        } else {
+                            rawBytes
+                        }
+                    val manifestJson = extractManifestFromZip(java.io.ByteArrayInputStream(zipBytes))
+                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) to zipBytes }
                 }
+            } catch (e: com.lxmf.messenger.migration.WrongPasswordException) {
+                Log.e(TAG, "Wrong password for encrypted export", e)
+                throw e
+            } catch (e: WrongPasswordException) {
+                Log.e(TAG, "Wrong password for encrypted export", e)
+                throw e
+            } catch (e: PasswordRequiredException) {
+                Log.e(TAG, "Password required for encrypted export", e)
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read migration bundle", e)
                 null
@@ -579,7 +676,10 @@ class MigrationImporter
         /**
          * Import a single identity using the Reticulum protocol.
          */
-        private suspend fun importIdentity(identityExport: IdentityExport): Boolean {
+        private suspend fun importIdentity(
+            identityExport: IdentityExport,
+            importPassword: CharArray?,
+        ): Boolean {
             // Check if identity already exists
             if (database.localIdentityDao().identityExists(identityExport.identityHash)) {
                 Log.d(TAG, "Identity ${identityExport.identityHash} already exists, updating icon if present")
@@ -599,14 +699,12 @@ class MigrationImporter
                 return false
             }
 
-            // Decode the key data
-            val keyData =
-                if (identityExport.keyData.isNotEmpty()) {
-                    Base64.decode(identityExport.keyData, Base64.NO_WRAP)
-                } else {
-                    Log.w(TAG, "No key data for identity ${identityExport.identityHash}")
-                    return false
-                }
+            // Decode and decrypt the key data
+            val keyData = decryptExportedKeyData(identityExport, importPassword)
+            if (keyData == null) {
+                Log.w(TAG, "No key data for identity ${identityExport.identityHash}")
+                return false
+            }
 
             // Create the identity file path
             val identityDir = File(context.filesDir, "reticulum")
@@ -633,14 +731,26 @@ class MigrationImporter
                 Log.w(TAG, "Reticulum recovery failed, using direct insert", e)
             }
 
-            // Insert into database with profile icon data
+            // Encrypt the key data with device key for secure storage
+            val (encryptedKeyData, keyVersion) = try {
+                val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to encrypt key for storage", e)
+                null to 0
+            }
+
+            // Insert into database with encrypted key and profile icon data
+            @Suppress("DEPRECATION")
             val entity =
                 LocalIdentityEntity(
                     identityHash = identityExport.identityHash,
                     displayName = identityExport.displayName,
                     destinationHash = identityExport.destinationHash,
                     filePath = filePath,
-                    keyData = keyData,
+                    keyData = null, // No longer store unencrypted
+                    encryptedKeyData = encryptedKeyData,
+                    keyEncryptionVersion = keyVersion,
                     createdTimestamp = identityExport.createdTimestamp,
                     lastUsedTimestamp = identityExport.lastUsedTimestamp,
                     isActive = identityExport.isActive,
@@ -651,7 +761,7 @@ class MigrationImporter
                 )
             database.localIdentityDao().insert(entity)
 
-            // Write key file directly as backup
+            // Write key file directly for Python/RNS compatibility
             try {
                 File(filePath).writeBytes(keyData)
             } catch (e: Exception) {
@@ -708,15 +818,45 @@ class MigrationImporter
         }
 
         /**
+         * Decrypt key data from an export, handling both encrypted and legacy formats.
+         */
+        private fun decryptExportedKeyData(
+            identityExport: IdentityExport,
+            importPassword: CharArray?,
+        ): ByteArray? {
+            return if (identityExport.isKeyEncrypted && identityExport.encryptedKeyData != null) {
+                // New encrypted format
+                if (importPassword == null) {
+                    Log.e(TAG, "Password required but not provided for encrypted identity")
+                    return null
+                }
+                try {
+                    val encryptedBytes = Base64.decode(identityExport.encryptedKeyData, Base64.NO_WRAP)
+                    keyEncryptor.decryptFromExport(encryptedBytes, importPassword)
+                } catch (e: WrongPasswordException) {
+                    Log.e(TAG, "Wrong password for identity ${identityExport.identityHash}", e)
+                    throw e // Re-throw to stop import
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to decrypt identity key", e)
+                    null
+                }
+            } else if (identityExport.keyData.isNotEmpty()) {
+                // Legacy unencrypted format
+                Base64.decode(identityExport.keyData, Base64.NO_WRAP)
+            } else {
+                null
+            }
+        }
+
+        /**
          * Import attachments from the ZIP file.
          */
-        private fun importAttachments(uri: Uri): Int {
+        private fun importAttachments(zipBytes: ByteArray): Int {
             val attachmentsDir = File(context.filesDir, "attachments")
             attachmentsDir.mkdirs()
 
             return try {
-                val inputStream = context.contentResolver.openInputStream(uri) ?: return 0
-                inputStream.use { extractAttachmentsFromZip(it, attachmentsDir) }
+                extractAttachmentsFromZip(java.io.ByteArrayInputStream(zipBytes), attachmentsDir)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import attachments", e)
                 0

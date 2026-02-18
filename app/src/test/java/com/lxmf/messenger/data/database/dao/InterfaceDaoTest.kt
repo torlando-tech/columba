@@ -39,10 +39,11 @@ class InterfaceDaoTest {
 
         // Create in-memory database for testing (no callbacks needed)
         database =
-            Room.inMemoryDatabaseBuilder(
-                context,
-                InterfaceDatabase::class.java,
-            ).allowMainThreadQueries()
+            Room
+                .inMemoryDatabaseBuilder(
+                    context,
+                    InterfaceDatabase::class.java,
+                ).allowMainThreadQueries()
                 .build()
 
         interfaceDao = database.interfaceDao()
@@ -115,6 +116,28 @@ class InterfaceDaoTest {
 
             // Then
             assertFalse("RNode in TCP mode should NOT require Bluetooth", result)
+        }
+
+    // ========== RNode USB Mode Tests ==========
+
+    @Test
+    fun hasEnabledBluetoothInterface_returns_false_for_RNode_USB_mode() =
+        runTest {
+            // Given - RNode connected via USB (no Bluetooth needed)
+            val rnodeUsb =
+                InterfaceEntity(
+                    name = "RNode USB",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode": "usb", "usb_device_id": 1003}""",
+                )
+            interfaceDao.insertInterface(rnodeUsb)
+
+            // When
+            val result = interfaceDao.hasEnabledBluetoothInterface().first()
+
+            // Then
+            assertFalse("RNode in USB mode should NOT require Bluetooth", result)
         }
 
     // ========== RNode Classic Mode Tests ==========
@@ -345,6 +368,34 @@ class InterfaceDaoTest {
 
             // Then
             assertFalse("Should return false when all Bluetooth interfaces are disabled", result)
+        }
+
+    @Test
+    fun hasEnabledBluetoothInterface_returns_false_when_only_USB_and_TCP_RNodes_enabled() =
+        runTest {
+            // Given - RNode USB and RNode TCP, both non-Bluetooth
+            interfaceDao.insertInterface(
+                InterfaceEntity(
+                    name = "RNode USB",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode": "usb", "usb_device_id": 1003}""",
+                ),
+            )
+            interfaceDao.insertInterface(
+                InterfaceEntity(
+                    name = "RNode TCP",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode": "tcp", "tcp_host": "10.0.0.1"}""",
+                ),
+            )
+
+            // When
+            val result = interfaceDao.hasEnabledBluetoothInterface().first()
+
+            // Then
+            assertFalse("Should return false when only USB and TCP RNodes are enabled", result)
         }
 
     @Test

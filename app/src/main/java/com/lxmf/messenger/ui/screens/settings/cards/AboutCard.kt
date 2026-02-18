@@ -142,7 +142,7 @@ fun AboutCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "© 2025 Columba Contributors",
+                    text = "© 2025–${java.time.Year.now().value} Columba Contributors",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

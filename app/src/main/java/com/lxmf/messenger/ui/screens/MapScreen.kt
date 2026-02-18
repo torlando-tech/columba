@@ -93,6 +93,7 @@ import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.SharingStatusChip
 import com.lxmf.messenger.ui.util.MarkerBitmapFactory
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.ContactMarker
 import com.lxmf.messenger.viewmodel.MapViewModel
@@ -249,8 +250,14 @@ fun MapScreen(
         mapStyleLoaded = true
     }
 
-    // Location client
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    // Location client - only create GMS client when Play Services is available (issue #456)
+    val useGms = remember { LocationCompat.isPlayServicesAvailable(context) }
+    val fusedLocationClient =
+        remember {
+            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
+        }
+    // Platform LocationListener for cleanup when not using GMS (issue #456)
+    var platformLocationListener by remember { mutableStateOf<android.location.LocationListener?>(null) }
 
     // Permission launcher
     val permissionLauncher =
@@ -260,7 +267,8 @@ fun MapScreen(
             val granted = permissions.values.all { it }
             viewModel.onPermissionResult(granted)
             if (granted) {
-                startLocationUpdates(fusedLocationClient, viewModel)
+                platformLocationListener?.let { LocationCompat.removeLocationUpdates(context, it) }
+                platformLocationListener = startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
             }
         }
 
@@ -269,14 +277,15 @@ fun MapScreen(
         MapLibre.getInstance(context)
         if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
-            startLocationUpdates(fusedLocationClient, viewModel)
+            platformLocationListener = startLocationUpdates(context, fusedLocationClient, useGms, viewModel)
         }
         // Permission sheet visibility is now managed by ViewModel state
     }
 
     // Center map on user location once when both map and location are ready
     // Key on both so we catch whichever becomes available last, but only center once
-    var hasInitiallyCentered by remember { mutableStateOf(false) }
+    // If viewport was restored from a saved camera position, skip re-centering
+    var hasInitiallyCentered by remember { mutableStateOf(state.lastCameraPosition != null) }
 
     // If focus coordinates are provided, center on them instead of user location
     LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
@@ -307,6 +316,21 @@ fun MapScreen(
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             hasInitiallyCentered = true
+        }
+    }
+
+    // Animate camera to default region center when it changes (e.g., after setting a favorite)
+    LaunchedEffect(state.defaultRegionCenter, mapLibreMap) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val center = state.defaultRegionCenter ?: return@LaunchedEffect
+        if (hasInitiallyCentered) {
+            val cameraPosition =
+                CameraPosition
+                    .Builder()
+                    .target(LatLng(center.latitude, center.longitude))
+                    .zoom(center.zoom)
+                    .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
         }
     }
 
@@ -382,7 +406,10 @@ fun MapScreen(
                 val view = mapView ?: return@LifecycleEventObserver
                 when (event) {
                     Lifecycle.Event.ON_START -> view.onStart()
-                    Lifecycle.Event.ON_RESUME -> view.onResume()
+                    Lifecycle.Event.ON_RESUME -> {
+                        view.onResume()
+                        viewModel.refreshDefaultRegion()
+                    }
                     Lifecycle.Event.ON_PAUSE -> view.onPause()
                     Lifecycle.Event.ON_STOP -> view.onStop()
                     Lifecycle.Event.ON_DESTROY -> {
@@ -400,6 +427,15 @@ fun MapScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Clean up platform location listener when leaving composition (issue #456)
+    DisposableEffect(Unit) {
+        onDispose {
+            platformLocationListener?.let {
+                LocationCompat.removeLocationUpdates(context, it)
+            }
         }
     }
 
@@ -512,14 +548,44 @@ fun MapScreen(
                             true
                         }
 
-                        // Set initial camera position (use last known location if available)
-                        val initialLat = state.userLocation?.latitude ?: 37.7749
-                        val initialLng = state.userLocation?.longitude ?: -122.4194
+                        // Set initial camera position priority:
+                        // 1. Saved camera position (restored from tab switch)
+                        // 2. User's GPS location
+                        // 3. Default offline map region center
+                        // 4. Fallback to 0,0 (world view)
+                        val savedPos = state.lastCameraPosition
+                        val defaultCenter = state.defaultRegionCenter
+                        val userLoc = state.userLocation
+                        val initialLat: Double
+                        val initialLng: Double
+                        val initialZoom: Double
+                        when {
+                            savedPos != null -> {
+                                initialLat = savedPos.latitude
+                                initialLng = savedPos.longitude
+                                initialZoom = savedPos.zoom
+                            }
+                            userLoc != null -> {
+                                initialLat = userLoc.latitude
+                                initialLng = userLoc.longitude
+                                initialZoom = 15.0
+                            }
+                            defaultCenter != null -> {
+                                initialLat = defaultCenter.latitude
+                                initialLng = defaultCenter.longitude
+                                initialZoom = defaultCenter.zoom
+                            }
+                            else -> {
+                                initialLat = 0.0
+                                initialLng = 0.0
+                                initialZoom = 2.0
+                            }
+                        }
                         val initialPosition =
                             CameraPosition
                                 .Builder()
                                 .target(LatLng(initialLat, initialLng))
-                                .zoom(if (state.userLocation != null) 15.0 else 12.0)
+                                .zoom(initialZoom)
                                 .build()
                         map.cameraPosition = initialPosition
                         metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
@@ -535,6 +601,19 @@ fun MapScreen(
                             val latLng2 = map.projection.fromScreenLocation(point2)
                             val distance = latLng1.distanceTo(latLng2) // meters
                             metersPerPixel = distance / 100.0 // 100 pixels between points
+                        }
+
+                        // Save viewport when user stops interacting (issue #333)
+                        // Uses onCameraIdle instead of onCameraMove to avoid excessive
+                        // state updates during pan/zoom gestures.
+                        map.addOnCameraIdleListener {
+                            val pos = map.cameraPosition
+                            val target = pos.target ?: return@addOnCameraIdleListener
+                            viewModel.saveCameraPosition(
+                                target.latitude,
+                                target.longitude,
+                                pos.zoom,
+                            )
                         }
                     }
                 }
@@ -1508,47 +1587,66 @@ internal fun NoMapSourceOverlay(
 }
 
 /**
- * Start location updates using FusedLocationProviderClient.
+ * Start location updates using FusedLocationProviderClient when available,
+ * falling back to Android LocationManager when Google Play Services is not installed (issue #456).
  */
 @SuppressLint("MissingPermission")
 private fun startLocationUpdates(
-    fusedLocationClient: FusedLocationProviderClient,
+    context: Context,
+    fusedLocationClient: FusedLocationProviderClient?,
+    useGms: Boolean,
     viewModel: MapViewModel,
-) {
-    val locationRequest =
-        LocationRequest
-            .Builder(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                // 30 seconds
-                30_000L,
-            ).apply {
-                setMinUpdateIntervalMillis(15_000L) // min interval
-                setMaxUpdateDelayMillis(60_000L) // max delay
-            }.build()
+): android.location.LocationListener? {
+    if (useGms && fusedLocationClient != null) {
+        val locationRequest =
+            LocationRequest
+                .Builder(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    // 30 seconds
+                    30_000L,
+                ).apply {
+                    setMinUpdateIntervalMillis(15_000L) // min interval
+                    setMaxUpdateDelayMillis(60_000L) // max delay
+                }.build()
 
-    val locationCallback =
-        object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    viewModel.updateUserLocation(location)
+        val locationCallback =
+            object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { location ->
+                        viewModel.updateUserLocation(location)
+                    }
                 }
             }
-        }
 
-    try {
-        // Get last known location first for faster initial display
-        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            location?.let { viewModel.updateUserLocation(it) }
-        }
+        try {
+            // Get last known location first for faster initial display
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let { viewModel.updateUserLocation(it) }
+            }
 
-        // Then start continuous updates
-        fusedLocationClient.requestLocationUpdates(
-            locationRequest,
-            locationCallback,
-            Looper.getMainLooper(),
-        )
-    } catch (e: SecurityException) {
-        Log.e("MapScreen", "Location permission not granted", e)
+            // Then start continuous updates
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper(),
+            )
+        } catch (e: SecurityException) {
+            Log.e("MapScreen", "Location permission not granted", e)
+        }
+        return null
+    } else {
+        // Fallback to platform LocationManager
+        try {
+            LocationCompat.getLastKnownLocation(context)?.let { location ->
+                viewModel.updateUserLocation(location)
+            }
+            return LocationCompat.requestLocationUpdates(context, 30_000L) { location ->
+                viewModel.updateUserLocation(location)
+            }
+        } catch (e: SecurityException) {
+            Log.e("MapScreen", "Location permission not granted", e)
+            return null
+        }
     }
 }
 

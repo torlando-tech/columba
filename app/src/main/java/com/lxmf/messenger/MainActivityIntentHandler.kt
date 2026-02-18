@@ -3,12 +3,14 @@ package com.lxmf.messenger
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.util.Base32
+import com.lxmf.messenger.util.FileUtils
 
 class MainActivityIntentHandler(
     private val activity: MainActivity,
@@ -58,6 +60,12 @@ class MainActivityIntentHandler(
 
     private fun handleActionSend(intent: Intent) {
         val mimeType = intent.type
+
+        if (mimeType != null && mimeType.startsWith("image/")) {
+            handleActionSendImage(intent)
+            return
+        }
+
         val isTextShare = mimeType == null || mimeType.startsWith("text/")
         if (!isTextShare) {
             Log.w(logTag, "ACTION_SEND received with non-text mimeType=$mimeType (ignored)")
@@ -92,8 +100,31 @@ class MainActivityIntentHandler(
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun handleActionSendImage(intent: Intent) {
+        val uri: Uri? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            }
+
+        if (uri != null) {
+            Log.d(logTag, "Received shared image (ACTION_SEND): $uri")
+            triggerSharedImages(listOf(uri))
+        } else {
+            Log.w(logTag, "ACTION_SEND received with image/* but no EXTRA_STREAM URI found")
+        }
+    }
+
     private fun handleActionSendMultiple(intent: Intent) {
         val mimeType = intent.type
+
+        if (mimeType != null && mimeType.startsWith("image/")) {
+            handleActionSendMultipleImages(intent)
+            return
+        }
+
         val isTextShare = mimeType == null || mimeType.startsWith("text/")
         if (!isTextShare) {
             Log.w(logTag, "ACTION_SEND_MULTIPLE received with non-text mimeType=$mimeType (ignored)")
@@ -130,6 +161,23 @@ class MainActivityIntentHandler(
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun handleActionSendMultipleImages(intent: Intent) {
+        val uris: List<Uri> =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
+            } else {
+                intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
+            }
+
+        if (uris.isNotEmpty()) {
+            Log.d(logTag, "Received ${uris.size} shared images (ACTION_SEND_MULTIPLE)")
+            triggerSharedImages(uris)
+        } else {
+            Log.w(logTag, "ACTION_SEND_MULTIPLE received with image/* but no EXTRA_STREAM URIs found")
+        }
+    }
+
     private fun handleActionProcessText(intent: Intent) {
         val extrasKeys = intent.extras?.keySet()?.joinToString() ?: "<none>"
         val sharedText = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
@@ -149,6 +197,22 @@ class MainActivityIntentHandler(
         } else {
             pendingNavigation.value = PendingNavigation.SharedText(sharedText)
         }
+    }
+
+    private fun triggerSharedImages(uris: List<Uri>) {
+        // Eagerly copy content:// URIs to app-private temp files while permissions
+        // are still valid. Content URIs from ACTION_SEND are ephemeral — the sender
+        // may revoke access once our Activity is paused during destination selection.
+        val stableUris =
+            uris.mapIndexedNotNull { index, uri ->
+                FileUtils.copyUriToTempFile(activity, uri, index)
+            }
+        if (stableUris.isEmpty()) {
+            Log.w(logTag, "All shared image URIs failed to copy to temp files")
+            return
+        }
+        pendingNavigation.value = null
+        pendingNavigation.value = PendingNavigation.SharedImage(stableUris)
     }
 
     private fun handleOpenCall(intent: Intent) {

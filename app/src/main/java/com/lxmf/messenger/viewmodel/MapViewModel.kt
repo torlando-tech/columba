@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
@@ -71,6 +72,16 @@ data class ContactMarker(
 )
 
 /**
+ * Saved camera position for restoring viewport across tab switches.
+ */
+@Immutable
+data class SavedCameraPosition(
+    val latitude: Double,
+    val longitude: Double,
+    val zoom: Double,
+)
+
+/**
  * UI state for the Map screen.
  */
 @Immutable
@@ -91,6 +102,10 @@ data class MapState(
     val isTelemetryRequestEnabled: Boolean = false,
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
+    /** Center coordinates of the default offline map region (fallback when no GPS) */
+    val defaultRegionCenter: SavedCameraPosition? = null,
+    /** Last camera position for restoring viewport after tab switches */
+    val lastCameraPosition: SavedCameraPosition? = null,
 )
 
 /**
@@ -102,6 +117,7 @@ data class MapState(
  * - Location sharing state
  * - Location permission state
  */
+@Suppress("TooManyFunctions")
 @HiltViewModel
 class MapViewModel
     @Inject
@@ -114,6 +130,7 @@ class MapViewModel
         private val settingsRepository: SettingsRepository,
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
+        private val offlineMapRegionRepository: OfflineMapRegionRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -223,6 +240,9 @@ class MapViewModel
         init {
             // Resolve initial map style (with null location)
             resolveMapStyle(null, null)
+
+            // Load default offline map region center as fallback for initial map position
+            refreshDefaultRegion()
 
             // Refresh map style when offline map availability changes (e.g., after download)
             viewModelScope.launch {
@@ -414,6 +434,28 @@ class MapViewModel
         }
 
         /**
+         * Re-fetch the default offline map region and update camera target.
+         * Called on init and when returning to the map screen after changing the favorite.
+         */
+        fun refreshDefaultRegion() {
+            viewModelScope.launch {
+                val defaultRegion = offlineMapRegionRepository.getDefaultRegion()
+                val newCenter =
+                    defaultRegion?.let {
+                        SavedCameraPosition(
+                            latitude = it.centerLatitude,
+                            longitude = it.centerLongitude,
+                            zoom = it.maxZoom.toDouble().coerceIn(2.0, 14.0),
+                        )
+                    }
+                _state.update { it.copy(defaultRegionCenter = newCenter) }
+                if (defaultRegion != null) {
+                    Log.d(TAG, "Default region loaded: ${defaultRegion.name} at ${defaultRegion.centerLatitude}, ${defaultRegion.centerLongitude}")
+                }
+            }
+        }
+
+        /**
          * Enable HTTP map source and refresh the map style.
          * Called from the "No Map Source" overlay.
          * Clears the "enabled for download" flag since user explicitly wants HTTP enabled.
@@ -475,6 +517,19 @@ class MapViewModel
             // Also update DataStore for app-level state management
             viewModelScope.launch {
                 settingsRepository.markLocationPermissionSheetDismissed()
+            }
+        }
+
+        /**
+         * Save the current camera position for viewport restoration after tab switches.
+         */
+        fun saveCameraPosition(
+            latitude: Double,
+            longitude: Double,
+            zoom: Double,
+        ) {
+            _state.update {
+                it.copy(lastCameraPosition = SavedCameraPosition(latitude, longitude, zoom))
             }
         }
 

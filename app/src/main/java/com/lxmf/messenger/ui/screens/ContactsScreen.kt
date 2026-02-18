@@ -115,6 +115,7 @@ import com.lxmf.messenger.util.validation.ValidationResult
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import kotlinx.coroutines.launch
 
@@ -135,8 +136,11 @@ fun ContactsScreen(
 ) {
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
     val sharedTextFromViewModel by sharedTextViewModel.sharedText.collectAsState()
+    val sharedImagesFromViewModel by sharedImageViewModel.sharedImages.collectAsState()
     val effectivePendingSharedText = sharedTextFromViewModel?.text
+    val hasPendingSharedImages = sharedImagesFromViewModel != null
 
     val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
@@ -539,8 +543,13 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                if (!effectivePendingSharedText.isNullOrBlank()) {
-                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                if (!effectivePendingSharedText.isNullOrBlank() || hasPendingSharedImages) {
+                                                    if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                        sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    }
+                                                    if (hasPendingSharedImages) {
+                                                        sharedImageViewModel.assignToDestination(contact.destinationHash)
+                                                    }
                                                     onStartChat(contact.destinationHash, contact.displayName)
                                                 } else {
                                                     onContactClick(contact.destinationHash, contact.displayName)
@@ -584,8 +593,13 @@ fun ContactsScreen(
                                                 pendingContactToShow = contact
                                                 showPendingContactSheet = true
                                             } else {
-                                                if (!effectivePendingSharedText.isNullOrBlank()) {
-                                                    sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                if (!effectivePendingSharedText.isNullOrBlank() || hasPendingSharedImages) {
+                                                    if (!effectivePendingSharedText.isNullOrBlank()) {
+                                                        sharedTextViewModel.assignToDestination(contact.destinationHash)
+                                                    }
+                                                    if (hasPendingSharedImages) {
+                                                        sharedImageViewModel.assignToDestination(contact.destinationHash)
+                                                    }
                                                     onStartChat(contact.destinationHash, contact.displayName)
                                                 } else {
                                                     onContactClick(contact.destinationHash, contact.displayName)
@@ -615,6 +629,9 @@ fun ContactsScreen(
                     onStartChat = { destinationHash, displayName ->
                         if (!effectivePendingSharedText.isNullOrBlank()) {
                             sharedTextViewModel.assignToDestination(destinationHash)
+                        }
+                        if (hasPendingSharedImages) {
+                            sharedImageViewModel.assignToDestination(destinationHash)
                         }
                         onStartChat(destinationHash, displayName)
                     },

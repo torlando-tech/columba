@@ -1286,6 +1286,42 @@ class ReticulumServiceBinder(
                 // This wakes the device and shows UI even when app is in background
                 callNotificationHelper.showIncomingCallNotification(identityHash, callerName)
 
+                // Launch IncomingCallActivity directly from the foreground service.
+                // The fullScreenIntent only fires when the device is locked.
+                // When unlocked, Android shows only a heads-up notification.
+                // With SYSTEM_ALERT_WINDOW permission, the foreground service is
+                // allowed to start activities from the background (Android 10+).
+                if (android.provider.Settings.canDrawOverlays(context)) {
+                    try {
+                        val callScreenIntent =
+                            android.content
+                                .Intent(
+                                    context,
+                                    com.lxmf.messenger.IncomingCallActivity::class.java,
+                                ).apply {
+                                    action = CallNotificationHelper.ACTION_OPEN_CALL
+                                    putExtra(CallNotificationHelper.EXTRA_IDENTITY_HASH, identityHash)
+                                    putExtra(
+                                        CallNotificationHelper.EXTRA_CALLER_NAME,
+                                        callerName,
+                                    )
+                                    flags =
+                                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                }
+                        context.startActivity(callScreenIntent)
+                        Log.i(TAG, "Launched IncomingCallActivity directly (overlay permission granted)")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not launch IncomingCallActivity: ${e.message}")
+                    }
+                } else {
+                    Log.w(
+                        TAG,
+                        "Cannot launch IncomingCallActivity - overlay permission not granted. " +
+                            "Falling back to notification only.",
+                    )
+                }
+
                 // Also broadcast to UI process
                 val callJson =
                     org.json

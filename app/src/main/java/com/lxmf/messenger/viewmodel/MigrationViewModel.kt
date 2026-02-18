@@ -1,5 +1,6 @@
 package com.lxmf.messenger.viewmodel
 
+import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -9,6 +10,8 @@ import com.lxmf.messenger.migration.ImportResult
 import com.lxmf.messenger.migration.MigrationExporter
 import com.lxmf.messenger.migration.MigrationImporter
 import com.lxmf.messenger.migration.MigrationPreview
+import com.lxmf.messenger.migration.PasswordRequiredException
+import com.lxmf.messenger.migration.WrongPasswordException
 import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +78,18 @@ class MigrationViewModel
         private val _includeAttachments = MutableStateFlow(true)
         val includeAttachments: StateFlow<Boolean> = _includeAttachments.asStateFlow()
 
+        /**
+         * Pending import URI that requires a password.
+         */
+        private val _pendingImportUri = MutableStateFlow<Uri?>(null)
+        val pendingImportUri: StateFlow<Uri?> = _pendingImportUri.asStateFlow()
+
+        /**
+         * Cached decrypted ZIP bytes from preview, reused during import
+         * to avoid redundant PBKDF2 key derivation and AES-GCM decryption.
+         */
+        private var cachedImportZipBytes: ByteArray? = null
+
         init {
             loadExportPreview()
         }
@@ -99,7 +114,7 @@ class MigrationViewModel
         /**
          * Export all app data to a migration file.
          */
-        fun exportData() {
+        fun exportData(password: String) {
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "Starting export...")
@@ -108,6 +123,7 @@ class MigrationViewModel
 
                     val result =
                         migrationExporter.exportData(
+                            password = password,
                             onProgress = { progress -> _exportProgress.value = progress },
                             includeAttachments = _includeAttachments.value,
                         )
@@ -136,28 +152,74 @@ class MigrationViewModel
         /**
          * Preview a migration file before importing.
          */
-        fun previewImport(uri: Uri) {
+        fun previewImport(
+            uri: Uri,
+            password: String? = null,
+        ) {
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "Previewing import: $uri")
                     _uiState.value = MigrationUiState.Loading("Reading migration file...")
 
-                    val result = migrationImporter.previewMigration(uri)
+                    // Check if file is encrypted and we don't have a password yet
+                    if (password == null) {
+                        val encryptedResult = migrationImporter.isEncryptedExport(uri)
+                        encryptedResult.fold(
+                            onSuccess = { isEncrypted ->
+                                if (isEncrypted) {
+                                    Log.i(TAG, "File is encrypted, requesting password")
+                                    _pendingImportUri.value = uri
+                                    _uiState.value = MigrationUiState.PasswordRequired(uri)
+                                    return@launch
+                                }
+                            },
+                            onFailure = { error ->
+                                _uiState.value =
+                                    MigrationUiState.Error(
+                                        "Could not read migration file: ${error.message}",
+                                    )
+                                return@launch
+                            },
+                        )
+                    }
+
+                    val result = migrationImporter.previewMigration(uri, password)
 
                     result.fold(
-                        onSuccess = { preview ->
-                            Log.i(TAG, "Preview loaded: ${preview.identityCount} identities")
-                            _importPreview.value = preview
-                            _uiState.value = MigrationUiState.ImportPreview(preview, uri)
+                        onSuccess = { previewWithData ->
+                            Log.i(TAG, "Preview loaded: ${previewWithData.preview.identityCount} identities")
+                            _importPreview.value = previewWithData.preview
+                            cachedImportZipBytes = previewWithData.zipBytes
+                            _pendingImportUri.value = null
+                            _uiState.value =
+                                MigrationUiState.ImportPreview(previewWithData.preview, uri, password)
                         },
                         onFailure = { error ->
                             Log.e(TAG, "Preview failed", error)
-                            _uiState.value =
-                                MigrationUiState.Error(
-                                    "Could not read migration file: ${error.message}",
-                                )
+                            when (error) {
+                                is WrongPasswordException -> {
+                                    _uiState.value = MigrationUiState.WrongPassword(uri)
+                                }
+                                is PasswordRequiredException -> {
+                                    _pendingImportUri.value = uri
+                                    _uiState.value = MigrationUiState.PasswordRequired(uri)
+                                }
+                                else -> {
+                                    _uiState.value =
+                                        MigrationUiState.Error(
+                                            "Could not read migration file: ${error.message}",
+                                        )
+                                }
+                            }
                         },
                     )
+                } catch (e: WrongPasswordException) {
+                    Log.w(TAG, "Wrong password for encrypted export", e)
+                    _uiState.value = MigrationUiState.WrongPassword(uri)
+                } catch (e: PasswordRequiredException) {
+                    Log.d(TAG, "Password required for encrypted export", e)
+                    _pendingImportUri.value = uri
+                    _uiState.value = MigrationUiState.PasswordRequired(uri)
                 } catch (e: Exception) {
                     Log.e(TAG, "Preview failed with exception", e)
                     _uiState.value =
@@ -171,17 +233,25 @@ class MigrationViewModel
         /**
          * Import data from a migration file.
          */
-        fun importData(uri: Uri) {
+        fun importData(
+            uri: Uri,
+            password: String? = null,
+        ) {
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "Starting import from: $uri")
                     _uiState.value = MigrationUiState.Importing
                     _importProgress.value = 0f
 
+                    val cachedBytes = cachedImportZipBytes
+                    cachedImportZipBytes = null // Release reference before long-running import
                     val result =
-                        migrationImporter.importData(uri) { progress ->
-                            _importProgress.value = progress
-                        }
+                        migrationImporter.importData(
+                            uri = uri,
+                            password = password,
+                            cachedZipBytes = cachedBytes,
+                            onProgress = { progress -> _importProgress.value = progress },
+                        )
 
                     when (result) {
                         is ImportResult.Success -> {
@@ -197,16 +267,14 @@ class MigrationViewModel
                             Log.i(TAG, "Restarting service after import...")
                             withContext(Dispatchers.IO) {
                                 interfaceConfigManager.applyInterfaceChanges()
+                            }.onSuccess {
+                                Log.i(TAG, "Service restarted successfully")
+                                _uiState.value = MigrationUiState.ImportComplete(result)
+                            }.onFailure { e ->
+                                Log.e(TAG, "Service restart failed", e)
+                                // Still mark as complete since import succeeded
+                                _uiState.value = MigrationUiState.ImportComplete(result)
                             }
-                                .onSuccess {
-                                    Log.i(TAG, "Service restarted successfully")
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
-                                .onFailure { e ->
-                                    Log.e(TAG, "Service restart failed", e)
-                                    // Still mark as complete since import succeeded
-                                    _uiState.value = MigrationUiState.ImportComplete(result)
-                                }
                         }
                         is ImportResult.Error -> {
                             Log.e(TAG, "Import failed: ${result.message}")
@@ -221,6 +289,41 @@ class MigrationViewModel
         }
 
         /**
+         * Called after the SAF save dialog is launched so the UI state resets
+         * and won't re-trigger the dialog on configuration changes.
+         */
+        fun onExportSaveDialogLaunched() {
+            _uiState.value = MigrationUiState.Idle
+        }
+
+        /**
+         * Save the exported file to a user-chosen destination via SAF.
+         */
+        fun saveExportToFile(
+            contentResolver: ContentResolver,
+            destinationUri: Uri,
+        ) {
+            val sourceUri = _exportedFileUri.value ?: return
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        contentResolver.openInputStream(sourceUri)?.use { input ->
+                            contentResolver.openOutputStream(destinationUri)?.use { output ->
+                                input.copyTo(output)
+                            }
+                        } ?: error("Could not open export file")
+                    }
+                    _uiState.value = MigrationUiState.ExportSaved
+                    cleanupExportFiles()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save export file", e)
+                    _uiState.value =
+                        MigrationUiState.Error("Failed to save export: ${e.message}")
+                }
+            }
+        }
+
+        /**
          * Reset state to idle.
          */
         fun resetState() {
@@ -228,6 +331,8 @@ class MigrationViewModel
             _exportProgress.value = 0f
             _importProgress.value = 0f
             _importPreview.value = null
+            _pendingImportUri.value = null
+            cachedImportZipBytes = null
         }
 
         /**
@@ -241,6 +346,7 @@ class MigrationViewModel
         override fun onCleared() {
             super.onCleared()
             cleanupExportFiles()
+            cachedImportZipBytes = null
         }
     }
 
@@ -250,19 +356,45 @@ class MigrationViewModel
 sealed class MigrationUiState {
     data object Idle : MigrationUiState()
 
-    data class Loading(val message: String) : MigrationUiState()
+    data class Loading(
+        val message: String,
+    ) : MigrationUiState()
 
     data object Exporting : MigrationUiState()
 
-    data class ExportComplete(val fileUri: Uri) : MigrationUiState()
+    data class ExportComplete(
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
-    data class ImportPreview(val preview: MigrationPreview, val fileUri: Uri) : MigrationUiState()
+    data object ExportSaved : MigrationUiState()
+
+    data class ImportPreview(
+        val preview: MigrationPreview,
+        val fileUri: Uri,
+        val password: String? = null,
+    ) : MigrationUiState() {
+        override fun toString(): String = "ImportPreview(preview=$preview, fileUri=$fileUri, password=${if (password != null) "<redacted>" else "null"})"
+    }
+
+    data class PasswordRequired(
+        val fileUri: Uri,
+    ) : MigrationUiState()
+
+    data class WrongPassword(
+        val fileUri: Uri,
+    ) : MigrationUiState()
 
     data object Importing : MigrationUiState()
 
-    data class RestartingService(val result: ImportResult.Success) : MigrationUiState()
+    data class RestartingService(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class ImportComplete(val result: ImportResult.Success) : MigrationUiState()
+    data class ImportComplete(
+        val result: ImportResult.Success,
+    ) : MigrationUiState()
 
-    data class Error(val message: String) : MigrationUiState()
+    data class Error(
+        val message: String,
+    ) : MigrationUiState()
 }

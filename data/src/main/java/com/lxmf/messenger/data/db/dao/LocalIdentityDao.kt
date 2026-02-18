@@ -142,4 +142,98 @@ interface LocalIdentityDao {
         foregroundColor: String?,
         backgroundColor: String?,
     )
+
+    /**
+     * Update the encrypted key data and encryption version for an identity.
+     * Used during key encryption migration to store the device-encrypted key.
+     */
+    @Query(
+        """
+        UPDATE local_identities
+        SET encryptedKeyData = :encryptedKeyData,
+            keyEncryptionVersion = :version
+        WHERE identityHash = :identityHash
+        """,
+    )
+    suspend fun updateEncryptedKeyData(
+        identityHash: String,
+        encryptedKeyData: ByteArray,
+        version: Int,
+    )
+
+    /**
+     * Downgrade from password protection to device-only encryption.
+     * Updates key data and clears all password-related fields.
+     */
+    @Query(
+        """
+        UPDATE local_identities
+        SET encryptedKeyData = :encryptedKeyData,
+            keyEncryptionVersion = :version,
+            passwordSalt = NULL,
+            passwordVerificationHash = NULL
+        WHERE identityHash = :identityHash
+        """,
+    )
+    suspend fun clearPasswordProtection(
+        identityHash: String,
+        encryptedKeyData: ByteArray,
+        version: Int,
+    )
+
+    /**
+     * Update all encryption-related fields for password protection.
+     */
+    @Query(
+        """
+        UPDATE local_identities
+        SET encryptedKeyData = :encryptedKeyData,
+            keyEncryptionVersion = :version,
+            passwordSalt = :passwordSalt,
+            passwordVerificationHash = :passwordVerificationHash
+        WHERE identityHash = :identityHash
+        """,
+    )
+    suspend fun updatePasswordProtection(
+        identityHash: String,
+        encryptedKeyData: ByteArray,
+        version: Int,
+        passwordSalt: ByteArray,
+        passwordVerificationHash: ByteArray,
+    )
+
+    /**
+     * Clear unencrypted key data after successful encryption migration.
+     * This securely removes the plaintext key from the database.
+     */
+    @Query("UPDATE local_identities SET keyData = NULL WHERE identityHash = :identityHash")
+    suspend fun clearUnencryptedKeyData(identityHash: String)
+
+    /**
+     * Get all identities that have unencrypted key data (need migration).
+     * These have keyData != NULL and keyEncryptionVersion == 0.
+     */
+    @Query(
+        """
+        SELECT * FROM local_identities
+        WHERE keyEncryptionVersion = 0
+        AND (keyData IS NOT NULL OR encryptedKeyData IS NULL)
+        ORDER BY lastUsedTimestamp DESC
+        """,
+    )
+    suspend fun getIdentitiesNeedingEncryption(): List<LocalIdentityEntity>
+
+    /**
+     * Check if any identities still need encryption migration.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM local_identities
+            WHERE keyEncryptionVersion = 0
+            AND (keyData IS NOT NULL OR encryptedKeyData IS NULL)
+        )
+        """,
+    )
+    suspend fun hasUnencryptedIdentities(): Boolean
 }

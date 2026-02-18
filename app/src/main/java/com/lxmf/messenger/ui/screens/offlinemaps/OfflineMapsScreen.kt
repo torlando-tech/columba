@@ -1,5 +1,8 @@
 package com.lxmf.messenger.ui.screens.offlinemaps
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +24,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -70,11 +76,27 @@ fun OfflineMapsScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // File picker launcher for MBTiles import
+    val importLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri: Uri? ->
+            uri?.let { viewModel.importMbtilesFile(it) }
+        }
+
     // Show error in snackbar
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
+        }
+    }
+
+    // Show import success in snackbar
+    LaunchedEffect(state.importSuccessMessage) {
+        state.importSuccessMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearImportSuccess()
         }
     }
 
@@ -88,6 +110,26 @@ fun OfflineMapsScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                         )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                        },
+                        enabled = !state.isImporting,
+                    ) {
+                        if (state.isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.FileOpen,
+                                contentDescription = "Import MBTiles file",
+                            )
+                        }
                     }
                 },
             )
@@ -156,6 +198,13 @@ fun OfflineMapsScreen(
                             // Navigate to download screen to re-download the region
                             // For now, just trigger the update check - full re-download TBD
                             viewModel.checkForUpdates(region)
+                        },
+                        onToggleDefault = {
+                            if (region.isDefault) {
+                                viewModel.clearDefaultRegion()
+                            } else {
+                                viewModel.setDefaultRegion(region.id)
+                            }
                         },
                     )
                 }
@@ -226,6 +275,7 @@ fun OfflineMapRegionCard(
     updateCheckResult: UpdateCheckResult? = null,
     onCheckForUpdates: () -> Unit = {},
     onUpdateNow: () -> Unit = {},
+    onToggleDefault: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -270,12 +320,19 @@ fun OfflineMapRegionCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Status and size
+                // Status, default badge, and size
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     StatusChip(status = region.status)
+                    if (region.isDefault) {
+                        Text(
+                            text = "Default",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         text = region.getSizeString(),
                         style = MaterialTheme.typography.bodySmall,
@@ -425,16 +482,38 @@ fun OfflineMapRegionCard(
                 }
             }
 
-            // Delete button
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                enabled = !isDeleting,
+            // Action buttons column
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error,
-                )
+                // Default map center toggle (star) - only for completed regions
+                if (region.status == OfflineMapRegion.Status.COMPLETE) {
+                    IconButton(
+                        onClick = onToggleDefault,
+                    ) {
+                        Icon(
+                            imageVector = if (region.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = if (region.isDefault) "Remove as default" else "Set as default",
+                            tint = if (region.isDefault) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
+
+                // Delete button
+                IconButton(
+                    onClick = { showDeleteDialog = true },
+                    enabled = !isDeleting,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }
@@ -541,7 +620,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Download map regions for offline use",
+            text = "Download or import map regions for offline use",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -549,7 +628,7 @@ fun EmptyOfflineMapsState(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Tap + to get started",
+            text = "Tap + to download, or use the import button to load an MBTiles file",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

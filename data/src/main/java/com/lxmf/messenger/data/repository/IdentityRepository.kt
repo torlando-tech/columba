@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
+import com.lxmf.messenger.data.crypto.IdentityKeyMigrator
+import com.lxmf.messenger.data.crypto.IdentityKeyProvider
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
@@ -20,6 +23,7 @@ private const val TAG = "IdentityRepository"
 /**
  * Repository for managing local Reticulum identities.
  */
+@Suppress("TooManyFunctions") // Identity management requires comprehensive API
 @Singleton
 class IdentityRepository
     @Inject
@@ -28,6 +32,9 @@ class IdentityRepository
         private val database: ColumbaDatabase,
         @ApplicationContext private val context: Context,
         private val ioDispatcher: CoroutineDispatcher,
+        private val keyEncryptor: IdentityKeyEncryptor,
+        private val keyMigrator: IdentityKeyMigrator,
+        private val keyProvider: IdentityKeyProvider,
     ) {
         /**
          * Flow of all identities, ordered by last used timestamp.
@@ -58,7 +65,7 @@ class IdentityRepository
 
         /**
          * Create a new identity using the Python Reticulum service.
-         * This will be implemented when ReticulumProtocol is available.
+         * The key data is encrypted using AES-256-GCM before storage.
          *
          * For now, this is a placeholder that creates a database entry.
          * The actual identity file creation will be handled by ReticulumProtocol.
@@ -73,20 +80,33 @@ class IdentityRepository
             withContext(ioDispatcher) {
                 try {
                     Log.d(TAG, "createIdentity: Creating entity for '$displayName' with hash ${identityHash.take(8)}...")
+
+                    // Encrypt the key data if provided
+                    val (encryptedKeyData, keyVersion) =
+                        if (keyData != null && keyData.size == 64) {
+                            val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                            encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
+                        } else {
+                            null to 0
+                        }
+
+                    @Suppress("DEPRECATION")
                     val entity =
                         LocalIdentityEntity(
                             identityHash = identityHash,
                             displayName = displayName,
                             destinationHash = destinationHash,
                             filePath = filePath,
-                            keyData = keyData,
+                            keyData = null, // No longer store unencrypted key data
+                            encryptedKeyData = encryptedKeyData,
+                            keyEncryptionVersion = keyVersion,
                             createdTimestamp = System.currentTimeMillis(),
                             lastUsedTimestamp = 0L,
                             isActive = false,
                         )
                     Log.d(TAG, "createIdentity: Calling DAO insert...")
                     identityDao.insert(entity)
-                    Log.d(TAG, "createIdentity: DAO insert completed successfully")
+                    Log.d(TAG, "createIdentity: DAO insert completed successfully (key encrypted: ${encryptedKeyData != null})")
                     Result.success(entity)
                 } catch (e: Exception) {
                     Log.e(TAG, "createIdentity: Failed to insert identity", e)
@@ -145,7 +165,7 @@ class IdentityRepository
 
         /**
          * Import an identity from a file URI.
-         * Reads the file, validates it, and adds it to the database.
+         * Reads the file, validates it, encrypts the key, and adds it to the database.
          */
         suspend fun importIdentity(
             identityHash: String,
@@ -156,13 +176,25 @@ class IdentityRepository
         ): Result<LocalIdentityEntity> =
             withContext(ioDispatcher) {
                 try {
+                    // Encrypt the key data if provided
+                    val (encryptedKeyData, keyVersion) =
+                        if (keyData != null && keyData.size == 64) {
+                            val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                            encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
+                        } else {
+                            null to 0
+                        }
+
+                    @Suppress("DEPRECATION")
                     val entity =
                         LocalIdentityEntity(
                             identityHash = identityHash,
                             displayName = displayName,
                             destinationHash = destinationHash,
                             filePath = filePath,
-                            keyData = keyData,
+                            keyData = null, // No longer store unencrypted
+                            encryptedKeyData = encryptedKeyData,
+                            keyEncryptionVersion = keyVersion,
                             createdTimestamp = System.currentTimeMillis(),
                             lastUsedTimestamp = 0L,
                             isActive = false,
@@ -300,12 +332,20 @@ class IdentityRepository
                             "attempting recovery",
                     )
 
-                    val keyData = identity.keyData
+                    // Try legacy plaintext keyData first, then fall back to decrypting encryptedKeyData
+                    @Suppress("DEPRECATION")
+                    val keyData =
+                        identity.keyData
+                            ?: if (identity.encryptedKeyData != null) {
+                                keyProvider.getDecryptedKeyData(identity.identityHash).getOrNull()
+                            } else {
+                                null
+                            }
                     if (keyData == null || keyData.size != 64) {
                         Log.e(
                             TAG,
                             "Cannot recover identity ${identity.identityHash}: " +
-                                "keyData is null or invalid size (${keyData?.size})",
+                                "no valid key data available (size=${keyData?.size})",
                         )
                         return@withContext Result.failure(
                             IllegalStateException("Identity file missing and no valid keyData backup available"),
@@ -344,6 +384,7 @@ class IdentityRepository
          * @param identityHash Optional identity hash to use (if not provided, migration will retry later)
          * @param destinationHash Optional destination hash to use (if not provided, migration will retry later)
          */
+        @Suppress("LongMethod") // Migration logic is complex but cohesive
         suspend fun migrateDefaultIdentityIfNeeded(
             identityHash: String? = null,
             destinationHash: String? = null,
@@ -398,7 +439,7 @@ class IdentityRepository
 
                 android.util.Log.i("IdentityRepository", "Creating identity entry: hash=$identityHash")
 
-                // Read key data from file for backup
+                // Read key data from file and encrypt it
                 val keyData =
                     try {
                         defaultIdentityFile.readBytes()
@@ -407,14 +448,31 @@ class IdentityRepository
                         null
                     }
 
+                // Encrypt the key data
+                val (encryptedKeyData, keyVersion) =
+                    if (keyData != null && keyData.size == 64) {
+                        try {
+                            val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                            encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
+                        } catch (e: Exception) {
+                            android.util.Log.w("IdentityRepository", "Failed to encrypt key data", e)
+                            null to 0
+                        }
+                    } else {
+                        null to 0
+                    }
+
                 // Create the actual default identity entry
+                @Suppress("DEPRECATION")
                 val defaultIdentity =
                     LocalIdentityEntity(
                         identityHash = identityHash,
                         displayName = "Anonymous Peer",
                         destinationHash = destinationHash,
                         filePath = defaultIdentityFile.absolutePath,
-                        keyData = keyData,
+                        keyData = null, // No longer store unencrypted
+                        encryptedKeyData = encryptedKeyData,
+                        keyEncryptionVersion = keyVersion,
                         createdTimestamp = defaultIdentityFile.lastModified(),
                         lastUsedTimestamp = System.currentTimeMillis(),
                         isActive = true,
@@ -447,4 +505,78 @@ class IdentityRepository
                 android.util.Log.e("IdentityRepository", "Failed to migrate default identity", e)
             }
         }
+
+        // ==================== Key Encryption Management ====================
+
+        /**
+         * Run the encryption migration for all unencrypted identities.
+         * This should be called during app initialization.
+         */
+        suspend fun runEncryptionMigration() =
+            withContext(ioDispatcher) {
+                Log.i(TAG, "Running identity key encryption migration...")
+                val result = keyMigrator.migrateUnencryptedIdentities()
+                result.onSuccess { migrationResult ->
+                    Log.i(
+                        TAG,
+                        "Encryption migration completed: ${migrationResult.successCount} succeeded, " +
+                            "${migrationResult.failureCount} failed",
+                    )
+                }.onFailure { e ->
+                    Log.e(TAG, "Encryption migration failed", e)
+                }
+                result
+            }
+
+        /**
+         * Get decrypted key data for an identity.
+         * Used when key data needs to be accessed (e.g., for export or Python/RNS).
+         *
+         * @param identityHash The identity to get key data for
+         * @param password Optional password if the identity is password-protected
+         */
+        suspend fun getDecryptedKeyData(
+            identityHash: String,
+            password: CharArray? = null,
+        ): Result<ByteArray> = keyProvider.getDecryptedKeyData(identityHash, password)
+
+        /**
+         * Check if an identity requires a password to unlock.
+         */
+        suspend fun requiresPassword(identityHash: String): Boolean = keyProvider.requiresPassword(identityHash)
+
+        /**
+         * Enable password protection on an identity.
+         */
+        suspend fun enablePasswordProtection(
+            identityHash: String,
+            password: CharArray,
+        ): Result<Unit> = keyProvider.enablePasswordProtection(identityHash, password)
+
+        /**
+         * Disable password protection on an identity.
+         */
+        suspend fun disablePasswordProtection(
+            identityHash: String,
+            currentPassword: CharArray,
+        ): Result<Unit> = keyProvider.disablePasswordProtection(identityHash, currentPassword)
+
+        /**
+         * Change the password on a password-protected identity.
+         */
+        suspend fun changeIdentityPassword(
+            identityHash: String,
+            oldPassword: CharArray,
+            newPassword: CharArray,
+        ): Result<Unit> = keyProvider.changePassword(identityHash, oldPassword, newPassword)
+
+        /**
+         * Check if encryption migration has been completed for all identities.
+         */
+        fun isEncryptionMigrationCompleted(): Boolean = keyMigrator.isMigrationCompleted()
+
+        /**
+         * Get encryption migration statistics.
+         */
+        fun getEncryptionMigrationStats() = keyMigrator.getMigrationStats()
     }

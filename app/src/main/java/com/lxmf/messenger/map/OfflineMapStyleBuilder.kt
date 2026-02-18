@@ -153,43 +153,199 @@ object OfflineMapStyleBuilder {
     }
 
     /**
-     * Build a style that combines multiple offline MBTiles sources.
+     * Build a combined style from multiple MBTiles files, auto-detecting raster vs vector.
+     * Raster layers render first (below), vector layers render on top.
      *
-     * @param mbtilesPaths Map of source ID to MBTiles file path
-     * @return Style JSON string
+     * @param mbtilesPaths List of absolute paths to MBTiles files
+     * @return Style JSON string with all sources and layers
      */
-    fun buildCombinedOfflineStyle(mbtilesPaths: Map<String, String>): String {
+    fun buildCombinedOfflineStyle(mbtilesPaths: List<String>): String {
         val sources = JSONObject()
-        mbtilesPaths.forEach { (id, path) ->
-            sources.put(
-                id,
-                JSONObject().apply {
-                    put("type", "vector")
-                    put("url", "mbtiles://$path")
-                },
-            )
+        val rasterLayers = JSONArray()
+        var hasVector = false
+        var vectorSourceId: String? = null
+
+        mbtilesPaths.forEachIndexed { index, path ->
+            val format = getTileFormat(path)
+            val sourceId = if (format == "pbf") "vector-$index" else "raster-$index"
+
+            if (format == "pbf") {
+                sources.put(
+                    sourceId,
+                    JSONObject().apply {
+                        put("type", "vector")
+                        put("url", "mbtiles://$path")
+                    },
+                )
+                if (!hasVector) {
+                    vectorSourceId = sourceId
+                    hasVector = true
+                }
+            } else {
+                sources.put(
+                    sourceId,
+                    JSONObject().apply {
+                        put("type", "raster")
+                        put("url", "mbtiles://$path")
+                        put("tileSize", 256)
+                    },
+                )
+                rasterLayers.put(
+                    JSONObject().apply {
+                        put("id", "raster-layer-$index")
+                        put("type", "raster")
+                        put("source", sourceId)
+                    },
+                )
+            }
         }
 
-        // Use first source as the main openmaptiles source
-        val primarySourceId = mbtilesPaths.keys.firstOrNull() ?: "openmaptiles"
+        // Build layers: background -> raster layers -> vector layers
+        val layers = JSONArray()
+        layers.put(
+            JSONObject().apply {
+                put("id", "background")
+                put("type", "background")
+                put("paint", JSONObject().put("background-color", "#f8f4f0"))
+            },
+        )
 
-        // Update layers to use the primary source
-        val layers = JSONArray(BASE_LAYERS)
-        for (i in 0 until layers.length()) {
-            val layer = layers.getJSONObject(i)
-            if (layer.has("source") && layer.getString("source") == "openmaptiles") {
-                layer.put("source", primarySourceId)
+        // Add raster layers first (they render below vector)
+        for (i in 0 until rasterLayers.length()) {
+            layers.put(rasterLayers.getJSONObject(i))
+        }
+
+        // Add vector layers on top if any vector source exists
+        if (hasVector) {
+            val baseLayersArray = JSONArray(BASE_LAYERS)
+            for (i in 0 until baseLayersArray.length()) {
+                val layer = baseLayersArray.getJSONObject(i)
+                // Skip the background layer (already added)
+                if (layer.getString("id") == "background") continue
+                // Point vector layers at the vector source
+                if (layer.has("source") && layer.getString("source") == "openmaptiles") {
+                    layer.put("source", vectorSourceId)
+                }
+                layers.put(layer)
             }
         }
 
         val style =
             JSONObject().apply {
                 put("version", 8)
-                put("name", "Offline Map")
+                put("name", "Offline Maps")
                 put("sources", sources)
                 put("layers", layers)
             }
-        return style.toString()
+        val json = style.toString()
+        Log.d("OfflineMapStyleBuilder", "Generated combined style with ${mbtilesPaths.size} sources")
+        return json
+    }
+
+    /**
+     * Build a style JSON string for a raster MBTiles source (e.g., PNG/JPEG tiles).
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @param name Display name for the source
+     * @return Style JSON string ready for MapLibre
+     */
+    fun buildRasterOfflineStyle(
+        mbtilesPath: String,
+        name: String = "Offline Map",
+    ): String {
+        val style =
+            JSONObject().apply {
+                put("version", 8)
+                put("name", name)
+                put(
+                    "sources",
+                    JSONObject().apply {
+                        put(
+                            "raster-tiles",
+                            JSONObject().apply {
+                                put("type", "raster")
+                                put("url", "mbtiles://$mbtilesPath")
+                                put("tileSize", 256)
+                            },
+                        )
+                    },
+                )
+                put(
+                    "layers",
+                    JSONArray().apply {
+                        put(
+                            JSONObject().apply {
+                                put("id", "background")
+                                put("type", "background")
+                                put("paint", JSONObject().put("background-color", "#f8f4f0"))
+                            },
+                        )
+                        put(
+                            JSONObject().apply {
+                                put("id", "raster-layer")
+                                put("type", "raster")
+                                put("source", "raster-tiles")
+                            },
+                        )
+                    },
+                )
+            }
+        val json = style.toString()
+        Log.d("OfflineMapStyleBuilder", "Generated raster style JSON: $json")
+        return json
+    }
+
+    /**
+     * Build the appropriate style (raster or vector) based on the MBTiles tile format.
+     * Reads the format from the MBTiles metadata table.
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @param name Display name for the source
+     * @return Style JSON string ready for MapLibre
+     */
+    fun buildAutoOfflineStyle(
+        mbtilesPath: String,
+        name: String = "Offline Map",
+    ): String {
+        val format = getTileFormat(mbtilesPath)
+        Log.d("OfflineMapStyleBuilder", "Detected tile format '$format' for $mbtilesPath")
+        return if (format == "pbf") {
+            buildOfflineStyle(mbtilesPath, name)
+        } else {
+            buildRasterOfflineStyle(mbtilesPath, name)
+        }
+    }
+
+    /**
+     * Read the tile format from an MBTiles file's metadata table.
+     *
+     * @param mbtilesPath Absolute path to the MBTiles file
+     * @return The format string (e.g., "pbf", "png", "jpg"), or "png" as default
+     */
+    fun getTileFormat(mbtilesPath: String): String {
+        var db: android.database.sqlite.SQLiteDatabase? = null
+        return try {
+            db =
+                android.database.sqlite.SQLiteDatabase.openDatabase(
+                    mbtilesPath,
+                    null,
+                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY,
+                )
+            db
+                .rawQuery(
+                    "SELECT value FROM metadata WHERE name = 'format'",
+                    null,
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else "png"
+                }
+        } catch (
+            @Suppress("SwallowedException") e: Exception,
+        ) {
+            Log.w("OfflineMapStyleBuilder", "Failed to read tile format from $mbtilesPath", e)
+            "png"
+        } finally {
+            db?.close()
+        }
     }
 
     /**
@@ -227,9 +383,7 @@ object OfflineMapStyleBuilder {
     /**
      * Get the offline maps directory.
      */
-    fun getOfflineMapsDir(context: Context): File {
-        return File(context.filesDir, "offline_maps").also { it.mkdirs() }
-    }
+    fun getOfflineMapsDir(context: Context): File = File(context.filesDir, "offline_maps").also { it.mkdirs() }
 
     /**
      * List all MBTiles files in the offline maps directory.

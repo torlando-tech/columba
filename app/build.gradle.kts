@@ -268,6 +268,9 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
+                // Restart JVM periodically to prevent Robolectric/Compose resource
+                // exhaustion that causes PagingData rendering failures in large suites.
+                it.setForkEvery(10)
                 // Enable JaCoCo coverage for Robolectric tests
                 it.extensions.configure<JacocoTaskExtension> {
                     isIncludeNoLocationClasses = true
@@ -279,6 +282,21 @@ android {
                     events("passed", "skipped", "failed")
                     showStandardStreams = false
                     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                }
+                // CI test sharding: distribute test classes across parallel jobs
+                val shard = project.findProperty("testShard")?.toString()?.toIntOrNull()
+                val total = project.findProperty("testShardTotal")?.toString()?.toIntOrNull()
+                if (shard != null && total != null && total > 1) {
+                    val testSourceDir = project.file("src/test/java")
+                    val allTestClasses = project.fileTree(testSourceDir) {
+                        include("**/*Test.kt")
+                    }.files.map { f ->
+                        f.relativeTo(testSourceDir)
+                            .path.replace(File.separatorChar, '.')
+                            .removeSuffix(".kt")
+                    }.sorted()
+                    val shardClasses = allTestClasses.filterIndexed { i, _ -> i % total == shard }
+                    shardClasses.forEach { cls -> it.filter.includeTestsMatching(cls) }
                 }
             }
         }
@@ -488,9 +506,9 @@ tasks.register("printVersion") {
     }
 }
 
-// Convenience task: `./gradlew install` defaults to installSentryDebug
+// Convenience task: `./gradlew install` defaults to installNoSentryDebug
 tasks.register("install") {
-    dependsOn("installSentryDebug")
-    description = "Installs the sentry debug APK (shortcut for installSentryDebug)"
+    dependsOn("installNoSentryDebug")
+    description = "Installs the noSentry debug APK (shortcut for installNoSentryDebug)"
     group = "Install"
 }

@@ -76,6 +76,7 @@ class MessageDataFlowTest {
                 peerIdentityDao = database.peerIdentityDao(),
                 localIdentityDao = database.localIdentityDao(),
                 attachmentStorage = AttachmentStorageManager(context),
+                draftDao = database.draftDao(),
             )
     }
 

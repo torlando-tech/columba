@@ -646,6 +646,10 @@ private fun TelemetryCollectorSection(
                     onCollectorAddressChange(contact.destinationHash.lowercase())
                     showContactPicker = false
                 },
+                onUnset = {
+                    onCollectorAddressChange(null)
+                    showContactPicker = false
+                },
                 onDismiss = { showContactPicker = false },
             )
         }
@@ -1213,6 +1217,7 @@ private fun GroupHostPickerDialog(
     contacts: List<EnrichedContact>,
     selectedHash: String?,
     onContactSelected: (EnrichedContact) -> Unit,
+    onUnset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -1239,6 +1244,33 @@ private fun GroupHostPickerDialog(
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 350.dp),
                     ) {
+                        // "None" option to unset the group host
+                        if (selectedHash != null) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable(onClick = onUnset)
+                                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(40.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "None",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                HorizontalDivider()
+                            }
+                        }
                         items(contacts.sortedBy { it.displayName.lowercase() }) { contact ->
                             GroupHostContactRow(
                                 contact = contact,

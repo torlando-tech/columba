@@ -4,10 +4,12 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions") // Room DAO — functions map 1:1 to queries
 @Dao
 interface OfflineMapRegionDao {
     /**
@@ -223,4 +225,41 @@ interface OfflineMapRegionDao {
      */
     @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' AND localStylePath IS NOT NULL LIMIT 1")
     suspend fun getFirstCompletedRegionWithLocalStyle(): OfflineMapRegionEntity?
+
+    /**
+     * Get the region marked as default map center.
+     * Returns null if no region is marked as default.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE isDefault = 1 AND status = 'COMPLETE' LIMIT 1")
+    suspend fun getDefaultRegion(): OfflineMapRegionEntity?
+
+    /**
+     * Clear the default flag from all regions.
+     */
+    @Query("UPDATE offline_map_regions SET isDefault = 0 WHERE isDefault = 1")
+    suspend fun clearDefaultRegion()
+
+    /**
+     * Set a specific region as the default map center.
+     */
+    @Query("UPDATE offline_map_regions SET isDefault = 1 WHERE id = :id")
+    suspend fun setDefaultRegionById(id: Long)
+
+    /**
+     * Atomically clear any existing default and set the given region as default.
+     * Wrapped in a transaction to prevent race conditions where multiple regions
+     * could end up marked as default simultaneously.
+     */
+    @Transaction
+    suspend fun setDefaultRegion(id: Long) {
+        clearDefaultRegion()
+        setDefaultRegionById(id)
+    }
+
+    /**
+     * Get all completed regions that have an MBTiles file on disk.
+     * Used to build a combined multi-region offline style.
+     */
+    @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' AND mbtilesPath IS NOT NULL ORDER BY createdAt DESC")
+    suspend fun getCompletedRegionsWithMbtiles(): List<OfflineMapRegionEntity>
 }

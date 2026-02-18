@@ -406,16 +406,12 @@ class MessageCollector
 
                             // Show notification for heard announce
                             try {
-                                val appDataString =
-                                    if (appData != null && appData.isNotEmpty()) {
-                                        String(appData, Charsets.UTF_8)
-                                    } else {
-                                        null
-                                    }
                                 notificationHelper.notifyAnnounceHeard(
                                     destinationHash = peerHash,
                                     peerName = peerName,
-                                    appData = appDataString,
+                                    hops = announce.hops,
+                                    interfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface),
+                                    receivingInterface = announce.receivingInterface,
                                 )
                                 Log.d(TAG, "Posted notification for announce")
                             } catch (e: Exception) {

@@ -90,6 +90,13 @@ tasks.register("clean", Delete::class) {
     delete(layout.buildDirectory)
 }
 
+// Convenience task: `./gradlew installDebug` installs the app (noSentry debug variant)
+tasks.register("installDebug") {
+    dependsOn(":app:installNoSentryDebug")
+    description = "Installs the app noSentry debug APK"
+    group = "Install"
+}
+
 // Create unified coverage report task
 tasks.register("jacocoTestReport", JacocoReport::class) {
     group = "verification"

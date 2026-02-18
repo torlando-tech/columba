@@ -539,6 +539,11 @@ class ServiceReticulumProtocol(
                     tech.torlando.lxst.core.CallCoordinator
                         .getInstance()
                         .onIncomingCall(callerHash)
+
+                    // NOTE: IncomingCallActivity is launched by the foreground service
+                    // (ReticulumServiceBinder) which has SYSTEM_ALERT_WINDOW permission,
+                    // and by the notification's fullScreenIntent when the device is locked.
+                    // We intentionally do NOT launch it here to avoid duplicate screens.
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling incoming call callback", e)
                 }
@@ -1122,6 +1127,9 @@ class ServiceReticulumProtocol(
                     iface.networkName?.let { ifaceJson.put("network_name", it) }
                     iface.passphrase?.let { ifaceJson.put("passphrase", it) }
                     ifaceJson.put("bootstrap_only", iface.bootstrapOnly)
+                    ifaceJson.put("socks_proxy_enabled", iface.socksProxyEnabled)
+                    ifaceJson.put("socks_proxy_host", iface.socksProxyHost)
+                    ifaceJson.put("socks_proxy_port", iface.socksProxyPort)
                 }
                 is InterfaceConfig.RNode -> {
                     ifaceJson.put("type", "RNode")

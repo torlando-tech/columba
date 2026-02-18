@@ -61,8 +61,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,12 +75,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.ProfileIcon
-import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
-import com.lxmf.messenger.viewmodel.SharedTextViewModel
+import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.ChatsViewModel
+import com.lxmf.messenger.viewmodel.SharedImageViewModel
+import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -92,12 +97,19 @@ fun ChatsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
+    val draftsMap by viewModel.draftsMap.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
+    val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
 
     val listState = rememberLazyListState()
+
+    // Hoist shared-content state above LazyColumn so it's collected once at screen level
+    // rather than per-item inside the items{} lambda (avoids redundant subscriptions).
+    val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
+    val pendingSharedImages by sharedImageViewModel.sharedImages.collectAsStateWithLifecycle()
 
     // Delete dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
@@ -199,16 +211,21 @@ fun ChatsScreen(
                         val hapticFeedback = LocalHapticFeedback.current
                         var showMenu by remember { mutableStateOf(false) }
                         val isSaved by viewModel.isContactSaved(conversation.peerHash).collectAsState()
-                        val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
+
+                        val draftText = draftsMap[conversation.peerHash]
 
                         // Wrap card and menu in Box to anchor menu to card
                         Box(modifier = Modifier.fillMaxWidth()) {
                             ConversationCard(
                                 conversation = conversation,
                                 isSaved = isSaved,
+                                draftText = draftText,
                                 onClick = {
                                     if (pendingSharedText != null) {
                                         sharedTextViewModel.assignToDestination(conversation.peerHash)
+                                    }
+                                    if (pendingSharedImages != null) {
+                                        sharedImageViewModel.assignToDestination(conversation.peerHash)
                                     }
                                     onChatClick(conversation.peerHash, conversation.displayName)
                                 },
@@ -304,6 +321,7 @@ fun ChatsScreen(
 fun ConversationCard(
     conversation: Conversation,
     isSaved: Boolean = false,
+    draftText: String? = null,
     onClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
     onStarClick: () -> Unit = {},
@@ -399,20 +417,47 @@ fun ConversationCard(
                         overflow = TextOverflow.Ellipsis,
                     )
 
-                    // Last message preview
-                    Text(
-                        text = conversation.lastMessage,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color =
-                            if (conversation.unreadCount > 0) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // Last message preview (or draft indicator)
+                    if (draftText != null) {
+                        Text(
+                            text =
+                                buildAnnotatedString {
+                                    withStyle(
+                                        SpanStyle(
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontStyle = FontStyle.Italic,
+                                        ),
+                                    ) {
+                                        append("Draft: ")
+                                    }
+                                    withStyle(
+                                        SpanStyle(
+                                            fontStyle = FontStyle.Italic,
+                                        ),
+                                    ) {
+                                        append(draftText)
+                                    }
+                                },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        Text(
+                            text = conversation.lastMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color =
+                                if (conversation.unreadCount > 0) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 // Timestamp

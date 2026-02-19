@@ -5,7 +5,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbDeviceConnection
+import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
@@ -159,6 +162,16 @@ class KotlinUSBBridge(
     private var ioManager: SerialInputOutputManager? = null
     private var ioManagerFuture: java.util.concurrent.Future<*>? = null
     private var connectedDeviceId: Int? = null
+
+    // Direct USB access for testConnection-free reads/writes during DFU.
+    // Both port.read() and port.write() call testConnection() (USB GET_STATUS)
+    // on zero-byte bulk transfer returns. The nRF52840 DFU bootloader's minimal
+    // TinyUSB stack cannot handle GET_STATUS, crashing the USB controller.
+    // These fields allow readBlockingDirect()/writeBlockingDirect() to call
+    // bulkTransfer() directly, bypassing testConnection entirely.
+    private var usbConnection: UsbDeviceConnection? = null
+    private var readEndpoint: UsbEndpoint? = null
+    private var writeEndpoint: UsbEndpoint? = null
 
     // Thread-safe state flags
     private val isConnected = AtomicBoolean(false)
@@ -590,12 +603,18 @@ class KotlinUSBBridge(
      *
      * @param deviceId The device ID to connect to
      * @param baudRate Baud rate (default: 115200)
+     * @param startIoManager If true (default), start the SerialInputOutputManager for
+     *   async reads. Set to false for DFU bootloader connections where the ioManager's
+     *   port.read() → testConnection() → USB GET_STATUS kills the nRF52840's USB
+     *   controller. When false, use readBlockingDirect()/writeBlockingDirect() which
+     *   call bulkTransfer() directly without testConnection().
      * @return true if connection successful, false otherwise
      */
     @Suppress("ReturnCount")
     fun connect(
         deviceId: Int,
         baudRate: Int = DEFAULT_BAUD_RATE,
+        startIoManager: Boolean = true,
     ): Boolean {
         if (isConnected.get()) {
             if (connectedDeviceId == deviceId) {
@@ -654,15 +673,20 @@ class KotlinUSBBridge(
             currentDriver = driver
             currentPort = port
             connectedDeviceId = deviceId
+            usbConnection = connection
+            readEndpoint = findBulkEndpoint(device, UsbConstants.USB_DIR_IN)
+            writeEndpoint = findBulkEndpoint(device, UsbConstants.USB_DIR_OUT)
             isConnected.set(true)
 
-            // Start I/O manager for async reads
-            val manager = SerialInputOutputManager(port, this)
-            manager.readTimeout = 100 // Small timeout to reduce CPU usage
-            ioManager = manager
-            ioManagerFuture = ioExecutor.submit(manager)
+            if (startIoManager) {
+                // Start I/O manager for async reads
+                val manager = SerialInputOutputManager(port, this)
+                manager.readTimeout = 100 // Small timeout to reduce CPU usage
+                ioManager = manager
+                ioManagerFuture = ioExecutor.submit(manager)
+            }
 
-            Log.i(TAG, "Connected to USB device $deviceId (${getDriverTypeName(driver)}) at $baudRate baud")
+            Log.i(TAG, "Connected to USB device $deviceId (${getDriverTypeName(driver)}) at $baudRate baud (ioManager=$startIoManager)")
 
             // Notify Python
             onConnectionStateChanged?.callAttr("__call__", true, deviceId)
@@ -705,6 +729,9 @@ class KotlinUSBBridge(
         currentPort = null
         currentDriver = null
         connectedDeviceId = null
+        usbConnection = null
+        readEndpoint = null
+        writeEndpoint = null
         readBuffer.clear()
 
         // Notify Python
@@ -737,6 +764,8 @@ class KotlinUSBBridge(
             currentPort = null
             currentDriver = null
             connectedDeviceId = null
+            usbConnection = null
+            readEndpoint = null
             readBuffer.clear()
 
             // Notify Python
@@ -904,13 +933,125 @@ class KotlinUSBBridge(
     }
 
     /**
+     * Find a bulk endpoint on a USB device by direction.
+     * CDC-ACM devices have a data interface with bulk IN and OUT endpoints.
+     *
+     * @param device USB device to search
+     * @param direction [UsbConstants.USB_DIR_IN] or [UsbConstants.USB_DIR_OUT]
+     */
+    @Suppress("NestedBlockDepth")
+    private fun findBulkEndpoint(
+        device: UsbDevice,
+        direction: Int,
+    ): UsbEndpoint? {
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            for (j in 0 until iface.endpointCount) {
+                val ep = iface.getEndpoint(j)
+                if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                    ep.direction == direction
+                ) {
+                    return ep
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Perform a blocking read bypassing the serial library's port.read().
+     *
+     * Unlike [readBlocking], this calls [UsbDeviceConnection.bulkTransfer]
+     * directly — no testConnection() and no USB GET_STATUS control transfers.
+     * This is critical during nRF52 DFU: the bootloader's CPU is blocked by
+     * NVMC flash erase and cannot service control transfers, so GET_STATUS
+     * causes a USB bus reset that kills the connection.
+     *
+     * Only useful in raw mode (ioManager stopped). Falls back to
+     * [readBlocking] if the direct USB connection is not available.
+     *
+     * @param buffer Buffer to read into
+     * @param timeoutMs Read timeout in milliseconds
+     * @return Number of bytes read, 0 on timeout, or -1 on error
+     */
+    fun readBlockingDirect(
+        buffer: ByteArray,
+        timeoutMs: Int,
+    ): Int {
+        val conn = usbConnection
+        val ep = readEndpoint
+        if (conn == null || ep == null) {
+            // Don't fall back to readBlocking() — it returns -1 instantly when
+            // not connected, which causes tight spin loops in polling callers.
+            Log.w(TAG, "readBlockingDirect: no USB connection")
+            return -1
+        }
+
+        return try {
+            val bytesRead = conn.bulkTransfer(ep, buffer, buffer.size, timeoutMs)
+            if (bytesRead > 0) {
+                val hex =
+                    buffer.take(minOf(bytesRead, 32)).joinToString(" ") {
+                        String.format(Locale.ROOT, "%02X", it.toInt() and 0xFF)
+                    }
+                Log.d(TAG, "readBlockingDirect: got $bytesRead bytes: $hex")
+            }
+            // bulkTransfer returns -1 on timeout/error; normalize to 0 for callers
+            maxOf(0, bytesRead)
+        } catch (e: Exception) {
+            Log.e(TAG, "Direct bulk read failed", e)
+            -1
+        }
+    }
+
+    /**
+     * Write data bypassing the serial library's port.write().
+     *
+     * Like [readBlockingDirect], this calls [UsbDeviceConnection.bulkTransfer]
+     * directly — no testConnection() and no USB GET_STATUS control transfers.
+     * The library's port.write() calls testConnection() when bulkTransfer
+     * returns 0 (e.g. device buffer full), which crashes the nRF52840
+     * bootloader's USB controller.
+     *
+     * Falls back to [write] if the direct USB connection is not available.
+     *
+     * @param data Bytes to write
+     * @return Number of bytes written, or -1 on error
+     */
+    fun writeBlockingDirect(data: ByteArray): Int {
+        val conn = usbConnection
+        val ep = writeEndpoint
+        if (conn == null || ep == null) {
+            return write(data)
+        }
+
+        return try {
+            val bytesWritten = conn.bulkTransfer(ep, data, data.size, WRITE_TIMEOUT_MS)
+            if (bytesWritten > 0) {
+                Log.v(TAG, "writeBlockingDirect: wrote $bytesWritten bytes")
+            } else {
+                Log.w(TAG, "writeBlockingDirect: bulkTransfer returned $bytesWritten")
+            }
+            if (bytesWritten < 0) -1 else bytesWritten
+        } catch (e: Exception) {
+            Log.e(TAG, "Direct bulk write failed", e)
+            -1
+        }
+    }
+
+    /**
      * Enable raw/blocking mode for ESPTool flashing.
      * This stops the SerialInputOutputManager so that readBlocking() can receive data.
      * Call disableRawMode() when done to restart async reads.
+     *
+     * @param drainPort If true (default), drain any buffered data from the serial
+     *   port using port.read(). Set to false for devices whose USB stack cannot
+     *   handle the GET_STATUS control transfer that port.read() triggers (e.g.
+     *   nRF52840 DFU bootloader) — the drain would crash their USB controller.
      */
     @Suppress("NestedBlockDepth")
-    fun enableRawMode() {
-        Log.d(TAG, "Enabling raw mode (stopping SerialInputOutputManager)")
+    fun enableRawMode(drainPort: Boolean = true) {
+        Log.d(TAG, "Enabling raw mode (stopping SerialInputOutputManager, drain=$drainPort)")
 
         // Set flag FIRST so onNewData ignores any data that arrives
         rawModeEnabled.set(true)
@@ -929,8 +1070,11 @@ class KotlinUSBBridge(
             waitForManagerStop(future)
             Log.d(TAG, "SerialInputOutputManager stopped")
 
-            // Drain any data that was buffered by the serial port during async operation
-            drainPortAfterManagerStop()
+            // Drain any data that was buffered by the serial port during async
+            // operation. Skipped for devices that can't handle testConnection().
+            if (drainPort) {
+                drainPortAfterManagerStop()
+            }
         }
         // Clear any buffered data in our queue
         readBuffer.clear()
@@ -992,6 +1136,81 @@ class KotlinUSBBridge(
         manager.readTimeout = 100
         ioManager = manager
         ioManagerFuture = ioExecutor.submit(manager)
+    }
+
+    /**
+     * Enable DFU mode: suppresses KISS parsing and Python callbacks for
+     * incoming data, but keeps the ioManager running for reliable reads.
+     * Data is buffered in readBuffer and can be polled via read()/available().
+     *
+     * Unlike enableRawMode(), this does NOT stop the SerialInputOutputManager.
+     * Android's bulkTransfer with large timeouts doesn't reliably return data,
+     * but the ioManager's short-timeout polling loop works correctly.
+     */
+    fun enableDfuMode() {
+        Log.d(TAG, "Enabling DFU mode (ioManager stays running)")
+        rawModeEnabled.set(true)
+        readBuffer.clear()
+    }
+
+    /**
+     * Stop the ioManager without draining the port.
+     *
+     * Unlike enableRawMode(), this does NOT call port.read() to drain
+     * buffered data. This is critical during nRF52 DFU: port.read() calls
+     * testConnection() which sends a USB GET_STATUS control transfer. If the
+     * nRF52840's CPU is blocked by NVMC flash erase, this control transfer
+     * corrupts the USB controller state and eventually causes a bus reset.
+     *
+     * Call this after reading the DFU Start ACK but before the erase wait,
+     * to keep the USB bus idle during the erase — matching the behavior of
+     * the reference implementation (pyserial sleeps, no reads during erase).
+     */
+    fun stopIoManager() {
+        Log.d(TAG, "Stopping ioManager (no drain)")
+        val manager = ioManager
+        val future = ioManagerFuture
+        if (manager != null) {
+            manager.stop()
+            ioManager = null
+            ioManagerFuture = null
+            future?.cancel(true)
+            waitForManagerStop(future)
+            Log.d(TAG, "ioManager stopped")
+        }
+    }
+
+    /**
+     * Start (or restart) the ioManager on the current port.
+     *
+     * Used after DFU flash erase: the ioManager was stopped to prevent
+     * testConnection() during erase, but the port itself is still valid.
+     * After erase completes, we restart the ioManager to buffer ACK data.
+     */
+    fun startIoManager() {
+        val port =
+            currentPort ?: run {
+                Log.d(TAG, "startIoManager: no current port")
+                return
+            }
+        if (ioManager != null) {
+            Log.d(TAG, "ioManager already running")
+            return
+        }
+        Log.d(TAG, "Starting ioManager on existing port")
+        val manager = SerialInputOutputManager(port, this)
+        manager.readTimeout = 100
+        ioManager = manager
+        ioManagerFuture = ioExecutor.submit(manager)
+    }
+
+    /**
+     * Disable DFU mode: restores normal KISS parsing and Python callbacks.
+     */
+    fun disableDfuMode() {
+        Log.d(TAG, "Disabling DFU mode")
+        rawModeEnabled.set(false)
+        readBuffer.clear()
     }
 
     /**
@@ -1099,7 +1318,11 @@ class KotlinUSBBridge(
             // In raw mode, the ioManager should be stopped but if it's still running,
             // don't process the data - it will be read via readBlocking() instead
             if (rawModeEnabled.get()) {
-                Log.v(TAG, "USB received ${data.size} bytes (ignored - raw mode)")
+                // DFU/raw mode: buffer data for readFromBuffer() but skip
+                // KISS parsing and Python callbacks (bootloader data, not Reticulum)
+                for (byte in data) {
+                    readBuffer.offer(byte)
+                }
                 return
             }
 
@@ -1184,9 +1407,19 @@ class KotlinUSBBridge(
 
     /**
      * Callback from SerialInputOutputManager on error.
+     *
+     * In DFU/raw mode, ioManager crashes are expected and non-fatal.
+     * The nRF52840 bootloader's minimal USB stack may not respond to the
+     * GET_STATUS control transfer that testConnection() sends on read
+     * timeouts. The port itself is still valid — writes use bulkTransfer
+     * to the OUT endpoint, which doesn't call testConnection().
      */
     override fun onRunError(e: Exception) {
         Log.e(TAG, "USB I/O error", e)
+        if (rawModeEnabled.get()) {
+            Log.w(TAG, "Suppressing disconnect in DFU/raw mode — port stays open for writes")
+            return
+        }
         handleDisconnect()
     }
 

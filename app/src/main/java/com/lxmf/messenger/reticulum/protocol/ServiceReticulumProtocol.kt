@@ -1476,14 +1476,18 @@ class ServiceReticulumProtocol(
         appData: ByteArray?,
     ): Result<Unit> =
         runCatching {
-            val service = this.service ?: throw IllegalStateException("Service not bound")
+            withContext(Dispatchers.IO) {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
 
-            val resultJson = service.announceDestination(destination.hash, appData)
-            val result = JSONObject(resultJson)
+                val resultJson = service.announceDestination(destination.hash, appData)
+                val result = JSONObject(resultJson)
 
-            if (!result.optBoolean("success", false)) {
-                val error = result.optString("error", "Unknown error")
-                throw RuntimeException(error)
+                if (!result.optBoolean("success", false)) {
+                    val error = result.optString("error", "Unknown error")
+                    throw RuntimeException(error)
+                }
             }
         }
 

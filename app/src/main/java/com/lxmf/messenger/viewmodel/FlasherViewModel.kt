@@ -207,6 +207,7 @@ class FlasherViewModel
         }
 
         private fun handleComplete(flashState: RNodeFlasher.FlashState.Complete) {
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
             _state.update {
                 it.copy(
                     currentStep = FlasherStep.COMPLETE,
@@ -224,6 +225,7 @@ class FlasherViewModel
                     _state.update { it.copy(isDetecting = false, detectionError = flashState.message) }
                 }
                 FlasherStep.FLASH_PROGRESS -> {
+                    com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
                     _state.update {
                         it.copy(
                             currentStep = FlasherStep.COMPLETE,
@@ -509,6 +511,12 @@ class FlasherViewModel
             val board = _state.value.selectedBoard ?: return
             val band = _state.value.selectedBand
 
+            // Suppress USB auto-navigation for the entire flash + provisioning duration.
+            // The device re-enumerates after DFU with a new device ID, which triggers
+            // ACTION_USB_DEVICE_ATTACHED — without this flag, the app navigates away
+            // from the flash progress screen.
+            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = true
+
             _state.update {
                 it.copy(
                     currentStep = FlasherStep.FLASH_PROGRESS,
@@ -546,6 +554,7 @@ class FlasherViewModel
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Flash failed with exception", e)
+                    com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
                     _state.update {
                         it.copy(
                             currentStep = FlasherStep.COMPLETE,

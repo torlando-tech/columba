@@ -305,8 +305,7 @@ fun StatusCard(
                             .background(
                                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                                 RoundedCornerShape(8.dp),
-                            )
-                            .padding(8.dp),
+                            ).padding(8.dp),
                 )
             }
         }
@@ -352,7 +351,6 @@ fun ReticulumInfoCard(
             InfoRow(label = "Storage Path", value = debugInfo.storagePath, monospace = true)
             InfoRow(label = "Transport Enabled", value = if (debugInfo.transportEnabled) "Yes" else "No")
             InfoRow(label = "Multicast Lock", value = if (debugInfo.multicastLockHeld) "✓ Held" else "✗ Not held")
-            InfoRow(label = "WiFi Lock", value = if (debugInfo.wifiLockHeld) "✓ Held" else "✗ Not held")
             InfoRow(label = "Wake Lock", value = if (debugInfo.wakeLockHeld) "✓ Held" else "✗ Not held")
 
             Divider(modifier = Modifier.padding(vertical = 4.dp))
@@ -567,15 +565,13 @@ fun InterfaceRow(
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
                     RoundedCornerShape(8.dp),
-                )
-                .then(
+                ).then(
                     if (onClick != null) {
                         Modifier.clickable(onClick = onClick)
                     } else {
                         Modifier
                     },
-                )
-                .padding(12.dp),
+                ).padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -940,8 +936,7 @@ fun BleConnectionsCard(
                                         .background(
                                             MaterialTheme.colorScheme.surfaceVariant,
                                             RoundedCornerShape(8.dp),
-                                        )
-                                        .padding(12.dp),
+                                        ).padding(12.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -988,7 +983,11 @@ fun BleConnectionsCard(
                             // Signal quality indicator
                             val avgSignalQuality =
                                 if (uiState.connections.isNotEmpty()) {
-                                    val avgRssi = uiState.connections.map { it.rssi }.average().toInt()
+                                    val avgRssi =
+                                        uiState.connections
+                                            .map { it.rssi }
+                                            .average()
+                                            .toInt()
                                     when {
                                         avgRssi > -50 -> SignalQuality.EXCELLENT
                                         avgRssi > -70 -> SignalQuality.GOOD

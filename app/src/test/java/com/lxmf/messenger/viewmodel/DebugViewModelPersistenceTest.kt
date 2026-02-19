@@ -225,7 +225,6 @@ class DebugViewModelPersistenceTest {
                     ),
                 transportEnabled = true,
                 multicastLockHeld = true,
-                wifiLockHeld = true,
                 wakeLockHeld = true,
                 error = null,
                 heartbeatAgeSeconds = 1L,
@@ -244,7 +243,6 @@ class DebugViewModelPersistenceTest {
         assertEquals(1, debugInfo.interfaces.size)
         assertTrue(debugInfo.transportEnabled)
         assertTrue(debugInfo.multicastLockHeld)
-        assertTrue(debugInfo.wifiLockHeld)
         assertTrue(debugInfo.wakeLockHeld)
         assertEquals(1L, debugInfo.heartbeatAgeSeconds)
         assertTrue(debugInfo.healthCheckRunning)

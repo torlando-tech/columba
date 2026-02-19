@@ -6,20 +6,25 @@ import android.os.PowerManager
 import android.util.Log
 
 /**
- * Manages WiFi, Multicast, and Wake locks for the Reticulum service.
+ * Manages Multicast and Wake locks for the Reticulum service.
  *
  * These locks ensure reliable network operation:
  * - MulticastLock: Required for receiving multicast packets (network discovery)
- * - WifiLock: Keeps WiFi active even when screen is off
  * - WakeLock: Prevents CPU from sleeping during Doze mode
+ *
+ * WiFi lock (WIFI_MODE_FULL_HIGH_PERF) was intentionally removed — it prevents
+ * 802.11 power-save mode (PSP), consuming ~10x more WiFi radio power for latency
+ * savings (~100-300ms) that are imperceptible for a messenger. The battery whitelist
+ * already ensures network access during Doze.
  *
  * All locks use setReferenceCounted(false) to prevent double-release issues.
  */
-class LockManager(private val context: Context) {
+class LockManager(
+    private val context: Context,
+) {
     companion object {
         private const val TAG = "LockManager"
         private const val MULTICAST_LOCK_TAG = "ReticulumMulticast"
-        private const val WIFI_LOCK_TAG = "ReticulumWifi"
         private const val WAKE_LOCK_TAG = "Columba::ReticulumService"
         private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 60 * 1000L // 10 hours
     }
@@ -36,7 +41,6 @@ class LockManager(private val context: Context) {
     }
 
     private var multicastLock: WifiManager.MulticastLock? = null
-    private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     /**
@@ -48,7 +52,6 @@ class LockManager(private val context: Context) {
         synchronized(lockMutex) {
             try {
                 acquireMulticastLock()
-                acquireWifiLock()
                 acquireWakeLock()
             } catch (e: Exception) {
                 Log.e(TAG, "Error acquiring locks", e)
@@ -65,7 +68,6 @@ class LockManager(private val context: Context) {
         synchronized(lockMutex) {
             try {
                 releaseMulticastLock()
-                releaseWifiLock()
                 releaseWakeLock()
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing locks", e)
@@ -81,7 +83,6 @@ class LockManager(private val context: Context) {
         synchronized(lockMutex) {
             return LockStatus(
                 multicastHeld = multicastLock?.isHeld == true,
-                wifiHeld = wifiLock?.isHeld == true,
                 wakeHeld = wakeLock?.isHeld == true,
             )
         }
@@ -98,33 +99,19 @@ class LockManager(private val context: Context) {
         }
     }
 
-    private fun acquireWifiLock() {
-        if (wifiLock == null || wifiLock?.isHeld != true) {
-            @Suppress("DEPRECATION")
-            wifiLock =
-                wifiManager.createWifiLock(
-                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-                    WIFI_LOCK_TAG,
-                ).apply {
-                    setReferenceCounted(false)
-                    acquire()
-                }
-            Log.i(TAG, "WifiLock acquired")
-        }
-    }
-
     private fun acquireWakeLock() {
         if (wakeLock == null || wakeLock?.isHeld != true) {
             val wasExpired = wakeLock != null && wakeLock?.isHeld != true
             wakeLock =
-                powerManager.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    WAKE_LOCK_TAG,
-                ).apply {
-                    setReferenceCounted(false)
-                    @Suppress("DEPRECATION")
-                    acquire(WAKE_LOCK_TIMEOUT_MS)
-                }
+                powerManager
+                    .newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK,
+                        WAKE_LOCK_TAG,
+                    ).apply {
+                        setReferenceCounted(false)
+                        @Suppress("DEPRECATION")
+                        acquire(WAKE_LOCK_TIMEOUT_MS)
+                    }
             if (wasExpired) {
                 Log.i(TAG, "WakeLock expired, re-acquired")
             } else {
@@ -141,14 +128,6 @@ class LockManager(private val context: Context) {
         multicastLock = null
     }
 
-    private fun releaseWifiLock() {
-        if (wifiLock?.isHeld == true) {
-            wifiLock?.release()
-            Log.i(TAG, "WifiLock released")
-        }
-        wifiLock = null
-    }
-
     private fun releaseWakeLock() {
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
@@ -162,7 +141,6 @@ class LockManager(private val context: Context) {
      */
     data class LockStatus(
         val multicastHeld: Boolean,
-        val wifiHeld: Boolean,
         val wakeHeld: Boolean,
     )
 }

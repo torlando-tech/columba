@@ -5435,15 +5435,16 @@ class ReticulumWrapper:
             # Check propagation state changes (for real-time sync progress)
             self._check_propagation_state_change()
 
-            # Use faster interval during active sync (100ms), slower when idle (1s)
+            # Use faster interval during active sync (100ms), slower when idle (5s)
             if (self.router and
                 self._last_propagation_state is not None and
                 self._last_propagation_state not in (0, 7, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4)):
                 # Active sync in progress - check more frequently
                 time.sleep(0.1)
             else:
-                # Idle or complete - normal heartbeat interval
-                time.sleep(1)
+                # Idle or complete - reduced from 1s to 5s to cut wake-ups by 80%.
+                # Kotlin HealthCheckManager uses 60s stale threshold, so 5s is safe.
+                time.sleep(5)
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop exiting (not initialized)")
 
     def get_heartbeat(self) -> float:
@@ -5484,7 +5485,7 @@ class ReticulumWrapper:
         """
         log_debug("ReticulumWrapper", "_maintenance_loop", "Maintenance loop started")
         while self.initialized:
-            time.sleep(1)  # Check every second, but only reinit per interval
+            time.sleep(30)  # Reduced from 1s — only does work when failed_interfaces is non-empty
 
             # Check if it's time to retry failed interfaces
             now = time.time()

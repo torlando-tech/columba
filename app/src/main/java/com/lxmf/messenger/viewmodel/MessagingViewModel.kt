@@ -247,6 +247,21 @@ class MessagingViewModel
                 peerHash?.let { linkStates[it] }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+        // Message font scale (text size dialog in conversation view)
+        val messageFontScale: StateFlow<Float> =
+            settingsRepository.messageFontScaleFlow
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = 1.0f,
+                )
+
+        fun saveMessageFontScale(scale: Float) {
+            viewModelScope.launch {
+                settingsRepository.saveMessageFontScale(scale)
+            }
+        }
+
         // Sync state from PropagationNodeManager
         val isSyncing: StateFlow<Boolean> = propagationNodeManager.isSyncing
         val currentRelay = propagationNodeManager.currentRelay

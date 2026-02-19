@@ -71,6 +71,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
@@ -91,6 +92,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -141,6 +143,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -202,6 +205,7 @@ private fun LinkifiedMessageText(
     text: String,
     isFromMe: Boolean,
     modifier: Modifier = Modifier,
+    fontScale: Float = 1.0f,
 ) {
     val context = LocalContext.current
     val viewConfiguration = LocalViewConfiguration.current
@@ -263,9 +267,11 @@ private fun LinkifiedMessageText(
 
     var layoutResult: TextLayoutResult? by remember { mutableStateOf(null) }
 
+    val scaledFontSize = MaterialTheme.typography.bodyLarge.fontSize * fontScale
+
     Text(
         text = annotatedText,
-        style = MaterialTheme.typography.bodyLarge,
+        style = MaterialTheme.typography.bodyLarge.copy(fontSize = scaledFontSize),
         color = textColor,
         onTextLayout = { layoutResult = it },
         modifier =
@@ -390,6 +396,10 @@ fun MessagingScreen(
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
+
+    // Message font scale (text size dialog)
+    val messageFontScale by viewModel.messageFontScale.collectAsStateWithLifecycle()
+    var showTextSizeDialog by remember { mutableStateOf(false) }
 
     // File attachment state
     val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
@@ -975,6 +985,36 @@ fun MessagingScreen(
                             )
                         }
                     }
+
+                    // Overflow menu
+                    Box {
+                        var showOverflowMenu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.FormatSize,
+                                        contentDescription = null,
+                                    )
+                                },
+                                text = { Text("Text size") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showTextSizeDialog = true
+                                },
+                            )
+                        }
+                    }
                 },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
@@ -1104,6 +1144,7 @@ fun MessagingScreen(
                                             peerName = peerName,
                                             syncProgress = syncProgress,
                                             isImageLoading = needsImageLoading,
+                                            fontScale = messageFontScale,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1490,6 +1531,15 @@ fun MessagingScreen(
             },
         )
     }
+
+    // Text size dialog
+    if (showTextSizeDialog) {
+        TextSizeDialog(
+            currentScale = messageFontScale,
+            onScaleChange = { viewModel.saveMessageFontScale(it) },
+            onDismiss = { showTextSizeDialog = false },
+        )
+    }
 }
 
 @Suppress("UnusedParameter") // Params kept for API consistency; actions handled by overlay
@@ -1503,6 +1553,7 @@ fun MessageBubble(
     peerName: String = "",
     syncProgress: SyncProgress = SyncProgress.Idle,
     isImageLoading: Boolean = false,
+    fontScale: Float = 1.0f,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -1917,6 +1968,7 @@ fun MessageBubble(
                         LinkifiedMessageText(
                             text = message.content,
                             isFromMe = isFromMe,
+                            fontScale = fontScale,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
@@ -2663,3 +2715,83 @@ internal fun getMessageStatusIcon(status: String): String =
         "failed" -> "!"
         else -> ""
     }
+
+@Composable
+private fun TextSizeDialog(
+    currentScale: Float,
+    onScaleChange: (Float) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var sliderValue by remember(currentScale) { mutableStateOf(currentScale) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.FormatSize,
+                contentDescription = null,
+            )
+        },
+        title = { Text("Text size") },
+        text = {
+            Column {
+                // Preview text
+                Text(
+                    text = "Preview message text",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * sliderValue,
+                    ),
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+
+                // Scale label
+                Text(
+                    text = "${(sliderValue * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // Slider
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    valueRange = 0.7f..2.0f,
+                    steps = 12,
+                )
+
+                // Min/Max labels
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "A",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "A",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onScaleChange(sliderValue)
+                onDismiss()
+            }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                onScaleChange(1.0f)
+                sliderValue = 1.0f
+            }) {
+                Text("Reset")
+            }
+        },
+    )
+}

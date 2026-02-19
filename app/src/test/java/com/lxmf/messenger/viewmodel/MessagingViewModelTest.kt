@@ -122,6 +122,7 @@ class MessagingViewModelTest {
         coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
         coEvery { settingsRepository.getTryPropagationOnFail() } returns true
         coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
+        every { settingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
@@ -528,6 +529,7 @@ class MessagingViewModelTest {
             coEvery { failingSettingsRepository.getDefaultDeliveryMethod() } returns "direct"
             coEvery { failingSettingsRepository.getTryPropagationOnFail() } returns true
             coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
+            every { failingSettingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
 
             val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)

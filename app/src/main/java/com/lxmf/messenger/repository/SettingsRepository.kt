@@ -140,6 +140,9 @@ class SettingsRepository
             // Telemetry host mode (acting as collector for others)
             val TELEMETRY_HOST_MODE_ENABLED = booleanPreferencesKey("telemetry_host_mode_enabled")
             val TELEMETRY_ALLOWED_REQUESTERS = stringSetPreferencesKey("telemetry_allowed_requesters")
+
+            // Message font scale (text size dialog in conversation view)
+            val MESSAGE_FONT_SCALE = floatPreferencesKey("message_font_scale")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1816,5 +1819,28 @@ class SettingsRepository
                 darkColorScheme = darkScheme,
                 baseTheme = themeData.baseTheme?.let { PresetTheme.valueOf(it) },
             )
+        }
+
+        // Message font scale (text size dialog)
+
+        /**
+         * Flow of the message font scale factor.
+         * Defaults to 1.0f (normal size). Range: 0.7f to 2.0f.
+         */
+        val messageFontScaleFlow: Flow<Float> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MESSAGE_FONT_SCALE] ?: 1.0f
+                }.distinctUntilChanged()
+
+        /**
+         * Save the message font scale factor.
+         *
+         * @param scale The font scale factor (0.7f to 2.0f)
+         */
+        suspend fun saveMessageFontScale(scale: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MESSAGE_FONT_SCALE] = scale.coerceIn(0.7f, 2.0f)
+            }
         }
     }

@@ -36,6 +36,7 @@ class NordicDFUFlasher(
         private const val DFU_FLASH_BAUD = 115200
 
         private const val SERIAL_PORT_OPEN_WAIT_MS = 100L
+        private const val DTR_DEASSERT_WAIT_MS = 50L
         private const val TOUCH_RESET_WAIT_MS = 1500L
 
         // DFU Packet Types
@@ -52,11 +53,35 @@ class NordicDFUFlasher(
         // Flash timing constants
         private const val FLASH_PAGE_SIZE = 4096
         private const val FLASH_PAGE_ERASE_TIME_MS = 89.7
-        private const val FLASH_WORD_WRITE_TIME_MS = 0.1
-        private const val FLASH_PAGE_WRITE_TIME_MS = (FLASH_PAGE_SIZE / 4) * FLASH_WORD_WRITE_TIME_MS
+
+        // Flash word write time: nRF52840 ~41us max, nRF52832 ~338us max.
+        // Using conservative estimate from reference: (4096/4) * 0.000100 = 0.1024s
+        private const val FLASH_PAGE_WRITE_TIME_MS = 103L // rounded up from 102.4
 
         // DFU packet max size
         private const val DFU_PACKET_MAX_SIZE = 512
+
+        // How many data packets fill one flash page (4096 / 512 = 8)
+        private const val PACKETS_PER_PAGE = FLASH_PAGE_SIZE / DFU_PACKET_MAX_SIZE
+
+        // ACK handling constants
+        // Reference uses 1s, but our USB serial stack has higher latency.
+        // Bootloader response times vary: Init ~1-3.3s, data unknown.
+        // Retries send duplicate packets that confuse the bootloader state
+        // machine, so we use a generous timeout to succeed on first attempt.
+        private const val ACK_READ_TIMEOUT_MS = 5000L
+        private const val MAX_RETRIES = 3
+
+        // Short timeout for readBlocking polls inside readAckNr.
+        // We use short reads to keep the polling loop responsive.
+        private const val DFU_READ_POLL_MS = 200
+
+        // Post-DFU settle time. After the DFU Stop ACK, the bootloader
+        // validates firmware CRC, writes bootloader settings to flash, and
+        // prepares to reset. For single-bank app-only updates, this takes
+        // ~200ms (one flash page erase + write). We wait generously to
+        // ensure the bootloader finishes before we disconnect USB.
+        private const val POST_DFU_SETTLE_MS = 2000L
 
         // Hex type for application
         private const val HEX_TYPE_APPLICATION = 4
@@ -113,11 +138,23 @@ class NordicDFUFlasher(
 
                 progressCallback.onProgress(10, "Connecting to bootloader...")
 
-                // Connect at flash baud rate
-                if (!usbBridge.connect(deviceId, DFU_FLASH_BAUD)) {
+                // Connect at flash baud rate WITHOUT starting the ioManager.
+                // The ioManager calls port.read() in a loop, and when it times
+                // out (returns 0 bytes), CdcAcmSerialDriver calls testConnection()
+                // — a USB GET_STATUS control transfer. The nRF52840 bootloader's
+                // minimal TinyUSB stack cannot handle GET_STATUS, causing a USB
+                // bus reset that kills the connection. By skipping the ioManager
+                // entirely, no port.read() or testConnection() ever occurs.
+                // All DFU I/O uses readBlockingDirect()/writeBlockingDirect()
+                // which call bulkTransfer() directly without testConnection.
+                if (!usbBridge.connect(deviceId, DFU_FLASH_BAUD, startIoManager = false)) {
                     progressCallback.onError("Failed to connect to bootloader")
                     return@withContext false
                 }
+
+                // Set raw mode flag (no ioManager to stop, just sets the flag
+                // so onRunError suppresses disconnects and readBuffer is cleared).
+                usbBridge.enableRawMode(drainPort = false)
 
                 delay(SERIAL_PORT_OPEN_WAIT_MS)
 
@@ -131,7 +168,17 @@ class NordicDFUFlasher(
                         progressCallback,
                     )
 
+                // Disconnect BEFORE settle wait (matches reference: close → sleep).
+                // The bootloader validates firmware CRC and writes bootloader settings
+                // after DFU Stop — closing the port prevents USB interference.
+                usbBridge.disableRawMode()
+                usbBridge.disconnect()
+
                 if (success) {
+                    // Wait for bootloader to finalize: validate CRC, write settings,
+                    // and (for dual-bank) copy bank1→bank0
+                    Log.d(TAG, "Waiting for bootloader to finalize firmware...")
+                    delay(POST_DFU_SETTLE_MS)
                     progressCallback.onComplete()
                 }
 
@@ -141,12 +188,21 @@ class NordicDFUFlasher(
                 progressCallback.onError("Flash failed: ${e.message}")
                 false
             } finally {
+                // Safety net: disconnect if still connected (e.g. after exception)
+                usbBridge.disableRawMode()
                 usbBridge.disconnect()
             }
         }
 
     /**
      * Enter DFU bootloader mode using the 1200 baud touch technique.
+     *
+     * The nRF52840's Adafruit bootloader monitors for a specific DTR sequence:
+     * 1. SET_LINE_CODING at 1200 baud → firmware flags _line_coding_1200 = true
+     * 2. SET_CONTROL_LINE_STATE with DTR=false → triggers system reset into bootloader
+     *
+     * On Android USB serial, port.close() does NOT send SET_CONTROL_LINE_STATE,
+     * so we must explicitly deassert DTR before disconnecting to trigger the touch.
      */
     private suspend fun enterDfuMode(deviceId: Int): Boolean {
         Log.d(TAG, "Entering DFU mode via 1200 baud touch")
@@ -154,19 +210,25 @@ class NordicDFUFlasher(
         // Disconnect if connected
         usbBridge.disconnect()
 
-        // Connect at 1200 baud
+        // Connect at 1200 baud (connect() sets DTR=true automatically)
         if (!usbBridge.connect(deviceId, DFU_TOUCH_BAUD)) {
             Log.e(TAG, "Failed to connect at 1200 baud")
             return false
         }
 
-        // Wait briefly
+        // Wait for the line coding to be processed by the device
         delay(SERIAL_PORT_OPEN_WAIT_MS)
 
-        // Disconnect (the 1200 baud touch triggers bootloader)
+        // Explicitly deassert DTR to trigger the 1200 baud touch.
+        // This sends SET_CONTROL_LINE_STATE(DTR=false) which the nRF52840
+        // firmware's tud_cdc_line_state_cb() detects as the reset signal.
+        usbBridge.setDtr(false)
+        delay(DTR_DEASSERT_WAIT_MS)
+
+        // Now disconnect (port.close() alone wouldn't trigger the touch)
         usbBridge.disconnect()
 
-        // Wait for device to enter DFU mode
+        // Wait for device to reset and enter DFU bootloader mode
         Log.d(TAG, "Waiting for device to enter DFU mode...")
         delay(TOUCH_RESET_WAIT_MS)
 
@@ -175,6 +237,12 @@ class NordicDFUFlasher(
 
     /**
      * Send the firmware image using DFU protocol.
+     *
+     * Uses raw mode (no ioManager) for the entire transfer. The ioManager's
+     * testConnection() sends USB GET_STATUS control transfers that the nRF52840
+     * bootloader can't handle — causing a USB controller reset. By using raw
+     * mode with readBlocking(testConnection=false), the USB connection stays
+     * alive throughout erase and data transfer.
      */
     @Suppress("ReturnCount")
     private suspend fun dfuSendImage(
@@ -185,7 +253,28 @@ class NordicDFUFlasher(
         // Reset sequence number
         sequenceNumber = 0
 
-        // Send DFU Start packet
+        // Diagnostic: verify firmware CRC16 matches init packet's embedded CRC16.
+        // The last 2 bytes of the init packet are the firmware CRC16 (little-endian).
+        if (initPacket.size >= 2) {
+            val initCrc =
+                (initPacket[initPacket.size - 2].toInt() and 0xFF) or
+                    ((initPacket[initPacket.size - 1].toInt() and 0xFF) shl 8)
+            val firmwareCrc = CRC16.calculate(firmware)
+            Log.d(
+                TAG,
+                "Firmware CRC16: 0x${"%04X".format(firmwareCrc)}, " +
+                    "Init packet CRC16: 0x${"%04X".format(initCrc)}, " +
+                    "match=${firmwareCrc == initCrc}",
+            )
+        }
+
+        // Flush the bootloader's SLIP parser. The app may have sent non-DFU
+        // data (KISS probes) before DFU started, leaving the SLIP parser with
+        // a partial frame. Sending FEND (0xC0) terminates any pending frame.
+        usbBridge.writeBlockingDirect(byteArrayOf(0xC0.toByte(), 0xC0.toByte()))
+        delay(50)
+
+        // Send DFU Start packet (triggers flash erase)
         Log.d(TAG, "Sending DFU start packet (firmware size: ${firmware.size} bytes)")
         if (!sendStartDfu(HEX_TYPE_APPLICATION, 0, 0, firmware.size)) {
             progressCallback.onError("Failed to send DFU start packet")
@@ -217,7 +306,13 @@ class NordicDFUFlasher(
     }
 
     /**
-     * Send DFU Start packet.
+     * Send DFU Start packet and wait for flash erase to complete.
+     *
+     * After the bootloader ACKs DFU Start, it begins erasing flash. During the
+     * erase (~5-8s), the nRF52840's CPU is blocked by synchronous NVMC operations
+     * and cannot service USB. Since we're in raw mode (no ioManager), there are no
+     * testConnection() calls to corrupt the USB controller. The USB connection
+     * stays alive, and we simply wait for the erase to complete.
      */
     private suspend fun sendStartDfu(
         mode: Int,
@@ -241,20 +336,37 @@ class NordicDFUFlasher(
         // Remember total size for erase time calculation
         totalSize = softdeviceSize + bootloaderSize + appSize
 
-        // Send HCI packet
         val hciPacket = createHciPacketFromFrame(frame)
-        usbBridge.write(hciPacket)
+        val eraseWaitMs = getEraseWaitTime().toLong()
 
-        // Wait for flash erase
-        val eraseWaitTime = getEraseWaitTime()
-        Log.d(TAG, "Waiting ${eraseWaitTime}ms for flash erase")
-        delay(eraseWaitTime.toLong())
+        // Log the complete packet hex for protocol debugging
+        val hex =
+            hciPacket.joinToString(" ") {
+                String.format(java.util.Locale.ROOT, "%02X", it.toInt() and 0xFF)
+            }
+        Log.d(TAG, "DFU Start packet (${hciPacket.size} bytes): $hex")
+
+        // Send DFU Start and read ACK. The bootloader ACKs at the HCI
+        // transport layer before starting erase, so ACK arrives quickly.
+        if (!sendAndWaitForAck(hciPacket, "DFU Start")) {
+            Log.e(TAG, "DFU Start: no ACK")
+            return false
+        }
+
+        // Wait for flash erase. The bootloader erases pages for the firmware
+        // region after ACKing DFU Start. During erase, CPU is blocked.
+        Log.d(TAG, "Waiting ${eraseWaitMs}ms for flash erase")
+        delay(eraseWaitMs)
 
         return true
     }
 
     /**
-     * Send DFU Init packet.
+     * Send DFU Init packet with ACK verification.
+     *
+     * The bootloader's DFU state machine (in RAM) survived the flash erase
+     * and is waiting for the Init packet. The USB connection stayed alive
+     * because raw mode prevented testConnection() calls during erase.
      */
     private suspend fun sendInitPacket(initPacket: ByteArray): Boolean {
         val frame = mutableListOf<Byte>()
@@ -265,30 +377,38 @@ class NordicDFUFlasher(
         // Init packet data
         frame.addAll(initPacket.toList())
 
-        // Padding (required by protocol)
-        frame.addAll(int16ToBytes(0x0000))
+        // Unconditional 2-byte suffix (matches reference: int16_to_bytes(0x0000)).
+        // The reference comment says "Padding required" — it's always appended
+        // regardless of init packet length. Without this, the HCI payload is 2
+        // bytes short, producing wrong length/checksum/CRC.
+        frame.add(0x00.toByte())
+        frame.add(0x00.toByte())
 
-        // Send HCI packet
         val hciPacket = createHciPacketFromFrame(frame)
-        usbBridge.write(hciPacket)
-
-        // Brief delay for processing
-        delay(100)
-
-        return true
+        return sendAndWaitForAck(hciPacket, "DFU Init")
     }
 
     /**
-     * Send firmware data in chunks.
+     * Send firmware data in chunks with ACK verification for each packet.
+     *
+     * The bootloader's HCI layer requires ACK-based flow control — each
+     * reliable packet must be acknowledged before the next is sent. Without
+     * this, the nRF52840's small CDC receive buffer (~64 bytes) overflows
+     * and subsequent packets are silently dropped.
+     *
+     * After DFU Stop ACK, we wait for the bootloader to validate firmware
+     * CRC and write bootloader settings to flash (~200ms for single-bank).
      */
+    @Suppress("ReturnCount")
     private suspend fun sendFirmware(
         firmware: ByteArray,
         progressCallback: ProgressCallback,
     ): Boolean {
-        val packets = mutableListOf<ByteArray>()
+        val totalPackets = (firmware.size + DFU_PACKET_MAX_SIZE - 1) / DFU_PACKET_MAX_SIZE
+        Log.d(TAG, "Sending firmware data (${firmware.size} bytes in $totalPackets packets)")
 
-        // Chunk firmware into packets
         var offset = 0
+        var packetIndex = 0
         while (offset < firmware.size) {
             val chunkSize = minOf(DFU_PACKET_MAX_SIZE, firmware.size - offset)
             val chunk = firmware.copyOfRange(offset, offset + chunkSize)
@@ -297,30 +417,36 @@ class NordicDFUFlasher(
             frame.addAll(int32ToBytes(DFU_DATA_PACKET))
             frame.addAll(chunk.toList())
 
-            packets.add(createHciPacketFromFrame(frame))
+            val hciPacket = createHciPacketFromFrame(frame)
+            if (!sendAndWaitForAck(hciPacket, "Data packet ${packetIndex + 1}/$totalPackets")) {
+                return false
+            }
+
             offset += chunkSize
+            packetIndex++
+
+            // After every page worth of packets (8 × 512 = 4096 bytes), give the
+            // bootloader time to write the page to flash. The nRF52840's CPU is
+            // blocked by synchronous NVMC write operations and cannot service USB.
+            if (packetIndex % PACKETS_PER_PAGE == 0) {
+                delay(FLASH_PAGE_WRITE_TIME_MS)
+            }
+
+            val progress = 25 + (packetIndex * 70 / totalPackets)
+            progressCallback.onProgress(progress, "Sending firmware: $packetIndex/$totalPackets")
         }
 
-        Log.d(TAG, "Sending ${packets.size} data packets")
+        // Wait for last page to write (may be partial page)
+        delay(FLASH_PAGE_WRITE_TIME_MS)
 
-        // Send each packet
-        for ((index, packet) in packets.withIndex()) {
-            usbBridge.write(packet)
-
-            // Wait for flash write
-            delay(FLASH_PAGE_WRITE_TIME_MS.toLong())
-
-            // Update progress (25% to 95% range for data transfer)
-            val progress = 25 + ((index + 1) * 70 / packets.size)
-            progressCallback.onProgress(progress, "Sending firmware: ${index + 1}/${packets.size}")
-        }
-
-        // Send DFU Stop packet
+        // Send DFU Stop packet with ACK verification
         Log.d(TAG, "Sending DFU stop packet")
         val stopFrame = mutableListOf<Byte>()
         stopFrame.addAll(int32ToBytes(DFU_STOP_DATA_PACKET))
         val stopPacket = createHciPacketFromFrame(stopFrame)
-        usbBridge.write(stopPacket)
+        if (!sendAndWaitForAck(stopPacket, "DFU Stop")) {
+            return false
+        }
 
         return true
     }
@@ -410,6 +536,91 @@ class NordicDFUFlasher(
     }
 
     /**
+     * Read a SLIP-framed ACK response from the bootloader.
+     *
+     * Matches the reference implementation (adafruit-nrfutil): extracts the ACK
+     * number from bits 5:3 of the first decoded byte. Does not validate header
+     * checksums or CRC — the reference doesn't either for ACK packets.
+     *
+     * @param timeoutMs Read timeout in milliseconds
+     * @return The ACK number (0-7), or -1 on timeout
+     */
+    private fun readAckNr(timeoutMs: Long = ACK_READ_TIMEOUT_MS): Int {
+        val parser = SLIPFrameParser()
+        val buffer = ByteArray(64)
+        val deadline = System.currentTimeMillis() + timeoutMs
+
+        while (System.currentTimeMillis() < deadline) {
+            // Use readBlockingDirect for testConnection-free reads. This calls
+            // UsbDeviceConnection.bulkTransfer() directly, bypassing the serial
+            // library's port.read() which sends USB GET_STATUS control transfers
+            // that kill the nRF52840 bootloader during NVMC flash operations.
+            val remaining = (deadline - System.currentTimeMillis()).toInt().coerceIn(1, DFU_READ_POLL_MS)
+            val bytesRead = usbBridge.readBlockingDirect(buffer, remaining)
+            if (bytesRead == -1) break // Connection lost — stop immediately
+            if (bytesRead == 0) continue // Timeout — try again
+
+            val data = buffer.copyOf(bytesRead)
+            val hex =
+                data.joinToString(" ") {
+                    String.format(java.util.Locale.ROOT, "%02X", it.toInt() and 0xFF)
+                }
+            Log.d(TAG, "readAck: got ${data.size} bytes: $hex")
+
+            val frames = parser.processBytes(data)
+            for (frame in frames) {
+                if (frame.isEmpty()) continue
+                val ackNr = (frame[0].toInt() shr 3) and 0x07
+                Log.d(TAG, "readAck: decoded frame ${frame.size} bytes, ack=$ackNr")
+                return ackNr
+            }
+        }
+
+        Log.e(TAG, "ACK timeout (no response within ${timeoutMs}ms)")
+        return -1
+    }
+
+    /**
+     * Send an HCI packet and wait for any ACK response, with retry logic.
+     *
+     * Matches the reference implementation (adafruit-nrfutil send_packet):
+     * accepts the first valid SLIP frame as a successful ACK without
+     * validating the ACK sequence number. The reference uses a local
+     * `last_ack = None` that resets every call, so it never actually
+     * performs cross-packet ACK validation.
+     *
+     * @param hciPacket The SLIP-encoded HCI packet to send
+     * @param description Human-readable description for logging
+     * @param ackTimeoutMs Per-attempt ACK read timeout (default: ACK_READ_TIMEOUT_MS)
+     * @param maxRetries Max send attempts (default: MAX_RETRIES)
+     * @return true if ACK was received within retry limit
+     */
+    private suspend fun sendAndWaitForAck(
+        hciPacket: ByteArray,
+        description: String,
+        ackTimeoutMs: Long = ACK_READ_TIMEOUT_MS,
+        maxRetries: Int = MAX_RETRIES,
+    ): Boolean {
+        for (attempt in 1..maxRetries) {
+            val bytesWritten = usbBridge.writeBlockingDirect(hciPacket)
+            Log.d(TAG, "$description: wrote ${hciPacket.size} bytes, result=$bytesWritten")
+
+            val ackNr = readAckNr(ackTimeoutMs)
+            if (ackNr >= 0) {
+                Log.d(TAG, "$description: ACK=$ackNr (accepted)")
+                return true
+            }
+
+            if (attempt < maxRetries) {
+                Log.w(TAG, "$description: ACK timeout, retry $attempt/$maxRetries")
+            }
+        }
+
+        Log.e(TAG, "$description: failed after $maxRetries attempts")
+        return false
+    }
+
+    /**
      * Convert int32 to 4 bytes (little-endian).
      */
     private fun int32ToBytes(value: Int): List<Byte> =
@@ -418,15 +629,6 @@ class NordicDFUFlasher(
             ((value shr 8) and 0xFF).toByte(),
             ((value shr 16) and 0xFF).toByte(),
             ((value shr 24) and 0xFF).toByte(),
-        )
-
-    /**
-     * Convert int16 to 2 bytes (little-endian).
-     */
-    private fun int16ToBytes(value: Int): List<Byte> =
-        listOf(
-            (value and 0xFF).toByte(),
-            ((value shr 8) and 0xFF).toByte(),
         )
 
     /**

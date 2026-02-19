@@ -232,13 +232,22 @@ class RNodeFlasher(
                     // Calculate the firmware hash from the binary for provisioning
                     val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
 
-                    // Wait for device reboot, then provision
-                    _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
-
-                    // Give device time to boot after hard reset
-                    // Native USB devices need more time for USB re-enumeration
-                    val rebootDelay = if (isNativeUsb) 6000L else 5000L
-                    kotlinx.coroutines.delay(rebootDelay)
+                    when (firmwarePackage.platform) {
+                        RNodePlatform.NRF52 -> {
+                            // nRF52 DFU already reboots the device after DFU Stop, and
+                            // NordicDFUFlasher waits POST_DFU_SETTLE_MS for finalization.
+                            // Just wait for USB re-enumeration to complete.
+                            _flashState.value = FlashState.Progress(96, "Verifying firmware...")
+                            kotlinx.coroutines.delay(3000L)
+                        }
+                        else -> {
+                            // ESP32 needs a hard reset after flashing — wait for reboot.
+                            // Native USB devices need more time for USB re-enumeration.
+                            _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
+                            val rebootDelay = if (isNativeUsb) 6000L else 5000L
+                            kotlinx.coroutines.delay(rebootDelay)
+                        }
+                    }
 
                     // Provision the device (write EEPROM and set firmware hash)
                     // provisionDevice() handles USB re-enumeration with retries

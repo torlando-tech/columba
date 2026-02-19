@@ -207,7 +207,10 @@ class FlasherViewModel
         }
 
         private fun handleComplete(flashState: RNodeFlasher.FlashState.Complete) {
-            com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = false
+            // Keep bootloaderFlashModeActive = true here. The device may still be
+            // re-enumerating on USB after the DFU reboot, and clearing the flag now
+            // would let handleUsbDeviceAttached() navigate away from the success screen.
+            // The flag is cleared in onCleared() (leaving flasher) and flashAnother().
             _state.update {
                 it.copy(
                     currentStep = FlasherStep.COMPLETE,

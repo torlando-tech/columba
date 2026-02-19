@@ -34,6 +34,7 @@ class NordicDFUFlasher(
         // DFU Protocol Constants
         private const val DFU_TOUCH_BAUD = 1200
         private const val DFU_FLASH_BAUD = 115200
+        private const val NRF52_BOOTLOADER_PID = 0x0071
 
         private const val SERIAL_PORT_OPEN_WAIT_MS = 100L
         private const val DTR_DEASSERT_WAIT_MS = 50L
@@ -128,15 +129,36 @@ class NordicDFUFlasher(
                     return@withContext false
                 }
 
-                progressCallback.onProgress(5, "Entering DFU mode...")
+                // Check if device is already in bootloader mode (PID 0x0071).
+                // If so, skip the 1200-baud touch — the bootloader doesn't handle it
+                // and won't re-enumerate.
+                val deviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
+                val alreadyInBootloader = deviceInfo?.productId == NRF52_BOOTLOADER_PID
 
-                // Enter DFU mode (1200 baud touch)
-                if (!enterDfuMode(deviceId)) {
-                    progressCallback.onError("Failed to enter DFU mode")
-                    return@withContext false
+                val bootloaderDeviceId: Int
+                if (alreadyInBootloader) {
+                    Log.d(TAG, "Device already in bootloader mode (PID=0x0071), skipping 1200-baud touch")
+                    bootloaderDeviceId = deviceId
+                } else {
+                    progressCallback.onProgress(5, "Entering DFU mode...")
+
+                    // Enter DFU mode (1200 baud touch)
+                    if (!enterDfuMode(deviceId)) {
+                        progressCallback.onError("Failed to enter DFU mode")
+                        return@withContext false
+                    }
+
+                    progressCallback.onProgress(10, "Connecting to bootloader...")
+
+                    // After the 1200-baud touch, the device re-enumerates in bootloader
+                    // mode with a new USB device ID (and different PID). Find it.
+                    val foundId = findBootloaderDevice(deviceId)
+                    if (foundId == null) {
+                        progressCallback.onError("Failed to find bootloader device after reset")
+                        return@withContext false
+                    }
+                    bootloaderDeviceId = foundId
                 }
-
-                progressCallback.onProgress(10, "Connecting to bootloader...")
 
                 // Connect at flash baud rate WITHOUT starting the ioManager.
                 // The ioManager calls port.read() in a loop, and when it times
@@ -147,7 +169,7 @@ class NordicDFUFlasher(
                 // entirely, no port.read() or testConnection() ever occurs.
                 // All DFU I/O uses readBlockingDirect()/writeBlockingDirect()
                 // which call bulkTransfer() directly without testConnection.
-                if (!usbBridge.connect(deviceId, DFU_FLASH_BAUD, startIoManager = false)) {
+                if (!usbBridge.connect(bootloaderDeviceId, DFU_FLASH_BAUD, startIoManager = false)) {
                     progressCallback.onError("Failed to connect to bootloader")
                     return@withContext false
                 }
@@ -171,8 +193,11 @@ class NordicDFUFlasher(
                 // Disconnect BEFORE settle wait (matches reference: close → sleep).
                 // The bootloader validates firmware CRC and writes bootloader settings
                 // after DFU Stop — closing the port prevents USB interference.
-                usbBridge.disableRawMode()
+                // disconnect() first so currentPort=null, then disableRawMode() just
+                // clears the flag without restarting the ioManager (which would
+                // immediately call testConnection() on the closing port).
                 usbBridge.disconnect()
+                usbBridge.disableRawMode()
 
                 if (success) {
                     // Wait for bootloader to finalize: validate CRC, write settings,
@@ -189,8 +214,8 @@ class NordicDFUFlasher(
                 false
             } finally {
                 // Safety net: disconnect if still connected (e.g. after exception)
-                usbBridge.disableRawMode()
                 usbBridge.disconnect()
+                usbBridge.disableRawMode()
             }
         }
 
@@ -210,8 +235,10 @@ class NordicDFUFlasher(
         // Disconnect if connected
         usbBridge.disconnect()
 
-        // Connect at 1200 baud (connect() sets DTR=true automatically)
-        if (!usbBridge.connect(deviceId, DFU_TOUCH_BAUD)) {
+        // Connect at 1200 baud without ioManager — the ioManager's
+        // testConnection() sends USB GET_STATUS which crashes the nRF52840's
+        // minimal TinyUSB CDC-ACM stack. We only need to set baud + toggle DTR.
+        if (!usbBridge.connect(deviceId, DFU_TOUCH_BAUD, startIoManager = false)) {
             Log.e(TAG, "Failed to connect at 1200 baud")
             return false
         }
@@ -233,6 +260,41 @@ class NordicDFUFlasher(
         delay(TOUCH_RESET_WAIT_MS)
 
         return true
+    }
+
+    /**
+     * Find the bootloader device after a 1200-baud touch reset.
+     *
+     * The device re-enumerates with a new USB device ID (and different PID:
+     * application PID 0x8071 → bootloader PID 0x0071). Scan for any supported
+     * USB serial device with a different ID than the original.
+     *
+     * @return The new device ID, or null if not found
+     */
+    private suspend fun findBootloaderDevice(originalDeviceId: Int): Int? {
+        val maxAttempts = 5
+        val scanDelayMs = 500L
+
+        for (attempt in 1..maxAttempts) {
+            val devices = usbBridge.getConnectedUsbDevices()
+            val newDevice = devices.find { it.deviceId != originalDeviceId }
+
+            if (newDevice != null) {
+                Log.d(
+                    TAG,
+                    "Found bootloader device on attempt $attempt: ID=${newDevice.deviceId} " +
+                        "(VID=0x${newDevice.vendorId.toString(16)}, PID=0x${newDevice.productId.toString(16)})",
+                )
+                return newDevice.deviceId
+            }
+
+            if (attempt < maxAttempts) {
+                delay(scanDelayMs)
+            }
+        }
+
+        Log.e(TAG, "Bootloader device not found after $maxAttempts attempts")
+        return null
     }
 
     /**

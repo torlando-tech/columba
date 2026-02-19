@@ -709,20 +709,33 @@ class RNodeFlasher(
                         break
                     }
 
-                    // If that failed, scan for devices and try to find one matching native USB VID/PID
-                    Log.d(TAG, "Original device ID failed, scanning for devices...")
+                    // If that failed, the device may have re-enumerated with a new ID
+                    // (e.g. nRF52 bootloader PID 0x0071 → application PID 0x8071).
+                    // Scan for any supported USB serial device with a different ID.
+                    Log.d(TAG, "Original device ID failed, scanning for re-enumerated device...")
                     val devices = usbBridge.getConnectedUsbDevices()
-                    val nativeUsbDevice =
-                        devices.find {
-                            ESPToolFlasher.isNativeUsbDevice(it.vendorId, it.productId)
-                        }
+                    val reEnumeratedDevice =
+                        devices.find { it.deviceId != deviceId }
 
-                    if (nativeUsbDevice != null && nativeUsbDevice.deviceId != deviceId) {
-                        Log.d(TAG, "Found native USB device with new ID: ${nativeUsbDevice.deviceId}")
-                        if (usbBridge.connect(nativeUsbDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                    if (reEnumeratedDevice != null) {
+                        Log.d(
+                            TAG,
+                            "Found device with new ID: ${reEnumeratedDevice.deviceId} " +
+                                "(VID=0x${reEnumeratedDevice.vendorId.toString(16)}, " +
+                                "PID=0x${reEnumeratedDevice.productId.toString(16)})",
+                        )
+
+                        // Android drops USB permissions on re-enumeration but shows
+                        // UsbResolverActivity ("Open with Columba?") automatically.
+                        // Don't request permission ourselves — just try to connect.
+                        // If the user hasn't tapped the system dialog yet, connect()
+                        // will fail and we'll retry on the next attempt.
+                        if (usbBridge.connect(reEnumeratedDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
                             connected = true
-                            actualDeviceId = nativeUsbDevice.deviceId
+                            actualDeviceId = reEnumeratedDevice.deviceId
                             break
+                        } else {
+                            Log.d(TAG, "Connect failed (likely waiting for USB permission grant)")
                         }
                     }
 

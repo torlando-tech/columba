@@ -141,7 +141,7 @@ sealed class InterfaceConfig {
      * @param stAlock Short-term airtime limit percentage (optional)
      * @param ltAlock Long-term airtime limit percentage (optional)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
-     * @param enableFramebuffer Display Columba logo on RNode's OLED screen
+     * @param enableFramebuffer Display Columba logo on RNode's screen
      */
     data class RNode(
         override val name: String = "RNode LoRa",
@@ -161,7 +161,7 @@ sealed class InterfaceConfig {
         val stAlock: Double? = null, // Short-term airtime limit %
         val ltAlock: Double? = null, // Long-term airtime limit %
         val mode: String = "access_point",
-        val enableFramebuffer: Boolean = true, // Display logo on RNode OLED
+        val enableFramebuffer: Boolean = true, // Display logo on RNode screen
     ) : InterfaceConfig()
 
     /**
@@ -236,7 +236,9 @@ enum class LogLevel {
 /**
  * Discovery scopes for AutoInterface
  */
-enum class DiscoveryScope(val value: String) {
+enum class DiscoveryScope(
+    val value: String,
+) {
     LINK("link"), // Only local network segment
     ADMIN("admin"), // Administrative scope
     SITE("site"), // Site-wide scope
@@ -247,7 +249,9 @@ enum class DiscoveryScope(val value: String) {
 /**
  * Interface operating modes
  */
-enum class InterfaceMode(val value: String) {
+enum class InterfaceMode(
+    val value: String,
+) {
     FULL("full"), // All functionality enabled
     GATEWAY("gateway"), // Gateway mode (path discovery for others)
     ACCESS_POINT("access_point"), // Access point mode (quiet unless active)

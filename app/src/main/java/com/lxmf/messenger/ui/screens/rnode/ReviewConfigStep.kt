@@ -523,7 +523,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
-                            "Show Columba logo on RNode's OLED display when connected",
+                            "Show Columba logo on RNode's display when connected",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

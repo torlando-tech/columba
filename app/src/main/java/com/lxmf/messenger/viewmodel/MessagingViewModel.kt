@@ -36,6 +36,7 @@ import com.lxmf.messenger.ui.model.toMessageUi
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.ImageUtils
+import com.lxmf.messenger.util.streamHexToFile
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,6 +74,7 @@ import com.lxmf.messenger.reticulum.model.Message as ReticulumMessage
 class MessagingViewModel
     @Inject
     constructor(
+        @param:dagger.hilt.android.qualifiers.ApplicationContext private val applicationContext: Context,
         private val reticulumProtocol: ReticulumProtocol,
         private val conversationRepository: com.lxmf.messenger.data.repository.ConversationRepository,
         private val announceRepository: com.lxmf.messenger.data.repository.AnnounceRepository,
@@ -1005,7 +1007,14 @@ class MessagingViewModel
             replyToMessageId: String? = null,
         ) {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
-            val fieldsJson = buildFieldsJson(imageData, imageFormat, fileAttachments, replyToMessageId)
+            val fieldsJson =
+                buildFieldsJson(
+                    imageData,
+                    imageFormat,
+                    fileAttachments,
+                    replyToMessageId,
+                    cacheDir = applicationContext.cacheDir,
+                )
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
@@ -1921,6 +1930,7 @@ private suspend fun buildFieldsJson(
     fileAttachments: List<FileAttachment> = emptyList(),
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
+    cacheDir: java.io.File? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
@@ -1936,51 +1946,68 @@ private suspend fun buildFieldsJson(
 
         // Add image field (Field 6)
         if (hasImage && imageData != null) {
-            val hexImageData = imageData.toHexString()
-            json.put("6", hexImageData)
+            json.put("6", imageData.toHexString())
         }
 
         // Add file attachments field (Field 5)
         if (hasFiles) {
-            val attachmentsArray = org.json.JSONArray()
-            for (attachment in fileAttachments) {
-                val attachmentObj = org.json.JSONObject()
-                attachmentObj.put("filename", attachment.filename)
-                attachmentObj.put("data", attachment.data.toHexString())
-                attachmentObj.put("size", attachment.sizeBytes)
-                attachmentsArray.put(attachmentObj)
-            }
-            json.put("5", attachmentsArray)
+            json.put("5", buildFileAttachmentsArray(fileAttachments, cacheDir))
         }
 
         // Add app extensions field (Field 16) for replies, reactions, and future features
         if (hasReply || hasReactions) {
-            val appExtensions = org.json.JSONObject()
-
-            // Add reply_to if present
-            if (hasReply) {
-                appExtensions.put("reply_to", replyToMessageId)
-            }
-
-            // Add reactions if present
-            // Format: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
-            if (hasReactions && reactions != null) {
-                val reactionsObj = org.json.JSONObject()
-                for ((emoji, senderHashes) in reactions) {
-                    val sendersArray = org.json.JSONArray()
-                    for (hash in senderHashes) {
-                        sendersArray.put(hash)
-                    }
-                    reactionsObj.put(emoji, sendersArray)
-                }
-                appExtensions.put("reactions", reactionsObj)
-            }
-
-            json.put("16", appExtensions)
+            json.put("16", buildAppExtensions(replyToMessageId, reactions))
         }
 
         json.toString()
     }
+}
+
+private fun buildFileAttachmentsArray(
+    fileAttachments: List<FileAttachment>,
+    cacheDir: java.io.File?,
+): org.json.JSONArray {
+    val array = org.json.JSONArray()
+    for ((i, attachment) in fileAttachments.withIndex()) {
+        val obj = org.json.JSONObject()
+        obj.put("filename", attachment.filename)
+        obj.put("size", attachment.sizeBytes)
+        if (cacheDir != null) {
+            // Stream hex to disk to avoid OOM on large files
+            val hexFile = java.io.File(cacheDir, "outgoing_${System.nanoTime()}_$i.hex")
+            attachment.data.streamHexToFile(hexFile)
+            obj.put("_data_ref", hexFile.absolutePath)
+        } else {
+            obj.put("data", attachment.data.toHexString())
+        }
+        array.put(obj)
+    }
+    return array
+}
+
+private fun buildAppExtensions(
+    replyToMessageId: String?,
+    reactions: Map<String, List<String>>?,
+): org.json.JSONObject {
+    val appExtensions = org.json.JSONObject()
+
+    if (replyToMessageId != null) {
+        appExtensions.put("reply_to", replyToMessageId)
+    }
+
+    if (!reactions.isNullOrEmpty()) {
+        val reactionsObj = org.json.JSONObject()
+        for ((emoji, senderHashes) in reactions) {
+            val sendersArray = org.json.JSONArray()
+            for (hash in senderHashes) {
+                sendersArray.put(hash)
+            }
+            reactionsObj.put(emoji, sendersArray)
+        }
+        appExtensions.put("reactions", reactionsObj)
+    }
+
+    return appExtensions
 }
 
 /**

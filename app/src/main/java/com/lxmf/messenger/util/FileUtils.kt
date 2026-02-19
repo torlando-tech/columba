@@ -419,3 +419,23 @@ object FileUtils {
             } ?: 0
     }
 }
+
+private val HEX_CHARS = "0123456789abcdef".toCharArray()
+
+/**
+ * Stream this ByteArray to a file as hex characters, two per byte.
+ *
+ * Unlike in-memory hex conversion which allocates a CharArray(size*2),
+ * this writes char-by-char through a BufferedWriter — O(1) extra memory
+ * regardless of input size. Prevents OOM when hex-encoding large file
+ * attachments (e.g., 111MB file would otherwise require a 222MB CharArray).
+ */
+fun ByteArray.streamHexToFile(outputFile: File) {
+    outputFile.bufferedWriter().use { writer ->
+        for (byte in this) {
+            val v = byte.toInt() and 0xFF
+            writer.append(HEX_CHARS[v ushr 4])
+            writer.append(HEX_CHARS[v and 0x0F])
+        }
+    }
+}

@@ -169,7 +169,13 @@ class NordicDFUFlasher(
                 // entirely, no port.read() or testConnection() ever occurs.
                 // All DFU I/O uses readBlockingDirect()/writeBlockingDirect()
                 // which call bulkTransfer() directly without testConnection.
-                if (!usbBridge.connect(bootloaderDeviceId, DFU_FLASH_BAUD, startIoManager = false)) {
+                //
+                // After a 1200-baud touch, the device re-enumerates with a new USB
+                // device ID. Android revokes permission for the old ID and shows a
+                // "Open with Columba?" system dialog. Until the user taps it (or
+                // the system auto-grants via device_filter.xml), connect() will fail
+                // with "No permission". Retry to give time for permission grant.
+                if (!connectWithRetry(bootloaderDeviceId, DFU_FLASH_BAUD)) {
                     progressCallback.onError("Failed to connect to bootloader")
                     return@withContext false
                 }
@@ -295,6 +301,37 @@ class NordicDFUFlasher(
 
         Log.e(TAG, "Bootloader device not found after $maxAttempts attempts")
         return null
+    }
+
+    /**
+     * Connect to a USB device with retries, waiting for Android USB permission.
+     *
+     * After USB re-enumeration (1200-baud touch or DFU reset), Android assigns
+     * a new device ID and requires fresh permission. The system shows "Open with
+     * Columba?" — until the user taps it, connect() fails with "No permission".
+     *
+     * @return true if connected within the retry window
+     */
+    private suspend fun connectWithRetry(
+        deviceId: Int,
+        baudRate: Int,
+    ): Boolean {
+        val maxAttempts = 10
+        val retryDelayMs = 1000L
+
+        for (attempt in 1..maxAttempts) {
+            if (usbBridge.connect(deviceId, baudRate, startIoManager = false)) {
+                Log.d(TAG, "Connected to device $deviceId on attempt $attempt")
+                return true
+            }
+            if (attempt < maxAttempts) {
+                Log.d(TAG, "Connect attempt $attempt/$maxAttempts failed (likely waiting for USB permission)")
+                delay(retryDelayMs)
+            }
+        }
+
+        Log.e(TAG, "Failed to connect to device $deviceId after $maxAttempts attempts")
+        return false
     }
 
     /**

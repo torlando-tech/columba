@@ -37,6 +37,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -165,6 +166,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -232,6 +234,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -283,6 +286,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -385,6 +389,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4

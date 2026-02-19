@@ -2786,11 +2786,8 @@ private fun TextSizeDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onScaleChange(1.0f)
-                sliderValue = 1.0f
-            }) {
-                Text("Reset")
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         },
     )

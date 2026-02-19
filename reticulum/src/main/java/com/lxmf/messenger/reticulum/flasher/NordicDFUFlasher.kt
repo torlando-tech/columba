@@ -657,22 +657,24 @@ class NordicDFUFlasher(
             val remaining = (deadline - System.currentTimeMillis()).toInt().coerceIn(1, DFU_READ_POLL_MS)
             val bytesRead = usbBridge.readBlockingDirect(buffer, remaining)
             if (bytesRead == -1) break // Connection lost — stop immediately
-            if (bytesRead == 0) continue // Timeout — try again
 
-            val data = buffer.copyOf(bytesRead)
-            val hex =
-                data.joinToString(" ") {
-                    String.format(java.util.Locale.ROOT, "%02X", it.toInt() and 0xFF)
+            if (bytesRead > 0) {
+                val data = buffer.copyOf(bytesRead)
+                val hex =
+                    data.joinToString(" ") {
+                        String.format(java.util.Locale.ROOT, "%02X", it.toInt() and 0xFF)
+                    }
+                Log.d(TAG, "readAck: got ${data.size} bytes: $hex")
+
+                val frames = parser.processBytes(data)
+                val ackFrame = frames.firstOrNull { it.isNotEmpty() }
+                if (ackFrame != null) {
+                    val ackNr = (ackFrame[0].toInt() shr 3) and 0x07
+                    Log.d(TAG, "readAck: decoded frame ${ackFrame.size} bytes, ack=$ackNr")
+                    return ackNr
                 }
-            Log.d(TAG, "readAck: got ${data.size} bytes: $hex")
-
-            val frames = parser.processBytes(data)
-            for (frame in frames) {
-                if (frame.isEmpty()) continue
-                val ackNr = (frame[0].toInt() shr 3) and 0x07
-                Log.d(TAG, "readAck: decoded frame ${frame.size} bytes, ack=$ackNr")
-                return ackNr
             }
+            // bytesRead == 0 → timeout, loop retries
         }
 
         Log.e(TAG, "ACK timeout (no response within ${timeoutMs}ms)")

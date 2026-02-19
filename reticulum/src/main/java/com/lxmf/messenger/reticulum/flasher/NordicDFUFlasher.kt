@@ -648,14 +648,15 @@ class NordicDFUFlasher(
         val parser = SLIPFrameParser()
         val buffer = ByteArray(64)
         val deadline = System.currentTimeMillis() + timeoutMs
+        var remaining = (deadline - System.currentTimeMillis()).toInt()
 
-        while (System.currentTimeMillis() < deadline) {
-            // Use readBlockingDirect for testConnection-free reads. This calls
-            // UsbDeviceConnection.bulkTransfer() directly, bypassing the serial
-            // library's port.read() which sends USB GET_STATUS control transfers
-            // that kill the nRF52840 bootloader during NVMC flash operations.
-            val remaining = (deadline - System.currentTimeMillis()).toInt().coerceIn(1, DFU_READ_POLL_MS)
-            val bytesRead = usbBridge.readBlockingDirect(buffer, remaining)
+        // Use readBlockingDirect for testConnection-free reads. This calls
+        // UsbDeviceConnection.bulkTransfer() directly, bypassing the serial
+        // library's port.read() which sends USB GET_STATUS control transfers
+        // that kill the nRF52840 bootloader during NVMC flash operations.
+        while (remaining > 0) {
+            val pollMs = remaining.coerceAtMost(DFU_READ_POLL_MS)
+            val bytesRead = usbBridge.readBlockingDirect(buffer, pollMs)
             if (bytesRead == -1) break // Connection lost — stop immediately
 
             if (bytesRead > 0) {
@@ -675,6 +676,7 @@ class NordicDFUFlasher(
                 }
             }
             // bytesRead == 0 → timeout, loop retries
+            remaining = (deadline - System.currentTimeMillis()).toInt()
         }
 
         Log.e(TAG, "ACK timeout (no response within ${timeoutMs}ms)")

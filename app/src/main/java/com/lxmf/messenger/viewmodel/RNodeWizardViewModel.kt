@@ -185,7 +185,7 @@ data class RNodeWizardState(
     val ltAlock: String = "",
     val interfaceMode: String = "boundary",
     val showAdvancedSettings: Boolean = false,
-    // Display logo on RNode OLED
+    // Display logo on RNode screen
     val enableFramebuffer: Boolean = true,
     // Validation errors
     val nameError: String? = null,

@@ -137,7 +137,6 @@ class NoRelaxedMocksRule(
                 "connectivitymanager",
                 "locationmanager",
                 "powermanager",
-                "wifilock",
                 "multicastlock",
                 "wakelock",
             )
@@ -173,7 +172,6 @@ class NoRelaxedMocksRule(
                 "ConnectivityManager",
                 "LocationManager",
                 "PowerManager",
-                "WifiManager.WifiLock",
                 "WifiManager.MulticastLock",
                 "PowerManager.WakeLock",
             )

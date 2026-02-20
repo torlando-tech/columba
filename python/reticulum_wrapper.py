@@ -562,9 +562,9 @@ class ReticulumWrapper:
         self._last_propagation_progress = 0.0  # For progress change detection during transfers
 
         # Service heartbeat tracking (Sideband-inspired process monitoring)
-        # Python updates timestamp every second; Kotlin monitors for stale heartbeats
-        # If heartbeat is stale > 10 seconds, Kotlin should restart the service
-        self._heartbeat_timestamp = 0.0  # Updated every second when running
+        # Python updates timestamp every 5s idle / 100ms during sync; Kotlin monitors for stale heartbeats
+        # If heartbeat is stale > 60 seconds, Kotlin should restart the service
+        self._heartbeat_timestamp = 0.0  # Updated every 5s when idle, 100ms during active sync
         self._heartbeat_thread = None  # Thread reference for heartbeat loop
 
         # Service maintenance tracking (Sideband-inspired interface recovery)
@@ -5345,7 +5345,7 @@ class ReticulumWrapper:
 
     def _start_heartbeat_thread(self):
         """
-        Start the heartbeat thread that updates the timestamp every second.
+        Start the heartbeat thread that updates the timestamp every 5s when idle.
         Kotlin monitors this timestamp and restarts the service if it becomes stale.
         This is called during initialize() after setting self.initialized = True.
         """
@@ -5356,7 +5356,7 @@ class ReticulumWrapper:
             )
             self._heartbeat_thread.start()
             log_info("ReticulumWrapper", "_start_heartbeat_thread",
-                    "Started service heartbeat thread (1s interval)")
+                    "Started service heartbeat thread (5s idle interval)")
 
     def _get_propagation_state_name(self, state: int) -> str:
         """Map LXMF propagation state integer to human-readable name."""
@@ -5426,7 +5426,7 @@ class ReticulumWrapper:
         """
         Background loop that updates the heartbeat timestamp.
         Also monitors propagation state changes for real-time sync progress.
-        Uses faster interval (100ms) during active sync, slower (1s) when idle.
+        Uses faster interval (100ms) during active sync, slower (5s) when idle.
         """
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop started")
         while self.initialized:

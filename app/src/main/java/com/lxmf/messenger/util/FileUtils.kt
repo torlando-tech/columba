@@ -307,6 +307,7 @@ object FileUtils {
 
     private const val TEMP_ATTACHMENTS_DIR = "attachments"
     private const val SHARE_IMAGES_DIR = "share_images"
+    private const val OUTGOING_HEX_DIR = "outgoing_hex"
 
     /**
      * Write file data to a temporary file for large file transfer.
@@ -381,7 +382,7 @@ object FileUtils {
         maxAgeMs: Long = 60 * 60 * 1000,
     ): Int {
         val cutoffTime = System.currentTimeMillis() - maxAgeMs
-        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR)
+        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR, OUTGOING_HEX_DIR)
 
         val cleanedCount =
             dirsToClean.sumOf { dirName ->

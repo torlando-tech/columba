@@ -1940,8 +1940,8 @@ private suspend fun buildFieldsJson(
 
     if (!hasAnyContent) return null
 
-    // Move CPU-intensive hex encoding to background thread
-    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+    // Move hex encoding + file I/O (streamHexToFile) to background thread
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val json = org.json.JSONObject()
 
         // Add image field (Field 6)

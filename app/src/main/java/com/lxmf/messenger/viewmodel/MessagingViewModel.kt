@@ -2197,6 +2197,7 @@ private fun DeliveryMethod.toStorageString(): String =
     }
 
 private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
+private const val OUTGOING_HEX_DIR = "outgoing_hex"
 
 private fun determineDeliveryMethod(
     sanitized: String,
@@ -2264,7 +2265,8 @@ private fun buildFileAttachmentsArray(
         obj.put("size", attachment.sizeBytes)
         if (cacheDir != null) {
             // Stream hex to disk to avoid OOM on large files
-            val hexFile = java.io.File(cacheDir, "outgoing_${System.nanoTime()}_$i.hex")
+            val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
+            val hexFile = java.io.File(hexDir, "outgoing_${System.nanoTime()}_$i.hex")
             attachment.data.streamHexToFile(hexFile)
             obj.put("_data_ref", hexFile.absolutePath)
         } else {

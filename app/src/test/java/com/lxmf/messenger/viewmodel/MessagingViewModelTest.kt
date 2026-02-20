@@ -103,6 +103,7 @@ class MessagingViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         applicationContext = mockk(relaxed = true)
+        every { applicationContext.cacheDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_cache").apply { mkdirs() }
         reticulumProtocol = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
@@ -185,6 +186,11 @@ class MessagingViewModelTest {
         Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
+        // Clean up temp hex files created during file attachment tests
+        java.io
+            .File(System.getProperty("java.io.tmpdir"), "test_cache")
+            .takeIf { it.exists() }
+            ?.deleteRecursively()
     }
 
     /**

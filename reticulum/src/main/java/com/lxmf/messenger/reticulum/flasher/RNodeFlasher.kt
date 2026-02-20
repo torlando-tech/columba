@@ -232,13 +232,22 @@ class RNodeFlasher(
                     // Calculate the firmware hash from the binary for provisioning
                     val firmwareHash = firmwarePackage.calculateFirmwareBinaryHash()
 
-                    // Wait for device reboot, then provision
-                    _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
-
-                    // Give device time to boot after hard reset
-                    // Native USB devices need more time for USB re-enumeration
-                    val rebootDelay = if (isNativeUsb) 6000L else 5000L
-                    kotlinx.coroutines.delay(rebootDelay)
+                    when (firmwarePackage.platform) {
+                        RNodePlatform.NRF52 -> {
+                            // nRF52 DFU already reboots the device after DFU Stop, and
+                            // NordicDFUFlasher waits POST_DFU_SETTLE_MS for finalization.
+                            // Just wait for USB re-enumeration to complete.
+                            _flashState.value = FlashState.Progress(96, "Verifying firmware...")
+                            kotlinx.coroutines.delay(3000L)
+                        }
+                        else -> {
+                            // ESP32 needs a hard reset after flashing — wait for reboot.
+                            // Native USB devices need more time for USB re-enumeration.
+                            _flashState.value = FlashState.Progress(96, "Waiting for device reboot...")
+                            val rebootDelay = if (isNativeUsb) 6000L else 5000L
+                            kotlinx.coroutines.delay(rebootDelay)
+                        }
+                    }
 
                     // Provision the device (write EEPROM and set firmware hash)
                     // provisionDevice() handles USB re-enumeration with retries
@@ -248,6 +257,7 @@ class RNodeFlasher(
                             firmwarePackage.board,
                             FrequencyBand.fromFilename(firmwarePackage.zipFile.name),
                             firmwareHash,
+                            expectedFirmwareVersion = firmwarePackage.version,
                         )
 
                     if (!provisionSuccess) {
@@ -684,6 +694,7 @@ class RNodeFlasher(
         board: RNodeBoard,
         band: FrequencyBand = FrequencyBand.BAND_868_915,
         firmwareHash: ByteArray? = null,
+        expectedFirmwareVersion: String? = null,
     ): Boolean =
         withContext(Dispatchers.IO) {
             _flashState.value = FlashState.Provisioning("Waiting for device...")
@@ -707,20 +718,33 @@ class RNodeFlasher(
                         break
                     }
 
-                    // If that failed, scan for devices and try to find one matching native USB VID/PID
-                    Log.d(TAG, "Original device ID failed, scanning for devices...")
+                    // If that failed, the device may have re-enumerated with a new ID
+                    // (e.g. nRF52 bootloader PID 0x0071 → application PID 0x8071).
+                    // Scan for any supported USB serial device with a different ID.
+                    Log.d(TAG, "Original device ID failed, scanning for re-enumerated device...")
                     val devices = usbBridge.getConnectedUsbDevices()
-                    val nativeUsbDevice =
-                        devices.find {
-                            ESPToolFlasher.isNativeUsbDevice(it.vendorId, it.productId)
-                        }
+                    val reEnumeratedDevice =
+                        devices.find { it.deviceId != deviceId }
 
-                    if (nativeUsbDevice != null && nativeUsbDevice.deviceId != deviceId) {
-                        Log.d(TAG, "Found native USB device with new ID: ${nativeUsbDevice.deviceId}")
-                        if (usbBridge.connect(nativeUsbDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                    if (reEnumeratedDevice != null) {
+                        Log.d(
+                            TAG,
+                            "Found device with new ID: ${reEnumeratedDevice.deviceId} " +
+                                "(VID=0x${reEnumeratedDevice.vendorId.toString(16)}, " +
+                                "PID=0x${reEnumeratedDevice.productId.toString(16)})",
+                        )
+
+                        // Android drops USB permissions on re-enumeration but shows
+                        // UsbResolverActivity ("Open with Columba?") automatically.
+                        // Don't request permission ourselves — just try to connect.
+                        // If the user hasn't tapped the system dialog yet, connect()
+                        // will fail and we'll retry on the next attempt.
+                        if (usbBridge.connect(reEnumeratedDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
                             connected = true
-                            actualDeviceId = nativeUsbDevice.deviceId
+                            actualDeviceId = reEnumeratedDevice.deviceId
                             break
+                        } else {
+                            Log.d(TAG, "Connect failed (likely waiting for USB permission grant)")
                         }
                     }
 
@@ -754,11 +778,55 @@ class RNodeFlasher(
                         Log.i(TAG, "Device shows 'Missing Config' - this is normal for Reticulum apps")
                     }
 
+                    // Verify firmware version if expected version is known
+                    if (expectedFirmwareVersion != null && deviceInfo.firmwareVersion != null) {
+                        if (deviceInfo.firmwareVersion != expectedFirmwareVersion) {
+                            Log.e(
+                                TAG,
+                                "Firmware version mismatch: expected=$expectedFirmwareVersion, " +
+                                    "actual=${deviceInfo.firmwareVersion}",
+                            )
+                            _flashState.value =
+                                FlashState.Error(
+                                    "Flash verification failed: device reports firmware " +
+                                        "${deviceInfo.firmwareVersion} but expected " +
+                                        "$expectedFirmwareVersion. The device may not have rebooted " +
+                                        "after flashing. Try manually resetting the device and " +
+                                        "re-flashing.",
+                                    recoverable = true,
+                                )
+                            usbBridge.disconnect()
+                            return@withContext false
+                        }
+                        Log.i(TAG, "Firmware version verified: ${deviceInfo.firmwareVersion}")
+                    }
+
                     // Set firmware hash
                     _flashState.value = FlashState.Provisioning("Setting firmware hash...")
                     val hashToSet = firmwareHash ?: detector.getFirmwareHash()
                     if (hashToSet != null) {
                         detector.setFirmwareHash(hashToSet)
+                    }
+
+                    // Verify firmware hash if expected hash is known
+                    if (firmwareHash != null) {
+                        val actualHash = detector.getFirmwareHash()
+                        if (actualHash != null && !actualHash.contentEquals(firmwareHash)) {
+                            Log.e(TAG, "Firmware hash mismatch after flash")
+                            _flashState.value =
+                                FlashState.Error(
+                                    "Flash verification failed: firmware hash does not match " +
+                                        "expected value. The device may not have rebooted after " +
+                                        "flashing. Try manually resetting the device and " +
+                                        "re-flashing.",
+                                    recoverable = true,
+                                )
+                            usbBridge.disconnect()
+                            return@withContext false
+                        }
+                        if (actualHash != null) {
+                            Log.i(TAG, "Firmware hash verified successfully")
+                        }
                     }
 
                     usbBridge.disconnect()
@@ -798,6 +866,31 @@ class RNodeFlasher(
 
                 kotlinx.coroutines.delay(500)
                 val verifiedInfo = detector.getDeviceInfo()
+
+                // Verify firmware version if expected version is known
+                if (expectedFirmwareVersion != null && verifiedInfo?.firmwareVersion != null) {
+                    if (verifiedInfo.firmwareVersion != expectedFirmwareVersion) {
+                        Log.e(
+                            TAG,
+                            "Firmware version mismatch after provisioning: " +
+                                "expected=$expectedFirmwareVersion, " +
+                                "actual=${verifiedInfo.firmwareVersion}",
+                        )
+                        _flashState.value =
+                            FlashState.Error(
+                                "Flash verification failed: device reports firmware " +
+                                    "${verifiedInfo.firmwareVersion} but expected " +
+                                    "$expectedFirmwareVersion. The device may not have rebooted " +
+                                    "after flashing. Try manually resetting the device and " +
+                                    "re-flashing.",
+                                recoverable = true,
+                            )
+                        usbBridge.disconnect()
+                        return@withContext false
+                    }
+                    Log.i(TAG, "Firmware version verified: ${verifiedInfo.firmwareVersion}")
+                }
+
                 usbBridge.disconnect()
 
                 if (verifiedInfo?.isProvisioned == true) {

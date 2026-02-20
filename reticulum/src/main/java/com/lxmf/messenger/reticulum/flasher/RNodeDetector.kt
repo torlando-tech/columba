@@ -755,28 +755,29 @@ class RNodeDetector(
     /**
      * Get the model code for a board and frequency band combination.
      *
-     * The model byte encodes the frequency band variant:
-     * - 0xX1, 0xX4, 0xX5: 868/915 MHz variants
-     * - 0xX2, 0xX6, 0xX7: 433 MHz variants
-     *
-     * @param board The board type (unused - model code is based solely on band)
-     * @param band The frequency band
-     * @return The model code byte
+     * Get the correct rnodeconf model code for a board + frequency band combination.
+     * Model codes are per-board and must match the rnodeconf reference exactly.
      */
-    @Suppress("UNUSED_PARAMETER")
+    @Suppress("CyclomaticComplexMethod")
     private fun getModelForBoardAndBand(
         board: RNodeBoard,
         band: FrequencyBand,
     ): Byte {
-        // Model codes follow a pattern where the lower nibble indicates frequency:
-        // 0x11 = 868/915 MHz (SX127x style)
-        // 0x12 = 433 MHz (SX127x style)
-        // 0x14 = 868/915 MHz (SX126x style, higher power)
-        // 0x16 = 433 MHz (SX126x style, higher power)
-        return when (band) {
-            FrequencyBand.BAND_868_915 -> 0x11.toByte()
-            FrequencyBand.BAND_433 -> 0x12.toByte()
-            FrequencyBand.UNKNOWN -> 0x11.toByte() // Default to 868/915
+        val isLow = band == FrequencyBand.BAND_433
+        return when (board) {
+            RNodeBoard.RAK4631 -> if (isLow) 0x11 else 0x12
+            RNodeBoard.HELTEC_T114 -> if (isLow) 0xC6.toByte() else 0xC7.toByte()
+            RNodeBoard.TECHO -> if (isLow) 0x16 else 0x17
+            RNodeBoard.HELTEC_V2 -> if (isLow) 0xC4.toByte() else 0xC9.toByte()
+            RNodeBoard.HELTEC_V3 -> if (isLow) 0xC5.toByte() else 0xCA.toByte()
+            RNodeBoard.HELTEC_V4 -> 0xC8.toByte() // 868/915 only (PA variant)
+            RNodeBoard.TBEAM -> if (isLow) 0xE4.toByte() else 0xE9.toByte()
+            RNodeBoard.TBEAM_S -> if (isLow) 0xDB.toByte() else 0xDC.toByte()
+            RNodeBoard.TDECK -> if (isLow) 0xD4.toByte() else 0xD9.toByte()
+            RNodeBoard.LORA32_V2_0 -> if (isLow) 0xB3.toByte() else 0xB8.toByte()
+            RNodeBoard.LORA32_V2_1 -> if (isLow) 0xB4.toByte() else 0xB9.toByte()
+            RNodeBoard.RNODE -> if (isLow) 0xA4.toByte() else 0xA9.toByte()
+            RNodeBoard.HOMEBREW, RNodeBoard.UNKNOWN -> if (isLow) 0xFE.toByte() else 0xFF.toByte()
         }
     }
 

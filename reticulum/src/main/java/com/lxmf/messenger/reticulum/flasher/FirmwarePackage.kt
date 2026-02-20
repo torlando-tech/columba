@@ -220,10 +220,30 @@ enum class FrequencyBand(
     ;
 
     companion object {
+        /**
+         * Determine frequency band from the RNode model code stored in EEPROM.
+         * Model codes are full bytes assigned per-board in rnodeconf — there is no
+         * nibble-level pattern that works across all board families.
+         */
+        @Suppress("CyclomaticComplexMethod")
         fun fromModelCode(model: Byte): FrequencyBand =
-            when (model.toInt() and 0x0F) {
-                0x01, 0x04, 0x05 -> BAND_868_915
-                0x02, 0x06, 0x07 -> BAND_433
+            when (model.toInt() and 0xFF) {
+                // Low band (420–525 MHz)
+                0x04, 0x11, 0x13, 0x16, // TCXO 433, RAK4631 433, RAK4631+SX1280 433, T-Echo 433
+                0xA1, 0xA2, 0xA3, 0xA4, 0xA5, // T3S3, NG21, NG20, RNode original, T3S3 SX127x
+                0xB3, 0xB4, 0xBA, // LoRa32 v2.0, v2.1, v1.0
+                0xC4, 0xC5, 0xC6, // Heltec v2, v3, T114
+                0xD4, 0xDB, 0xDE, // T-Deck, T-Beam Supreme, Xiao ESP32S3
+                0xE3, 0xE4, // T-Beam SX1262, T-Beam SX127x
+                -> BAND_433
+                // High band (779–1020 MHz)
+                0x09, 0x12, 0x14, 0x17, 0x21, // TCXO 868, RAK4631 868, RAK4631+SX1280 868, T-Echo 868, OpenCom XL
+                0xA6, 0xA7, 0xA8, 0xA9, 0xAA, // T3S3, NG21, NG20, RNode original, T3S3 SX127x
+                0xB8, 0xB9, 0xBB, // LoRa32 v2.0, v2.1, v1.0
+                0xC7, 0xC8, 0xC9, 0xCA, // Heltec T114, v4 PA, v2, v3
+                0xD9, 0xDC, 0xDD, // T-Deck, T-Beam Supreme, Xiao ESP32S3
+                0xE8, 0xE9, // T-Beam SX1262, T-Beam SX127x
+                -> BAND_868_915
                 else -> UNKNOWN
             }
 

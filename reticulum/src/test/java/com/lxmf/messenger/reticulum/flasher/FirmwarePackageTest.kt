@@ -9,22 +9,46 @@ import org.junit.Test
 class FrequencyBandTest {
     @Test
     fun `fromModelCode returns 868_915 for appropriate model codes`() {
-        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x11))
-        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x04))
-        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x05))
+        // RAK4631, T-Echo, OpenCom XL, TCXO
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x12))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x14))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x17))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x21))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0x09))
+        // Heltec T114, V2, V3, V4
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xC7.toByte()))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xC9.toByte()))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xCA.toByte()))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xC8.toByte()))
+        // T-Beam, T-Deck, LoRa32
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xE9.toByte()))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xD9.toByte()))
+        assertEquals(FrequencyBand.BAND_868_915, FrequencyBand.fromModelCode(0xB8.toByte()))
     }
 
     @Test
     fun `fromModelCode returns 433 for appropriate model codes`() {
-        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x12))
-        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x06))
-        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x07))
+        // RAK4631, T-Echo, TCXO
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x11))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x13))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x16))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0x04))
+        // Heltec T114, V2, V3
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xC6.toByte()))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xC4.toByte()))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xC5.toByte()))
+        // T-Beam, T-Deck, LoRa32
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xE4.toByte()))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xD4.toByte()))
+        assertEquals(FrequencyBand.BAND_433, FrequencyBand.fromModelCode(0xB3.toByte()))
     }
 
     @Test
     fun `fromModelCode returns UNKNOWN for unrecognized codes`() {
         assertEquals(FrequencyBand.UNKNOWN, FrequencyBand.fromModelCode(0x00))
         assertEquals(FrequencyBand.UNKNOWN, FrequencyBand.fromModelCode(0x03))
+        // 2.4 GHz models are not 433 or 868/915
+        assertEquals(FrequencyBand.UNKNOWN, FrequencyBand.fromModelCode(0xAC.toByte()))
     }
 
     @Test

@@ -248,6 +248,7 @@ class RNodeFlasher(
                             firmwarePackage.board,
                             FrequencyBand.fromFilename(firmwarePackage.zipFile.name),
                             firmwareHash,
+                            expectedFirmwareVersion = firmwarePackage.version,
                         )
 
                     if (!provisionSuccess) {
@@ -684,6 +685,7 @@ class RNodeFlasher(
         board: RNodeBoard,
         band: FrequencyBand = FrequencyBand.BAND_868_915,
         firmwareHash: ByteArray? = null,
+        expectedFirmwareVersion: String? = null,
     ): Boolean =
         withContext(Dispatchers.IO) {
             _flashState.value = FlashState.Provisioning("Waiting for device...")
@@ -754,11 +756,55 @@ class RNodeFlasher(
                         Log.i(TAG, "Device shows 'Missing Config' - this is normal for Reticulum apps")
                     }
 
+                    // Verify firmware version if expected version is known
+                    if (expectedFirmwareVersion != null && deviceInfo.firmwareVersion != null) {
+                        if (deviceInfo.firmwareVersion != expectedFirmwareVersion) {
+                            Log.e(
+                                TAG,
+                                "Firmware version mismatch: expected=$expectedFirmwareVersion, " +
+                                    "actual=${deviceInfo.firmwareVersion}",
+                            )
+                            _flashState.value =
+                                FlashState.Error(
+                                    "Flash verification failed: device reports firmware " +
+                                        "${deviceInfo.firmwareVersion} but expected " +
+                                        "$expectedFirmwareVersion. The device may not have rebooted " +
+                                        "after flashing. Try manually resetting the device and " +
+                                        "re-flashing.",
+                                    recoverable = true,
+                                )
+                            usbBridge.disconnect()
+                            return@withContext false
+                        }
+                        Log.i(TAG, "Firmware version verified: ${deviceInfo.firmwareVersion}")
+                    }
+
                     // Set firmware hash
                     _flashState.value = FlashState.Provisioning("Setting firmware hash...")
                     val hashToSet = firmwareHash ?: detector.getFirmwareHash()
                     if (hashToSet != null) {
                         detector.setFirmwareHash(hashToSet)
+                    }
+
+                    // Verify firmware hash if expected hash is known
+                    if (firmwareHash != null) {
+                        val actualHash = detector.getFirmwareHash()
+                        if (actualHash != null && !actualHash.contentEquals(firmwareHash)) {
+                            Log.e(TAG, "Firmware hash mismatch after flash")
+                            _flashState.value =
+                                FlashState.Error(
+                                    "Flash verification failed: firmware hash does not match " +
+                                        "expected value. The device may not have rebooted after " +
+                                        "flashing. Try manually resetting the device and " +
+                                        "re-flashing.",
+                                    recoverable = true,
+                                )
+                            usbBridge.disconnect()
+                            return@withContext false
+                        }
+                        if (actualHash != null) {
+                            Log.i(TAG, "Firmware hash verified successfully")
+                        }
                     }
 
                     usbBridge.disconnect()
@@ -798,6 +844,31 @@ class RNodeFlasher(
 
                 kotlinx.coroutines.delay(500)
                 val verifiedInfo = detector.getDeviceInfo()
+
+                // Verify firmware version if expected version is known
+                if (expectedFirmwareVersion != null && verifiedInfo?.firmwareVersion != null) {
+                    if (verifiedInfo.firmwareVersion != expectedFirmwareVersion) {
+                        Log.e(
+                            TAG,
+                            "Firmware version mismatch after provisioning: " +
+                                "expected=$expectedFirmwareVersion, " +
+                                "actual=${verifiedInfo.firmwareVersion}",
+                        )
+                        _flashState.value =
+                            FlashState.Error(
+                                "Flash verification failed: device reports firmware " +
+                                    "${verifiedInfo.firmwareVersion} but expected " +
+                                    "$expectedFirmwareVersion. The device may not have rebooted " +
+                                    "after flashing. Try manually resetting the device and " +
+                                    "re-flashing.",
+                                recoverable = true,
+                            )
+                        usbBridge.disconnect()
+                        return@withContext false
+                    }
+                    Log.i(TAG, "Firmware version verified: ${verifiedInfo.firmwareVersion}")
+                }
+
                 usbBridge.disconnect()
 
                 if (verifiedInfo?.isProvisioned == true) {

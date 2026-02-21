@@ -14,14 +14,13 @@ import org.junit.Test
 /**
  * Unit tests for LockManager.
  *
- * Tests WiFi, Multicast, and Wake lock acquisition/release.
+ * Tests Multicast and Wake lock acquisition/release.
  */
 class LockManagerTest {
     private lateinit var context: Context
     private lateinit var wifiManager: WifiManager
     private lateinit var powerManager: PowerManager
     private lateinit var multicastLock: WifiManager.MulticastLock
-    private lateinit var wifiLock: WifiManager.WifiLock
     private lateinit var wakeLock: PowerManager.WakeLock
     private lateinit var lockManager: LockManager
 
@@ -32,7 +31,6 @@ class LockManagerTest {
         wifiManager = mockk()
         powerManager = mockk()
         multicastLock = mockk()
-        wifiLock = mockk()
         wakeLock = mockk()
 
         // Setup context to return system services
@@ -42,24 +40,18 @@ class LockManagerTest {
 
         // Setup lock creation
         every { wifiManager.createMulticastLock(any()) } returns multicastLock
-        @Suppress("DEPRECATION")
-        every { wifiManager.createWifiLock(any<Int>(), any()) } returns wifiLock
         every { powerManager.newWakeLock(any(), any()) } returns wakeLock
 
         // Stub lock methods
         every { multicastLock.setReferenceCounted(any()) } returns Unit
         every { multicastLock.acquire() } returns Unit
         every { multicastLock.release() } returns Unit
-        every { wifiLock.setReferenceCounted(any()) } returns Unit
-        every { wifiLock.acquire() } returns Unit
-        every { wifiLock.release() } returns Unit
         every { wakeLock.setReferenceCounted(any()) } returns Unit
         every { wakeLock.acquire(any()) } returns Unit
         every { wakeLock.release() } returns Unit
 
         // Initially locks are not held
         every { multicastLock.isHeld } returns false
-        every { wifiLock.isHeld } returns false
         every { wakeLock.isHeld } returns false
 
         lockManager = LockManager(context)
@@ -69,7 +61,6 @@ class LockManagerTest {
     fun `acquireAll acquires all locks`() {
         // After acquire, mark locks as held
         every { multicastLock.isHeld } returns true
-        every { wifiLock.isHeld } returns true
         every { wakeLock.isHeld } returns true
 
         lockManager.acquireAll()
@@ -77,7 +68,6 @@ class LockManagerTest {
         // Verify locks are now held via getLockStatus()
         val status = lockManager.getLockStatus()
         assertTrue(status.multicastHeld)
-        assertTrue(status.wifiHeld)
         assertTrue(status.wakeHeld)
     }
 
@@ -85,7 +75,6 @@ class LockManagerTest {
     fun `releaseAll releases all held locks`() {
         // Setup locks as held initially
         every { multicastLock.isHeld } returns true
-        every { wifiLock.isHeld } returns true
         every { wakeLock.isHeld } returns true
 
         // First acquire so we have lock references
@@ -97,7 +86,6 @@ class LockManagerTest {
 
         // After release, mark locks as not held
         every { multicastLock.isHeld } returns false
-        every { wifiLock.isHeld } returns false
         every { wakeLock.isHeld } returns false
 
         lockManager.releaseAll()
@@ -105,7 +93,6 @@ class LockManagerTest {
         // Verify locks are no longer held
         val statusAfter = lockManager.getLockStatus()
         assertFalse(statusAfter.multicastHeld)
-        assertFalse(statusAfter.wifiHeld)
         assertFalse(statusAfter.wakeHeld)
     }
 
@@ -120,7 +107,6 @@ class LockManagerTest {
 
         // Now mark as not held before release
         every { multicastLock.isHeld } returns false
-        every { wifiLock.isHeld } returns false
         every { wakeLock.isHeld } returns false
 
         lockManager.releaseAll()
@@ -128,7 +114,6 @@ class LockManagerTest {
         // Verify locks are still not held (no change)
         val statusAfter = lockManager.getLockStatus()
         assertFalse(statusAfter.multicastHeld)
-        assertFalse(statusAfter.wifiHeld)
         assertFalse(statusAfter.wakeHeld)
     }
 
@@ -137,7 +122,6 @@ class LockManagerTest {
         val status = lockManager.getLockStatus()
 
         assertFalse(status.multicastHeld)
-        assertFalse(status.wifiHeld)
         assertFalse(status.wakeHeld)
     }
 
@@ -148,13 +132,11 @@ class LockManagerTest {
 
         // Mark as held
         every { multicastLock.isHeld } returns true
-        every { wifiLock.isHeld } returns true
         every { wakeLock.isHeld } returns true
 
         val status = lockManager.getLockStatus()
 
         assertTrue(status.multicastHeld)
-        assertTrue(status.wifiHeld)
         assertTrue(status.wakeHeld)
     }
 
@@ -165,13 +147,11 @@ class LockManagerTest {
 
         // Mark as already held
         every { multicastLock.isHeld } returns true
-        every { wifiLock.isHeld } returns true
         every { wakeLock.isHeld } returns true
 
         // Verify locks are held after first acquisition
         val statusAfterFirst = lockManager.getLockStatus()
         assertTrue(statusAfterFirst.multicastHeld)
-        assertTrue(statusAfterFirst.wifiHeld)
         assertTrue(statusAfterFirst.wakeHeld)
 
         // Second acquisition should not re-acquire (idempotent)
@@ -180,15 +160,14 @@ class LockManagerTest {
         // Verify locks are still held (no change in state)
         val statusAfterSecond = lockManager.getLockStatus()
         assertTrue(statusAfterSecond.multicastHeld)
-        assertTrue(statusAfterSecond.wifiHeld)
         assertTrue(statusAfterSecond.wakeHeld)
     }
 
     @Test
     fun `LockStatus data class equals works correctly`() {
-        val status1 = LockManager.LockStatus(true, false, true)
-        val status2 = LockManager.LockStatus(true, false, true)
-        val status3 = LockManager.LockStatus(false, false, true)
+        val status1 = LockManager.LockStatus(true, true)
+        val status2 = LockManager.LockStatus(true, true)
+        val status3 = LockManager.LockStatus(false, true)
 
         assertEquals(status1, status2)
         assertTrue(status1 != status3)

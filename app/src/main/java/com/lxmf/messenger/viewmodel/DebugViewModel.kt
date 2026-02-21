@@ -30,7 +30,6 @@ data class DebugInfo(
     val interfaces: List<InterfaceInfo> = emptyList(),
     val transportEnabled: Boolean = false,
     val multicastLockHeld: Boolean = false,
-    val wifiLockHeld: Boolean = false,
     val wakeLockHeld: Boolean = false,
     val error: String? = null,
     // Process persistence debug info
@@ -215,7 +214,6 @@ class DebugViewModel
                         interfaces = interfaces,
                         transportEnabled = json.optBoolean("transport_enabled", false),
                         multicastLockHeld = json.optBoolean("multicast_lock_held", false),
-                        wifiLockHeld = json.optBoolean("wifi_lock_held", false),
                         wakeLockHeld = json.optBoolean("wake_lock_held", false),
                         error =
                             json.optString("error", null)
@@ -334,7 +332,6 @@ class DebugViewModel
                             interfaces = interfaces,
                             transportEnabled = pythonDebugInfo["transport_enabled"] as? Boolean ?: false,
                             multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false,
-                            wifiLockHeld = pythonDebugInfo["wifi_lock_held"] as? Boolean ?: false,
                             wakeLockHeld = wakeLockHeld,
                             error =
                                 pythonDebugInfo["error"] as? String

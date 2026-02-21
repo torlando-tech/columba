@@ -19,7 +19,7 @@ import org.junit.Test
  * Unit tests for MaintenanceManager.
  *
  * Tests the periodic wake lock refresh mechanism that ensures locks are
- * maintained aggressively (every 5 minutes) following Sideband's pattern.
+ * maintained every 2 hours (wake lock timeout is 10 hours).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MaintenanceManagerTest {
@@ -95,7 +95,7 @@ class MaintenanceManagerTest {
             // Job should be running
             assertTrue("Job should be running after start", maintenanceManager.isRunning())
 
-            // Advance time by refresh interval (5 minutes)
+            // Advance time by refresh interval (2 hours)
             testScope.advanceTimeBy(MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
 
@@ -110,7 +110,7 @@ class MaintenanceManagerTest {
             testScope.runCurrent()
             assertTrue(maintenanceManager.isRunning())
 
-            // Advance time by 3 refresh intervals (15 minutes)
+            // Advance time by 3 refresh intervals (6 hours)
             testScope.advanceTimeBy(3 * MaintenanceManager.REFRESH_INTERVAL_MS)
             testScope.runCurrent()
 
@@ -125,8 +125,8 @@ class MaintenanceManagerTest {
             testScope.runCurrent()
             assertTrue("Job should be running", maintenanceManager.isRunning())
 
-            // Advance time by 4 minutes (less than 5 minute interval)
-            testScope.advanceTimeBy(4 * 60 * 1000L)
+            // Advance time by 1 hour (less than 2 hour interval)
+            testScope.advanceTimeBy(1 * 60 * 60 * 1000L)
             testScope.runCurrent()
 
             // Job should still be running (hasn't hit first interval yet)

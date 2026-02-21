@@ -332,7 +332,6 @@ class IdentityScreenPersistenceTest {
             DebugInfo(
                 reticulumAvailable = true,
                 multicastLockHeld = true,
-                wifiLockHeld = false,
                 wakeLockHeld = true,
             )
 
@@ -342,9 +341,7 @@ class IdentityScreenPersistenceTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Multicast Lock").assertExists()
-        composeTestRule.onNodeWithText("WiFi Lock").assertExists()
         composeTestRule.onNodeWithText("Wake Lock").assertExists()
         composeTestRule.onAllNodesWithText("✓ Held").assertCountEquals(2)
-        composeTestRule.onNodeWithText("✗ Not held").assertExists()
     }
 }

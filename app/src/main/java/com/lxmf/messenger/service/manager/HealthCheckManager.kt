@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 /**
  * Monitors the health of the Python Reticulum process via heartbeat checking.
  *
- * The Python wrapper updates a heartbeat timestamp every second when running.
+ * The Python wrapper updates a heartbeat timestamp every 5 seconds when idle.
  * This manager periodically checks if that heartbeat is stale, indicating the
  * Python process may be hung or dead.
  *
@@ -27,12 +27,12 @@ class HealthCheckManager(
     companion object {
         private const val TAG = "HealthCheckManager"
 
-        // Check heartbeat every 5 seconds
-        internal const val CHECK_INTERVAL_MS = 5_000L
+        // Check heartbeat every 30 seconds (reduced from 5s to cut IPC calls by 83%)
+        internal const val CHECK_INTERVAL_MS = 30_000L
 
-        // Heartbeat is stale if older than 10 seconds
-        // Python updates every 1 second, so 10 seconds means 10+ missed updates
-        internal const val STALE_THRESHOLD_MS = 10_000L
+        // Heartbeat is stale if older than 60 seconds
+        // Python updates every 5 seconds when idle, so 60 seconds means 12+ missed updates
+        internal const val STALE_THRESHOLD_MS = 60_000L
     }
 
     private var healthCheckJob: Job? = null

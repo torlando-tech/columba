@@ -238,8 +238,8 @@ class TestHeartbeatIntegration(unittest.TestCase):
         # Stop the wrapper
         self.wrapper.initialized = False
 
-        # Wait for thread to stop
-        self.wrapper._heartbeat_thread.join(timeout=3)
+        # Wait for thread to stop (idle sleep is 5s, so timeout must exceed that)
+        self.wrapper._heartbeat_thread.join(timeout=10)
 
         # Thread should have stopped
         self.assertFalse(self.wrapper._heartbeat_thread.is_alive())

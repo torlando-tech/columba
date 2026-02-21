@@ -42,7 +42,6 @@ import org.junit.Test
 class ReticulumServiceErrorHandlingTest {
     private lateinit var mockContext: Context
     private lateinit var mockWifiManager: WifiManager
-    private lateinit var mockWifiLock: WifiManager.WifiLock
     private lateinit var mockMulticastLock: WifiManager.MulticastLock
 
     @Suppress("NoRelaxedMocks") // Android framework classes require relaxed mocking
@@ -50,14 +49,11 @@ class ReticulumServiceErrorHandlingTest {
     fun setup() {
         mockContext = mockk<Context>(relaxed = true)
         mockWifiManager = mockk<WifiManager>(relaxed = true)
-        mockWifiLock = mockk<WifiManager.WifiLock>(relaxed = true)
         mockMulticastLock = mockk<WifiManager.MulticastLock>(relaxed = true)
 
         every { mockContext.applicationContext } returns mockContext
         every { mockContext.getSystemService(Context.WIFI_SERVICE) } returns mockWifiManager
-        every { mockWifiManager.createWifiLock(any(), any()) } returns mockWifiLock
         every { mockWifiManager.createMulticastLock(any()) } returns mockMulticastLock
-        every { mockWifiLock.isHeld } returns false
         every { mockMulticastLock.isHeld } returns false
     }
 
@@ -71,63 +67,45 @@ class ReticulumServiceErrorHandlingTest {
     /**
      * P0-3: Service Initialization Resource Leak
      *
-     * Verifies that when Python initialization fails, WiFi locks are released
+     * Verifies that when Python initialization fails, locks are released
      * and polling jobs are cancelled.
      */
     @Test
-    fun `P0-3 Service initialization failure releases WiFi locks`() =
+    fun `P0-3 Service initialization failure releases locks`() =
         runTest {
-            // Given: WiFi locks that are acquired
-            every { mockWifiLock.isHeld } returns true
+            // Given: Multicast lock that is acquired
             every { mockMulticastLock.isHeld } returns true
 
-            var wifiLockReleased = false
             var multicastLockReleased = false
-
-            every { mockWifiLock.release() } answers {
-                wifiLockReleased = true
-                Unit
-            }
 
             every { mockMulticastLock.release() } answers {
                 multicastLockReleased = true
                 Unit
             }
 
-            // Simulate initialization failure by checking the behavior
-            // (Actual implementation would need Python mocking)
-
             // When: Initialization fails and cleanup is triggered
-            // In the actual implementation, this would be:
-            // - Python wrapper initialization returns error
-            // - Cleanup code calls releaseWifiLocks()
-
-            // For this test, we verify the mock behavior
-            if (mockWifiLock.isHeld) mockWifiLock.release()
             if (mockMulticastLock.isHeld) mockMulticastLock.release()
 
-            // Then: Locks are released
-            assertTrue("WiFi lock should be released on initialization failure", wifiLockReleased)
+            // Then: Lock is released
             assertTrue("Multicast lock should be released on initialization failure", multicastLockReleased)
 
-            verify { mockWifiLock.release() }
             verify { mockMulticastLock.release() }
         }
 
     /**
-     * Verifies that WiFi lock release handles IllegalStateException gracefully.
+     * Verifies that multicast lock release handles IllegalStateException gracefully.
      */
     @Test
-    fun `WiFi lock release handles IllegalStateException gracefully`() =
+    fun `multicast lock release handles IllegalStateException gracefully`() =
         runTest {
-            // Given: WiFi lock that throws exception when released
-            every { mockWifiLock.isHeld } returns false // Not held
-            every { mockWifiLock.release() } throws IllegalStateException("Lock not held")
+            // Given: Multicast lock that throws exception when released
+            every { mockMulticastLock.isHeld } returns false // Not held
+            every { mockMulticastLock.release() } throws IllegalStateException("Lock not held")
 
             // When: Try to release lock
             try {
-                if (mockWifiLock.isHeld) {
-                    mockWifiLock.release()
+                if (mockMulticastLock.isHeld) {
+                    mockMulticastLock.release()
                 }
                 // Success - exception avoided by checking isHeld
             } catch (e: Exception) {
@@ -135,7 +113,7 @@ class ReticulumServiceErrorHandlingTest {
             }
 
             // Then: No exception because we checked isHeld first
-            verify(exactly = 0) { mockWifiLock.release() }
+            verify(exactly = 0) { mockMulticastLock.release() }
         }
 
     // ========== P2: Null Wrapper Checks ==========
@@ -467,27 +445,27 @@ class ReticulumServiceErrorHandlingTest {
     // ========== Edge Cases ==========
 
     /**
-     * Verifies that multiple WiFi lock releases don't cause issues.
+     * Verifies that multiple multicast lock releases don't cause issues.
      */
     @Test
-    fun `multiple WiFi lock releases are handled gracefully`() {
-        // Given: WiFi lock that is held
-        every { mockWifiLock.isHeld } returns true andThen false
+    fun `multiple multicast lock releases are handled gracefully`() {
+        // Given: Multicast lock that is held
+        every { mockMulticastLock.isHeld } returns true andThen false
 
         // When: Release multiple times
         var releaseCount = 0
-        if (mockWifiLock.isHeld) {
-            mockWifiLock.release()
+        if (mockMulticastLock.isHeld) {
+            mockMulticastLock.release()
             releaseCount++
         }
-        if (mockWifiLock.isHeld) {
-            mockWifiLock.release()
+        if (mockMulticastLock.isHeld) {
+            mockMulticastLock.release()
             releaseCount++
         }
 
         // Then: Only released once
         assertEquals(1, releaseCount)
-        verify(exactly = 1) { mockWifiLock.release() }
+        verify(exactly = 1) { mockMulticastLock.release() }
     }
 
     /**

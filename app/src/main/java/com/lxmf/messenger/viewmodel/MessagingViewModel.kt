@@ -1112,13 +1112,21 @@ class MessagingViewModel
         ) {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             val fieldsJson =
-                buildFieldsJson(
-                    imageData,
-                    imageFormat,
-                    fileAttachments,
-                    replyToMessageId,
-                    cacheDir = applicationContext.cacheDir,
-                )
+                try {
+                    buildFieldsJson(
+                        imageData,
+                        imageFormat,
+                        fileAttachments,
+                        replyToMessageId,
+                        cacheDir = applicationContext.cacheDir,
+                    )
+                } catch (e: java.io.IOException) {
+                    Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
+                    // Fall back to text-only fields so the message is still saved to the database.
+                    // The message was already delivered to the recipient — losing the local attachment
+                    // reference is acceptable vs. losing the message from conversation history entirely.
+                    buildFieldsJson(null, null, emptyList(), replyToMessageId)
+                }
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 

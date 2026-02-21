@@ -1916,6 +1916,7 @@ private fun DeliveryMethod.toStorageString(): String =
 
 private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
 private const val OUTGOING_HEX_DIR = "outgoing_hex"
+private const val STREAM_HEX_THRESHOLD = 512 * 1024 // Stream to disk above 512KB to avoid OOM
 
 private fun determineDeliveryMethod(
     sanitized: String,
@@ -1955,7 +1956,14 @@ private suspend fun buildFieldsJson(
 
         // Add image field (Field 6)
         if (hasImage && imageData != null) {
-            json.put("6", imageData.toHexString())
+            if (cacheDir != null && imageData.size > STREAM_HEX_THRESHOLD) {
+                val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
+                val hexFile = java.io.File(hexDir, "outgoing_img_${System.nanoTime()}.hex")
+                imageData.streamHexToFile(hexFile)
+                json.put("6", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
+            } else {
+                json.put("6", imageData.toHexString())
+            }
         }
 
         // Add file attachments field (Field 5)

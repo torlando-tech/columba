@@ -8,6 +8,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,14 +46,19 @@ class ApkSharingServerTest {
 
     @After
     fun teardown() {
-        server.stop()
-        // Wait for the server coroutine to fully terminate so leaked threads
-        // don't corrupt the Robolectric environment for subsequent test classes.
-        runBlocking {
-            serverScope.coroutineContext.job.children
-                .forEach { it.join() }
-        }
+        // Cancel the scope FIRST to prevent any pending (not-yet-started) coroutines
+        // from executing. This fixes a race in "start rejects duplicate launch" where
+        // the second launch's coroutine could start AFTER stop() sets isRunning=false,
+        // causing it to create a new server that nobody stops — hanging the JVM forever.
         serverScope.cancel()
+        server.stop()
+        // Wait for running coroutines to finish (with a safety timeout to prevent CI hangs).
+        runBlocking {
+            withTimeout(5_000) {
+                serverScope.coroutineContext.job.children
+                    .forEach { it.join() }
+            }
+        }
         apkFile.delete()
     }
 

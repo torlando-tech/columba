@@ -131,13 +131,17 @@ class ReticulumServiceBinder(
                             announceLxmfDestination()
 
                             // Notify success with shared instance status
-                            callback.onInitializationComplete(
-                                JSONObject()
-                                    .apply {
-                                        put("success", true)
-                                        put("is_shared_instance", isSharedInstance)
-                                    }.toString(),
-                            )
+                            try {
+                                callback.onInitializationComplete(
+                                    JSONObject()
+                                        .apply {
+                                            put("success", true)
+                                            put("is_shared_instance", isSharedInstance)
+                                        }.toString(),
+                                )
+                            } catch (e: android.os.RemoteException) {
+                                Log.w(TAG, "Client died before initialization complete callback", e)
+                            }
 
                             // Update status
                             state.networkStatus.set("READY")
@@ -161,7 +165,11 @@ class ReticulumServiceBinder(
                             broadcaster.broadcastStatusChange("ERROR:$errorMsg")
                             notificationManager.updateNotification("ERROR")
 
-                            callback.onInitializationError(errorMsg)
+                            try {
+                                callback.onInitializationError(errorMsg)
+                            } catch (e: android.os.RemoteException) {
+                                Log.w(TAG, "Client died before initialization error callback", e)
+                            }
                         }
                     },
                     onError = { error ->
@@ -173,12 +181,20 @@ class ReticulumServiceBinder(
                         broadcaster.broadcastStatusChange("ERROR:$error")
                         notificationManager.updateNotification("ERROR:$error")
 
-                        callback.onInitializationError(error)
+                        try {
+                            callback.onInitializationError(error)
+                        } catch (e: android.os.RemoteException) {
+                            Log.w(TAG, "Client died before initialization error callback", e)
+                        }
                     },
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Initialization failed", e)
-                callback.onInitializationError(e.message ?: "Unknown error")
+                try {
+                    callback.onInitializationError(e.message ?: "Unknown error")
+                } catch (re: android.os.RemoteException) {
+                    Log.w(TAG, "Client died before initialization error callback", re)
+                }
             }
         }
     }

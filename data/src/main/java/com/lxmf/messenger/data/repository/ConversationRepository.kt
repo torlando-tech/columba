@@ -866,6 +866,13 @@ class ConversationRepository
                             put("size", size)
                         }
 
+                    // Pass through existing _data_ref if data was already streamed to disk
+                    if (data.isEmpty() && attachment.has("_data_ref")) {
+                        modifiedAttachment.put("_data_ref", attachment.getString("_data_ref"))
+                        result.put(modifiedAttachment)
+                        continue
+                    }
+
                     // Extract data to disk if present and non-empty
                     if (data.isNotEmpty()) {
                         val filePath =

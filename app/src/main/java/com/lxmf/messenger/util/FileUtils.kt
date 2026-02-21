@@ -307,6 +307,7 @@ object FileUtils {
 
     private const val TEMP_ATTACHMENTS_DIR = "attachments"
     private const val SHARE_IMAGES_DIR = "share_images"
+    private const val OUTGOING_HEX_DIR = "outgoing_hex"
 
     /**
      * Write file data to a temporary file for large file transfer.
@@ -381,7 +382,7 @@ object FileUtils {
         maxAgeMs: Long = 60 * 60 * 1000,
     ): Int {
         val cutoffTime = System.currentTimeMillis() - maxAgeMs
-        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR)
+        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR, OUTGOING_HEX_DIR)
 
         val cleanedCount =
             dirsToClean.sumOf { dirName ->
@@ -417,5 +418,25 @@ object FileUtils {
                     if (deleted) Log.d(TAG, "Cleaned up old temp file: $dirNameForLog/${file.name}")
                 }
             } ?: 0
+    }
+}
+
+private val HEX_CHARS = "0123456789abcdef".toCharArray()
+
+/**
+ * Stream this ByteArray to a file as hex characters, two per byte.
+ *
+ * Unlike in-memory hex conversion which allocates a CharArray(size*2),
+ * this writes char-by-char through a BufferedWriter — O(1) extra memory
+ * regardless of input size. Prevents OOM when hex-encoding large file
+ * attachments (e.g., 111MB file would otherwise require a 222MB CharArray).
+ */
+fun ByteArray.streamHexToFile(outputFile: File) {
+    outputFile.bufferedWriter().use { writer ->
+        for (byte in this) {
+            val v = byte.toInt() and 0xFF
+            writer.append(HEX_CHARS[v ushr 4])
+            writer.append(HEX_CHARS[v and 0x0F])
+        }
     }
 }

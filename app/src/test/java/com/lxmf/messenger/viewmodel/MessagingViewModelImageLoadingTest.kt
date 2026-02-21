@@ -71,6 +71,7 @@ class MessagingViewModelImageLoadingTest {
             privateKey = ByteArray(32) { it.toByte() },
         )
 
+    private lateinit var applicationContext: android.content.Context
     private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
@@ -91,6 +92,7 @@ class MessagingViewModelImageLoadingTest {
         runTest {
             viewModel =
                 MessagingViewModel(
+                    applicationContext = applicationContext,
                     reticulumProtocol = reticulumProtocol,
                     conversationRepository = conversationRepository,
                     announceRepository = announceRepository,
@@ -113,6 +115,7 @@ class MessagingViewModelImageLoadingTest {
         // Clear ImageCache before each test
         ImageCache.clear()
 
+        applicationContext = mockk(relaxed = true)
         reticulumProtocol = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()

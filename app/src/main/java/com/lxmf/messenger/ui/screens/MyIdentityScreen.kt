@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import android.content.Intent
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -58,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,6 +79,7 @@ import com.lxmf.messenger.ui.components.IconPickerDialog
 import com.lxmf.messenger.ui.components.Identicon
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.components.QrCodeImage
+import com.lxmf.messenger.ui.components.findActivity
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
 
@@ -916,6 +919,21 @@ private fun IdentityQrCodeDialog(
                 usePlatformDefaultWidth = false,
             ),
     ) {
+        // Max brightness + keep screen on while showing QR code
+        DisposableEffect(Unit) {
+            val window = context.findActivity().window
+            val originalBrightness = window.attributes.screenBrightness
+            window.attributes = window.attributes.also { it.screenBrightness = 1f }
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onDispose {
+                window.attributes =
+                    window.attributes.also {
+                        it.screenBrightness = originalBrightness
+                    }
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,

@@ -211,9 +211,11 @@ class MessagingScreenTest {
 
         // When - open overflow menu, then tap "Sync messages"
         composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Sync messages").assertExists()
         composeTestRule.onNodeWithText("Sync messages").performClick()
 
-        // Then
+        // Then - menu dismisses and sync is triggered
+        composeTestRule.onNodeWithText("Sync messages").assertDoesNotExist()
         verify { mockViewModel.syncFromPropagationNode() }
     }
 

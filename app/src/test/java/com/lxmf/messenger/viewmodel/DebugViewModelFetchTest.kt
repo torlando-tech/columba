@@ -1,4 +1,5 @@
 @file:Suppress("UseOrEmpty", "UnsafeCast")
+
 package com.lxmf.messenger.viewmodel
 
 import com.lxmf.messenger.reticulum.model.NetworkStatus
@@ -109,7 +110,6 @@ class DebugViewModelFetchTest {
         val storagePath = pythonDebugInfo["storage_path"] as? String ?: ""
         val transportEnabled = pythonDebugInfo["transport_enabled"] as? Boolean ?: false
         val multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false
-        val wifiLockHeld = pythonDebugInfo["wifi_lock_held"] as? Boolean ?: false
         val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
 
         assertTrue(initialized)
@@ -117,7 +117,6 @@ class DebugViewModelFetchTest {
         assertEquals("", storagePath)
         assertEquals(false, transportEnabled)
         assertEquals(false, multicastLockHeld)
-        assertEquals(false, wifiLockHeld)
         assertEquals(false, wakeLockHeld)
     }
 
@@ -138,7 +137,6 @@ class DebugViewModelFetchTest {
                 interfaces = interfaces,
                 transportEnabled = true,
                 multicastLockHeld = true,
-                wifiLockHeld = false,
                 wakeLockHeld = true,
                 error = null,
             )
@@ -149,7 +147,6 @@ class DebugViewModelFetchTest {
         assertEquals(2, debugInfo.interfaceCount)
         assertTrue(debugInfo.transportEnabled)
         assertTrue(debugInfo.multicastLockHeld)
-        assertEquals(false, debugInfo.wifiLockHeld)
         assertTrue(debugInfo.wakeLockHeld)
         assertNull(debugInfo.error)
     }
@@ -377,7 +374,6 @@ class DebugViewModelFetchTest {
                     ),
                 "transport_enabled" to true,
                 "multicast_lock_held" to true,
-                "wifi_lock_held" to false,
                 "wake_lock_held" to true,
             )
         val failedInterfaces =
@@ -409,7 +405,6 @@ class DebugViewModelFetchTest {
                     ),
                 "transport_enabled" to false,
                 "multicast_lock_held" to true,
-                "wifi_lock_held" to true,
                 "wake_lock_held" to true,
                 "error" to null,
             )
@@ -457,7 +452,6 @@ class DebugViewModelFetchTest {
                 interfaces = interfaces,
                 transportEnabled = pythonDebugInfo["transport_enabled"] as? Boolean ?: false,
                 multicastLockHeld = pythonDebugInfo["multicast_lock_held"] as? Boolean ?: false,
-                wifiLockHeld = pythonDebugInfo["wifi_lock_held"] as? Boolean ?: false,
                 wakeLockHeld = wakeLockHeld,
                 error =
                     pythonDebugInfo["error"] as? String
@@ -472,7 +466,6 @@ class DebugViewModelFetchTest {
         assertEquals(3, debugInfoResult.interfaces.size)
         assertEquals(false, debugInfoResult.transportEnabled)
         assertTrue(debugInfoResult.multicastLockHeld)
-        assertTrue(debugInfoResult.wifiLockHeld)
         assertTrue(debugInfoResult.wakeLockHeld)
         assertNull(debugInfoResult.error)
 
@@ -598,7 +591,6 @@ class DebugViewModelFetchTest {
                     ),
                 transportEnabled = true,
                 multicastLockHeld = true,
-                wifiLockHeld = false,
                 wakeLockHeld = true,
                 error = null,
             )
@@ -622,7 +614,6 @@ class DebugViewModelFetchTest {
         assertTrue(defaultInfo.interfaces.isEmpty())
         assertEquals(false, defaultInfo.transportEnabled)
         assertEquals(false, defaultInfo.multicastLockHeld)
-        assertEquals(false, defaultInfo.wifiLockHeld)
         assertEquals(false, defaultInfo.wakeLockHeld)
         assertNull(defaultInfo.error)
     }

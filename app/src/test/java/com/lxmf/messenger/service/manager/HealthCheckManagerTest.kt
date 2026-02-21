@@ -96,8 +96,8 @@ class HealthCheckManagerTest {
     @Test
     fun `stale heartbeat triggers callback after consecutive checks`() =
         runTest {
-            // Mock a stale heartbeat (20 seconds old)
-            val staleTime = (System.currentTimeMillis() / 1000.0) - 20.0
+            // Mock a stale heartbeat (90 seconds old, past 60s threshold)
+            val staleTime = (System.currentTimeMillis() / 1000.0) - 90.0
             every { wrapperManager.getHeartbeat() } returns staleTime
 
             healthCheckManager.start()
@@ -138,8 +138,8 @@ class HealthCheckManagerTest {
     @Test
     fun `recovered heartbeat resets stale count`() =
         runTest {
-            // Start with stale heartbeat
-            val staleTime = (System.currentTimeMillis() / 1000.0) - 20.0
+            // Start with stale heartbeat (90 seconds old, past 60s threshold)
+            val staleTime = (System.currentTimeMillis() / 1000.0) - 90.0
             every { wrapperManager.getHeartbeat() } returns staleTime
 
             healthCheckManager.start()
@@ -217,11 +217,11 @@ class HealthCheckManagerTest {
         }
 
     @Test
-    fun `stale threshold is 10 seconds`() =
+    fun `stale threshold is 60 seconds`() =
         runTest {
-            // Mock heartbeat that's just past the threshold (10.1 seconds old)
-            // Code uses > comparison, so exactly 10 seconds is not stale
-            val thresholdTime = (System.currentTimeMillis() / 1000.0) - 10.1
+            // Mock heartbeat that's just past the threshold (60.1 seconds old)
+            // Code uses > comparison, so exactly 60 seconds is not stale
+            val thresholdTime = (System.currentTimeMillis() / 1000.0) - 60.1
             every { wrapperManager.getHeartbeat() } returns thresholdTime
 
             healthCheckManager.start()
@@ -231,23 +231,23 @@ class HealthCheckManagerTest {
             testScope.advanceTimeBy(HealthCheckManager.CHECK_INTERVAL_MS * 2 + 1000)
             testScope.runCurrent()
 
-            // Should trigger when past 10 second threshold
-            assertTrue("Callback should trigger past 10 second threshold", staleHeartbeatCallCount >= 1)
+            // Should trigger when past 60 second threshold
+            assertTrue("Callback should trigger past 60 second threshold", staleHeartbeatCallCount >= 1)
         }
 
     @Test
-    fun `check interval is 5 seconds`() {
+    fun `check interval is 30 seconds`() {
         assertTrue(
-            "Check interval should be 5 seconds",
-            HealthCheckManager.CHECK_INTERVAL_MS == 5_000L,
+            "Check interval should be 30 seconds",
+            HealthCheckManager.CHECK_INTERVAL_MS == 30_000L,
         )
     }
 
     @Test
-    fun `stale threshold is 10 seconds constant`() {
+    fun `stale threshold is 60 seconds constant`() {
         assertTrue(
-            "Stale threshold should be 10 seconds",
-            HealthCheckManager.STALE_THRESHOLD_MS == 10_000L,
+            "Stale threshold should be 60 seconds",
+            HealthCheckManager.STALE_THRESHOLD_MS == 60_000L,
         )
     }
 }

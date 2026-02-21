@@ -562,9 +562,9 @@ class ReticulumWrapper:
         self._last_propagation_progress = 0.0  # For progress change detection during transfers
 
         # Service heartbeat tracking (Sideband-inspired process monitoring)
-        # Python updates timestamp every second; Kotlin monitors for stale heartbeats
-        # If heartbeat is stale > 10 seconds, Kotlin should restart the service
-        self._heartbeat_timestamp = 0.0  # Updated every second when running
+        # Python updates timestamp every 5s idle / 100ms during sync; Kotlin monitors for stale heartbeats
+        # If heartbeat is stale > 60 seconds, Kotlin should restart the service
+        self._heartbeat_timestamp = 0.0  # Updated every 5s when idle, 100ms during active sync
         self._heartbeat_thread = None  # Thread reference for heartbeat loop
 
         # Service maintenance tracking (Sideband-inspired interface recovery)
@@ -5326,7 +5326,7 @@ class ReticulumWrapper:
 
     def _start_heartbeat_thread(self):
         """
-        Start the heartbeat thread that updates the timestamp every second.
+        Start the heartbeat thread that updates the timestamp every 5s when idle.
         Kotlin monitors this timestamp and restarts the service if it becomes stale.
         This is called during initialize() after setting self.initialized = True.
         """
@@ -5337,7 +5337,7 @@ class ReticulumWrapper:
             )
             self._heartbeat_thread.start()
             log_info("ReticulumWrapper", "_start_heartbeat_thread",
-                    "Started service heartbeat thread (1s interval)")
+                    "Started service heartbeat thread (5s idle interval)")
 
     def _get_propagation_state_name(self, state: int) -> str:
         """Map LXMF propagation state integer to human-readable name."""
@@ -5407,7 +5407,7 @@ class ReticulumWrapper:
         """
         Background loop that updates the heartbeat timestamp.
         Also monitors propagation state changes for real-time sync progress.
-        Uses faster interval (100ms) during active sync, slower (1s) when idle.
+        Uses faster interval (100ms) during active sync, slower (5s) when idle.
         """
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop started")
         while self.initialized:
@@ -5416,15 +5416,16 @@ class ReticulumWrapper:
             # Check propagation state changes (for real-time sync progress)
             self._check_propagation_state_change()
 
-            # Use faster interval during active sync (100ms), slower when idle (1s)
+            # Use faster interval during active sync (100ms), slower when idle (5s)
             if (self.router and
                 self._last_propagation_state is not None and
                 self._last_propagation_state not in (0, 7, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4)):
                 # Active sync in progress - check more frequently
                 time.sleep(0.1)
             else:
-                # Idle or complete - normal heartbeat interval
-                time.sleep(1)
+                # Idle or complete - reduced from 1s to 5s to cut wake-ups by 80%.
+                # Kotlin HealthCheckManager uses 60s stale threshold, so 5s is safe.
+                time.sleep(5)
         log_debug("ReticulumWrapper", "_heartbeat_loop", "Heartbeat loop exiting (not initialized)")
 
     def get_heartbeat(self) -> float:
@@ -5465,7 +5466,7 @@ class ReticulumWrapper:
         """
         log_debug("ReticulumWrapper", "_maintenance_loop", "Maintenance loop started")
         while self.initialized:
-            time.sleep(1)  # Check every second, but only reinit per interval
+            time.sleep(30)  # Reduced from 1s — only does work when failed_interfaces is non-empty
 
             # Check if it's time to retry failed interfaces
             now = time.time()

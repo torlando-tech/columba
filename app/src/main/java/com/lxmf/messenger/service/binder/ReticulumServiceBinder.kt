@@ -517,7 +517,6 @@ class ReticulumServiceBinder(
             // Add lock status
             val lockStatus = lockManager.getLockStatus()
             debugInfo.put("multicast_lock_held", lockStatus.multicastHeld)
-            debugInfo.put("wifi_lock_held", lockStatus.wifiHeld)
             debugInfo.put("wake_lock_held", lockStatus.wakeHeld)
 
             // Add process persistence status

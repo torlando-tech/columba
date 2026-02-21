@@ -1975,7 +1975,6 @@ class ServiceReticulumProtocol(
             debugInfo["pending_announces"] = result.optInt("pending_announces", 0)
             debugInfo["transport_enabled"] = result.optBoolean("transport_enabled", false)
             debugInfo["multicast_lock_held"] = result.optBoolean("multicast_lock_held", false)
-            debugInfo["wifi_lock_held"] = result.optBoolean("wifi_lock_held", false)
             debugInfo["wake_lock_held"] = result.optBoolean("wake_lock_held", false)
 
             // Process persistence debug info

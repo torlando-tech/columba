@@ -4801,7 +4801,7 @@ class ReticulumWrapper:
                 # propagation to succeed because: (a) propagation may fail entirely, leaving
                 # the recipient uninformed, and (b) the direct link to the recipient likely
                 # still works (the original failure was a size-limit rejection, not a path failure).
-                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and FIELD_FILE_ATTACHMENTS in lxmf_message.fields:
                     log_info("ReticulumWrapper", "_on_message_failed",
                              f"📬 Sending pending file notification eagerly for {msg_hash[:16]}...")
                     self._send_pending_file_notification(lxmf_message)

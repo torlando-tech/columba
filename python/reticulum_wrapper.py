@@ -3034,6 +3034,7 @@ class ReticulumWrapper:
                 FIELD_FILE_ATTACHMENTS,    # 0x05
                 FIELD_IMAGE,               # 0x06
                 FIELD_AUDIO,               # 0x07
+                APP_EXTENSIONS_FIELD,      # 16 - App extensions (pending file notifications, etc.)
             }
             has_meaningful_fields = False
             if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
@@ -4584,14 +4585,6 @@ class ReticulumWrapper:
                 # Ensure timer is running
                 self._start_opportunistic_timer()
 
-            # Track PROPAGATED messages with file attachments for pending notification
-            # When propagation succeeds, we'll send a lightweight notification to the recipient
-            if lxmf_method == LXMF.LXMessage.PROPAGATED and msg_hash:
-                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
-                    self._pending_file_notifications[msg_hash.hex()] = lxmf_message
-                    log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
-                             f"Tracking {msg_hash.hex()[:16]}... for pending file notification after propagation")
-
             # Map method back to string for return
             method_names = {
                 LXMF.LXMessage.OPPORTUNISTIC: "opportunistic",
@@ -4768,14 +4761,6 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "_on_message_delivered",
                         f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
 
-                # If this message was tracked for pending file notification, send it now
-                # The notification tells the recipient to sync with the relay to get the file
-                if msg_hash in self._pending_file_notifications:
-                    tracked_message = self._pending_file_notifications.pop(msg_hash)
-                    log_info("ReticulumWrapper", "_on_message_delivered",
-                            f"📬 Sending pending file notification now that propagation confirmed")
-                    self._send_pending_file_notification(tracked_message)
-
             # Remove from opportunistic tracking (if it was being tracked)
             if msg_hash in self._opportunistic_messages:
                 del self._opportunistic_messages[msg_hash]
@@ -4873,6 +4858,16 @@ class ReticulumWrapper:
                 # Switch to PROPAGATED delivery
                 lxmf_message.desired_method = LXMF.LXMessage.PROPAGATED
 
+                # Send pending file notification EAGERLY — notify recipient immediately
+                # that a large file is being retried via propagation. We don't wait for
+                # propagation to succeed because: (a) propagation may fail entirely, leaving
+                # the recipient uninformed, and (b) the direct link to the recipient likely
+                # still works (the original failure was a size-limit rejection, not a path failure).
+                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and FIELD_FILE_ATTACHMENTS in lxmf_message.fields:
+                    log_info("ReticulumWrapper", "_on_message_failed",
+                             f"📬 Sending pending file notification eagerly for {msg_hash[:16]}...")
+                    self._send_pending_file_notification(lxmf_message)
+
                 # Re-submit to router (will go through pending_deferred_stamps for stamp generation)
                 self.router.handle_outbound(lxmf_message)
 
@@ -4888,13 +4883,6 @@ class ReticulumWrapper:
                 except Exception as e:
                     log_debug("ReticulumWrapper", "_on_message_failed",
                              f"Could not check propagation state: {e}")
-
-                # If message has file attachments, track it for notification AFTER propagation succeeds
-                # We don't send the notification immediately - wait until the relay confirms receipt
-                if hasattr(lxmf_message, 'fields') and lxmf_message.fields and 5 in lxmf_message.fields:
-                    self._pending_file_notifications[msg_hash] = lxmf_message
-                    log_debug("ReticulumWrapper", "_on_message_failed",
-                             f"Tracking {msg_hash[:16]}... for pending file notification after propagation")
 
                 # Notify Kotlin of retry (status = "retrying_propagated")
                 if self.kotlin_delivery_status_callback:
@@ -5226,13 +5214,6 @@ class ReticulumWrapper:
                 status = 'propagated'
                 log_info("ReticulumWrapper", "_on_message_sent",
                         f"📤 Message {msg_hash[:16]}... PROPAGATED (stored on relay)")
-
-                # Send pending file notification if tracked (for fallback propagation with attachments)
-                if msg_hash in self._pending_file_notifications:
-                    tracked_message = self._pending_file_notifications.pop(msg_hash)
-                    log_info("ReticulumWrapper", "_on_message_sent",
-                            f"📬 Sending pending file notification now that propagation confirmed")
-                    self._send_pending_file_notification(tracked_message)
 
                 # Track this message as successfully propagated (Issue #257 fix)
                 # This prevents spurious failure callbacks from degrading the status

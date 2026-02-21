@@ -616,7 +616,10 @@ class ConversationRepository
          * Save a draft message for a conversation.
          * If content is blank, the draft is deleted instead.
          */
-        suspend fun saveDraft(peerHash: String, content: String) {
+        suspend fun saveDraft(
+            peerHash: String,
+            content: String,
+        ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             if (content.isBlank()) {
                 draftDao.deleteDraft(peerHash, activeIdentity.identityHash)
@@ -921,6 +924,13 @@ class ConversationRepository
                             put("filename", filename)
                             put("size", size)
                         }
+
+                    // Pass through existing _data_ref if data was already streamed to disk
+                    if (data.isEmpty() && attachment.has("_data_ref")) {
+                        modifiedAttachment.put("_data_ref", attachment.getString("_data_ref"))
+                        result.put(modifiedAttachment)
+                        continue
+                    }
 
                     // Extract data to disk if present and non-empty
                     if (data.isNotEmpty()) {

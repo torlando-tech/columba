@@ -5,6 +5,7 @@
 
 package com.lxmf.messenger.viewmodel
 
+import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.db.entity.MessageEntity
@@ -73,6 +74,7 @@ class MessagingViewModelTest {
     // Create fresh dispatcher per test to avoid exception leakage between tests
     private lateinit var testDispatcher: TestDispatcher
 
+    private lateinit var applicationContext: Context
     private lateinit var reticulumProtocol: ServiceReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
@@ -100,6 +102,8 @@ class MessagingViewModelTest {
         testDispatcher = UnconfinedTestDispatcher()
         Dispatchers.setMain(testDispatcher)
 
+        applicationContext = mockk(relaxed = true)
+        every { applicationContext.cacheDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_cache").apply { mkdirs() }
         reticulumProtocol = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
@@ -182,6 +186,11 @@ class MessagingViewModelTest {
         Thread.sleep(100)
         Dispatchers.resetMain()
         clearAllMocks()
+        // Clean up temp hex files created during file attachment tests
+        java.io
+            .File(System.getProperty("java.io.tmpdir"), "test_cache")
+            .takeIf { it.exists() }
+            ?.deleteRecursively()
     }
 
     /**
@@ -192,6 +201,7 @@ class MessagingViewModelTest {
         runTest {
             viewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
@@ -213,6 +223,7 @@ class MessagingViewModelTest {
      */
     private fun createTestViewModel(): MessagingViewModel =
         MessagingViewModel(
+            applicationContext,
             reticulumProtocol,
             conversationRepository,
             announceRepository,
@@ -536,6 +547,7 @@ class MessagingViewModelTest {
             every { failingConversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
             val viewModelWithoutIdentity =
                 MessagingViewModel(
+                    applicationContext,
                     failingProtocol,
                     failingRepository,
                     failingAnnounceRepository,
@@ -985,6 +997,7 @@ class MessagingViewModelTest {
 
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
+                applicationContext,
                 reticulumProtocol,
                 conversationRepository,
                 announceRepository,
@@ -1053,6 +1066,7 @@ class MessagingViewModelTest {
 
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
+                applicationContext,
                 reticulumProtocol,
                 conversationRepository,
                 announceRepository,
@@ -1119,6 +1133,7 @@ class MessagingViewModelTest {
 
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
+                applicationContext,
                 reticulumProtocol,
                 conversationRepository,
                 announceRepository,
@@ -1173,6 +1188,7 @@ class MessagingViewModelTest {
 
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
+                applicationContext,
                 reticulumProtocol,
                 conversationRepository,
                 announceRepository,
@@ -1241,6 +1257,7 @@ class MessagingViewModelTest {
             @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
@@ -1302,6 +1319,7 @@ class MessagingViewModelTest {
             @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
@@ -1363,6 +1381,7 @@ class MessagingViewModelTest {
             @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
@@ -1424,6 +1443,7 @@ class MessagingViewModelTest {
             @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,
@@ -1485,6 +1505,7 @@ class MessagingViewModelTest {
             @Suppress("UnusedPrivateProperty") // ViewModel needs to exist to collect flows
             val testViewModel =
                 MessagingViewModel(
+                    applicationContext,
                     reticulumProtocol,
                     conversationRepository,
                     announceRepository,

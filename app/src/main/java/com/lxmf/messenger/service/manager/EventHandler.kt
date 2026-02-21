@@ -12,6 +12,7 @@ import com.lxmf.messenger.service.state.ServiceState
 import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -75,7 +76,7 @@ class EventHandler(
         Log.d(TAG, "Announce handling started - using event-driven callbacks (polling disabled)")
 
         // One-time drain of pending announces from startup
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Draining pending announces from startup queue...")
 
@@ -109,7 +110,7 @@ class EventHandler(
      * is handled via handleMessageReceivedEvent().
      */
     fun drainPendingMessages() {
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Draining pending messages from startup queue...")
 
@@ -190,8 +191,9 @@ class EventHandler(
         try {
             Log.d(TAG, "Message received event")
 
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 try {
+                    Log.d(TAG, "Message coroutine started on ${Thread.currentThread().name}")
                     val json = JSONObject(messageJson)
 
                     // Check if this is a full message (truly event-driven) or just a notification

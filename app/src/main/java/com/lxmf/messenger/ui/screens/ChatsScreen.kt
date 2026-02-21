@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -91,7 +92,10 @@ import java.util.Locale
 fun ChatsScreen(
     onChatClick: (peerHash: String, peerName: String) -> Unit = { _, _ -> },
     onViewPeerDetails: (peerHash: String) -> Unit = {},
+    onNavigateToQrScanner: () -> Unit = {},
     viewModel: ChatsViewModel = hiltViewModel(),
+    settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel = hiltViewModel(),
+    debugViewModel: com.lxmf.messenger.viewmodel.DebugViewModel = hiltViewModel(),
 ) {
     val chatsState by viewModel.chatsState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -118,6 +122,14 @@ fun ChatsScreen(
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
+
+    // QR code state
+    var showQrBottomSheet by remember { mutableStateOf(false) }
+    var showQrCodeDialog by remember { mutableStateOf(false) }
+    val qrCodeData by debugViewModel.qrCodeData.collectAsState()
+    val identityHash by debugViewModel.identityHash.collectAsState()
+    val destinationHash by debugViewModel.destinationHash.collectAsState()
+    val settingsState by settingsViewModel.state.collectAsState()
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -149,6 +161,13 @@ fun ChatsScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
                 additionalActions = {
+                    // QR Code button
+                    IconButton(onClick = { showQrBottomSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode2,
+                            contentDescription = "QR Code",
+                        )
+                    }
                     // Sync button - shows spinner during sync, tapping opens status sheet
                     IconButton(
                         onClick = {
@@ -311,6 +330,39 @@ fun ChatsScreen(
                 syncProgress = syncProgress,
                 onDismiss = { showSyncStatusSheet = false },
                 sheetState = syncStatusSheetState,
+            )
+        }
+
+        // QR Code bottom sheet
+        if (showQrBottomSheet) {
+            com.lxmf.messenger.ui.components.QrCodeBottomSheet(
+                onDismiss = { showQrBottomSheet = false },
+                onScanQrCode = { onNavigateToQrScanner() },
+                onShowQrCode = { showQrCodeDialog = true },
+            )
+        }
+
+        // QR Code dialog - reuses IdentityQrCodeDialog from settings
+        if (showQrCodeDialog && identityHash != null) {
+            com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog(
+                displayName = settingsState.displayName,
+                identityHash = identityHash,
+                destinationHash = destinationHash,
+                qrCodeData = qrCodeData,
+                onDismiss = { showQrCodeDialog = false },
+                onShareClick = {
+                    val shareText = debugViewModel.generateShareText(settingsState.displayName)
+                    if (shareText != null) {
+                        val sendIntent =
+                            android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                type = "text/plain"
+                            }
+                        val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Identity")
+                        context.startActivity(shareIntent)
+                    }
+                },
             )
         }
     }

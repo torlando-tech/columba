@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.components
 
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,8 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -47,10 +50,27 @@ fun IdentityQrCodeDialogContent(
     title: String = "Your Identity",
     actionsContent: @Composable ColumnScope.() -> Unit,
 ) {
+    // Capture Activity context before Dialog (inside Dialog, LocalContext is a ContextThemeWrapper)
+    val activity = LocalContext.current.findActivity()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        // Max brightness + keep screen on while showing QR code
+        DisposableEffect(Unit) {
+            val window = activity.window
+            val originalBrightness = window.attributes.screenBrightness
+            window.attributes = window.attributes.also { it.screenBrightness = 1f }
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onDispose {
+                window.attributes =
+                    window.attributes.also {
+                        it.screenBrightness = originalBrightness
+                    }
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+
         Surface(
             modifier =
                 Modifier

@@ -666,6 +666,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -687,6 +689,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -708,6 +712,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -726,6 +732,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -746,6 +754,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -770,6 +780,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -789,6 +801,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -813,6 +827,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -842,6 +858,8 @@ class ChatsScreenTest {
                 },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -866,6 +884,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -894,6 +914,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -920,6 +942,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -950,6 +974,8 @@ class ChatsScreenTest {
                 onChatClick = { _, _ -> },
                 onViewPeerDetails = {},
                 viewModel = mockViewModel,
+                settingsViewModel = createMockSettingsViewModel(),
+                debugViewModel = createMockDebugViewModel(),
             )
         }
 
@@ -985,5 +1011,25 @@ class ChatsScreenTest {
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)
 
         return mockViewModel
+    }
+
+    @Suppress("NoRelaxedMocks")
+    private fun createMockSettingsViewModel(): com.lxmf.messenger.viewmodel.SettingsViewModel {
+        val mock = mockk<com.lxmf.messenger.viewmodel.SettingsViewModel>(relaxed = true)
+        every { mock.state } returns
+            MutableStateFlow(
+                com.lxmf.messenger.viewmodel
+                    .SettingsState(),
+            )
+        return mock
+    }
+
+    @Suppress("NoRelaxedMocks")
+    private fun createMockDebugViewModel(): com.lxmf.messenger.viewmodel.DebugViewModel {
+        val mock = mockk<com.lxmf.messenger.viewmodel.DebugViewModel>(relaxed = true)
+        every { mock.qrCodeData } returns MutableStateFlow(null)
+        every { mock.identityHash } returns MutableStateFlow(null)
+        every { mock.destinationHash } returns MutableStateFlow(null)
+        return mock
     }
 }

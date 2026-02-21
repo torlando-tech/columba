@@ -92,8 +92,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -143,7 +143,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -963,29 +962,6 @@ fun MessagingScreen(
                         onClick = { viewModel.toggleContact() },
                     )
 
-                    // Sync button - shows spinner during sync, tapping opens status sheet
-                    IconButton(
-                        onClick = {
-                            if (isSyncing) {
-                                showSyncStatusSheet = true
-                            } else {
-                                viewModel.syncFromPropagationNode()
-                            }
-                        },
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Sync messages",
-                            )
-                        }
-                    }
-
                     // Overflow menu
                     Box {
                         var showOverflowMenu by remember { mutableStateOf(false) }
@@ -993,6 +969,12 @@ fun MessagingScreen(
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More options",
+                                tint =
+                                    if (isSyncing) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                         }
                         DropdownMenu(
@@ -1000,6 +982,32 @@ fun MessagingScreen(
                             onDismissRequest = { showOverflowMenu = false },
                             shape = RoundedCornerShape(12.dp),
                         ) {
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    if (isSyncing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                        )
+                                    }
+                                },
+                                text = {
+                                    Text(if (isSyncing) "Syncing\u2026" else "Sync messages")
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    if (isSyncing) {
+                                        showSyncStatusSheet = true
+                                    } else {
+                                        viewModel.syncFromPropagationNode()
+                                    }
+                                },
+                            )
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
@@ -2738,9 +2746,10 @@ private fun TextSizeDialog(
                 // Preview text
                 Text(
                     text = "Preview message text",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * sliderValue,
-                    ),
+                    style =
+                        MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize * sliderValue,
+                        ),
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
 

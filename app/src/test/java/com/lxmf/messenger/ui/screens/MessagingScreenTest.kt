@@ -198,7 +198,7 @@ class MessagingScreenTest {
     }
 
     @Test
-    fun topAppBar_syncButton_callsSyncFromPropagationNode() {
+    fun topAppBar_syncMenuItem_callsSyncFromPropagationNode() {
         // Given
         composeTestRule.setContent {
             MessagingScreen(
@@ -209,19 +209,16 @@ class MessagingScreenTest {
             )
         }
 
-        // When
-        val result =
-            runCatching {
-                composeTestRule.onNodeWithContentDescription("Sync messages").performClick()
-            }
+        // When - open overflow menu, then tap "Sync messages"
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Sync messages").performClick()
 
         // Then
-        assertTrue("Sync button click should succeed", result.isSuccess)
         verify { mockViewModel.syncFromPropagationNode() }
     }
 
     @Test
-    fun topAppBar_syncButton_disabledWhenSyncing() {
+    fun topAppBar_syncMenuItem_showsSyncingState() {
         // Given
         every { mockViewModel.isSyncing } returns MutableStateFlow(true)
 
@@ -234,9 +231,12 @@ class MessagingScreenTest {
             )
         }
 
-        // Then - sync button should not be clickable (disabled state)
-        // When syncing, a CircularProgressIndicator is shown instead of the icon
-        composeTestRule.onNodeWithContentDescription("Sync messages").assertDoesNotExist()
+        // When - open overflow menu
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+
+        // Then - menu item shows syncing text instead of normal text
+        composeTestRule.onNodeWithText("Syncing\u2026").assertExists()
+        composeTestRule.onNodeWithText("Sync messages").assertDoesNotExist()
     }
 
     // ========== Star Toggle Button Tests ==========

@@ -133,6 +133,18 @@ class ReticulumService : Service() {
     ): Int {
         Log.d(TAG, "Service started with action: ${intent?.action}")
 
+        // If the user explicitly shut down the service, don't allow START_STICKY or
+        // scheduleServiceRestart() to bring it back. Check flag and stop immediately.
+        val isUserShutdown =
+            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                .getBoolean("is_user_shutdown", false)
+        if (isUserShutdown && intent?.action != ACTION_STOP && intent?.action != ACTION_START) {
+            Log.i(TAG, "User shutdown flag set - stopping service instead of restarting")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         // CRITICAL: Always return START_STICKY to ensure Android restarts the service if killed.
         // Previously returned START_NOT_STICKY when managers weren't initialized, which meant
         // the service wouldn't restart after being killed during the initialization race window.
@@ -145,20 +157,33 @@ class ReticulumService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
+                // Clear user shutdown flag — this is an intentional start (app launch or restart)
+                getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("is_user_shutdown", false)
+                    .apply()
+
                 // Reinforce foreground service with notification (may already be started in onCreate)
                 managers.notificationManager.startForeground(this)
             }
             ACTION_STOP -> {
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
-                if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
-                binder.shutdown()
+
+                // Remove notification FIRST — binder.shutdown()'s async Python cleanup
+                // can crash the process, so ensure the notification is gone before that.
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
 
+                if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
+                try {
+                    binder.shutdown()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error during shutdown cleanup (process exiting anyway)", e)
+                }
+
                 // Force process exit to ensure service truly stops even with active bindings
                 // This is safe because we're in a separate :reticulum process
-                // Android will automatically restart if needed due to START_STICKY
                 System.exit(0)
             }
             ACTION_RESTART_BLE -> {
@@ -223,9 +248,17 @@ class ReticulumService : Service() {
         }
         serviceScope.cancel()
 
-        // Schedule explicit service restart (Sideband-inspired auto-restart)
-        // This ensures service comes back up even if Android delays START_STICKY restart
-        scheduleServiceRestart()
+        // Only schedule restart if the user didn't explicitly shut down the service
+        val isUserShutdown =
+            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                .getBoolean("is_user_shutdown", false)
+        if (isUserShutdown) {
+            Log.d(TAG, "User shutdown flag set - skipping service restart")
+        } else {
+            // Schedule explicit service restart (Sideband-inspired auto-restart)
+            // This ensures service comes back up even if Android delays START_STICKY restart
+            scheduleServiceRestart()
+        }
     }
 
     /**

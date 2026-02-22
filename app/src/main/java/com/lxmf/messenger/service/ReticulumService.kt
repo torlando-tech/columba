@@ -213,6 +213,14 @@ class ReticulumService : Service() {
         return binder
     }
 
+    override fun onRebind(intent: Intent?) {
+        Log.d(TAG, "Service rebound")
+        if (::managers.isInitialized) {
+            managers.notificationManager.startForeground(this)
+            managers.broadcaster.setServiceBound(true)
+        }
+    }
+
     override fun onUnbind(intent: Intent?): Boolean {
         Log.d(TAG, "Service unbound")
 

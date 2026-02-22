@@ -60,6 +60,14 @@ class InterfaceTypeTest {
     }
 
     @Test
+    fun `fromInterfaceName returns RNODE for BLE-connected RNode interfaces`() {
+        // RNode connected via BLE gets a name containing both "RNode" and "BLE"
+        // Must resolve to RNODE, not ANDROID_BLE
+        assertEquals(InterfaceType.RNODE, InterfaceType.fromInterfaceName("ColumbaRNodeInterface[RNode 5A3F BLE]"))
+        assertEquals(InterfaceType.RNODE, InterfaceType.fromInterfaceName("RNodeInterface[RNode ABC1 BLE]"))
+    }
+
+    @Test
     fun `fromInterfaceName returns UNKNOWN for null`() {
         assertEquals(InterfaceType.UNKNOWN, InterfaceType.fromInterfaceName(null))
     }

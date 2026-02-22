@@ -73,11 +73,11 @@ private fun categorizeInterface(interfaceName: String): InterfaceCategory {
             lowerName.contains("auto discovery") ||
             lowerName.startsWith("auto") -> InterfaceCategory.AUTO
         lowerName.contains("tcp") || lowerName.contains("backbone") -> InterfaceCategory.TCP
+        lowerName.contains("rnode") ||
+            lowerName.contains("lora") -> InterfaceCategory.LORA
         lowerName.contains("ble") ||
             lowerName.contains("bluetooth") ||
             lowerName.contains("androidble") -> InterfaceCategory.BLUETOOTH
-        lowerName.contains("rnode") ||
-            lowerName.contains("lora") -> InterfaceCategory.LORA
         lowerName.contains("serial") -> InterfaceCategory.SERIAL
         else -> InterfaceCategory.UNKNOWN
     }

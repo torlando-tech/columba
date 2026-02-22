@@ -178,6 +178,16 @@ class ReceivingInterfaceInfoTest {
     }
 
     @Test
+    fun `RNode connected via BLE categorized as LoRa not Bluetooth`() {
+        // RNode connected via BLE gets a name containing both "RNode" and "BLE"
+        val info = getReceivingInterfaceInfo("ColumbaRNodeInterface[RNode 5A3F BLE]")
+
+        assertEquals(Icons.Default.CellTower, info.icon)
+        assertEquals("RNode 5A3F BLE", info.text)
+        assertEquals("ColumbaRNodeInterface", info.subtitle)
+    }
+
+    @Test
     fun `RNode interface without brackets falls back to LoRa Radio`() {
         val info = getReceivingInterfaceInfo("RNodeInterface")
 

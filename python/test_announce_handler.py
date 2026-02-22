@@ -266,10 +266,12 @@ class TestAnnounceTableExtraction(unittest.TestCase):
 
     @patch('reticulum_wrapper.RNS')
     def test_handle_missing_announce_table(self, mock_rns):
-        """Test handler gracefully handles missing announce_table"""
-        # RNS.Transport has no announce_table attribute
+        """Test handler gracefully handles missing announce_table and path_table"""
+        # RNS.Transport has no announce_table or path_table attribute
         mock_rns.Transport.announce_table = None
         delattr(mock_rns.Transport, 'announce_table')
+        mock_rns.Transport.path_table = None
+        delattr(mock_rns.Transport, 'path_table')
         mock_rns.Transport.hops_to.return_value = 1
 
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
@@ -290,6 +292,43 @@ class TestAnnounceTableExtraction(unittest.TestCase):
         self.assertIsNone(stored_announce['interface'])
 
     @patch('reticulum_wrapper.RNS')
+    def test_path_table_fallback_when_announce_table_missing(self, mock_rns):
+        """Test that path_table is used as fallback when announce_table has no entry.
+
+        This happens when transport is disabled - announce_table is not populated
+        but path_table always is. Verifies the fix for interface identification
+        on non-transport nodes.
+        """
+        test_dest_hash = b'test_dest_hash_123'
+
+        # announce_table is empty (transport disabled, so no entry added)
+        mock_rns.Transport.announce_table = {}
+
+        # path_table has the entry (always populated by RNS for every announce)
+        # path_table format: [timestamp, received_from, hops, expires, random_blobs, receiving_interface, packet_hash]
+        mock_interface = Mock()
+        mock_interface.__class__.__name__ = 'AutoInterface'
+        mock_interface.name = "Local"
+        mock_rns.Transport.path_table = {
+            test_dest_hash: [None, None, None, None, None, mock_interface, None]
+        }
+        mock_rns.Transport.hops_to.return_value = 0
+
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        test_identity = Mock()
+        test_identity.get_public_key = Mock(return_value=b'test_pubkey')
+        test_app_data = b'test_app_data'
+
+        handler = wrapper._announce_handlers["lxmf.delivery"]
+        handler.received_announce(test_dest_hash, test_identity, test_app_data)
+
+        # Interface should be extracted from path_table
+        self.assertEqual(len(wrapper.pending_announces), 1)
+        stored_announce = wrapper.pending_announces[0]
+        self.assertEqual(stored_announce['interface'], "AutoInterface[Local]")
+
+    @patch('reticulum_wrapper.RNS')
     def test_handle_missing_packet_in_announce_entry(self, mock_rns):
         """Test handler handles announce_table entry without packet"""
         test_dest_hash = b'test_dest_hash_123'
@@ -298,6 +337,7 @@ class TestAnnounceTableExtraction(unittest.TestCase):
         announce_entry = [None, None, None, None, None]
 
         mock_rns.Transport.announce_table = {test_dest_hash: announce_entry}
+        mock_rns.Transport.path_table = {}
         mock_rns.Transport.hops_to.return_value = 1
 
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)

@@ -18,6 +18,7 @@ import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import javax.inject.Inject
 
@@ -233,7 +235,10 @@ class InterfaceStatsViewModel
                 // For RNode interfaces, also get RSSI if available
                 var rssi: Int? = null
                 if (entity.type == "RNode" && isOnline) {
-                    val rnodeRssi = configManager.getRNodeRssi()
+                    val rnodeRssi =
+                        withContext(Dispatchers.IO) {
+                            configManager.getRNodeRssi()
+                        }
                     if (rnodeRssi > -100) {
                         rssi = rnodeRssi
                     }
@@ -384,8 +389,8 @@ class InterfaceStatsViewModel
         private fun parseConfigJson(
             configJson: String,
             type: String,
-        ): ParsedConfig {
-            return try {
+        ): ParsedConfig =
+            try {
                 val json = JSONObject(configJson)
                 when (type) {
                     "RNode" ->
@@ -423,7 +428,6 @@ class InterfaceStatsViewModel
                 Log.e(TAG, "Error parsing config JSON", e)
                 ParsedConfig()
             }
-        }
 
         override fun onCleared() {
             super.onCleared()

@@ -451,7 +451,10 @@ class RNodeWizardViewModel
                 viewModelScope.launch {
                     while (isActive) {
                         delay(RSSI_UPDATE_INTERVAL_MS)
-                        val rssi = configManager.getRNodeRssi()
+                        val rssi =
+                            withContext(Dispatchers.IO) {
+                                configManager.getRNodeRssi()
+                            }
                         if (rssi > -100) {
                             _state.update { state ->
                                 state.copy(

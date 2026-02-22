@@ -40,6 +40,11 @@ class ServiceNotificationManager(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
+    // Service reference for reposting dismissed foreground notifications.
+    // On Android 13+, users can swipe away foreground notifications; only
+    // Service.startForeground() can restore them — NotificationManager.notify() cannot.
+    private var service: Service? = null
+
     // Track current sync state for notification updates
     private var currentSyncState: Int = PropagationState.STATE_IDLE
 
@@ -56,7 +61,7 @@ class ServiceNotificationManager(
             Log.w(TAG, "Sync notification watchdog fired - resetting to normal notification")
             currentSyncState = PropagationState.STATE_IDLE
             currentSyncProgress = 0f
-            notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+            repostNotification(createNotification(lastNetworkStatus))
         }
 
     /**
@@ -119,7 +124,7 @@ class ServiceNotificationManager(
             if (currentSyncState in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
                 return@post
             }
-            notificationManager.notify(NOTIFICATION_ID, createNotification(networkStatus))
+            repostNotification(createNotification(networkStatus))
         }
     }
 
@@ -145,14 +150,14 @@ class ServiceNotificationManager(
                 // Only show sync notification for active sync states
                 if (state in PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED) {
                     val notification = createSyncNotification(stateName, progress)
-                    notificationManager.notify(NOTIFICATION_ID, notification)
+                    repostNotification(notification)
                     // Reset watchdog on each active state update
                     scheduleSyncTimeout()
                 } else {
                     // Any non-active state (complete, idle, or error) restores normal notification
                     cancelSyncTimeout()
                     currentSyncState = PropagationState.STATE_IDLE
-                    notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+                    repostNotification(createNotification(lastNetworkStatus))
                 }
             }
         } catch (e: Exception) {
@@ -170,7 +175,7 @@ class ServiceNotificationManager(
             cancelSyncTimeout()
             currentSyncState = PropagationState.STATE_IDLE
             currentSyncProgress = 0f
-            notificationManager.notify(NOTIFICATION_ID, createNotification(lastNetworkStatus))
+            repostNotification(createNotification(lastNetworkStatus))
         }
     }
 
@@ -250,6 +255,7 @@ class ServiceNotificationManager(
      * @return true if foreground started successfully, false if it failed
      */
     fun startForeground(service: Service): Boolean {
+        this.service = service
         try {
             val notification = createNotification(state.networkStatus.get())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -281,6 +287,28 @@ class ServiceNotificationManager(
 
             // Service continues to run but not as foreground - it's now killable
             return false
+        }
+    }
+
+    /**
+     * Repost a notification via [Service.startForeground] so it survives user dismissal
+     * on Android 13+. Falls back to [NotificationManager.notify] if the service reference
+     * is unavailable (should never happen in practice).
+     */
+    private fun repostNotification(notification: Notification) {
+        val svc = service
+        if (svc != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                svc.startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                )
+            } else {
+                svc.startForeground(NOTIFICATION_ID, notification)
+            }
+        } else {
+            notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }
 

@@ -66,6 +66,7 @@ class SettingsViewModelTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: ContactRepository
+    private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -104,6 +105,22 @@ class SettingsViewModelTest {
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
+        context =
+            mockk {
+                val mockEditor =
+                    mockk<android.content.SharedPreferences.Editor>(relaxed = true) {
+                        every { putBoolean(any(), any()) } returns this
+                        every { commit() } returns true
+                        every { apply() } just Runs
+                    }
+                val mockPrefs =
+                    mockk<android.content.SharedPreferences> {
+                        every { edit() } returns mockEditor
+                        every { getBoolean(any(), any()) } returns false
+                    }
+                every { getSharedPreferences(any(), any()) } returns mockPrefs
+                every { startForegroundService(any()) } returns null
+            }
 
         // Mock TelemetryCollectorManager flows used during init
         every { telemetryCollectorManager.isEnabled } returns MutableStateFlow(false)
@@ -221,6 +238,7 @@ class SettingsViewModelTest {
 
     private fun createViewModel(): SettingsViewModel =
         SettingsViewModel(
+            context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,
@@ -1546,6 +1564,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -1592,6 +1611,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -1779,14 +1799,17 @@ class SettingsViewModelTest {
     // region Service Control Tests
 
     @Test
-    fun `shutdownService callsReticulumProtocolShutdown`() =
+    fun `shutdownService setsShutdownFlagAndSendsStopIntent`() =
         runTest {
             viewModel = createViewModel()
 
             val result = runCatching { viewModel.shutdownService() }
 
             assertTrue("shutdownService should complete successfully", result.isSuccess)
-            coVerify { reticulumProtocol.shutdown() }
+            // Verify ACTION_STOP intent is sent to stop the foreground service
+            io.mockk.verify { context.startForegroundService(any()) }
+            // Verify shutdown() is NOT called via IPC (it causes race conditions)
+            coVerify(exactly = 0) { reticulumProtocol.shutdown() }
         }
 
     // endregion
@@ -2199,6 +2222,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,
@@ -2242,6 +2266,7 @@ class SettingsViewModelTest {
 
             viewModel =
                 SettingsViewModel(
+                    context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
                     reticulumProtocol = serviceProtocol,

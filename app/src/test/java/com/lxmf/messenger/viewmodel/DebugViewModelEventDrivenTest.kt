@@ -47,6 +47,9 @@ import org.junit.Test
 class DebugViewModelEventDrivenTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    @Suppress("NoRelaxedMocks") // Android Context with many system service methods
+    private val mockContext: android.content.Context = mockk(relaxed = true)
+
     private lateinit var mockProtocol: ServiceReticulumProtocol
     private lateinit var mockSettingsRepo: SettingsRepository
     private lateinit var mockIdentityRepo: IdentityRepository
@@ -119,6 +122,7 @@ class DebugViewModelEventDrivenTest {
             // Given - create ViewModel (which starts observeDebugInfo in init)
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -151,6 +155,7 @@ class DebugViewModelEventDrivenTest {
             // Given
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -175,6 +180,7 @@ class DebugViewModelEventDrivenTest {
             // Given
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -196,6 +202,7 @@ class DebugViewModelEventDrivenTest {
             // Given
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -238,6 +245,7 @@ class DebugViewModelEventDrivenTest {
             // When - create ViewModel with non-service protocol
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     nonServiceProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -259,6 +267,7 @@ class DebugViewModelEventDrivenTest {
             // Given
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -297,6 +306,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -324,6 +334,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -350,6 +361,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -377,6 +389,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -404,6 +417,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -428,6 +442,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -454,6 +469,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,
@@ -494,6 +510,7 @@ class DebugViewModelEventDrivenTest {
 
             val viewModel =
                 DebugViewModel(
+                    mockContext,
                     mockProtocol,
                     mockSettingsRepo,
                     mockIdentityRepo,

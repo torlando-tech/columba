@@ -12,6 +12,7 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
@@ -160,6 +161,7 @@ class SettingsViewModel
     @Suppress("LongParameterList") // ViewModel with many DI dependencies is expected
     @Inject
     constructor(
+        @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: IdentityRepository,
         private val reticulumProtocol: ReticulumProtocol,
@@ -833,7 +835,32 @@ class SettingsViewModel
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "User requested service shutdown")
-                    reticulumProtocol.shutdown()
+
+                    // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped
+                    // Use commit() to ensure flag is on disk before service process reads it
+                    context
+                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("is_user_shutdown", true)
+                        .commit()
+
+                    // Unbind FIRST to prevent auto-rebind if the service process crashes.
+                    // Do NOT call reticulumProtocol.shutdown() — its async Python cleanup can
+                    // crash the service process before ACTION_STOP is delivered, triggering
+                    // ServiceReticulumProtocol's auto-rebind which restarts the service.
+                    // ACTION_STOP will handle shutdown internally in the service process.
+                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                        (reticulumProtocol as com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol)
+                            .unbindService()
+                    }
+
+                    // Send ACTION_STOP to actually stop the foreground service and remove notification
+                    val stopIntent =
+                        android.content.Intent(context, com.lxmf.messenger.service.ReticulumService::class.java).apply {
+                            action = com.lxmf.messenger.service.ReticulumService.ACTION_STOP
+                        }
+                    context.startForegroundService(stopIntent)
+
                     Log.i(TAG, "Service shutdown complete")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error shutting down service", e)

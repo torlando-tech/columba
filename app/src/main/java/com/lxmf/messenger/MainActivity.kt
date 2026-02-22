@@ -293,6 +293,19 @@ class MainActivity : ComponentActivity() {
         if (::jankStats.isInitialized) {
             jankStats.isTrackingEnabled = true
         }
+
+        // Reinforce foreground notification: on Android 13+ users can swipe it away,
+        // and only Service.startForeground() can restore it. Sending ACTION_START
+        // triggers onStartCommand which calls startForeground(this).
+        try {
+            val intent =
+                Intent(this, ReticulumService::class.java).apply {
+                    action = ReticulumService.ACTION_START
+                }
+            startForegroundService(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not reinforce foreground notification", e)
+        }
     }
 
     override fun onPause() {

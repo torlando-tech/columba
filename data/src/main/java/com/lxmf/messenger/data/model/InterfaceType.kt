@@ -29,8 +29,8 @@ enum class InterfaceType(
             return when {
                 name.contains("autointerface") -> AUTO_INTERFACE
                 name.contains("tcpclient") || name.contains("tcpinterface") || name.contains("backbone") -> TCP_CLIENT
-                name.contains("ble") || name.contains("androidble") -> ANDROID_BLE
                 name.contains("rnode") -> RNODE
+                name.contains("ble") || name.contains("androidble") -> ANDROID_BLE
                 else -> UNKNOWN
             }
         }

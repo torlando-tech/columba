@@ -16,6 +16,7 @@ import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
 from signal_quality import extract_signal_metrics, add_signal_to_message_event
+from interface_lookup import get_receiving_interface
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -2166,27 +2167,12 @@ class ReticulumWrapper:
             if hops is None or hops == RNS.Transport.PATHFINDER_M:
                 hops = 0  # Direct or unknown
 
-            # Get receiving interface from announce_table packet
-            receiving_interface = None
-            try:
-                if hasattr(RNS.Transport, 'announce_table') and destination_hash in RNS.Transport.announce_table:
-                    announce_entry = RNS.Transport.announce_table[destination_hash]
-                    if len(announce_entry) > 5:
-                        packet = announce_entry[5]  # IDX_AT_PACKET
-                        if packet and hasattr(packet, 'receiving_interface'):
-                            interface_obj = packet.receiving_interface
-                            if interface_obj:
-                                # Build formatted interface string: "ClassName[UserConfiguredName]"
-                                # This allows Kotlin to extract both the friendly name and the interface type
-                                class_name = type(interface_obj).__name__
-                                user_name = getattr(interface_obj, 'name', None)
-                                if user_name and user_name != class_name:
-                                    receiving_interface = f"{class_name}[{user_name}]"
-                                else:
-                                    receiving_interface = class_name
-            except Exception as e:
-                log_debug("ReticulumWrapper", "_announce_handler",
-                         f"Could not extract interface: {e}")
+            # Get receiving interface (checks announce_table then path_table)
+            receiving_interface = get_receiving_interface(
+                destination_hash,
+                announce_table=getattr(RNS.Transport, 'announce_table', None),
+                path_table=getattr(RNS.Transport, 'path_table', None),
+            )
 
             # Extract display name using LXMF's canonical implementation
             # Use the correct function based on aspect:
@@ -3282,26 +3268,12 @@ class ReticulumWrapper:
                 if hops is None or hops == RNS.Transport.PATHFINDER_M:
                     hops = 0
 
-                # Get receiving interface from announce_table packet
-                receiving_interface = None
-                try:
-                    announce_entry = RNS.Transport.announce_table.get(dest_hash)
-                    if announce_entry is not None and len(announce_entry) > 5:
-                        packet = announce_entry[5]  # IDX_AT_PACKET
-                        if packet and hasattr(packet, 'receiving_interface'):
-                            interface_obj = packet.receiving_interface
-                            if interface_obj:
-                                # Build formatted interface string: "ClassName[UserConfiguredName]"
-                                # This allows Kotlin to extract both the friendly name and the interface type
-                                class_name = type(interface_obj).__name__
-                                user_name = getattr(interface_obj, 'name', None)
-                                if user_name and user_name != class_name:
-                                    receiving_interface = f"{class_name}[{user_name}]"
-                                else:
-                                    receiving_interface = class_name
-                except Exception as e:
-                    log_debug("ReticulumWrapper", "poll_received_announces",
-                             f"Could not extract interface: {e}")
+                # Get receiving interface (checks announce_table then path_table)
+                receiving_interface = get_receiving_interface(
+                    dest_hash,
+                    announce_table=getattr(RNS.Transport, 'announce_table', None),
+                    path_table=getattr(RNS.Transport, 'path_table', None),
+                )
 
                 # Create simple announce event
                 # NOTE: dest_hash is the DESTINATION hash (e.g., "lxmf.delivery", "nomadnetwork.node")

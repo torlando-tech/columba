@@ -66,6 +66,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: com.lxmf.messenger.data.repository.ContactRepository
+    private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
     // Mutable flows for controlling test scenarios
@@ -85,6 +86,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private val transportNodeEnabledFlow = MutableStateFlow(true)
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
 
+    @Suppress("LongMethod") // SettingsViewModel has many dependencies requiring mock setup
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -102,6 +104,22 @@ class SettingsViewModelIncomingMessageLimitTest {
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
+        context =
+            mockk {
+                val mockEditor =
+                    mockk<android.content.SharedPreferences.Editor>(relaxed = true) {
+                        every { putBoolean(any(), any()) } returns this
+                        every { commit() } returns true
+                        every { apply() } just Runs
+                    }
+                val mockPrefs =
+                    mockk<android.content.SharedPreferences> {
+                        every { edit() } returns mockEditor
+                        every { getBoolean(any(), any()) } returns false
+                    }
+                every { getSharedPreferences(any(), any()) } returns mockPrefs
+                every { startForegroundService(any()) } returns null
+            }
 
         // Mock ContactRepository flow
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
@@ -193,6 +211,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
     private fun createViewModel(): SettingsViewModel =
         SettingsViewModel(
+            context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
             reticulumProtocol = reticulumProtocol,

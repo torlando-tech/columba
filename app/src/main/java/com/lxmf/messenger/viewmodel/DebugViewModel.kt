@@ -93,6 +93,7 @@ data class TestAnnounceResult(
 class DebugViewModel
     @Inject
     constructor(
+        @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
@@ -266,19 +267,26 @@ class DebugViewModel
             fetchDebugInfo()
         }
 
+        /** Check if the service has been shut down (by network status or SharedPreferences flag). */
+        private fun isServiceShutdown(): Boolean {
+            val status = reticulumProtocol.networkStatus.value
+            if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN) return true
+            // Also check SharedPreferences flag — onServiceDisconnected may not have fired yet
+            return context
+                .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("is_user_shutdown", false)
+        }
+
         private fun fetchDebugInfo() {
             viewModelScope.launch {
                 try {
-                    // Fetch debug info on IO thread to avoid blocking main thread
-                    // (service.debugInfo is a synchronous AIDL IPC call)
+                    if (isServiceShutdown()) return@launch
+
                     val (pythonDebugInfo, failedInterfaces) =
                         withContext(Dispatchers.IO) {
-                            val debugInfo = reticulumProtocol.getDebugInfo()
-                            val failed = reticulumProtocol.getFailedInterfaces()
-                            Pair(debugInfo, failed)
+                            Pair(reticulumProtocol.getDebugInfo(), reticulumProtocol.getFailedInterfaces())
                         }
 
-                    // Extract interface information (runs on main thread - just data transformation)
                     @Suppress("UNCHECKED_CAST")
                     val interfacesData = pythonDebugInfo["interfaces"] as? List<Map<String, Any>> ?: emptyList()
                     val activeInterfaces =
@@ -289,41 +297,13 @@ class DebugViewModel
                                 online = ifaceMap["online"] as? Boolean ?: false,
                             )
                         }
-
                     val failedInterfaceInfos =
                         failedInterfaces.map { failed ->
-                            InterfaceInfo(
-                                name = failed.name,
-                                // Use name as type since we don't have detailed type info
-                                type = failed.name,
-                                online = false,
-                                error = failed.error,
-                            )
+                            InterfaceInfo(name = failed.name, type = failed.name, online = false, error = failed.error)
                         }
-
-                    // Combine active and failed interfaces
                     val interfaces = activeInterfaces + failedInterfaceInfos
-
-                    // Get status
                     val status = reticulumProtocol.networkStatus.value
-
-                    @Suppress("UNUSED_VARIABLE")
-                    val statusString =
-                        when (status) {
-                            is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -> "READY"
-                            is com.lxmf.messenger.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
-                            is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
-                            is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -> "ERROR: ${status.message}"
-                            else -> status.toString()
-                        }
-
-                    // Build debug info
                     val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
-                    Log.d(
-                        TAG,
-                        "DebugViewModel: wake_lock_held from service = $wakeLockHeld, " +
-                            "raw value = ${pythonDebugInfo["wake_lock_held"]}",
-                    )
 
                     _debugInfo.value =
                         DebugInfo(
@@ -339,7 +319,6 @@ class DebugViewModel
                             error =
                                 pythonDebugInfo["error"] as? String
                                     ?: if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR) status.message else null,
-                            // Process persistence debug info
                             heartbeatAgeSeconds = (pythonDebugInfo["heartbeat_age_seconds"] as? Number)?.toLong() ?: -1,
                             healthCheckRunning = pythonDebugInfo["health_check_running"] as? Boolean ?: false,
                             networkMonitorRunning = pythonDebugInfo["network_monitor_running"] as? Boolean ?: false,
@@ -348,11 +327,12 @@ class DebugViewModel
                             failedInterfaceCount = (pythonDebugInfo["failed_interface_count"] as? Number)?.toInt() ?: 0,
                         )
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching debug info", e)
-                    _debugInfo.value =
-                        _debugInfo.value.copy(
-                            error = e.message,
-                        )
+                    if (isServiceShutdown()) {
+                        _debugInfo.value = DebugInfo()
+                    } else {
+                        Log.e(TAG, "Error fetching debug info", e)
+                        _debugInfo.value = _debugInfo.value.copy(error = e.message ?: "Service unavailable")
+                    }
                 }
             }
         }
@@ -551,7 +531,32 @@ class DebugViewModel
             viewModelScope.launch {
                 try {
                     Log.i(TAG, "User requested service shutdown")
-                    reticulumProtocol.shutdown()
+
+                    // Set shutdown flag so restart mechanisms (onDestroy, START_STICKY) stay stopped
+                    context
+                        .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("is_user_shutdown", true)
+                        .commit()
+
+                    // Clear UI immediately so status card shows clean shutdown state
+                    // (don't wait for onServiceDisconnected which has a race window)
+                    _debugInfo.value = DebugInfo()
+                    _networkStatus.value = "SHUTDOWN"
+
+                    // Unbind FIRST to prevent auto-rebind if service process crashes
+                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
+                        (reticulumProtocol as com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol)
+                            .unbindService()
+                    }
+
+                    // Send ACTION_STOP to stop the foreground service and remove notification
+                    val stopIntent =
+                        android.content.Intent(context, com.lxmf.messenger.service.ReticulumService::class.java).apply {
+                            action = com.lxmf.messenger.service.ReticulumService.ACTION_STOP
+                        }
+                    context.startForegroundService(stopIntent)
+
                     Log.i(TAG, "Service shutdown complete")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error shutting down service", e)

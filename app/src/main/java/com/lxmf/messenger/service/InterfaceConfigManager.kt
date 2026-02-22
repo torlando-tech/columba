@@ -187,6 +187,12 @@ class InterfaceConfigManager
                 Log.d(TAG, "✓ Ports should be released")
 
                 // Step 7: Start service again (fresh process, no port conflicts)
+                // Clear user shutdown flag so the service starts normally
+                context
+                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("is_user_shutdown", false)
+                    .commit()
                 Log.d(TAG, "Step 7: Starting ReticulumService in fresh process...")
                 val startIntent =
                     Intent(context, ReticulumService::class.java).apply {

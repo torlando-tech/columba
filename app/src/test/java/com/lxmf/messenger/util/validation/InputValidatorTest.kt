@@ -236,6 +236,41 @@ class InputValidatorTest {
         assertEquals("example.com", result.getOrNull())
     }
 
+    @Test
+    fun `validateHostname - strips http scheme prefix`() {
+        val result = InputValidator.validateHostname("http://rns.soon.it")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("rns.soon.it", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips https scheme prefix`() {
+        val result = InputValidator.validateHostname("https://example.com")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips scheme and trailing slash`() {
+        val result = InputValidator.validateHostname("http://example.com/")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips scheme and path`() {
+        val result = InputValidator.validateHostname("https://example.com/some/path")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips scheme from IP address`() {
+        val result = InputValidator.validateHostname("http://192.168.1.1")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("192.168.1.1", result.getOrNull())
+    }
+
     // ========== PORT VALIDATION TESTS ==========
 
     @Test

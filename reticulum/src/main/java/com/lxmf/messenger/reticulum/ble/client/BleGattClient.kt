@@ -113,7 +113,9 @@ class BleGattClient(
      * GATT callback handler.
      * Runs on main thread (Android requirement).
      */
-    private inner class GattCallback(private val address: String) : BluetoothGattCallback() {
+    private inner class GattCallback(
+        private val address: String,
+    ) : BluetoothGattCallback() {
         override fun onConnectionStateChange(
             gatt: BluetoothGatt,
             status: Int,
@@ -379,9 +381,7 @@ class BleGattClient(
     /**
      * Get current MTU for a connection.
      */
-    suspend fun getMtu(address: String): Int? {
-        return connectionsMutex.withLock { connections[address]?.mtu }
-    }
+    suspend fun getMtu(address: String): Int? = connectionsMutex.withLock { connections[address]?.mtu }
 
     /**
      * Determine if we should initiate connection based on MAC address comparison.
@@ -421,16 +421,12 @@ class BleGattClient(
     /**
      * Check if connected to a device.
      */
-    suspend fun isConnected(address: String): Boolean {
-        return connectionsMutex.withLock { connections.containsKey(address) }
-    }
+    suspend fun isConnected(address: String): Boolean = connectionsMutex.withLock { connections.containsKey(address) }
 
     /**
      * Get list of connected device addresses.
      */
-    suspend fun getConnectedDevices(): List<String> {
-        return connectionsMutex.withLock { connections.keys.toList() }
-    }
+    suspend fun getConnectedDevices(): List<String> = connectionsMutex.withLock { connections.keys.toList() }
 
     // ========== GATT Callback Handlers ==========
 
@@ -1100,8 +1096,8 @@ class BleGattClient(
     /**
      * Check if BLUETOOTH_CONNECT permission is granted.
      */
-    private fun hasConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT,
@@ -1109,7 +1105,6 @@ class BleGattClient(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     // ========== Connection Keepalive ==========
 
@@ -1122,81 +1117,91 @@ class BleGattClient(
      *
      * @param address MAC address of the device
      */
-    private fun startKeepalive(address: String) {
-        scope.launch {
-            connectionsMutex.withLock {
-                connections[address]?.let { connData ->
-                    // Cancel any existing keepalive
-                    connData.keepaliveJob?.cancel()
+    private suspend fun startKeepalive(address: String) {
+        connectionsMutex.withLock {
+            connections[address]?.let { connData ->
+                // Cancel any existing keepalive
+                connData.keepaliveJob?.cancel()
 
-                    // Start new keepalive job
-                    connData.keepaliveJob =
-                        scope.launch {
-                            // Send immediate first keepalive to prevent supervision timeout
-                            // Android BLE connections can timeout after ~20s of inactivity,
-                            // so we send immediately rather than waiting for the first interval
-                            try {
-                                val keepalivePacket = byteArrayOf(0x00)
-                                val result = sendData(address, keepalivePacket)
-                                if (result.isSuccess) {
-                                    Log.v(TAG, "Initial keepalive sent to $address")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Initial keepalive error for $address", e)
+                // Start new keepalive job
+                connData.keepaliveJob =
+                    scope.launch {
+                        // Send immediate first keepalive to prevent supervision timeout
+                        // Android BLE connections can timeout after ~20s of inactivity,
+                        // so we send immediately rather than waiting for the first interval
+                        try {
+                            val keepalivePacket = byteArrayOf(0x00)
+                            val result = sendData(address, keepalivePacket)
+                            if (result.isSuccess) {
+                                Log.v(TAG, "Initial keepalive sent to $address")
                             }
-
-                            // Continue with regular interval
-                            while (isActive) {
-                                delay(BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS)
-
-                                try {
-                                    // Send 1-byte keepalive packet (0x00 = ping)
-                                    val keepalivePacket = byteArrayOf(0x00)
-                                    val result = sendData(address, keepalivePacket)
-
-                                    if (result.isSuccess) {
-                                        Log.v(TAG, "Keepalive sent to $address")
-                                        // Reset failure counter on success
-                                        connectionsMutex.withLock {
-                                            connections[address]?.consecutiveKeepaliveFailures = 0
-                                        }
-                                    } else {
-                                        val failures =
-                                            connectionsMutex.withLock {
-                                                val conn = connections[address]
-                                                if (conn != null) {
-                                                    conn.consecutiveKeepaliveFailures++
-                                                    conn.consecutiveKeepaliveFailures
-                                                } else {
-                                                    0
-                                                }
-                                            }
-                                        Log.w(
-                                            TAG,
-                                            "Keepalive failed for $address ($failures/${BleConstants.MAX_CONNECTION_FAILURES} failures)",
-                                        )
-
-                                        // Disconnect after too many consecutive failures
-                                        if (failures >= BleConstants.MAX_CONNECTION_FAILURES) {
-                                            Log.e(
-                                                TAG,
-                                                "Connection to $address is dead after $failures consecutive keepalive failures, disconnecting",
-                                            )
-                                            // Launch disconnect in separate coroutine to avoid blocking keepalive loop
-                                            scope.launch {
-                                                disconnect(address)
-                                            }
-                                            break
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Keepalive error for $address", e)
-                                }
-                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Initial keepalive error for $address", e)
                         }
 
-                    Log.d(TAG, "Started keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")
-                }
+                        // Continue with regular interval
+                        while (isActive) {
+                            delay(BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS)
+
+                            // Early exit if connection was removed by another code path
+                            val stillConnected =
+                                connectionsMutex.withLock {
+                                    connections.containsKey(address)
+                                }
+                            if (!stillConnected) {
+                                Log.d(TAG, "Keepalive stopping for $address: connection no longer exists")
+                                return@launch
+                            }
+
+                            try {
+                                // Send 1-byte keepalive packet (0x00 = ping)
+                                val keepalivePacket = byteArrayOf(0x00)
+                                val result = sendData(address, keepalivePacket)
+
+                                if (result.isSuccess) {
+                                    Log.v(TAG, "Keepalive sent to $address")
+                                    // Reset failure counter on success
+                                    connectionsMutex.withLock {
+                                        connections[address]?.consecutiveKeepaliveFailures = 0
+                                    }
+                                } else {
+                                    val failures =
+                                        connectionsMutex.withLock {
+                                            val conn = connections[address]
+                                            if (conn != null) {
+                                                conn.consecutiveKeepaliveFailures++
+                                                conn.consecutiveKeepaliveFailures
+                                            } else {
+                                                0
+                                            }
+                                        }
+                                    Log.w(
+                                        TAG,
+                                        "Keepalive failed for $address ($failures/${BleConstants.MAX_CONNECTION_FAILURES} failures)",
+                                    )
+
+                                    // Disconnect after too many consecutive failures
+                                    if (failures >= BleConstants.MAX_CONNECTION_FAILURES) {
+                                        Log.e(
+                                            TAG,
+                                            "Connection to $address is dead after $failures consecutive keepalive failures, disconnecting",
+                                        )
+                                        // Null our own job ref so stopKeepalive() inside disconnect() is a no-op,
+                                        // preventing self-cancellation of the currently executing coroutine
+                                        connectionsMutex.withLock {
+                                            connections[address]?.keepaliveJob = null
+                                        }
+                                        disconnect(address)
+                                        break
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Keepalive error for $address", e)
+                            }
+                        }
+                    }
+
+                Log.d(TAG, "Started keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")
             }
         }
     }

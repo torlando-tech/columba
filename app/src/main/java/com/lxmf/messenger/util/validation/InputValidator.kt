@@ -293,8 +293,10 @@ object InputValidator {
                 .first() // Strip any path component after the hostname
 
         // Strip trailing :port (e.g. "example.com:8080" → "example.com")
-        // but not from IPv6 addresses which use colons extensively
-        if (!cleaned.startsWith("[") && !IPV6_REGEX.matches(cleaned) && cleaned.matches(Regex("^.+:\\d+$"))) {
+        // IPv6 addresses always have multiple colons; hostname:port has exactly one.
+        // This is safer than relying on IPV6_REGEX which may not cover all compressed forms.
+        val colonCount = cleaned.count { it == ':' }
+        if (colonCount == 1 && cleaned.matches(Regex("^.+:\\d+$"))) {
             cleaned = cleaned.substringBeforeLast(":")
         }
 

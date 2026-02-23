@@ -647,7 +647,12 @@ class InterfaceManagementViewModel
                             isValid = false
                         }
                         is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(targetHostError = null)
+                            // Write back the cleaned hostname (strips scheme prefixes like http://)
+                            _configState.value =
+                                _configState.value.copy(
+                                    targetHostError = null,
+                                    targetHost = hostResult.value,
+                                )
                         }
                     }
 
@@ -754,7 +759,11 @@ class InterfaceManagementViewModel
                             isValid = false
                         }
                         is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(listenIpError = null)
+                            _configState.value =
+                                _configState.value.copy(
+                                    listenIpError = null,
+                                    listenIp = ipResult.value,
+                                )
                         }
                     }
 

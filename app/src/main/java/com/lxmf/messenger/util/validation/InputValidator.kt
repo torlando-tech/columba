@@ -283,7 +283,7 @@ object InputValidator {
      */
     fun validateHostname(host: String): ValidationResult<String> {
         // Strip URI scheme prefixes — users sometimes paste full URLs instead of bare hostnames
-        val cleaned =
+        var cleaned =
             host
                 .trim()
                 .removePrefix("http://")
@@ -291,6 +291,12 @@ object InputValidator {
                 .removeSuffix("/")
                 .split("/")
                 .first() // Strip any path component after the hostname
+
+        // Strip trailing :port (e.g. "example.com:8080" → "example.com")
+        // but not from IPv6 addresses which use colons extensively
+        if (!cleaned.startsWith("[") && !IPV6_REGEX.matches(cleaned) && cleaned.matches(Regex("^.+:\\d+$"))) {
+            cleaned = cleaned.substringBeforeLast(":")
+        }
 
         return when {
             cleaned.isEmpty() ->

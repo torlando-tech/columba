@@ -271,6 +271,31 @@ class InputValidatorTest {
         assertEquals("192.168.1.1", result.getOrNull())
     }
 
+    @Test
+    fun `validateHostname - strips scheme and port from URL`() {
+        val result = InputValidator.validateHostname("http://example.com:8080")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips port from bare hostname`() {
+        val result = InputValidator.validateHostname("rns.soon.it:4242")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("rns.soon.it", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - does not strip segments from IPv6 address`() {
+        // IPv6 like "2001:db8::1" ends with ":1" which could look like a port
+        val validIPv6 = listOf("2001:db8:85a3:0:0:8a2e:370:7334", "fe80:0:0:0:0:0:0:1")
+        validIPv6.forEach { ipv6 ->
+            val result = InputValidator.validateHostname(ipv6)
+            assertTrue("$ipv6 should be valid", result is ValidationResult.Success)
+            assertEquals(ipv6, result.getOrNull())
+        }
+    }
+
     // ========== PORT VALIDATION TESTS ==========
 
     @Test

@@ -1543,6 +1543,176 @@ class MessagingViewModelTest {
             }
         }
 
+    // ========== DELIVERED TERMINAL STATE TESTS ==========
+
+    @Test
+    fun `propagated status is blocked when message is already delivered`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val testMessageHash = "delivered_msg_spurious_propagated"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "delivered",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            @Suppress("UnusedPrivateProperty")
+            val testViewModel =
+                MessagingViewModel(
+                    applicationContext,
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                )
+            advanceUntilIdle()
+
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "propagated",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+            advanceUntilIdle()
+
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
+
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "propagated")
+            }
+        }
+
+    @Test
+    fun `retrying_propagated status is blocked when message is already delivered`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val testMessageHash = "delivered_msg_spurious_retrying"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "delivered",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            @Suppress("UnusedPrivateProperty")
+            val testViewModel =
+                MessagingViewModel(
+                    applicationContext,
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                )
+            advanceUntilIdle()
+
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "retrying_propagated",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+            advanceUntilIdle()
+
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
+
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "retrying_propagated")
+            }
+        }
+
+    @Test
+    fun `sent status is blocked when message is already delivered`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val testMessageHash = "delivered_msg_spurious_sent"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "delivered",
+                )
+            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+
+            @Suppress("UnusedPrivateProperty")
+            val testViewModel =
+                MessagingViewModel(
+                    applicationContext,
+                    reticulumProtocol,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                )
+            advanceUntilIdle()
+
+            val emitResult =
+                runCatching {
+                    deliveryStatusFlow.emit(
+                        DeliveryStatusUpdate(
+                            messageHash = testMessageHash,
+                            status = "sent",
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+            advanceUntilIdle()
+
+            assertTrue("Status update emission should complete without error", emitResult.isSuccess)
+
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageStatus(testMessageHash, "sent")
+            }
+        }
+
     // ========== CONTACT TOGGLE TESTS ==========
 
     @Test

@@ -259,7 +259,7 @@ class InterfaceRepository
                     "RNode" -> {
                         val targetDeviceName = json.optString("target_device_name", "")
                         val connectionMode = json.optString("connection_mode", "classic")
-                        val tcpHost = json.optString("tcp_host", "").ifEmpty { null }
+                        var tcpHost: String? = json.optString("tcp_host", "").ifEmpty { null }
                         val tcpPort = json.optInt("tcp_port", 7633)
                         val usbDeviceId = if (json.has("usb_device_id")) json.getInt("usb_device_id") else null
                         val usbVendorId = if (json.has("usb_vendor_id")) json.getInt("usb_vendor_id") else null
@@ -273,14 +273,15 @@ class InterfaceRepository
                                     Log.e(TAG, "Empty RNode TCP host in database")
                                     error("Empty RNode TCP host")
                                 }
-                                // Validate TCP host format
-                                when (val result = InputValidator.validateHostname(tcpHost)) {
-                                    is ValidationResult.Error -> {
-                                        Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
-                                        error("Invalid RNode TCP host: $tcpHost")
+                                // Validate TCP host format (strips scheme prefixes like http://)
+                                tcpHost =
+                                    when (val result = InputValidator.validateHostname(tcpHost)) {
+                                        is ValidationResult.Error -> {
+                                            Log.e(TAG, "Invalid RNode TCP host: $tcpHost - ${result.message}")
+                                            error("Invalid RNode TCP host: $tcpHost")
+                                        }
+                                        is ValidationResult.Success -> result.value
                                     }
-                                    else -> {}
-                                }
                                 // Validate TCP port
                                 if (tcpPort !in 1..65535) {
                                     Log.e(TAG, "Invalid RNode TCP port: $tcpPort")
@@ -326,27 +327,29 @@ class InterfaceRepository
                     }
 
                     "UDP" -> {
-                        val listenIp = json.optString("listen_ip", "0.0.0.0")
+                        val rawListenIp = json.optString("listen_ip", "0.0.0.0")
                         val listenPort = json.optInt("listen_port", 4242)
-                        val forwardIp = json.optString("forward_ip", "255.255.255.255")
+                        val rawForwardIp = json.optString("forward_ip", "255.255.255.255")
                         val forwardPort = json.optInt("forward_port", 4242)
 
-                        // Validate IPs
-                        when (val listenIpResult = InputValidator.validateHostname(listenIp)) {
-                            is ValidationResult.Error -> {
-                                Log.e(TAG, "Invalid listen IP in database: $listenIp - ${listenIpResult.message}")
-                                error("Invalid listen IP: $listenIp")
+                        // Validate IPs (strips scheme prefixes like http://)
+                        val listenIp =
+                            when (val listenIpResult = InputValidator.validateHostname(rawListenIp)) {
+                                is ValidationResult.Error -> {
+                                    Log.e(TAG, "Invalid listen IP in database: $rawListenIp - ${listenIpResult.message}")
+                                    error("Invalid listen IP: $rawListenIp")
+                                }
+                                is ValidationResult.Success -> listenIpResult.value
                             }
-                            else -> {}
-                        }
 
-                        when (val forwardIpResult = InputValidator.validateHostname(forwardIp)) {
-                            is ValidationResult.Error -> {
-                                Log.e(TAG, "Invalid forward IP in database: $forwardIp - ${forwardIpResult.message}")
-                                error("Invalid forward IP: $forwardIp")
+                        val forwardIp =
+                            when (val forwardIpResult = InputValidator.validateHostname(rawForwardIp)) {
+                                is ValidationResult.Error -> {
+                                    Log.e(TAG, "Invalid forward IP in database: $rawForwardIp - ${forwardIpResult.message}")
+                                    error("Invalid forward IP: $rawForwardIp")
+                                }
+                                is ValidationResult.Success -> forwardIpResult.value
                             }
-                            else -> {}
-                        }
 
                         // Validate ports
                         if (listenPort !in 1..65535) {

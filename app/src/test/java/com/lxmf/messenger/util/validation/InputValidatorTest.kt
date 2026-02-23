@@ -271,6 +271,20 @@ class InputValidatorTest {
         assertEquals("192.168.1.1", result.getOrNull())
     }
 
+    @Test
+    fun `validateHostname - strips scheme and port from URL`() {
+        val result = InputValidator.validateHostname("http://example.com:8080")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips port from bare hostname`() {
+        val result = InputValidator.validateHostname("rns.soon.it:4242")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("rns.soon.it", result.getOrNull())
+    }
+
     // ========== PORT VALIDATION TESTS ==========
 
     @Test

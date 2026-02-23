@@ -294,7 +294,7 @@ object InputValidator {
 
         // Strip trailing :port (e.g. "example.com:8080" → "example.com")
         // but not from IPv6 addresses which use colons extensively
-        if (!cleaned.startsWith("[") && cleaned.matches(Regex("^.+:\\d+$"))) {
+        if (!cleaned.startsWith("[") && !IPV6_REGEX.matches(cleaned) && cleaned.matches(Regex("^.+:\\d+$"))) {
             cleaned = cleaned.substringBeforeLast(":")
         }
 

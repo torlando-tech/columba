@@ -442,16 +442,12 @@ class BleGattServer(
     /**
      * Get list of connected central addresses.
      */
-    suspend fun getConnectedCentrals(): List<String> {
-        return centralsMutex.withLock { connectedCentrals.keys.toList() }
-    }
+    suspend fun getConnectedCentrals(): List<String> = centralsMutex.withLock { connectedCentrals.keys.toList() }
 
     /**
      * Get MTU for a specific central.
      */
-    suspend fun getMtu(centralAddress: String): Int? {
-        return mtuMutex.withLock { centralMtus[centralAddress] }
-    }
+    suspend fun getMtu(centralAddress: String): Int? = mtuMutex.withLock { centralMtus[centralAddress] }
 
     /**
      * Disconnect a specific central device.
@@ -501,16 +497,12 @@ class BleGattServer(
     /**
      * Check if a central is connected.
      */
-    suspend fun isConnected(centralAddress: String): Boolean {
-        return centralsMutex.withLock { connectedCentrals.containsKey(centralAddress) }
-    }
+    suspend fun isConnected(centralAddress: String): Boolean = centralsMutex.withLock { connectedCentrals.containsKey(centralAddress) }
 
     /**
      * Check if a central has completed identity handshake.
      */
-    suspend fun hasIdentity(centralAddress: String): Boolean {
-        return identityMutex.withLock { addressToIdentity.containsKey(centralAddress) }
-    }
+    suspend fun hasIdentity(centralAddress: String): Boolean = identityMutex.withLock { addressToIdentity.containsKey(centralAddress) }
 
     /**
      * Complete a peripheral connection using identity obtained from another source.
@@ -984,8 +976,8 @@ class BleGattServer(
     /**
      * Check if BLUETOOTH_CONNECT permission is granted.
      */
-    private fun hasConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT,
@@ -993,7 +985,6 @@ class BleGattServer(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     // ========== Peripheral Mode Keepalive ==========
 
@@ -1007,55 +998,63 @@ class BleGattServer(
      *
      * @param address MAC address of the connected central
      */
-    private fun startPeripheralKeepalive(address: String) {
-        scope.launch {
-            keepaliveMutex.withLock {
-                // Cancel any existing keepalive
-                peripheralKeepaliveJobs[address]?.cancel()
+    private suspend fun startPeripheralKeepalive(address: String) {
+        keepaliveMutex.withLock {
+            // Cancel any existing keepalive
+            peripheralKeepaliveJobs[address]?.cancel()
 
-                // Start new keepalive job
-                peripheralKeepaliveJobs[address] =
-                    scope.launch {
-                        // Send immediate first keepalive to prevent supervision timeout
-                        // Android BLE connections can timeout after ~20s of inactivity,
-                        // so we send immediately rather than waiting for the first interval
-                        try {
-                            val keepalivePacket = byteArrayOf(0x00)
-                            val result = notifyCentrals(keepalivePacket, address)
-                            if (result.isSuccess) {
-                                Log.v(TAG, "Initial peripheral keepalive sent to $address")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Initial peripheral keepalive error for $address", e)
+            // Start new keepalive job
+            peripheralKeepaliveJobs[address] =
+                scope.launch {
+                    // Send immediate first keepalive to prevent supervision timeout
+                    // Android BLE connections can timeout after ~20s of inactivity,
+                    // so we send immediately rather than waiting for the first interval
+                    try {
+                        val keepalivePacket = byteArrayOf(0x00)
+                        val result = notifyCentrals(keepalivePacket, address)
+                        if (result.isSuccess) {
+                            Log.v(TAG, "Initial peripheral keepalive sent to $address")
                         }
-
-                        // Continue with regular interval
-                        while (isActive) {
-                            delay(BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS)
-
-                            try {
-                                // Send 1-byte keepalive via TX characteristic notification
-                                val keepalivePacket = byteArrayOf(0x00)
-                                val result = notifyCentrals(keepalivePacket, address)
-
-                                if (result.isSuccess) {
-                                    Log.v(TAG, "Peripheral keepalive sent to $address")
-                                } else {
-                                    val error = result.exceptionOrNull()?.message ?: "unknown"
-                                    if (error.contains("No connected centrals")) {
-                                        Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
-                                        break // Exit loop, job ends naturally
-                                    }
-                                    Log.w(TAG, "Peripheral keepalive failed for $address, connection may be dead")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Peripheral keepalive error for $address", e)
-                            }
-                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Initial peripheral keepalive error for $address", e)
                     }
 
-                Log.d(TAG, "Started peripheral keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")
-            }
+                    // Continue with regular interval
+                    while (isActive) {
+                        delay(BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS)
+
+                        // Early exit if connection was removed by another code path
+                        val stillConnected =
+                            centralsMutex.withLock {
+                                connectedCentrals.containsKey(address)
+                            }
+                        if (!stillConnected) {
+                            Log.d(TAG, "Peripheral keepalive stopping for $address: central no longer connected")
+                            return@launch
+                        }
+
+                        try {
+                            // Send 1-byte keepalive via TX characteristic notification
+                            val keepalivePacket = byteArrayOf(0x00)
+                            val result = notifyCentrals(keepalivePacket, address)
+
+                            if (result.isSuccess) {
+                                Log.v(TAG, "Peripheral keepalive sent to $address")
+                            } else {
+                                val error = result.exceptionOrNull()?.message ?: "unknown"
+                                if (error.contains("No connected centrals")) {
+                                    Log.w(TAG, "Keepalive for $address: target no longer tracked, stopping")
+                                    break // Exit loop, job ends naturally
+                                }
+                                Log.w(TAG, "Peripheral keepalive failed for $address, connection may be dead")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Peripheral keepalive error for $address", e)
+                        }
+                    }
+                }
+
+            Log.d(TAG, "Started peripheral keepalive for $address (interval: ${BleConstants.CONNECTION_KEEPALIVE_INTERVAL_MS}ms)")
         }
     }
 

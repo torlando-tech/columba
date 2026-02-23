@@ -795,6 +795,18 @@ class MessagingViewModel
                 }
 
                 if (message != null) {
+                    // Guard: 'delivered' is terminal — never regress to any other state.
+                    // LXMF may fire spurious failure/sent callbacks after delivery confirmation,
+                    // which can trigger propagation retries that overwrite 'delivered' with 'propagated'.
+                    if (message.status == "delivered" && update.status != "delivered") {
+                        Log.w(
+                            TAG,
+                            "Blocking status regression from 'delivered' to '${update.status}' " +
+                                "for message ${update.messageHash.take(16)}...",
+                        )
+                        return
+                    }
+
                     // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
                     // This provides defense-in-depth in case Python layer misses the spurious callback
                     if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {

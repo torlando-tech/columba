@@ -545,6 +545,7 @@ class ReticulumWrapper:
         # that successfully reached SENT state with PROPAGATED method, and ignore any
         # subsequent failure callbacks for these messages.
         self._successfully_propagated = {}  # {msg_hash_hex: timestamp} - messages that reached relay
+        self._successfully_delivered = {}  # {msg_hash_hex: timestamp} - messages confirmed by recipient
         self._propagated_tracking_ttl_seconds = 86400  # 24 hours - cleanup old entries
 
         # Pending file notifications for propagated messages with attachments
@@ -4721,10 +4722,17 @@ class ReticulumWrapper:
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
 
+            # Guard: if this message was already confirmed delivered, don't regress
+            if msg_hash in self._successfully_delivered:
+                log_info("ReticulumWrapper", "_on_message_delivered",
+                        f"⚠️ Message {msg_hash[:16]}... already delivered, ignoring subsequent callback")
+                return
+
             # Determine status based on LXMF message state
             # LXMF sets state=DELIVERED for direct, state=SENT for propagated
             if lxmf_message.state == LXMF.LXMessage.DELIVERED:
                 status = 'delivered'
+                self._successfully_delivered[msg_hash] = time.time()
                 log_info("ReticulumWrapper", "_on_message_delivered",
                         f"✅ Message {msg_hash[:16]}... DELIVERED (confirmed by recipient)")
             else:
@@ -4781,6 +4789,13 @@ class ReticulumWrapper:
         """
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
+
+            # Guard: if this message was already confirmed delivered by recipient,
+            # don't retry via propagation — that would regress the status
+            if msg_hash in self._successfully_delivered:
+                log_info("ReticulumWrapper", "_on_message_failed",
+                        f"⚠️ Message {msg_hash[:16]}... already delivered, ignoring spurious failure callback")
+                return  # Do NOT retry - already confirmed by recipient
 
             # CRITICAL FIX for issue #257: Guard against spurious failure callbacks
             # LXMF may call failure callback for propagated messages because it expects
@@ -5180,6 +5195,12 @@ class ReticulumWrapper:
         try:
             msg_hash = lxmf_message.hash.hex() if lxmf_message.hash else "unknown"
 
+            # Guard: if this message was already confirmed delivered, don't regress to sent/propagated
+            if msg_hash in self._successfully_delivered:
+                log_info("ReticulumWrapper", "_on_message_sent",
+                        f"⚠️ Message {msg_hash[:16]}... already delivered, ignoring sent callback")
+                return
+
             # For PROPAGATED messages, SENT state means relay stored the message
             # LXMF doesn't reliably call delivery callback for relay acceptance
             if hasattr(lxmf_message, 'desired_method') and lxmf_message.desired_method == LXMF.LXMessage.PROPAGATED:
@@ -5478,27 +5499,28 @@ class ReticulumWrapper:
 
     def _cleanup_stale_propagated_tracking(self):
         """
-        Remove entries from _successfully_propagated that are older than TTL.
-        This prevents memory leaks in long-running service.
+        Remove entries from _successfully_propagated and _successfully_delivered
+        that are older than TTL. This prevents memory leaks in long-running service.
 
         Called periodically from _opportunistic_timeout_loop (Issue #257 fix).
         """
-        if not self._successfully_propagated:
-            return  # Nothing to clean up
-
         now = time.time()
-        stale = []
 
-        for msg_hash, timestamp in list(self._successfully_propagated.items()):
-            age = now - timestamp
-            if age >= self._propagated_tracking_ttl_seconds:
-                stale.append(msg_hash)
-
-        if stale:
-            for msg_hash in stale:
-                del self._successfully_propagated[msg_hash]
-            log_debug("ReticulumWrapper", "_cleanup_stale_propagated_tracking",
-                     f"Cleaned up {len(stale)} stale propagated tracking entries")
+        for tracking_dict, label in [
+            (self._successfully_propagated, "propagated"),
+            (self._successfully_delivered, "delivered"),
+        ]:
+            if not tracking_dict:
+                continue
+            stale = [
+                msg_hash for msg_hash, timestamp in list(tracking_dict.items())
+                if now - timestamp >= self._propagated_tracking_ttl_seconds
+            ]
+            if stale:
+                for msg_hash in stale:
+                    del tracking_dict[msg_hash]
+                log_debug("ReticulumWrapper", "_cleanup_stale_propagated_tracking",
+                         f"Cleaned up {len(stale)} stale {label} tracking entries")
 
     def get_transport_identity_hash(self) -> bytes:
         """

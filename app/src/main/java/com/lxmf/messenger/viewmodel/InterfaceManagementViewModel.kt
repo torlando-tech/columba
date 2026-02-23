@@ -190,8 +190,7 @@ class InterfaceManagementViewModel
                     .onStart {
                         // Fetch initial status before first event arrives
                         fetchInterfaceStatus()
-                    }
-                    .collect { statusJson ->
+                    }.collect { statusJson ->
                         Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Received: $statusJson")
                         try {
                             parseAndUpdateInterfaceStatus(statusJson)
@@ -641,7 +640,12 @@ class InterfaceManagementViewModel
                             isValid = false
                         }
                         is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(targetHostError = null)
+                            // Write back the cleaned hostname (strips scheme prefixes like http://)
+                            _configState.value =
+                                _configState.value.copy(
+                                    targetHostError = null,
+                                    targetHost = hostResult.value,
+                                )
                         }
                     }
 
@@ -723,7 +727,11 @@ class InterfaceManagementViewModel
                             isValid = false
                         }
                         is ValidationResult.Success -> {
-                            _configState.value = _configState.value.copy(listenIpError = null)
+                            _configState.value =
+                                _configState.value.copy(
+                                    listenIpError = null,
+                                    listenIp = ipResult.value,
+                                )
                         }
                     }
 
@@ -817,8 +825,8 @@ class InterfaceManagementViewModel
         /**
          * Convert InterfaceConfigState to InterfaceConfig for saving.
          */
-        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig {
-            return when (state.type) {
+        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig =
+            when (state.type) {
                 "AutoInterface" ->
                     InterfaceConfig.AutoInterface(
                         name = state.name.trim(),
@@ -879,7 +887,6 @@ class InterfaceManagementViewModel
 
                 else -> throw IllegalArgumentException("Unsupported interface type: ${state.type}")
             }
-        }
 
         /**
          * Apply pending interface configuration changes to the running Reticulum instance.
@@ -905,22 +912,20 @@ class InterfaceManagementViewModel
                     // Run on IO dispatcher to avoid blocking UI with IPC calls
                     withContext(kotlinx.coroutines.Dispatchers.IO) {
                         configManager.applyInterfaceChanges()
+                    }.onSuccess {
+                        _state.value =
+                            _state.value.copy(
+                                hasPendingChanges = false,
+                                isApplyingChanges = false,
+                            )
+                        showSuccess("Configuration applied successfully")
+                    }.onFailure { error ->
+                        _state.value =
+                            _state.value.copy(
+                                isApplyingChanges = false,
+                                applyChangesError = error.message ?: "Failed to apply changes",
+                            )
                     }
-                        .onSuccess {
-                            _state.value =
-                                _state.value.copy(
-                                    hasPendingChanges = false,
-                                    isApplyingChanges = false,
-                                )
-                            showSuccess("Configuration applied successfully")
-                        }
-                        .onFailure { error ->
-                            _state.value =
-                                _state.value.copy(
-                                    isApplyingChanges = false,
-                                    applyChangesError = error.message ?: "Failed to apply changes",
-                                )
-                        }
                 } catch (e: Exception) {
                     // Catch any unexpected exceptions to ensure UI state is reset
                     _state.value =

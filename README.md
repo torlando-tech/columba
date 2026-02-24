@@ -2,7 +2,7 @@
 
 # Columba
 
-Columba is a simple messaging app for the [Reticulum](https://github.com/markqvist/Reticulum) network on Android. Send [LXMF](https://github.com/markqvist/LXMF) messages without relying on the internet, cell towers, or any central servers.
+Columba is a simple messaging and voice app for the [Reticulum](https://github.com/markqvist/Reticulum) network on Android. Send [LXMF](https://github.com/markqvist/LXMF) messages and make [LXST](https://github.com/markqvist/LXST/tree/master/LXST) voice calls without relying on the internet, cell towers, or any central servers.
 
 Built with a native Android interface and Material Design 3, Columba brings mesh networking to your pocket in a familiar, easy-to-use package.
 
@@ -13,10 +13,12 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 - **Message without infrastructure** - Send messages even when the internet is down or unavailable
 - **Connect multiple ways** - Use Bluetooth LE to connect to those around you anywhere, Wifi for those at home, LoRa radio via [RNode](https://github.com/markqvist/RNode_Firmware) for those at a distance, or use TCP to connect to any Reticulum server around the world 
 - **Stay private** - End-to-end encryption with no accounts, no tracking, and no central servers
-- **Build your network** - Help relay messages for others and expand the mesh
+- **Share location** - Share your location securely with others, viewable from a dedicated map
+- **Download maps for offline use** - Download or import map files. Supports vector and raster, in MBTiles format
+- **Build your network** - Help relay traffic for others and expand the mesh
 - **Keep your identity** - Generate your messaging identity right on your device
 - **Manage multiple identities** - Easily swap between multiple identities
-- **Export and import identities** - Keep an external backup of your keys, or migrate to a new device
+- **Export and import identities** - Keep an external backup of your keys, or migrate to a new device. Import from other Reticulum clients like [Sideband](https://github.com/markqvist/Sideband)
 - **Share your identity via QR Code** - Built in QR code scanner and generator for sharing your identity with others
 - **Custom Color Themes** - Don't like the default colors? Rice to your heart's content! 
 

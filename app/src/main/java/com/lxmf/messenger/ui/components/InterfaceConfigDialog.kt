@@ -103,8 +103,13 @@ fun InterfaceConfigDialog(
                     OutlinedTextField(
                         value = configState.targetHost,
                         onValueChange = { host ->
-                            // VALIDATION: Trim whitespace from hostname/IP
-                            onConfigUpdate(configState.copy(targetHost = host.trim()))
+                            // Strip scheme prefixes and whitespace — only bare hostnames are valid
+                            val cleaned =
+                                host
+                                    .trim()
+                                    .removePrefix("http://")
+                                    .removePrefix("https://")
+                            onConfigUpdate(configState.copy(targetHost = cleaned))
                         },
                         label = { Text("Target Host *") },
                         placeholder = { Text("IP address or hostname") },
@@ -552,7 +557,12 @@ fun TCPServerFields(
     OutlinedTextField(
         value = configState.listenIp,
         onValueChange = { ip ->
-            onConfigUpdate(configState.copy(listenIp = ip.trim()))
+            val cleaned =
+                ip
+                    .trim()
+                    .removePrefix("http://")
+                    .removePrefix("https://")
+            onConfigUpdate(configState.copy(listenIp = cleaned))
         },
         label = { Text("Listen IP") },
         placeholder = { Text("0.0.0.0") },

@@ -271,6 +271,47 @@ class InputValidatorTest {
         assertEquals("192.168.1.1", result.getOrNull())
     }
 
+    @Test
+    fun `validateHostname - strips scheme and port from URL`() {
+        val result = InputValidator.validateHostname("http://example.com:8080")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("example.com", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - strips port from bare hostname`() {
+        val result = InputValidator.validateHostname("rns.soon.it:4242")
+        assertTrue(result is ValidationResult.Success)
+        assertEquals("rns.soon.it", result.getOrNull())
+    }
+
+    @Test
+    fun `validateHostname - does not strip segments from IPv6 address`() {
+        // Full-form IPv6 addresses should not be corrupted by port stripping
+        val validIPv6 = listOf("2001:db8:85a3:0:0:8a2e:370:7334", "fe80:0:0:0:0:0:0:1")
+        validIPv6.forEach { ipv6 ->
+            val result = InputValidator.validateHostname(ipv6)
+            assertTrue("$ipv6 should be valid", result is ValidationResult.Success)
+            assertEquals(ipv6, result.getOrNull())
+        }
+    }
+
+    @Test
+    fun `validateHostname - does not corrupt compressed IPv6 addresses`() {
+        // Compressed IPv6 forms like "::1" end with ":1" which looks like a port
+        // Port stripping must not corrupt these
+        val compressedIPv6 = listOf("::1", "fe80::1", "2001:db8::1")
+        compressedIPv6.forEach { ipv6 ->
+            val result = InputValidator.validateHostname(ipv6)
+            // These may fail validation (IPV6_REGEX is incomplete for compressed forms)
+            // but they must NOT be corrupted by port stripping into something like "::"
+            if (result is ValidationResult.Success) {
+                assertEquals("$ipv6 should not be corrupted", ipv6, result.getOrNull())
+            }
+            // If it fails, that's an existing IPV6_REGEX limitation, not a port-stripping bug
+        }
+    }
+
     // ========== PORT VALIDATION TESTS ==========
 
     @Test

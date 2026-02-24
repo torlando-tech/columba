@@ -53,6 +53,11 @@ class AnnounceStreamViewModel
             internal var updateIntervalMs = 30_000L
         }
 
+        // Dirty flag: starts true for initial load, set on each announce, cleared by periodic timer
+        private val reachableCountDirty =
+            java.util.concurrent.atomic
+                .AtomicBoolean(true)
+
         private data class FilterParams(
             val query: String,
             val selectedTypes: Set<NodeType>,
@@ -171,11 +176,14 @@ class AnnounceStreamViewModel
             // Start collecting announces - but only if service is ready
             startCollectingAnnouncesWhenReady()
 
-            // Update reachable count periodically
+            // Update reachable count periodically, but only when dirty (new announces arrived).
+            // Dirty flag starts true so the first iteration loads the initial count.
             if (updateIntervalMs > 0) {
                 viewModelScope.launch {
                     while (true) {
-                        updateReachableCount()
+                        if (reachableCountDirty.getAndSet(false)) {
+                            updateReachableCount()
+                        }
                         kotlinx.coroutines.delay(updateIntervalMs)
                     }
                 }
@@ -298,8 +306,8 @@ class AnnounceStreamViewModel
                         )
                         Log.d(TAG, "Saved/updated announce in database: ${hashHex.take(16)}")
 
-                        // Update reachable count after new announce
-                        updateReachableCount()
+                        // Mark dirty so periodic timer triggers an update
+                        reachableCountDirty.set(true)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to save announce to database", e)
                     }

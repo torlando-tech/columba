@@ -262,17 +262,19 @@ fun ReplyPreviewBubble(
             Spacer(modifier = Modifier.width(8.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                // Sender name
-                Text(
-                    text = replyPreview.senderName,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // Sender name (hidden for deleted message placeholders)
+                if (replyPreview.senderName.isNotEmpty()) {
+                    Text(
+                        text = replyPreview.senderName,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
 
-                Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
 
                 // Content preview with attachment indicators
                 Row(

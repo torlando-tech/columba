@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.SystemClock
@@ -29,6 +30,7 @@ import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -77,6 +79,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
@@ -178,6 +181,7 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
 import com.lxmf.messenger.util.AnimatedImageLoader
+import com.lxmf.messenger.util.AudioPermissionManager
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
 import com.lxmf.messenger.util.ImageUtils
@@ -189,6 +193,7 @@ import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.MessagingViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
+import com.lxmf.messenger.viewmodel.VoiceMessageViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -319,6 +324,10 @@ fun MessagingScreen(
     onVoiceCall: (profileCode: Int) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
+    val voiceMessageViewModel: VoiceMessageViewModel = hiltViewModel()
+    val recordingState by voiceMessageViewModel.recordingState.collectAsStateWithLifecycle()
+    val voiceCoroutineScope = rememberCoroutineScope()
+
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
@@ -689,6 +698,16 @@ fun MessagingScreen(
             if (granted) {
                 viewModel.loadRecentPhotos(context)
             }
+        }
+
+    // RECORD_AUDIO permission launcher for voice messages
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { _ ->
+            // Permission result received. User needs to hold the mic button again
+            // to start recording. No auto-start on permission grant (consistent with
+            // research recommendation to avoid unexpected recording).
         }
 
     // Back handler: dismiss panel on back press
@@ -1236,6 +1255,26 @@ fun MessagingScreen(
                         }
                     },
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
+                    hasTextOrAttachments = messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty(),
+                    isRecording = recordingState.isRecording,
+                    onMicPress = {
+                        if (AudioPermissionManager.hasPermission(context)) {
+                            voiceMessageViewModel.startRecording()
+                        } else {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    onMicRelease = {
+                        // stopRecording() is a suspend fun (dispatches AudioRecord.stop() to
+                        // IO thread to avoid ANR). Must be launched in a coroutine.
+                        voiceCoroutineScope.launch {
+                            val recording = voiceMessageViewModel.stopRecording()
+                            if (recording != null) {
+                                viewModel.sendMessage(destinationHash, "", voiceRecording = recording)
+                            }
+                            // If null: recording was < 300ms, silently discarded
+                        }
+                    },
                 )
 
                 // Bottom space: attachment panel, keyboard spacer, or nothing
@@ -2109,6 +2148,10 @@ fun MessageInputBar(
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
     isAttachmentPanelActive: Boolean = false,
+    hasTextOrAttachments: Boolean = false,
+    isRecording: Boolean = false,
+    onMicPress: () -> Unit = {},
+    onMicRelease: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2333,29 +2376,60 @@ fun MessageInputBar(
                     )
                 }
 
-                FilledIconButton(
-                    onClick = onSendClick,
-                    enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    colors =
-                        IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                ) {
-                    if (isSending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
+                if (hasTextOrAttachments || isRecording) {
+                    // Send button: visible when there is text/attachments or actively recording
+                    FilledIconButton(
+                        onClick = onSendClick,
+                        enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        colors =
+                            IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                    ) {
+                        if (isSending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send message",
+                            )
+                        }
+                    }
+                } else {
+                    // Mic button: visible when text field is empty and no attachments
+                    IconButton(
+                        onClick = { /* no-op: gesture handled by pointerInput */ },
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            onMicPress()
+                                            tryAwaitRelease()
+                                            onMicRelease()
+                                        },
+                                    )
+                                },
+                    ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send message",
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = "Hold to record voice message",
+                            tint =
+                                if (isRecording) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
                         )
                     }
                 }

@@ -29,6 +29,8 @@ import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.model.MessageUi
 import com.lxmf.messenger.ui.model.SharingDuration
 import com.lxmf.messenger.ui.model.decodeImageWithAnimation
+import com.lxmf.messenger.ui.model.extractAudioBytes
+import com.lxmf.messenger.ui.model.extractAudioMetadata
 import com.lxmf.messenger.ui.model.getImageMetadata
 import com.lxmf.messenger.ui.model.loadFileAttachmentData
 import com.lxmf.messenger.ui.model.loadFileAttachmentMetadata
@@ -1116,6 +1118,11 @@ class MessagingViewModel
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
 
+                    // Audio data -- will be populated from VoiceMessageViewModel in Phase 8
+                    val audioData: ByteArray? = null
+                    val audioCodecId: String? = null
+                    val audioWaveform: List<Float>? = null
+
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
@@ -1171,12 +1178,26 @@ class MessagingViewModel
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
                             replyToMessageId = replyToId,
                             iconAppearance = iconAppearance,
+                            audioData = audioData,
+                            audioCodecId = audioCodecId,
                         )
 
                     result
                         .onSuccess { receipt ->
                             // Clear pending reply and draft after successful send
-                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
+                            handleSendSuccess(
+                                receipt,
+                                sanitized,
+                                destinationHash,
+                                imageData,
+                                imageFormat,
+                                fileAttachments,
+                                deliveryMethodString,
+                                replyToId,
+                                audioData = audioData,
+                                audioCodecId = audioCodecId,
+                                audioWaveform = audioWaveform,
+                            )
                             clearReplyTo()
                             draftSaveJob?.cancel()
                             lastDraftText = ""
@@ -1203,6 +1224,9 @@ class MessagingViewModel
             fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
             replyToMessageId: String? = null,
+            audioData: ByteArray? = null,
+            audioCodecId: String? = null,
+            audioWaveform: List<Float>? = null,
         ) {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             val fieldsJson =
@@ -1213,6 +1237,9 @@ class MessagingViewModel
                         fileAttachments,
                         replyToMessageId,
                         cacheDir = applicationContext.cacheDir,
+                        audioData = audioData,
+                        audioCodecId = audioCodecId,
+                        audioWaveform = audioWaveform,
                     )
                 } catch (e: java.io.IOException) {
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
@@ -2133,6 +2160,15 @@ class MessagingViewModel
                     val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
                     val imageFormat = if (imageData != null) "jpg" else null
 
+                    // Parse audio data from fieldsJson if present (mirrors image extraction above)
+                    val audioBytes = extractAudioBytes(failedMessage.fieldsJson)
+                    val retryAudioCodecId =
+                        if (audioBytes != null) {
+                            extractAudioMetadata(failedMessage.fieldsJson)?.codecId ?: "opus_vm"
+                        } else {
+                            null
+                        }
+
                     // Parse file attachments from fieldsJson if present
                     // For retry, we need to reconstruct file attachments from stored data
                     // TODO: Implement file attachment parsing from fieldsJson when retrying
@@ -2160,6 +2196,8 @@ class MessagingViewModel
                             imageFormat = imageFormat,
                             // Preserve reply on retry
                             replyToMessageId = failedMessage.replyToMessageId,
+                            audioData = audioBytes,
+                            audioCodecId = retryAudioCodecId,
                         )
 
                     result
@@ -2366,12 +2404,16 @@ private suspend fun buildFieldsJson(
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
+    audioData: ByteArray? = null,
+    audioCodecId: String? = null,
+    audioWaveform: List<Float>? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
-    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions
+    val hasAudio = audioData != null && audioCodecId != null
+    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions || hasAudio
 
     if (!hasAnyContent) return null
 
@@ -2388,6 +2430,28 @@ private suspend fun buildFieldsJson(
                 json.put("6", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
             } else {
                 json.put("6", imageData.toHexString())
+            }
+        }
+
+        // Add audio field (Field 7) -- format: ["codec_id", "hex_audio_data"] or with waveform: ["codec_id", "hex", [waveform]]
+        if (hasAudio && audioData != null && audioCodecId != null) {
+            if (cacheDir != null && audioData.size > STREAM_HEX_THRESHOLD) {
+                // Large audio: write hex to temp file, store file ref
+                val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
+                val hexFile = java.io.File(hexDir, "outgoing_audio_${System.nanoTime()}.hex")
+                audioData.streamHexToFile(hexFile)
+                json.put("7", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
+            } else {
+                val audioArray = org.json.JSONArray()
+                audioArray.put(audioCodecId)
+                audioArray.put(audioData.toHexString())
+                // Add waveform as third array element if available
+                if (audioWaveform != null) {
+                    val waveformArray = org.json.JSONArray()
+                    audioWaveform.forEach { waveformArray.put(it.toDouble()) }
+                    audioArray.put(waveformArray)
+                }
+                json.put("7", audioArray)
             }
         }
 

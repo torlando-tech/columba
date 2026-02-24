@@ -2837,19 +2837,29 @@ class ReticulumWrapper:
                     telemetry_source = "Legacy field 7"
                     try:
                         legacy_data = lxmf_message.fields[LEGACY_LOCATION_FIELD]
-                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                f"📍 Legacy location telemetry received in field 7")
 
-                        # Legacy format: JSON string as bytes or string
-                        if isinstance(legacy_data, bytes):
-                            location_json = legacy_data.decode('utf-8')
-                        elif isinstance(legacy_data, str):
-                            location_json = legacy_data
+                        # Disambiguate: audio data arrives as [codec_id, audio_bytes] (list/tuple
+                        # with a string as first element), while legacy location is JSON bytes/string.
+                        # Without this check, audio messages would be mis-parsed as location JSON.
+                        if isinstance(legacy_data, (list, tuple)) and len(legacy_data) >= 2 and isinstance(legacy_data[0], str):
+                            # This is FIELD_AUDIO data (codec_id, audio_bytes), not legacy location
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"Field 7 contains audio data (codec={legacy_data[0]}), skipping legacy location parse")
                         else:
-                            location_json = None
+                            # Original legacy location handling
+                            log_info("ReticulumWrapper", "_on_lxmf_delivery",
+                                    f"📍 Legacy location telemetry received in field 7")
 
-                        if location_json:
-                            location_event = json.loads(location_json)
+                            # Legacy format: JSON string as bytes or string
+                            if isinstance(legacy_data, bytes):
+                                location_json = legacy_data.decode('utf-8')
+                            elif isinstance(legacy_data, str):
+                                location_json = legacy_data
+                            else:
+                                location_json = None
+
+                            if location_json:
+                                location_event = json.loads(location_json)
                     except Exception as e:
                         log_warning("ReticulumWrapper", "_on_lxmf_delivery",
                                    f"Failed to parse legacy field 7: {e}")
@@ -4257,7 +4267,9 @@ class ReticulumWrapper:
                                        image_data_path: str = None,
                                        file_attachments: list = None, file_attachment_paths: list = None,
                                        reply_to_message_id: str = None,
-                                       icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None) -> Dict:
+                                       icon_name: str = None, icon_fg_color: str = None, icon_bg_color: str = None,
+                                       audio_data: bytes = None, audio_codec_id: str = None,
+                                       audio_data_path: str = None) -> Dict:
         """
         Send an LXMF message with explicit delivery method.
 
@@ -4498,6 +4510,40 @@ class ReticulumWrapper:
                 ]
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
                         f"📎 Adding icon appearance: {icon_name}, fg={icon_fg_color} ({fg_bytes.hex()}), bg={icon_bg_color} ({bg_bytes.hex()})")
+
+            # If audio_data_path is provided, read from file (for large audio bypassing Binder IPC)
+            if audio_data_path and audio_codec_id:
+                import os
+                try:
+                    with open(audio_data_path, 'rb') as f:
+                        audio_data = f.read()
+                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                             f"🎤 Read large audio from temp file: {len(audio_data)} bytes")
+                except Exception as e:
+                    log_error("ReticulumWrapper", "send_lxmf_message_with_method",
+                              f"Failed to read audio from temp file: {e}")
+                    return {"success": False, "error": f"Failed to read audio file: {e}", "delivery_method": None}
+                finally:
+                    # Always try to delete temp file (best effort cleanup)
+                    try:
+                        if os.path.exists(audio_data_path):
+                            os.remove(audio_data_path)
+                            log_debug("ReticulumWrapper", "send_lxmf_message_with_method",
+                                      f"Deleted temp audio file: {audio_data_path}")
+                    except Exception as del_err:
+                        log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                   f"Failed to delete temp audio file: {del_err}")
+
+            # Add audio field (FIELD_AUDIO = 0x07) if provided
+            # Format: [codec_id, audio_bytes] - codec_id identifies the encoding (e.g., "opus_vm")
+            if audio_data and audio_codec_id:
+                if hasattr(audio_data, '__iter__') and not isinstance(audio_data, (bytes, bytearray)):
+                    audio_data = bytes(audio_data)
+                if fields is None:
+                    fields = {}
+                fields[FIELD_AUDIO] = [audio_codec_id, audio_data]
+                log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                        f"🎤 Attaching audio: {len(audio_data)} bytes, codec={audio_codec_id}")
 
             # Create LXMF message with specified delivery method
             lxmf_message = LXMF.LXMessage(

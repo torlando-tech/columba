@@ -2208,6 +2208,8 @@ class ServiceReticulumProtocol(
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
         iconAppearance: IconAppearance?,
+        audioData: ByteArray?,
+        audioCodecId: String?,
     ): Result<MessageReceipt> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -2258,6 +2260,23 @@ class ServiceReticulumProtocol(
                     }
                 }
 
+                // Handle large audio by writing to temp file to bypass Binder IPC limits
+                var smallAudioData: ByteArray? = null
+                var audioDataPath: String? = null
+                if (audioData != null && audioCodecId != null) {
+                    if (audioData.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                        smallAudioData = audioData
+                    } else {
+                        // Write large audio to temp on IO thread and pass path
+                        val tempFile =
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                FileUtils.writeTempAttachment(context, "audio.$audioCodecId", audioData)
+                            }
+                        audioDataPath = tempFile.absolutePath
+                        Log.d(TAG, "Large audio (${audioData.size} bytes) written to temp file")
+                    }
+                }
+
                 val resultJson =
                     service.sendLxmfMessageWithMethod(
                         destinationHash,
@@ -2268,6 +2287,9 @@ class ServiceReticulumProtocol(
                         smallImageData,
                         imageFormat,
                         imageDataPath,
+                        smallAudioData,
+                        audioCodecId,
+                        audioDataPath,
                         smallAttachments.ifEmpty { null },
                         largeAttachmentPaths.ifEmpty { null },
                         replyToMessageId,

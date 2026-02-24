@@ -88,11 +88,11 @@ Plans:
   3. Accidental taps shorter than 300ms are silently discarded (no message sent)
   4. RECORD_AUDIO permission is requested on first recording attempt (recording does not start without permission)
   5. Other app audio (notifications, media) is silenced during recording via AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- VoiceMessageRecorder with Opus encoding, audio focus, and AudioPermissionManager
+- [ ] 08-02-PLAN.md -- VoiceMessageViewModel, mic button UI with hold gesture, sendMessage wiring
 
 ### Phase 9: Playback and Audio Bubble
 **Goal**: Received voice messages render inline as audio bubbles and play back with waveform progress
@@ -133,6 +133,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Protocol and Transport Foundation | 3/3 | Complete | 2026-02-24 |
-| 8. Recording and Send Path | 0/TBD | Not started | - |
+| 8. Recording and Send Path | 0/2 | Not started | - |
 | 9. Playback and Audio Bubble | 0/TBD | Not started | - |
 | 10. Recording UI and Edge Cases | 0/TBD | Not started | - |

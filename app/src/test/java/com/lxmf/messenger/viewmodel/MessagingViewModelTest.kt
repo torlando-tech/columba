@@ -4788,27 +4788,55 @@ class MessagingViewModelTest {
     // ========== DELETE MESSAGE TESTS ==========
 
     @Test
-    fun `deleteMessage calls repository with correct parameters`() =
+    fun `deleteMessage invalidates reply preview cache for deleted message`() =
         runViewModelTest {
             coEvery { conversationRepository.deleteMessage(any(), any()) } just Runs
 
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
+            // Pre-populate reply preview cache via loadReplyPreviewIfNeeded
+            coEvery {
+                conversationRepository.getReplyPreview("test-message-id", any())
+            } returns com.lxmf.messenger.data.repository.ReplyPreview(
+                messageId = "test-message-id",
+                senderName = "Test Peer",
+                contentPreview = "Hello world",
+                hasImage = false,
+                hasFileAttachment = false,
+                firstFileName = null,
+            )
+            viewModel.loadReplyPreviewAsync("reply-msg", "test-message-id")
+            advanceUntilIdle()
+
+            // Verify preview is cached with original content
+            val cachedBefore = viewModel.replyPreviewCache.value["reply-msg"]
+            assertNotNull(cachedBefore)
+            assertEquals("Hello world", cachedBefore!!.contentPreview)
+
+            // Delete the message
             viewModel.deleteMessage("test-message-id")
             advanceUntilIdle()
 
-            coVerify { conversationRepository.deleteMessage("test-message-id", testPeerHash) }
+            // Assert: cached reply preview is replaced with "Message deleted" placeholder
+            val cachedAfter = viewModel.replyPreviewCache.value["reply-msg"]
+            assertNotNull(cachedAfter)
+            assertEquals("Message deleted", cachedAfter!!.contentPreview)
+            assertEquals("", cachedAfter.senderName)
         }
 
     @Test
-    fun `deleteMessage does nothing when no active conversation`() =
+    fun `deleteMessage without active conversation does not modify state`() =
         runViewModelTest {
+            // Capture initial state
+            val initialCache = viewModel.replyPreviewCache.value
+
             // Don't call loadMessages — no active conversation
             viewModel.deleteMessage("test-message-id")
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { conversationRepository.deleteMessage(any(), any()) }
+            // Assert: reply preview cache is unchanged
+            assertEquals(initialCache, viewModel.replyPreviewCache.value)
         }
 
     // ========== DECODED IMAGES STATE TESTS ==========

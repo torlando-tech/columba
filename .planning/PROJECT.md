@@ -28,25 +28,43 @@ Reliable off-grid messaging with a polished, responsive user experience.
 
 ### Active
 
-- [ ] **NOTF-01**: No duplicate notifications after service restart for already-read messages (#338)
-- [ ] **PERM-01**: Location permission dialog stays dismissed until app restart (#342)
-- [ ] Native memory growth investigation (~1.4 MB/min in Python layer)
+- [ ] **VM-01**: User can record a voice message by holding a mic button in the chat input
+- [ ] **VM-02**: Voice message is encoded with Opus VOICE_MEDIUM (8kbps) via LXST-kt
+- [ ] **VM-03**: Voice message is sent as FIELD_AUDIO (0x07) in LXMF message
+- [ ] **VM-04**: Voice messages render inline as a bubble with play/pause button and waveform
+- [ ] **VM-05**: Voice message playback uses LXST-kt (Opus decode + Oboe playback)
+- [ ] **VM-06**: Recording has a 30-second maximum duration (~30KB at VOICE_MEDIUM)
 
 ### Out of Scope
 
 - iOS version — Android-first approach
 - Desktop version — mobile focus
+- Voice calls over mesh — separate feature (LXST telephone already exists)
+- Audio effects/filters on voice messages — unnecessary complexity
+
+## Current Milestone: v0.10.0 Voice Messages
+
+**Goal:** Add voice message recording, sending, and inline playback to conversations.
+
+**Target features:**
+- Hold-to-record mic button in chat input area
+- Opus VOICE_MEDIUM encoding via LXST-kt (~30KB for 30s)
+- LXMF FIELD_AUDIO transport
+- Inline audio bubble with play/pause + waveform visualization
+- Playback via LXST-kt Opus decode + Oboe native playback
 
 ## Context
 
-**Current State (v0.7.3):**
+**Current State:**
 - ~205K lines of Kotlin
 - Tech stack: Kotlin, Compose, Hilt, Room, Chaquopy (Python bridge)
-- Sentry performance monitoring integrated (10% transactions, 5% profiling)
-- 137 commits, 107 files changed since v0.7.2-beta
+- LXST-kt audio library already in repo (Opus, Codec2, Oboe capture/playback)
+- FIELD_AUDIO = 0x07 already defined in Python wrapper and recognized as meaningful field
+- MessageEntity.fieldsJson already supports audio field storage
+- Sentry performance monitoring integrated
 
 **Known Issues:**
-- Native memory growth (~1.4 MB/min) in Python/Reticulum layer — needs tracemalloc investigation
+- Native memory growth (~1.4 MB/min) in Python/Reticulum layer
 - PropagationNodeManager is large class — could extract RelaySelectionStateMachine
 
 ## Constraints
@@ -68,6 +86,10 @@ Reliable off-grid messaging with a polished, responsive user experience.
 | SQL subquery for contact-aware delete | More efficient than app-side filtering | ✓ Good |
 | Cache MapLibre style JSON locally | Enables indefinite offline map rendering | ✓ Good |
 | Boolean isLoading flag pattern | Consistent with existing MapViewModel | ✓ Good |
+| Opus VOICE_MEDIUM for voice messages | 8kbps balances quality and mesh-friendly size (~30KB/30s) | — Pending |
+| Hold-to-record UX | Familiar pattern (WhatsApp/Signal), quick for short messages | — Pending |
+| 30s max voice message duration | Keeps messages under ~30KB, practical for mesh links | — Pending |
+| LXST-kt for record and playback | Already in codebase, native Oboe performance, Opus codec ready | — Pending |
 
 ---
-*Last updated: 2026-01-28 after v0.7.3 milestone*
+*Last updated: 2026-02-23 after v0.10.0 milestone start*

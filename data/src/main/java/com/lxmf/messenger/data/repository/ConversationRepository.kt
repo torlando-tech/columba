@@ -431,6 +431,49 @@ class ConversationRepository
             return identitiesWithKeys
         }
 
+        /**
+         * Delete a single message by ID for the active identity.
+         * After deletion, updates the conversation's last message preview
+         * to reflect the previous message (or clears it if no messages remain).
+         *
+         * @param messageId The ID of the message to delete
+         * @param conversationHash The peer hash of the conversation containing the message
+         */
+        @Transaction
+        suspend fun deleteMessage(
+            messageId: String,
+            conversationHash: String,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val identityHash = activeIdentity.identityHash
+
+            // Delete the message
+            messageDao.deleteMessageById(messageId, identityHash)
+            android.util.Log.d("ConversationRepository", "Deleted message $messageId")
+
+            // Update conversation's last message preview
+            val conversation = conversationDao.getConversation(conversationHash, identityHash) ?: return
+            val lastMessage = messageDao.getLastMessage(conversationHash, identityHash)
+
+            val updatedConversation =
+                if (lastMessage != null) {
+                    conversation.copy(
+                        lastMessage = TextSanitizer.sanitizePreview(lastMessage.content),
+                        lastMessageTimestamp = lastMessage.timestamp,
+                    )
+                } else {
+                    conversation.copy(
+                        lastMessage = "",
+                        lastMessageTimestamp = 0L,
+                    )
+                }
+            conversationDao.updateConversation(updatedConversation)
+            android.util.Log.d(
+                "ConversationRepository",
+                "Updated conversation $conversationHash last message after deletion",
+            )
+        }
+
         suspend fun getMessageById(messageId: String): MessageEntity? {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)

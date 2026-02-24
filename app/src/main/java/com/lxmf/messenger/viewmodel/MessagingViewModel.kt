@@ -2124,6 +2124,29 @@ class MessagingViewModel
         }
 
         /**
+         * Delete a message from the local database.
+         * This is a local-only deletion — the message is not recalled from the recipient.
+         *
+         * @param messageId The ID (hash) of the message to delete
+         */
+        fun deleteMessage(messageId: String) {
+            val conversationHash = _currentConversation.value
+            if (conversationHash == null) {
+                Log.e(TAG, "Cannot delete message: no active conversation")
+                return
+            }
+            viewModelScope.launch {
+                try {
+                    Log.d(TAG, "Deleting message: $messageId")
+                    conversationRepository.deleteMessage(messageId, conversationHash)
+                    Log.d(TAG, "Message deleted successfully: $messageId")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error deleting message: $messageId", e)
+                }
+            }
+        }
+
+        /**
          * Get the recommended codec profile based on link speed probing.
          *
          * Probes the link to the current conversation peer and returns a

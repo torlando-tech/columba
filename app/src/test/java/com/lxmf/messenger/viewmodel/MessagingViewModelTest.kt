@@ -4785,6 +4785,32 @@ class MessagingViewModelTest {
             assertEquals(expectedHash, viewModel.myIdentityHash.value)
         }
 
+    // ========== DELETE MESSAGE TESTS ==========
+
+    @Test
+    fun `deleteMessage calls repository with correct parameters`() =
+        runViewModelTest {
+            coEvery { conversationRepository.deleteMessage(any(), any()) } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+
+            viewModel.deleteMessage("test-message-id")
+            advanceUntilIdle()
+
+            coVerify { conversationRepository.deleteMessage("test-message-id", testPeerHash) }
+        }
+
+    @Test
+    fun `deleteMessage does nothing when no active conversation`() =
+        runViewModelTest {
+            // Don't call loadMessages — no active conversation
+            viewModel.deleteMessage("test-message-id")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { conversationRepository.deleteMessage(any(), any()) }
+        }
+
     // ========== DECODED IMAGES STATE TESTS ==========
 
     @Test

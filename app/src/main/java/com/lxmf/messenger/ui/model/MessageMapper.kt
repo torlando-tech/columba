@@ -44,6 +44,9 @@ fun Message.toMessageUi(): MessageUi {
     }
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
 
+    val hasAudio = hasAudioField(fieldsJson)
+    val audioMeta = if (hasAudio) extractAudioMetadata(fieldsJson) else null
+
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
 
@@ -51,9 +54,9 @@ fun Message.toMessageUi(): MessageUi {
     val reactionsList = parseReactionsFromField16(fieldsJson)
 
     // Determine if we need to preserve fieldsJson for UI components
-    // (uncached image, file attachments, or pending file notification)
+    // (uncached image, file attachments, audio, or pending file notification)
     val hasUncachedImage = hasImage && cachedImage == null
-    val needsFieldsJson = hasUncachedImage || hasFiles || hasPendingFileNotification(fieldsJson)
+    val needsFieldsJson = hasUncachedImage || hasFiles || hasAudio || hasPendingFileNotification(fieldsJson)
 
     return MessageUi(
         id = id,
@@ -66,6 +69,10 @@ fun Message.toMessageUi(): MessageUi {
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,
         hasFileAttachments = hasFiles,
+        hasAudioAttachment = hasAudio,
+        audioDurationMs = audioMeta?.durationMs,
+        audioCodecId = audioMeta?.codecId,
+        audioWaveform = audioMeta?.waveform,
         fieldsJson = if (needsFieldsJson) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
@@ -159,12 +166,148 @@ private fun hasImageField(fieldsJson: String?): Boolean {
             field6 is JSONObject && field6.has(FILE_REF_KEY) -> true
             field6 is String && field6.isNotEmpty() -> true
             // Handle array format from Python: ["format", "hex_data"]
-            field6 is JSONArray && field6.length() >= 2 &&
+            field6 is JSONArray &&
+                field6.length() >= 2 &&
                 (field6.opt(1) as? String)?.isNotEmpty() == true -> true
             else -> false
         }
     } catch (e: Exception) {
         false
+    }
+}
+
+/**
+ * Check if the message has an audio field (type 7, FIELD_AUDIO) in its JSON.
+ * This is a fast check that doesn't decode anything.
+ *
+ * Audio data is distinguished from legacy location data by format:
+ * - Audio: field "7" is a JSONArray starting with a string codec_id: ["opus_vm", "hex_data"]
+ * - Legacy location: field "7" is a string or bytes containing JSON with "type" key
+ * - File reference: field "7" is a JSONObject with "_file_ref" key (large audio saved to disk)
+ *
+ * Returns false for invalid JSON or legacy location data.
+ */
+@Suppress("SwallowedException")
+fun hasAudioField(fieldsJson: String?): Boolean {
+    if (fieldsJson == null) return false
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field7 = fields.opt("7")
+        when {
+            // File reference format: large audio stored on disk
+            field7 is JSONObject && field7.has(FILE_REF_KEY) -> true
+            // Array format from Python: ["codec_id", "hex_audio_data"] or ["codec_id", "hex", [waveform]]
+            field7 is JSONArray &&
+                field7.length() >= 2 &&
+                field7.opt(0) is String &&
+                (field7.opt(0) as String).isNotEmpty() &&
+                field7.opt(1) is String &&
+                (field7.opt(1) as String).isNotEmpty() -> true
+            // NOT audio: string/other format = legacy location data
+            else -> false
+        }
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
+ * Metadata extracted from a voice message's FIELD_AUDIO.
+ *
+ * @property codecId Codec identifier (e.g., "opus_vm")
+ * @property durationMs Duration in milliseconds (null if not in metadata)
+ * @property waveform Pre-computed amplitude peaks for visualization (null if not available)
+ */
+data class AudioMetadata(
+    val codecId: String,
+    val durationMs: Long?,
+    val waveform: List<Float>?,
+)
+
+/**
+ * Extract raw audio bytes from fields JSON.
+ *
+ * IMPORTANT: Call this from a background thread (Dispatchers.IO).
+ * Audio data may be loaded from disk for large files.
+ *
+ * @param fieldsJson The message's fields JSON containing the audio data
+ * @return Raw Opus-encoded audio bytes, or null if not found
+ */
+@Suppress("ReturnCount")
+fun extractAudioBytes(fieldsJson: String?): ByteArray? {
+    if (fieldsJson == null) return null
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field7 = fields.opt("7") ?: return null
+
+        val hexAudioData: String =
+            when {
+                // File reference: load from disk
+                field7 is JSONObject && field7.has(FILE_REF_KEY) -> {
+                    val filePath = field7.getString(FILE_REF_KEY)
+                    loadAttachmentFromDisk(filePath) ?: return null
+                }
+                // Array format: ["codec_id", "hex_audio_data"]
+                field7 is JSONArray && field7.length() >= 2 -> field7.optString(1, "")
+                else -> return null
+            }
+
+        if (hexAudioData.isEmpty()) return null
+        hexStringToByteArray(hexAudioData)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to extract audio bytes", e)
+        null
+    }
+}
+
+/**
+ * Extract audio metadata (codec_id, duration, waveform) from fields JSON.
+ * This is fast (no hex decoding) -- only reads the array structure.
+ *
+ * @param fieldsJson The message's fields JSON
+ * @return AudioMetadata or null if no audio field
+ */
+@Suppress("SwallowedException")
+fun extractAudioMetadata(fieldsJson: String?): AudioMetadata? {
+    if (fieldsJson == null) return null
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field7 = fields.opt("7")
+
+        when {
+            field7 is JSONObject && field7.has(FILE_REF_KEY) -> {
+                // File ref: we know it's audio but can't read metadata without loading
+                AudioMetadata(codecId = "opus_vm", durationMs = null, waveform = null)
+            }
+            field7 is JSONArray && field7.length() >= 2 -> {
+                val codecId = field7.optString(0, "")
+                if (codecId.isEmpty()) return null
+
+                // Extract waveform from third element if present
+                val waveform =
+                    if (field7.length() >= 3) {
+                        val waveformArray = field7.optJSONArray(2)
+                        waveformArray?.let { arr ->
+                            (0 until arr.length()).map { i ->
+                                arr.optDouble(i, 0.0).toFloat()
+                            }
+                        }
+                    } else {
+                        null
+                    }
+
+                // Duration will be extracted from the audio header bytes in Phase 9
+                // For now, return null -- the UI will show "0:00" until playback starts
+                AudioMetadata(
+                    codecId = codecId,
+                    durationMs = null,
+                    waveform = waveform,
+                )
+            }
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
     }
 }
 
@@ -375,7 +518,8 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
 
         // Convert hex string to bytes
         val imageBytes =
-            hexImageData.chunked(2)
+            hexImageData
+                .chunked(2)
                 .map { it.toInt(16).toByte() }
                 .toByteArray()
 
@@ -395,8 +539,8 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
  * @param filePath Absolute path to attachment file
  * @return Attachment data (hex-encoded string), or null if not found
  */
-private fun loadAttachmentFromDisk(filePath: String): String? {
-    return try {
+private fun loadAttachmentFromDisk(filePath: String): String? =
+    try {
         val file = File(filePath)
         if (file.exists()) {
             file.readText().also {
@@ -410,7 +554,6 @@ private fun loadAttachmentFromDisk(filePath: String): String? {
         Log.e(TAG, "Failed to load attachment from disk: $filePath", e)
         null
     }
-}
 
 /**
  * Check if the message has a file attachments field (type 5) in its JSON.
@@ -623,9 +766,7 @@ fun loadFileAttachmentMetadata(
  * @param fieldsJson The message's fields JSON containing image data (field 6)
  * @return Raw image bytes, or null if not found or loading fails
  */
-fun loadImageData(fieldsJson: String?): ByteArray? {
-    return extractImageBytes(fieldsJson)
-}
+fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJson)
 
 /**
  * Get image metadata for save operations.
@@ -661,17 +802,23 @@ private fun detectImageFormat(bytes: ByteArray): Pair<String, String> =
 private fun isJpeg(bytes: ByteArray): Boolean = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
 
 private fun isPng(bytes: ByteArray): Boolean =
-    bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
-        bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+    bytes[0] == 0x89.toByte() &&
+        bytes[1] == 0x50.toByte() &&
+        bytes[2] == 0x4E.toByte() &&
+        bytes[3] == 0x47.toByte()
 
 private fun isGif(bytes: ByteArray): Boolean = bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
 
 private fun isWebP(bytes: ByteArray): Boolean =
     bytes.size >= 12 &&
-        bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
-        bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
-        bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
-        bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
+        bytes[0] == 0x52.toByte() &&
+        bytes[1] == 0x49.toByte() &&
+        bytes[2] == 0x46.toByte() &&
+        bytes[3] == 0x46.toByte() &&
+        bytes[8] == 0x57.toByte() &&
+        bytes[9] == 0x45.toByte() &&
+        bytes[10] == 0x42.toByte() &&
+        bytes[11] == 0x50.toByte()
 
 /**
  * Efficiently convert a hex string to byte array.

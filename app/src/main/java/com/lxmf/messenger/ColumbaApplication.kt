@@ -84,9 +84,9 @@ class ColumbaApplication : Application() {
     lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
     // Application-level coroutine scope for app-wide operations
-    // Uses Dispatchers.Main for lifecycle operations and UI coordination
+    // Uses Dispatchers.Default for background initialization (no main-thread work needed)
     // SupervisorJob ensures failures don't crash the entire app
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()

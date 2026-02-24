@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.lxmf.messenger.audio.VoiceRecording
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
@@ -1031,6 +1032,7 @@ class MessagingViewModel
         fun sendMessage(
             destinationHash: String,
             content: String,
+            voiceRecording: VoiceRecording? = null,
         ) {
             viewModelScope.launch {
                 _isSending.value = true
@@ -1039,12 +1041,21 @@ class MessagingViewModel
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
 
-                    // Audio data -- will be populated from VoiceMessageViewModel in Phase 8
-                    val audioData: ByteArray? = null
-                    val audioCodecId: String? = null
-                    val audioWaveform: List<Float>? = null
+                    // Phase 8: Wire voice recording output
+                    val audioData: ByteArray? = voiceRecording?.audioBytes
+                    val audioCodecId: String? = voiceRecording?.codecId
+                    val audioWaveform: List<Float>? = voiceRecording?.waveformPeaks
 
-                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
+                    // Voice-only messages: bypass text validation when audio is present
+                    // without text or other attachments. Uses " " (single space) for Sideband
+                    // compatibility, matching the existing image-only escape hatch pattern
+                    // inside validateAndSanitizeContent().
+                    val sanitized =
+                        if (voiceRecording != null && content.isBlank() && imageData == null && fileAttachments.isEmpty()) {
+                            " "
+                        } else {
+                            validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
+                        }
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {

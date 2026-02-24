@@ -5,24 +5,27 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.10.0 Voice Messages — Defining requirements
+**Current focus:** v0.10.0 Voice Messages -- Phase 7: Protocol and Transport Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-23 — Milestone v0.10.0 started
+Phase: 7 of 10 (Protocol and Transport Foundation)
+Plan: 2 of 3 in phase (07-02 complete)
+Status: In progress
+Last activity: 2026-02-24 -- Completed 07-02-PLAN.md (audio fields in MessageUi/MessageMapper)
 
-Progress: [░░░░░░░░░░░░] 0% — Requirements phase
+Progress: [░░░░░░░░░░░░] 0% -- 0/4 phases complete (Phase 7 in progress)
 
 ## Milestone Summary
 
-**v0.10.0 Voice Messages — Initializing**
+**v0.10.0 Voice Messages**
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| TBD | — | — | Not started |
+| 7. Protocol Foundation | Audio round-trips through LXMF pipeline | PROTO-01..05 | Not started |
+| 8. Recording + Send | Record and send voice messages | REC-01,05,07 EDGE-01,07 | Not started |
+| 9. Playback + Bubble | Inline playback with waveform | PLAY-01..07 EDGE-02,06 | Not started |
+| 10. UI Polish + Edge Cases | Gesture polish, interruption handling | REC-02..04,06 EDGE-03..05 | Not started |
 
 ## Accumulated Context
 
@@ -37,18 +40,13 @@ Progress: [░░░░░░░░░░░░] 0% — Requirements phase
 
 | Decision | Rationale | Phase |
 |----------|-----------|-------|
-| Opus VOICE_MEDIUM (8kbps) | Balances quality and mesh-friendly size (~30KB/30s) | — |
-| Hold-to-record UX | Familiar pattern (WhatsApp/Signal), quick for short messages | — |
-| 30s max duration | Keeps messages under ~30KB, practical for mesh links | — |
-| LXST-kt for record + playback | Already in codebase, native Oboe performance, Opus codec ready | — |
-| Play button + waveform UI | Rich inline experience, matches modern messenger expectations | — |
-
-### Patterns Established
-
-- **WhileSubscribed(5000L)**: Standard timeout for Room-backed StateFlows
-- **Turbine test pattern**: Keep collector active inside test block when testing StateFlow.value with WhileSubscribed
-- **BuildConfig feature flags**: Clean pattern for debug-only functionality with zero release overhead
-- **Image attachment pipeline**: FIELD_IMAGE → fieldsJson → MessageUi → inline rendering (pattern to follow for audio)
+| Opus VOICE_MEDIUM (8kbps) | Balances quality and mesh-friendly size (~30KB/30s) | 7 |
+| AudioRecord + Opus.encode() over NativeCaptureEngine | Avoids singleton conflict with voice calls; quality diff negligible for store-and-forward | 8 |
+| Length-prefixed Opus frames (no Ogg container) | Compact, simple, sufficient for Columba-to-Columba; codec_id identifies format | 7 |
+| 30s max duration | Keeps messages under ~30KB, practical for mesh links | 8 |
+| Audio detected by JSONArray format in field 7 | Distinguishes audio ["codec_id","hex"] from legacy location string data in same field | 7-02 |
+| audioDurationMs=null until Phase 9 playback | Duration in audio header requires decoding; deferred to avoid blocking toMessageUi() | 7-02 |
+| Waveform not transmitted over wire for received messages | Avoids bloating LXMF wire format; computed lazily on first view in Phase 9 | 7-02 |
 
 ### Pending Todos
 
@@ -57,9 +55,13 @@ Progress: [░░░░░░░░░░░░] 0% — Requirements phase
 - **Make discovered interfaces page event-driven** (ui)
 - **Refactor PropagationNodeManager to extract components** (architecture)
 
+### Blockers/Concerns
+
+None yet.
+
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Milestone v0.10.0 initialization
+Last session: 2026-02-24T05:06:10Z
+Stopped at: Completed 07-02-PLAN.md (audio fields in MessageUi and MessageMapper)
 Resume file: None
-Next: Complete requirements → roadmap → `/gsd:plan-phase [N]`
+Next: 07-03 (audio send pipeline - encode voice messages into fieldsJson for LXMF transport)

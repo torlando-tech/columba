@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-23)
 
 ## Current Position
 
-Phase: 7 of 10 (Protocol and Transport Foundation) -- COMPLETE
-Plan: 3 of 3 in phase (07-01, 07-02, 07-03 all complete)
-Status: Phase 7 complete, ready for Phase 8
-Last activity: 2026-02-24 -- Completed 07-03-PLAN.md (ViewModel audio send flow)
+Phase: 8 of 10 (Recording and Send Path) -- IN PROGRESS
+Plan: 1 of 2 in phase (08-01 complete, 08-02 pending)
+Status: Plan 08-01 complete, ready for 08-02
+Last activity: 2026-02-24 -- Completed 08-01-PLAN.md (VoiceMessageRecorder + AudioPermissionManager)
 
-Progress: [█░░░░░░░░░░░] ~8% -- Phase 7 complete (1/4 voice message phases done)
+Progress: [██░░░░░░░░░░] ~17% -- Phase 8 plan 1/2 complete (4/8 voice message plans done)
 
 ## Milestone Summary
 
@@ -23,7 +23,7 @@ Progress: [█░░░░░░░░░░░] ~8% -- Phase 7 complete (1/4 vo
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 7. Protocol Foundation | Audio round-trips through LXMF pipeline | PROTO-01..05 | **COMPLETE** |
-| 8. Recording + Send | Record and send voice messages | REC-01,05,07 EDGE-01,07 | Not started |
+| 8. Recording + Send | Record and send voice messages | REC-01,05,07 EDGE-01,07 | **In progress** (1/2 plans) |
 | 9. Playback + Bubble | Inline playback with waveform | PLAY-01..07 EDGE-02,06 | Not started |
 | 10. UI Polish + Edge Cases | Gesture polish, interruption handling | REC-02..04,06 EDGE-03..05 | Not started |
 
@@ -42,6 +42,10 @@ Progress: [█░░░░░░░░░░░] ~8% -- Phase 7 complete (1/4 vo
 - **07-02:** Kotlin extraction -- MessageUi audio fields, MessageMapper.extractAudioBytes/extractAudioMetadata/hasAudioField, AudioMetadata data class
 - **07-03:** ViewModel send flow -- buildFieldsJson Field 7 packing, sendMessage audio pass-through, handleSendSuccess local storage, retryFailedMessage re-extraction
 
+### Phase 8 Delivered (so far)
+
+- **08-01:** VoiceMessageRecorder (AudioRecord 24kHz mono + Opus VOICE_MEDIUM encoding + length-prefixed frame accumulation + 300ms discard + 30s auto-stop + audio focus + waveform peaks) and AudioPermissionManager (RECORD_AUDIO check)
+
 ### Decisions
 
 | Decision | Rationale | Phase |
@@ -57,6 +61,10 @@ Progress: [█░░░░░░░░░░░] ~8% -- Phase 7 complete (1/4 vo
 | Field 7 disambiguation via isinstance on first element | list[0] is str = audio, bytes/str = legacy location JSON; no ambiguity possible | 7-01 |
 | Audio vars null in sendMessage() until Phase 8 | Placeholders declared at correct call site; Phase 8 wires VoiceMessageViewModel output in | 7-03 |
 | retryAudioCodecId falls back to "opus_vm" | Prevents retry failure on metadata parse edge case while preserving codec intent | 7-03 |
+| Audio focus released before 300ms discard check | Ensures tap-discards release focus; prevents permanently muting other apps | 8-01 |
+| Partial final frames discarded (not zero-padded) | Avoids audible silence artifacts at recording end | 8-01 |
+| Both API 26+ and deprecated audio focus paths | minSdk is 24; need deprecated requestAudioFocus for pre-O devices | 8-01 |
+| VoiceRecording.equals uses contentEquals for ByteArray | Standard Kotlin data class pattern for array fields | 8-01 |
 
 ### Pending Todos
 
@@ -67,11 +75,11 @@ Progress: [█░░░░░░░░░░░] ~8% -- Phase 7 complete (1/4 vo
 
 ### Blockers/Concerns
 
-None. Phase 8 can begin immediately.
+None. Plan 08-02 can proceed immediately.
 
 ## Session Continuity
 
-Last session: 2026-02-24T05:14:53Z
-Stopped at: Completed 07-03-PLAN.md (ViewModel audio send flow) -- Phase 7 complete
+Last session: 2026-02-24T15:50:18Z
+Stopped at: Completed 08-01-PLAN.md (VoiceMessageRecorder + AudioPermissionManager)
 Resume file: None
-Next: Phase 8 -- Recording and Send (AudioRecord + Opus encoding, VoiceMessageViewModel, send button wiring)
+Next: Plan 08-02 -- VoiceMessageViewModel, permission launcher, mic button wiring in MessagingScreen

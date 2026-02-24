@@ -54,7 +54,7 @@ Plans:
 
 **Milestone Goal:** Add voice message recording, sending, and inline playback to conversations, using Opus encoding via LXST-kt and LXMF FIELD_AUDIO transport.
 
-- [ ] **Phase 7: Protocol and Transport Foundation** - Wire format, field collision resolution, send/receive pipeline
+- [x] **Phase 7: Protocol and Transport Foundation** - Wire format, field collision resolution, send/receive pipeline
 - [ ] **Phase 8: Recording and Send Path** - VoiceRecorder with Opus encoding, wired through to LXMF send
 - [ ] **Phase 9: Playback and Audio Bubble** - Opus decode, inline voice message bubble with waveform playback
 - [ ] **Phase 10: Recording UI and Edge Cases** - Hold-to-record gesture polish and interruption handling
@@ -74,9 +74,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md -- Send path plumbing: AIDL + ServiceBinder + Protocol + Python audio params and field 7 disambiguation
-- [ ] 07-02-PLAN.md -- Kotlin extraction: MessageMapper audio detection/extraction + MessageUi audio fields
-- [ ] 07-03-PLAN.md -- ViewModel wiring: buildFieldsJson field 7 support + end-to-end build verification
+- [x] 07-01-PLAN.md -- Send path plumbing: AIDL + ServiceBinder + Protocol + Python audio params and field 7 disambiguation
+- [x] 07-02-PLAN.md -- Kotlin extraction: MessageMapper audio detection/extraction + MessageUi audio fields
+- [x] 07-03-PLAN.md -- ViewModel wiring: buildFieldsJson field 7 support + end-to-end build verification
 
 ### Phase 8: Recording and Send Path
 **Goal**: User can record a voice message from the chat screen and send it through the LXMF pipeline
@@ -132,7 +132,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Protocol and Transport Foundation | 0/3 | Not started | - |
+| 7. Protocol and Transport Foundation | 3/3 | Complete | 2026-02-24 |
 | 8. Recording and Send Path | 0/TBD | Not started | - |
 | 9. Playback and Audio Bubble | 0/TBD | Not started | - |
 | 10. Recording UI and Edge Cases | 0/TBD | Not started | - |

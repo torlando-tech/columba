@@ -610,6 +610,7 @@ class KotlinUSBBridge(
      *   call bulkTransfer() directly without testConnection().
      * @return true if connection successful, false otherwise
      */
+    @JvmOverloads
     @Suppress("ReturnCount")
     fun connect(
         deviceId: Int,

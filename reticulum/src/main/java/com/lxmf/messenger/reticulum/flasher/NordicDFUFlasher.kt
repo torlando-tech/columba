@@ -34,7 +34,17 @@ class NordicDFUFlasher(
         // DFU Protocol Constants
         private const val DFU_TOUCH_BAUD = 1200
         private const val DFU_FLASH_BAUD = 115200
-        private const val NRF52_BOOTLOADER_PID = 0x0071
+
+        // nRF52 bootloader PIDs (Adafruit UF2 bootloader).
+        // Source: PlatformIO board JSONs + observed from real devices.
+        // RAK4631 can present as 0x0029 (RAK-customized) or 0x002A (generic pca10056).
+        // T-Echo observed as 0x002A (builds against adafruit:nrf52:pca10056).
+        private val NRF52_BOOTLOADER_PIDS =
+            setOf(
+                0x0029, // RAK4631 (RAK-customized bootloader)
+                0x002A, // Generic pca10056 bootloader (RAK4631 alt, T-Echo)
+                0x0071, // Heltec HT-n5262 (T114)
+            )
 
         private const val SERIAL_PORT_OPEN_WAIT_MS = 100L
         private const val DTR_DEASSERT_WAIT_MS = 50L
@@ -129,15 +139,15 @@ class NordicDFUFlasher(
                     return@withContext false
                 }
 
-                // Check if device is already in bootloader mode (PID 0x0071).
+                // Check if device is already in bootloader mode.
                 // If so, skip the 1200-baud touch — the bootloader doesn't handle it
                 // and won't re-enumerate.
                 val deviceInfo = usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId }
-                val alreadyInBootloader = deviceInfo?.productId == NRF52_BOOTLOADER_PID
+                val alreadyInBootloader = deviceInfo?.productId in NRF52_BOOTLOADER_PIDS
 
                 val bootloaderDeviceId: Int
                 if (alreadyInBootloader) {
-                    Log.d(TAG, "Device already in bootloader mode (PID=0x0071), skipping 1200-baud touch")
+                    Log.d(TAG, "Device already in bootloader mode (PID=0x${deviceInfo?.productId?.toString(16)}), skipping 1200-baud touch")
                     bootloaderDeviceId = deviceId
                 } else {
                     progressCallback.onProgress(5, "Entering DFU mode...")
@@ -271,8 +281,8 @@ class NordicDFUFlasher(
     /**
      * Find the bootloader device after a 1200-baud touch reset.
      *
-     * The device re-enumerates with a new USB device ID (and different PID:
-     * application PID 0x8071 → bootloader PID 0x0071). Scan for any supported
+     * The device re-enumerates with a new USB device ID (and different PID,
+     * e.g. application 0x8071 → bootloader 0x0071). Scan for any supported
      * USB serial device with a different ID than the original.
      *
      * @return The new device ID, or null if not found

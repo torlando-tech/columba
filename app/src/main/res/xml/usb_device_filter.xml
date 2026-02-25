@@ -40,13 +40,14 @@
 
     <!-- nRF52 boards: application mode -->
     <usb-device vendor-id="9114" product-id="32809" /><!-- 0x239a / 0x8029: RAK4630 -->
+    <usb-device vendor-id="9114" product-id="32810" /><!-- 0x239a / 0x802A: Generic pca10056 app (RAK4631 alt) -->
     <usb-device vendor-id="9114" product-id="32881" /><!-- 0x239a / 0x8071: Heltec HT-n5262 -->
     <usb-device vendor-id="9114" product-id="32986" /><!-- 0x239a / 0x80BA: LilyGO T-Echo -->
 
     <!-- nRF52 boards: bootloader mode (after 1200-baud touch for DFU) -->
     <usb-device vendor-id="9114" product-id="41"    /><!-- 0x239a / 0x0029: RAK4630 bootloader -->
+    <usb-device vendor-id="9114" product-id="42"    /><!-- 0x239a / 0x002A: Generic pca10056 bootloader (RAK4631 alt, T-Echo) -->
     <usb-device vendor-id="9114" product-id="113"   /><!-- 0x239a / 0x0071: Heltec HT-n5262 bootloader -->
-    <usb-device vendor-id="9114" product-id="186"   /><!-- 0x239a / 0x00BA: LilyGO T-Echo bootloader -->
 
     <!-- LilyGO T3S3 v1.2 -->
     <usb-device vendor-id="12346" product-id="4097" /><!-- 0x303A / 0x1001: LilyGO T3S3 v1.2 -->

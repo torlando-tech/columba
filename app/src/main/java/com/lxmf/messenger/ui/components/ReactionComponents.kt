@@ -936,7 +936,7 @@ fun ReactionModeOverlay(
         onDelete?.let {
             {
                 it()
-                handleDismiss()
+                // Note: Don't dismiss here - delete confirmation dialog handles its own dismiss
             }
         }
 

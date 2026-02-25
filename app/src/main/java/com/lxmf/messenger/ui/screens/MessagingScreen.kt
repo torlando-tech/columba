@@ -1289,7 +1289,10 @@ fun MessagingScreen(
                 // Delete confirmation dialog
                 if (showDeleteConfirmation) {
                     androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { showDeleteConfirmation = false },
+                        onDismissRequest = {
+                            showDeleteConfirmation = false
+                            viewModel.exitReactionMode()
+                        },
                         title = { Text("Delete message") },
                         text = { Text("This message will be permanently deleted from this device.") },
                         confirmButton = {
@@ -1305,7 +1308,10 @@ fun MessagingScreen(
                         },
                         dismissButton = {
                             androidx.compose.material3.TextButton(
-                                onClick = { showDeleteConfirmation = false },
+                                onClick = {
+                                    showDeleteConfirmation = false
+                                    viewModel.exitReactionMode()
+                                },
                             ) {
                                 Text("Cancel")
                             }

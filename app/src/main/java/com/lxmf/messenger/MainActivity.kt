@@ -921,10 +921,10 @@ fun ColumbaNavigation(
             Screen.Settings,
         )
 
-    // Double-back-to-exit: when on a root tab, first back press shows a toast,
+    // Double-back-to-exit state: first back press on a root tab shows a toast,
     // second press within 2 seconds finishes the activity.
-    val rootRoutes = screens.map { it.route }.toSet()
-    val isOnRootScreen = currentRoute in rootRoutes
+    // The BackHandler is placed inside each root tab's composable() so it takes
+    // priority over NavHost's internal back-stack popping between tabs.
     var backPressedOnce by remember(currentRoute) { mutableStateOf(false) }
 
     // Auto-reset the flag after 2 seconds
@@ -935,12 +935,15 @@ fun ColumbaNavigation(
         }
     }
 
-    BackHandler(enabled = isOnRootScreen) {
-        if (backPressedOnce) {
-            (context as? ComponentActivity)?.finish()
-        } else {
-            backPressedOnce = true
-            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+    @Composable
+    fun DoubleBackToExitHandler(route: String) {
+        BackHandler(enabled = currentRoute == route) {
+            if (backPressedOnce) {
+                (context as? ComponentActivity)?.finish()
+            } else {
+                backPressedOnce = true
+                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -1002,6 +1005,7 @@ fun ColumbaNavigation(
                     }
 
                     composable(Screen.Chats.route) {
+                        DoubleBackToExitHandler(Screen.Chats.route)
                         ChatsScreen(
                             onChatClick = { destinationHash, peerName ->
                                 val encodedHash = Uri.encode(destinationHash)
@@ -1046,6 +1050,7 @@ fun ColumbaNavigation(
                     }
 
                     composable(Screen.Contacts.route) {
+                        DoubleBackToExitHandler(Screen.Contacts.route)
                         val contactsViewModel: ContactsViewModel = hiltViewModel()
                         ContactsScreen(
                             onContactClick = { destinationHash, displayName ->
@@ -1080,6 +1085,7 @@ fun ColumbaNavigation(
                     }
 
                     composable(Screen.Map.route) {
+                        DoubleBackToExitHandler(Screen.Map.route)
                         MapScreen(
                             onNavigateToConversation = { destinationHash ->
                                 // Navigate to messaging screen with the contact
@@ -1255,6 +1261,7 @@ fun ColumbaNavigation(
                     }
 
                     composable(Screen.Settings.route) {
+                        DoubleBackToExitHandler(Screen.Settings.route)
                         SettingsScreen(
                             viewModel = settingsViewModel,
                             crashReportManager = crashReportManager,

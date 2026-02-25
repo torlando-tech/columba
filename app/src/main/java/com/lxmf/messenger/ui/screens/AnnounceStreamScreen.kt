@@ -832,7 +832,10 @@ fun AnnounceStreamContent(
                 items(
                     count = pagingItems.itemCount,
                     key = { index ->
-                        pagingItems.peek(index)?.destinationHash ?: "placeholder_$index"
+                        // Include index to prevent duplicate key crash when Paging3
+                        // transiently returns overlapping items (issue #542)
+                        val hash = pagingItems.peek(index)?.destinationHash
+                        if (hash != null) "${hash}_$index" else "placeholder_$index"
                     },
                 ) { index ->
                     val announce = pagingItems[index]

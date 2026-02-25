@@ -488,7 +488,8 @@ private fun IdentityList(
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(identities, key = { it.identityHash }) { identity ->
+        // Deduplicate defensively to prevent LazyColumn key crash (#542)
+        items(identities.distinctBy { it.identityHash }, key = { it.identityHash }) { identity ->
             IdentityCard(
                 identity = identity,
                 isActive = identity.identityHash == activeIdentity?.identityHash,

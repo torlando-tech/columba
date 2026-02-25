@@ -306,6 +306,66 @@ class ChatsViewModelTest {
         }
 
     @Test
+    fun `duplicate peerHash conversations are deduplicated in chatsState`() =
+        runTest {
+            // Given: Repository returns conversations with duplicate peerHash
+            // (can happen transiently via Room LEFT JOIN race conditions - see issue #542)
+            val repository: ConversationRepository = mockk()
+            val duplicateConversations =
+                listOf(
+                    testConversation1.copy(peerHash = "8ccb1298abcdef01"),
+                    testConversation2,
+                    testConversation1.copy(peerHash = "8ccb1298abcdef01", lastMessage = "Duplicate"),
+                )
+            every { repository.getConversations() } returns flowOf(duplicateConversations)
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
+
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+
+            // When: chatsState is collected
+            newViewModel.chatsState.test {
+                awaitItem() // Consume initialValue (loading state)
+                advanceUntilIdle()
+                val state = awaitItem()
+
+                // Then: Only unique peerHash entries remain (first occurrence wins)
+                assertEquals(2, state.conversations.size)
+                val peerHashes = state.conversations.map { it.peerHash }
+                assertEquals(peerHashes.distinct(), peerHashes)
+            }
+        }
+
+    @Test
+    fun `search results with duplicate peerHash are deduplicated`() =
+        runTest {
+            // Given: Search returns conversations with duplicate peerHash
+            val repository: ConversationRepository = mockk()
+            every { repository.getConversations() } returns flowOf(emptyList())
+            every { repository.observeDrafts() } returns flowOf(emptyMap())
+            every { repository.searchConversations("alice") } returns
+                flowOf(
+                    listOf(
+                        testConversation1.copy(peerHash = "duplicate_hash"),
+                        testConversation1.copy(peerHash = "duplicate_hash", lastMessage = "Other"),
+                    ),
+                )
+
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+
+            // When: Search query is set
+            newViewModel.searchQuery.value = "alice"
+
+            newViewModel.chatsState.test {
+                awaitItem() // Consume initialValue (loading state)
+                advanceUntilIdle()
+                val state = awaitItem()
+
+                // Then: Duplicates are removed
+                assertEquals(1, state.conversations.size)
+            }
+        }
+
+    @Test
     fun `chatsState flow starts when subscribed`() =
         runTest {
             // WhileSubscribed starts only when there's an active subscriber

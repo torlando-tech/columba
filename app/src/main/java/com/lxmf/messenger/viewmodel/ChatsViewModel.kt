@@ -78,7 +78,9 @@ class ChatsViewModel
                     }
                 }.map { conversations ->
                     ChatsState(
-                        conversations = conversations,
+                        // Deduplicate by peerHash to prevent LazyColumn duplicate key crash
+                        // (issue #542: transient duplicates from Room LEFT JOIN race conditions)
+                        conversations = conversations.distinctBy { it.peerHash },
                         isLoading = false,
                     )
                 }.onStart {

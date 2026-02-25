@@ -204,7 +204,9 @@ class PropagationNodeManager
                                 lastSeenTimestamp = announce.lastSeenTimestamp,
                             )
                         }
-                    AvailableRelaysState.Loaded(relays)
+                    // Deduplicate by destinationHash to prevent LazyColumn duplicate key crash
+                    // (issue #542: transient duplicates from data layer race conditions)
+                    AvailableRelaysState.Loaded(relays.distinctBy { it.destinationHash })
                 }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)

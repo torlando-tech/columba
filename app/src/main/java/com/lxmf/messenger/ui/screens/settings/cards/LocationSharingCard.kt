@@ -367,7 +367,11 @@ private fun DurationPickerDialog(
 /**
  * Precision radius presets for the picker.
  */
-private enum class PrecisionPreset(val radiusMeters: Int, val displayName: String, val description: String) {
+private enum class PrecisionPreset(
+    val radiusMeters: Int,
+    val displayName: String,
+    val description: String,
+) {
     PRECISE(0, "Precise", "Exact GPS location"),
     NEIGHBORHOOD(100, "Neighborhood", "~100m radius"),
     CITY(1000, "City", "~1km radius"),
@@ -463,26 +467,24 @@ internal fun formatTimeRemaining(endTime: Long?): String {
 /**
  * Get display text for a SharingDuration enum name.
  */
-internal fun getDurationDisplayText(durationName: String): String {
-    return try {
+internal fun getDurationDisplayText(durationName: String): String =
+    try {
         SharingDuration.valueOf(durationName).displayText
     } catch (e: IllegalArgumentException) {
         "1 hour" // Default fallback
     }
-}
 
 /**
  * Get display text for a precision radius setting.
  */
-internal fun getPrecisionRadiusDisplayText(radiusMeters: Int): String {
-    return when (radiusMeters) {
+internal fun getPrecisionRadiusDisplayText(radiusMeters: Int): String =
+    when (radiusMeters) {
         0 -> "Precise"
         1000 -> "Neighborhood (~1km)"
         10000 -> "City (~10km)"
         100000 -> "Region (~100km)"
         else -> if (radiusMeters >= 1000) "${radiusMeters / 1000}km" else "${radiusMeters}m"
     }
-}
 
 // =============================================================================
 // Telemetry Collector Section
@@ -1028,17 +1030,19 @@ private fun AllowedRequestersDialog(
     var selectedHashes by remember { mutableStateOf(allowedRequesters) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Filter contacts by search query
+    // Filter contacts by search query, deduplicate to prevent LazyColumn key crash (#542)
     val filteredContacts =
         remember(contacts, searchQuery) {
-            if (searchQuery.isBlank()) {
-                contacts
-            } else {
-                contacts.filter { contact ->
-                    contact.displayName.contains(searchQuery, ignoreCase = true) ||
-                        contact.destinationHash.contains(searchQuery, ignoreCase = true)
+            val base =
+                if (searchQuery.isBlank()) {
+                    contacts
+                } else {
+                    contacts.filter { contact ->
+                        contact.displayName.contains(searchQuery, ignoreCase = true) ||
+                            contact.destinationHash.contains(searchQuery, ignoreCase = true)
+                    }
                 }
-            }
+            base.distinctBy { it.destinationHash }
         }
 
     AlertDialog(

@@ -294,6 +294,38 @@ class RNodeDetector(
         }
 
     /**
+     * Wipe (erase) the device EEPROM.
+     *
+     * For nRF52 devices, this formats the LittleFS filesystem used to emulate EEPROM.
+     * The device will hard-reset after the wipe, so the caller must disconnect and
+     * reconnect after calling this method.
+     *
+     * IMPORTANT: For nRF52, the caller should wait ~18 seconds after calling this
+     * before attempting to reconnect, as the LittleFS format is slow.
+     *
+     * This corresponds to rnodeconf's wipe_eeprom() which sends CMD_ROM_WIPE (0x59).
+     * In the firmware, this command is called CMD_UNLOCK_ROM and triggers eeprom_erase().
+     *
+     * @return true if the wipe command was sent successfully
+     */
+    suspend fun wipeEeprom(): Boolean =
+        withContext(Dispatchers.IO) {
+            Log.i(TAG, "Sending EEPROM wipe command")
+            val frame =
+                KISSCodec.createFrame(
+                    RNodeConstants.CMD_UNLOCK_ROM,
+                    byteArrayOf(RNodeConstants.ROM_UNLOCK_BYTE),
+                )
+            val result = usbBridge.write(frame) > 0
+            if (result) {
+                Log.d(TAG, "EEPROM wipe command sent successfully")
+            } else {
+                Log.e(TAG, "Failed to send EEPROM wipe command")
+            }
+            result
+        }
+
+    /**
      * Indicate to the RNode firmware that a firmware update is about to begin.
      *
      * This command tells the RNode firmware to prepare for an update. For ESP32 devices,

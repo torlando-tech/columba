@@ -2414,6 +2414,73 @@ class PropagationNodeManagerTest {
             testManager.stop()
         }
 
+    @Test
+    fun `availableRelaysState - deduplicates relays by destinationHash`() =
+        runTest {
+            // Given: Database returns announces with duplicate destinationHash
+            // (can happen transiently via Paging3 race conditions - see issue #542)
+            clearAllMocks()
+
+            val duplicateAnnounces =
+                listOf(
+                    TestFactories.createAnnounce(
+                        destinationHash = testDestHash,
+                        peerName = "Relay A",
+                        hops = 2,
+                    ),
+                    TestFactories.createAnnounce(
+                        destinationHash = testDestHash2,
+                        peerName = "Relay B",
+                        hops = 3,
+                    ),
+                    TestFactories.createAnnounce(
+                        destinationHash = testDestHash, // Duplicate of first
+                        peerName = "Relay A (dup)",
+                        hops = 4,
+                    ),
+                )
+            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(duplicateAnnounces)
+            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
+            coEvery { announceRepository.getAnnounce(any()) } returns null
+            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
+            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
+            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
+            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
+            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
+            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
+            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
+            coEvery { settingsRepository.getManualPropagationNode() } returns null
+
+            val testManager =
+                PropagationNodeManager(
+                    settingsRepository = settingsRepository,
+                    contactRepository = contactRepository,
+                    announceRepository = announceRepository,
+                    reticulumProtocol = reticulumProtocol,
+                    scope = testScope.backgroundScope,
+                    defaultDispatcher = testDispatcher,
+                )
+
+            // When: availableRelaysState is collected
+            testManager.availableRelaysState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                if (state is AvailableRelaysState.Loading) {
+                    state = awaitItem()
+                }
+
+                // Then: Only unique destinationHash entries remain
+                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
+                val loadedState = state as AvailableRelaysState.Loaded
+                assertEquals(2, loadedState.relays.size)
+                val hashes = loadedState.relays.map { it.destinationHash }
+                assertEquals(hashes.distinct(), hashes)
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            testManager.stop()
+        }
+
     // ========== SyncProgress.Complete Tests ==========
 
     @Test

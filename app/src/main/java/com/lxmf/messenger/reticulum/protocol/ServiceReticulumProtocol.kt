@@ -2197,6 +2197,7 @@ class ServiceReticulumProtocol(
             )
         }
 
+    @Suppress("LongMethod")
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
         content: String,

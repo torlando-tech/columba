@@ -89,7 +89,7 @@ data class MessageUi(
     /**
      * List of emoji reactions on this message.
      * Each reaction contains the emoji and list of sender hashes who reacted with it.
-     * Parsed from LXMF Field 16 {"reactions": {"👍": ["sender1", "sender2"], ...}}.
+     * Parsed from LXMF Field 16 reactions map (emoji to sender hash list).
      */
     val reactions: List<ReactionUi> = emptyList(),
     /**

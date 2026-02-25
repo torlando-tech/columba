@@ -173,6 +173,7 @@ fun IdentityScreen(
 
             // Status Card
             StatusCard(
+                isLoading = debugInfo.isLoading,
                 initialized = debugInfo.initialized,
                 networkStatus = networkStatus,
                 error = debugInfo.error,
@@ -220,6 +221,7 @@ fun IdentityScreen(
 
 @Composable
 fun StatusCard(
+    isLoading: Boolean = false,
     initialized: Boolean,
     networkStatus: String,
     error: String?,
@@ -233,7 +235,7 @@ fun StatusCard(
             CardDefaults.cardColors(
                 containerColor =
                     when {
-                        isConnecting -> MaterialTheme.colorScheme.tertiaryContainer
+                        isLoading || isConnecting -> MaterialTheme.colorScheme.tertiaryContainer
                         initialized && error == null -> MaterialTheme.colorScheme.primaryContainer
                         else -> MaterialTheme.colorScheme.errorContainer
                     },
@@ -253,14 +255,14 @@ fun StatusCard(
                 Icon(
                     imageVector =
                         when {
-                            isConnecting -> Icons.Default.Refresh
+                            isLoading || isConnecting -> Icons.Default.Refresh
                             initialized && error == null -> Icons.Default.CheckCircle
                             else -> Icons.Default.Warning
                         },
                     contentDescription = null,
                     tint =
                         when {
-                            isConnecting -> MaterialTheme.colorScheme.onTertiaryContainer
+                            isLoading || isConnecting -> MaterialTheme.colorScheme.onTertiaryContainer
                             initialized && error == null -> MaterialTheme.colorScheme.onPrimaryContainer
                             else -> MaterialTheme.colorScheme.onErrorContainer
                         },
@@ -274,10 +276,20 @@ fun StatusCard(
 
             Divider()
 
-            InfoRow(label = "Initialized", value = if (initialized) "Yes" else "No")
-            InfoRow(label = "Network Status", value = networkStatus)
+            InfoRow(
+                label = "Initialized",
+                value =
+                    if (isLoading) {
+                        "Loading..."
+                    } else if (initialized) {
+                        "Yes"
+                    } else {
+                        "No"
+                    },
+            )
+            InfoRow(label = "Network Status", value = if (isLoading) "Loading..." else networkStatus)
 
-            if (isConnecting) {
+            if (isLoading || isConnecting) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -287,7 +299,7 @@ fun StatusCard(
                         strokeWidth = 2.dp,
                     )
                     Text(
-                        text = "Reconnecting to service...",
+                        text = if (isLoading) "Fetching service status..." else "Reconnecting to service...",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )

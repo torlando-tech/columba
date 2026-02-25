@@ -23,6 +23,7 @@ import javax.inject.Inject
 
 @androidx.compose.runtime.Immutable
 data class DebugInfo(
+    val isLoading: Boolean = true,
     val initialized: Boolean = false,
     val reticulumAvailable: Boolean = false,
     val storagePath: String = "",
@@ -208,6 +209,7 @@ class DebugViewModel
 
                 _debugInfo.value =
                     DebugInfo(
+                        isLoading = false,
                         initialized = json.optBoolean("initialized", false),
                         reticulumAvailable = json.optBoolean("reticulum_available", false),
                         storagePath = json.optString("storage_path", ""),
@@ -251,7 +253,7 @@ class DebugViewModel
 
                     // Reset debug info when shutdown - prevents stale "initialized: true" in UI
                     if (status is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN) {
-                        _debugInfo.value = DebugInfo()
+                        _debugInfo.value = DebugInfo(isLoading = false)
                     }
                 }
             }
@@ -305,6 +307,7 @@ class DebugViewModel
 
                     _debugInfo.value =
                         DebugInfo(
+                            isLoading = false,
                             initialized = pythonDebugInfo["initialized"] as? Boolean ?: false,
                             reticulumAvailable = pythonDebugInfo["reticulum_available"] as? Boolean ?: false,
                             storagePath = pythonDebugInfo["storage_path"] as? String ?: "",
@@ -325,10 +328,10 @@ class DebugViewModel
                         )
                 } catch (e: Exception) {
                     if (isServiceShutdown()) {
-                        _debugInfo.value = DebugInfo()
+                        _debugInfo.value = DebugInfo(isLoading = false)
                     } else {
                         Log.e(TAG, "Error fetching debug info", e)
-                        _debugInfo.value = _debugInfo.value.copy(error = e.message ?: "Service unavailable")
+                        _debugInfo.value = _debugInfo.value.copy(isLoading = false, error = e.message ?: "Service unavailable")
                     }
                 }
             }
@@ -538,7 +541,7 @@ class DebugViewModel
 
                     // Clear UI immediately so status card shows clean shutdown state
                     // (don't wait for onServiceDisconnected which has a race window)
-                    _debugInfo.value = DebugInfo()
+                    _debugInfo.value = DebugInfo(isLoading = false)
                     _networkStatus.value = "SHUTDOWN"
 
                     // Unbind FIRST to prevent auto-rebind if service process crashes

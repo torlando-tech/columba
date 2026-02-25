@@ -98,7 +98,7 @@ data class MessageUi(
     /**
      * Pre-computed waveform amplitude peaks for rendering without re-decoding.
      * Normalized floats [0.0, 1.0] representing amplitude at regular intervals.
-     * Stored as the third element in the FIELD_AUDIO array: ["codec_id", "hex", [peaks...]].
+     * Stored as the third element in the FIELD_AUDIO array (codec_id, hex, peaks).
      * Null if waveform not available (will be computed lazily on first view).
      */
     val audioWaveform: List<Float>? = null,

@@ -1038,6 +1038,7 @@ class MessagingViewModel
             _messagesRefreshTrigger.value++
         }
 
+        @Suppress("LongMethod", "ComplexCondition")
         fun sendMessage(
             destinationHash: String,
             content: String,
@@ -2251,6 +2252,7 @@ private fun determineDeliveryMethod(
     }
 }
 
+@Suppress("LongParameterList", "CyclomaticComplexMethod")
 private suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,

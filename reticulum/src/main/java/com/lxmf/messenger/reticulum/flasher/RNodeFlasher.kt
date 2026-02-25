@@ -719,7 +719,7 @@ class RNodeFlasher(
                     }
 
                     // If that failed, the device may have re-enumerated with a new ID
-                    // (e.g. nRF52 bootloader PID 0x0071 → application PID 0x8071).
+                    // (e.g. nRF52 bootloader → application mode with different PID).
                     // Scan for any supported USB serial device with a different ID.
                     Log.d(TAG, "Original device ID failed, scanning for re-enumerated device...")
                     val devices = usbBridge.getConnectedUsbDevices()

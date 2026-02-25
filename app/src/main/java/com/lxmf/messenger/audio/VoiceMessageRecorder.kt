@@ -194,6 +194,7 @@ class VoiceMessageRecorder(
      * Recording loop: reads PCM frames from [AudioRecord], converts to float32,
      * encodes to Opus, and accumulates length-prefixed frames.
      */
+    @Suppress("LoopWithTooManyJumpStatements")
     private suspend fun recordingLoop(record: AudioRecord) {
         val shortBuf = ShortArray(FRAME_SIZE)
 

@@ -1119,18 +1119,13 @@ class MessagingViewModel
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
-
-                    // Phase 8: Wire voice recording output
-                    val audioData: ByteArray? = voiceRecording?.audioBytes
-                    val audioCodecId: String? = voiceRecording?.codecId
-                    val audioWaveform: List<Float>? = voiceRecording?.waveformPeaks
-
-                    // Voice-only messages: bypass text validation when audio is present
-                    // without text or other attachments. Uses " " (single space) for Sideband
-                    // compatibility, matching the existing image-only escape hatch pattern
-                    // inside validateAndSanitizeContent().
+                    val audioData = voiceRecording?.audioBytes
+                    val audioCodecId = voiceRecording?.codecId
+                    val audioWaveform = voiceRecording?.waveformPeaks
+                    // Voice-only: bypass text validation, use " " for Sideband compat
+                    val isVoiceOnly = voiceRecording != null && content.isBlank() && imageData == null && fileAttachments.isEmpty()
                     val sanitized =
-                        if (voiceRecording != null && content.isBlank() && imageData == null && fileAttachments.isEmpty()) {
+                        if (isVoiceOnly) {
                             " "
                         } else {
                             validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
@@ -1138,45 +1133,21 @@ class MessagingViewModel
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {
-                            Log.e(TAG, "Failed to load source identity")
+                            Log.e(TAG, "No source identity")
                             return@launch
                         }
-
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, fileAttachments, defaultMethod)
+                    val deliveryMethod =
+                        determineDeliveryMethod(
+                            sanitized,
+                            imageData,
+                            fileAttachments,
+                            settingsRepository.getDefaultDeliveryMethod(),
+                        )
                     val deliveryMethodString = deliveryMethod.toStorageString()
-
-                    // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
                     val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
-
-                    Log.d(
-                        TAG,
-                        "Sending LXMF message to $destinationHash " +
-                            "(${sanitized.length} chars, hasImage=${imageData != null}, " +
-                            "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
-                    )
-
-                    // Get pending reply ID if replying to a message
                     val replyToId = _pendingReplyTo.value?.messageId
-
-                    // Get user's icon appearance for Sideband/MeshChat interoperability
-                    val iconAppearance =
-                        identityRepository.getActiveIdentitySync()?.let { activeId ->
-                            val name = activeId.iconName
-                            val fg = activeId.iconForegroundColor
-                            val bg = activeId.iconBackgroundColor
-                            if (name != null && fg != null && bg != null) {
-                                com.lxmf.messenger.reticulum.protocol.IconAppearance(
-                                    iconName = name,
-                                    foregroundColor = fg,
-                                    backgroundColor = bg,
-                                )
-                            } else {
-                                null
-                            }
-                        }
-
+                    val iconAppearance = loadIconAppearance()
                     val result =
                         reticulumProtocol.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
@@ -1195,7 +1166,6 @@ class MessagingViewModel
 
                     result
                         .onSuccess { receipt ->
-                            // Clear pending reply and draft after successful send
                             handleSendSuccess(
                                 receipt,
                                 sanitized,
@@ -1205,15 +1175,11 @@ class MessagingViewModel
                                 fileAttachments,
                                 deliveryMethodString,
                                 replyToId,
-                                audioData = audioData,
-                                audioCodecId = audioCodecId,
-                                audioWaveform = audioWaveform,
+                                audioData,
+                                audioCodecId,
+                                audioWaveform,
                             )
-                            clearReplyTo()
-                            draftSaveJob?.cancel()
-                            lastDraftText = ""
-                            conversationRepository.clearDraft(destinationHash)
-                            _draftText.value = null
+                            clearReplyAndDraft(destinationHash)
                         }.onFailure { error ->
                             handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
                         }
@@ -1224,6 +1190,30 @@ class MessagingViewModel
                 }
             }
         }
+
+        private suspend fun clearReplyAndDraft(destinationHash: String) {
+            clearReplyTo()
+            draftSaveJob?.cancel()
+            lastDraftText = ""
+            conversationRepository.clearDraft(destinationHash)
+            _draftText.value = null
+        }
+
+        private suspend fun loadIconAppearance(): com.lxmf.messenger.reticulum.protocol.IconAppearance? =
+            identityRepository.getActiveIdentitySync()?.let { activeId ->
+                val name = activeId.iconName
+                val fg = activeId.iconForegroundColor
+                val bg = activeId.iconBackgroundColor
+                if (name != null && fg != null && bg != null) {
+                    com.lxmf.messenger.reticulum.protocol.IconAppearance(
+                        iconName = name,
+                        foregroundColor = fg,
+                        backgroundColor = bg,
+                    )
+                } else {
+                    null
+                }
+            }
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
         private suspend fun handleSendSuccess(
@@ -1248,9 +1238,12 @@ class MessagingViewModel
                         fileAttachments,
                         replyToMessageId,
                         cacheDir = applicationContext.cacheDir,
-                        audioData = audioData,
-                        audioCodecId = audioCodecId,
-                        audioWaveform = audioWaveform,
+                        audio =
+                            if (audioData != null && audioCodecId != null) {
+                                AudioFieldData(audioData, audioCodecId, audioWaveform)
+                            } else {
+                                null
+                            },
                     )
                 } catch (e: java.io.IOException) {
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
@@ -2407,6 +2400,12 @@ private fun determineDeliveryMethod(
     }
 }
 
+private data class AudioFieldData(
+    val data: ByteArray,
+    val codecId: String,
+    val waveform: List<Float>?,
+)
+
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
 private suspend fun buildFieldsJson(
     imageData: ByteArray?,
@@ -2415,68 +2414,65 @@ private suspend fun buildFieldsJson(
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
-    audioData: ByteArray? = null,
-    audioCodecId: String? = null,
-    audioWaveform: List<Float>? = null,
+    audio: AudioFieldData? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
-    val hasAudio = audioData != null && audioCodecId != null
-    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions || hasAudio
+    val hasAudio = audio != null
+    val hasAnyField = hasImage || hasFiles || hasReply || hasReactions || hasAudio
+    if (!hasAnyField) return null
 
-    if (!hasAnyContent) return null
-
-    // Move hex encoding + file I/O (streamHexToFile) to background thread
     return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val json = org.json.JSONObject()
-
-        // Add image field (Field 6)
-        if (hasImage && imageData != null) {
-            if (cacheDir != null && imageData.size > STREAM_HEX_THRESHOLD) {
-                val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
-                val hexFile = java.io.File(hexDir, "outgoing_img_${System.nanoTime()}.hex")
-                imageData.streamHexToFile(hexFile)
-                json.put("6", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
-            } else {
-                json.put("6", imageData.toHexString())
-            }
+        if (hasImage && imageData != null) addImageField(json, imageData, cacheDir)
+        if (hasAudio && audio != null) {
+            addAudioField(json, audio.data, audio.codecId, audio.waveform, cacheDir)
         }
-
-        // Add audio field (Field 7) -- format: ["codec_id", "hex_audio_data"] or with waveform: ["codec_id", "hex", [waveform]]
-        if (hasAudio && audioData != null && audioCodecId != null) {
-            if (cacheDir != null && audioData.size > STREAM_HEX_THRESHOLD) {
-                // Large audio: write hex to temp file, store file ref
-                val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
-                val hexFile = java.io.File(hexDir, "outgoing_audio_${System.nanoTime()}.hex")
-                audioData.streamHexToFile(hexFile)
-                json.put("7", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
-            } else {
-                val audioArray = org.json.JSONArray()
-                audioArray.put(audioCodecId)
-                audioArray.put(audioData.toHexString())
-                // Add waveform as third array element if available
-                if (audioWaveform != null) {
-                    val waveformArray = org.json.JSONArray()
-                    audioWaveform.forEach { waveformArray.put(it.toDouble()) }
-                    audioArray.put(waveformArray)
-                }
-                json.put("7", audioArray)
-            }
-        }
-
-        // Add file attachments field (Field 5)
-        if (hasFiles) {
-            json.put("5", buildFileAttachmentsArray(fileAttachments, cacheDir))
-        }
-
-        // Add app extensions field (Field 16) for replies, reactions, and future features
-        if (hasReply || hasReactions) {
-            json.put("16", buildAppExtensions(replyToMessageId, reactions))
-        }
-
+        if (hasFiles) json.put("5", buildFileAttachmentsArray(fileAttachments, cacheDir))
+        if (hasReply || hasReactions) json.put("16", buildAppExtensions(replyToMessageId, reactions))
         json.toString()
+    }
+}
+
+private fun addImageField(
+    json: org.json.JSONObject,
+    imageData: ByteArray,
+    cacheDir: java.io.File?,
+) {
+    if (cacheDir != null && imageData.size > STREAM_HEX_THRESHOLD) {
+        val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
+        val hexFile = java.io.File(hexDir, "outgoing_img_${System.nanoTime()}.hex")
+        imageData.streamHexToFile(hexFile)
+        json.put("6", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
+    } else {
+        json.put("6", imageData.toHexString())
+    }
+}
+
+private fun addAudioField(
+    json: org.json.JSONObject,
+    audioData: ByteArray,
+    audioCodecId: String,
+    audioWaveform: List<Float>?,
+    cacheDir: java.io.File?,
+) {
+    if (cacheDir != null && audioData.size > STREAM_HEX_THRESHOLD) {
+        val hexDir = java.io.File(cacheDir, OUTGOING_HEX_DIR).apply { mkdirs() }
+        val hexFile = java.io.File(hexDir, "outgoing_audio_${System.nanoTime()}.hex")
+        audioData.streamHexToFile(hexFile)
+        json.put("7", org.json.JSONObject().put("_file_ref", hexFile.absolutePath))
+    } else {
+        val audioArray = org.json.JSONArray()
+        audioArray.put(audioCodecId)
+        audioArray.put(audioData.toHexString())
+        if (audioWaveform != null) {
+            val waveformArray = org.json.JSONArray()
+            audioWaveform.forEach { waveformArray.put(it.toDouble()) }
+            audioArray.put(waveformArray)
+        }
+        json.put("7", audioArray)
     }
 }
 

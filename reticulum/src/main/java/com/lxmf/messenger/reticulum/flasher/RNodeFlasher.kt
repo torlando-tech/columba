@@ -48,6 +48,11 @@ class RNodeFlasher(
 ) {
     companion object {
         private const val TAG = "Columba:RNodeFlasher"
+
+        // nRF52 EEPROM wipe timing (rnodeconf uses 18s for LittleFS format + reboot)
+        private const val NRF52_EEPROM_WIPE_WAIT_MS = 18_000L
+        private const val NRF52_RECONNECT_RETRIES = 5
+        private const val NRF52_RECONNECT_DELAY_MS = 2_000L
     }
 
     private val usbBridge = KotlinUSBBridge.getInstance(context)
@@ -262,7 +267,10 @@ class RNodeFlasher(
 
                     if (!provisionSuccess) {
                         Log.w(TAG, "Provisioning failed, but flash was successful")
-                        // Don't fail the whole operation - flash succeeded
+                        // Don't fail the whole operation — flash succeeded, and
+                        // the device works without provisioning (Columba sends radio
+                        // params at runtime). Override the Error state from provisionDevice().
+                        _flashState.value = FlashState.Complete(null)
                     }
                 }
 
@@ -350,7 +358,10 @@ class RNodeFlasher(
 
                     if (!provisionSuccess) {
                         Log.w(TAG, "Provisioning failed, but flash was successful")
-                        // Don't fail the whole operation - flash succeeded
+                        // Don't fail the whole operation — flash succeeded, and
+                        // the device works without provisioning (Columba sends radio
+                        // params at runtime). Override the Error state from provisionDevice().
+                        _flashState.value = FlashState.Complete(null)
                     }
                 }
 
@@ -834,6 +845,65 @@ class RNodeFlasher(
                     return@withContext true
                 }
 
+                // For nRF52 boards, wipe EEPROM first to initialize LittleFS.
+                // The nRF52 emulates EEPROM using LittleFS on internal flash. After DFU,
+                // the filesystem may be uninitialized, causing individual byte writes to
+                // crash the device. The wipe formats LittleFS and triggers a hard reset.
+                // rnodeconf always does this wipe before provisioning nRF52 devices.
+                if (board.platform == RNodePlatform.NRF52) {
+                    _flashState.value = FlashState.Provisioning("Preparing EEPROM...")
+                    if (!detector.wipeEeprom()) {
+                        Log.e(TAG, "Failed to send EEPROM wipe command")
+                        _flashState.value = FlashState.Error("Failed to wipe EEPROM")
+                        usbBridge.disconnect()
+                        return@withContext false
+                    }
+
+                    // Device will hard-reset after wipe — disconnect and wait
+                    usbBridge.disconnect()
+                    _flashState.value = FlashState.Provisioning("Waiting for device reset...")
+                    // nRF52 LittleFS format + reboot is slow (rnodeconf uses 18s)
+                    kotlinx.coroutines.delay(NRF52_EEPROM_WIPE_WAIT_MS)
+
+                    // Reconnect — device may have new ID after reboot
+                    var reconnected = false
+                    for (attempt in 1..NRF52_RECONNECT_RETRIES) {
+                        _flashState.value = FlashState.Provisioning("Reconnecting (attempt $attempt)...")
+
+                        if (usbBridge.connect(actualDeviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                            reconnected = true
+                            break
+                        }
+
+                        // Scan for re-enumerated device (nRF52 boards use Adafruit VID 0x239A)
+                        val devices = usbBridge.getConnectedUsbDevices()
+                        val reEnumeratedDevice =
+                            devices.find {
+                                it.deviceId != actualDeviceId && it.vendorId == 0x239A
+                            }
+                        if (reEnumeratedDevice != null) {
+                            if (usbBridge.connect(reEnumeratedDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                                actualDeviceId = reEnumeratedDevice.deviceId
+                                reconnected = true
+                                break
+                            }
+                        }
+
+                        if (attempt < NRF52_RECONNECT_RETRIES) {
+                            kotlinx.coroutines.delay(NRF52_RECONNECT_DELAY_MS)
+                        }
+                    }
+
+                    if (!reconnected) {
+                        Log.e(TAG, "Failed to reconnect after EEPROM wipe")
+                        _flashState.value = FlashState.Error("Failed to reconnect after EEPROM wipe. Try unplugging and re-plugging the device.")
+                        return@withContext false
+                    }
+
+                    Log.i(TAG, "Reconnected to device $actualDeviceId after EEPROM wipe")
+                    kotlinx.coroutines.delay(1000) // Let device settle
+                }
+
                 // Provision EEPROM
                 _flashState.value = FlashState.Provisioning("Writing device information...")
                 if (!detector.provisionAndSetFirmwareHash(board, band, firmwareHash)) {
@@ -855,9 +925,27 @@ class RNodeFlasher(
                 // Wait for device to reboot
                 kotlinx.coroutines.delay(3000)
 
-                // Verify provisioning
+                // Verify provisioning — device may have re-enumerated with a new ID
                 _flashState.value = FlashState.Provisioning("Verifying provisioning...")
-                if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                var verifyConnected = false
+                for (attempt in 1..3) {
+                    if (usbBridge.connect(actualDeviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                        verifyConnected = true
+                        break
+                    }
+                    // Scan for re-enumerated device (new ID after reset)
+                    val devices = usbBridge.getConnectedUsbDevices()
+                    val reEnumerated = devices.find { it.deviceId != actualDeviceId }
+                    if (reEnumerated != null &&
+                        usbBridge.connect(reEnumerated.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)
+                    ) {
+                        actualDeviceId = reEnumerated.deviceId
+                        verifyConnected = true
+                        break
+                    }
+                    kotlinx.coroutines.delay(2000)
+                }
+                if (!verifyConnected) {
                     // Device may have changed ports after reset, but provisioning likely succeeded
                     Log.w(TAG, "Could not reconnect to verify, but provisioning likely succeeded")
                     _flashState.value = FlashState.Complete(null)

@@ -875,12 +875,9 @@ class RNodeFlasher(
                             break
                         }
 
-                        // Scan for re-enumerated device (nRF52 boards use Adafruit VID 0x239A)
+                        // Scan for re-enumerated device (new ID after reboot)
                         val devices = usbBridge.getConnectedUsbDevices()
-                        val reEnumeratedDevice =
-                            devices.find {
-                                it.deviceId != actualDeviceId && it.vendorId == 0x239A
-                            }
+                        val reEnumeratedDevice = devices.find { it.deviceId != actualDeviceId }
                         if (reEnumeratedDevice != null) {
                             if (usbBridge.connect(reEnumeratedDevice.deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
                                 actualDeviceId = reEnumeratedDevice.deviceId

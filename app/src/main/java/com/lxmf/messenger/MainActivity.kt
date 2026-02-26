@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -302,7 +303,7 @@ class MainActivity : ComponentActivity() {
                 Intent(this, ReticulumService::class.java).apply {
                     action = ReticulumService.ACTION_START
                 }
-            startForegroundService(intent)
+            ContextCompat.startForegroundService(this, intent)
         } catch (e: Exception) {
             Log.w(TAG, "Could not reinforce foreground notification", e)
         }

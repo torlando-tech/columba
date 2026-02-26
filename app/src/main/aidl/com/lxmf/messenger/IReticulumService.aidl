@@ -463,6 +463,18 @@ interface IReticulumService {
      */
     String setTelemetryAllowedRequesters(String allowedHashesJson);
 
+    /**
+     * Store the host's own location in collected telemetry so it is included
+     * in FIELD_TELEMETRY_STREAM responses sent to group members.
+     *
+     * @param locationJson JSON string with location data (lat, lng, acc, ts, etc.)
+     * @param iconName Optional icon name for appearance (null if none)
+     * @param iconFgColor Optional foreground color hex string (null if none)
+     * @param iconBgColor Optional background color hex string (null if none)
+     * @return JSON string with result: {"success": true} or {"success": false, "error": "..."}
+     */
+    String storeOwnTelemetry(String locationJson, String iconName, String iconFgColor, String iconBgColor);
+
     // ==================== EMOJI REACTIONS ====================
 
     /**

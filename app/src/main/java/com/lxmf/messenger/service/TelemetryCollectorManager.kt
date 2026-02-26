@@ -184,6 +184,8 @@ class TelemetryCollectorManager
                     .collect { address ->
                         _collectorAddress.value = address
                         Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
+                        restartPeriodicSend()
+                        restartPeriodicRequest()
                     }
             }
             launch {
@@ -559,6 +561,25 @@ class TelemetryCollectorManager
         }
 
         /**
+         * Check if the given collector hash is the local device's own destination hash.
+         */
+        private suspend fun isLocalDestination(collectorHash: String): Boolean {
+            val localHash = identityRepository.getActiveIdentitySync()?.destinationHash ?: return false
+            return collectorHash.equals(localHash, ignoreCase = true)
+        }
+
+        private suspend fun syncHostModeIfNeededForLocalStore(): TelemetrySendResult.Error? {
+            if (!_isHostModeEnabled.value) return null
+
+            val hostModeSyncResult = reticulumProtocol.setTelemetryCollectorMode(true)
+            if (hostModeSyncResult.isSuccess) return null
+
+            val syncError = hostModeSyncResult.exceptionOrNull()?.message ?: "Unknown host mode sync error"
+            Log.e(TAG, "❌ Failed to re-sync host mode before self telemetry store: $syncError")
+            return TelemetrySendResult.Error("Failed to enable host mode: $syncError")
+        }
+
+        /**
          * Send telemetry to the specified collector.
          */
         @Suppress("ReturnCount") // Early returns for validation are clearer than nested conditions
@@ -578,19 +599,6 @@ class TelemetryCollectorManager
                     return TelemetrySendResult.NoLocationAvailable
                 }
 
-                // Get LXMF identity
-                val serviceProtocol =
-                    reticulumProtocol as? ServiceReticulumProtocol
-                        ?: return TelemetrySendResult.Error("Protocol not available")
-
-                val sourceIdentity =
-                    try {
-                        serviceProtocol.getLxmfIdentity().getOrNull()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to get LXMF identity", e)
-                        null
-                    } ?: return TelemetrySendResult.Error("No LXMF identity")
-
                 // Build location JSON using the location's actual capture time
                 // Fallback to current time if location.time is 0 (unknown)
                 val telemetryData =
@@ -604,9 +612,6 @@ class TelemetryCollectorManager
                         bearing = location.bearing,
                     )
                 val locationJson = Json.encodeToString(telemetryData)
-
-                // Convert collector hash to bytes
-                val collectorBytes = collectorHash.hexToByteArray()
 
                 // Get user's icon appearance for Sideband/MeshChat interoperability
                 val iconAppearance =
@@ -625,14 +630,34 @@ class TelemetryCollectorManager
                         }
                     }
 
-                // Send via protocol
+                // If the collector is ourselves, store locally instead of sending via network
                 val result =
-                    reticulumProtocol.sendLocationTelemetry(
-                        destinationHash = collectorBytes,
-                        locationJson = locationJson,
-                        sourceIdentity = sourceIdentity,
-                        iconAppearance = iconAppearance,
-                    )
+                    if (isLocalDestination(collectorHash)) {
+                        syncHostModeIfNeededForLocalStore()?.let { return it }
+                        Log.d(TAG, "📍 Collector is self, storing own telemetry locally")
+                        reticulumProtocol.storeOwnTelemetry(locationJson, iconAppearance)
+                    } else {
+                        // Get LXMF identity for network send
+                        val serviceProtocol =
+                            reticulumProtocol as? ServiceReticulumProtocol
+                                ?: return TelemetrySendResult.Error("Protocol not available")
+
+                        val sourceIdentity =
+                            try {
+                                serviceProtocol.getLxmfIdentity().getOrNull()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to get LXMF identity", e)
+                                null
+                            } ?: return TelemetrySendResult.Error("No LXMF identity")
+
+                        val collectorBytes = collectorHash.hexToByteArray()
+                        reticulumProtocol.sendLocationTelemetry(
+                            destinationHash = collectorBytes,
+                            locationJson = locationJson,
+                            sourceIdentity = sourceIdentity,
+                            iconAppearance = iconAppearance,
+                        )
+                    }
 
                 return if (result.isSuccess) {
                     // Update last send time

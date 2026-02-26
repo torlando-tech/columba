@@ -1442,5 +1442,118 @@ class TestTelemetryStreamFiltering(unittest.TestCase):
         self.assertNotIn(b'data1', packed_data)
 
 
+class TestStoreOwnTelemetry(unittest.TestCase):
+    """Test store_own_telemetry method for host self-location inclusion."""
+
+    def setUp(self):
+        self.wrapper = ReticulumWrapper.__new__(ReticulumWrapper)
+        self.wrapper.initialized = True
+        self.wrapper.telemetry_collector_enabled = True
+        self.wrapper.collected_telemetry = {}
+        self.wrapper.telemetry_retention_seconds = 86400
+
+        # Mock local LXMF destination
+        self.wrapper.local_lxmf_destination = MagicMock()
+        self.wrapper.local_lxmf_destination.hexhash = "ab" * 16
+        self.wrapper.local_lxmf_destination.hash = bytes.fromhex("ab" * 16)
+
+    def test_stores_own_location(self):
+        """store_own_telemetry should store the host's location in collected_telemetry."""
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        result = self.wrapper.store_own_telemetry(location_json)
+
+        self.assertTrue(result['success'])
+        self.assertIn("ab" * 16, self.wrapper.collected_telemetry)
+
+        entry = self.wrapper.collected_telemetry["ab" * 16]
+        self.assertIn('packed_telemetry', entry)
+        self.assertIn('timestamp', entry)
+        self.assertIn('received_at', entry)
+        self.assertEqual(entry['timestamp'], 1700000000)
+
+    def test_stores_with_appearance(self):
+        """store_own_telemetry should store icon appearance when provided."""
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        result = self.wrapper.store_own_telemetry(
+            location_json, icon_name="cat", icon_fg_color="ff0000", icon_bg_color="00ff00"
+        )
+
+        self.assertTrue(result['success'])
+        entry = self.wrapper.collected_telemetry["ab" * 16]
+        self.assertIsNotNone(entry['appearance'])
+        self.assertEqual(entry['appearance'][0], "cat")
+        self.assertEqual(entry['appearance'][1], bytes.fromhex("ff0000"))
+        self.assertEqual(entry['appearance'][2], bytes.fromhex("00ff00"))
+
+    def test_stores_without_appearance(self):
+        """store_own_telemetry should work without icon appearance."""
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        result = self.wrapper.store_own_telemetry(location_json)
+
+        self.assertTrue(result['success'])
+        entry = self.wrapper.collected_telemetry["ab" * 16]
+        self.assertIsNone(entry['appearance'])
+
+    def test_fails_when_host_mode_disabled(self):
+        """store_own_telemetry should fail when host mode is not enabled."""
+        self.wrapper.telemetry_collector_enabled = False
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        result = self.wrapper.store_own_telemetry(location_json)
+
+        self.assertFalse(result['success'])
+        self.assertIn('Host mode not enabled', result['error'])
+
+    def test_fails_when_no_destination(self):
+        """store_own_telemetry should fail when local LXMF destination is not set."""
+        self.wrapper.local_lxmf_destination = None
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        result = self.wrapper.store_own_telemetry(location_json)
+
+        self.assertFalse(result['success'])
+        self.assertIn('destination not created', result['error'])
+
+    def test_own_location_included_in_stream_response(self):
+        """Host's own location should appear in the telemetry stream sent to requesters."""
+        # Store own location
+        location_json = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        self.wrapper.store_own_telemetry(location_json)
+
+        # Also store a peer's location
+        self.wrapper.collected_telemetry["cd" * 16] = {
+            'timestamp': 1700000000,
+            'packed_telemetry': b'peer_data',
+            'appearance': None,
+            'received_at': time.time(),
+        }
+
+        # Set up mocks the same way TestSendTelemetryStreamResponse does
+        reticulum_wrapper.RNS = MagicMock()
+        reticulum_wrapper.LXMF = MagicMock()
+
+        mock_router = MagicMock()
+        self.wrapper.router = mock_router
+
+        mock_identity = MagicMock()
+        requester_hash = bytes.fromhex("ee" * 16)
+
+        self.wrapper._send_telemetry_stream_response(requester_hash, mock_identity, None)
+
+        # Verify router.handle_outbound was called
+        mock_router.handle_outbound.assert_called_once()
+
+    def test_updates_existing_own_location(self):
+        """Calling store_own_telemetry again should update the existing entry."""
+        location_json_1 = '{"lat": 48.8566, "lng": 2.3522, "acc": 10.0, "ts": 1700000000000}'
+        self.wrapper.store_own_telemetry(location_json_1)
+
+        location_json_2 = '{"lat": 49.0, "lng": 3.0, "acc": 5.0, "ts": 1700001000000}'
+        self.wrapper.store_own_telemetry(location_json_2)
+
+        # Should still be just one entry for our hash
+        self.assertEqual(len(self.wrapper.collected_telemetry), 1)
+        entry = self.wrapper.collected_telemetry["ab" * 16]
+        self.assertEqual(entry['timestamp'], 1700001000)
+
+
 if __name__ == '__main__':
     unittest.main()

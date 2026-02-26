@@ -345,8 +345,8 @@ class SettingsViewModel
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
                             manualAnnounceError = _state.value.manualAnnounceError,
-                            identityHash = identityInfo.first,
-                            destinationHash = identityInfo.second,
+                            identityHash = identityInfo.first ?: activeIdentity?.identityHash,
+                            destinationHash = identityInfo.second ?: activeIdentity?.destinationHash,
                             showQrDialog = _state.value.showQrDialog,
                             // Profile icon from active identity
                             iconName = activeIdentity?.iconName,

@@ -1803,13 +1803,23 @@ class SettingsViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            val result = runCatching { viewModel.shutdownService() }
+            io.mockk.mockkStatic(androidx.core.content.ContextCompat::class) {
+                every {
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(any(), any())
+                } just Runs
 
-            assertTrue("shutdownService should complete successfully", result.isSuccess)
-            // Verify ACTION_STOP intent is sent to stop the foreground service
-            io.mockk.verify { context.startForegroundService(any()) }
-            // Verify shutdown() is NOT called via IPC (it causes race conditions)
-            coVerify(exactly = 0) { reticulumProtocol.shutdown() }
+                val result = runCatching { viewModel.shutdownService() }
+
+                assertTrue("shutdownService should complete successfully", result.isSuccess)
+                // Verify ACTION_STOP intent is sent to stop the foreground service via ContextCompat
+                io.mockk.verify {
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(context, any())
+                }
+                // Verify shutdown() is NOT called via IPC (it causes race conditions)
+                coVerify(exactly = 0) { reticulumProtocol.shutdown() }
+            }
         }
 
     // endregion

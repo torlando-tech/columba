@@ -555,7 +555,8 @@ class DebugViewModel
                         android.content.Intent(context, com.lxmf.messenger.service.ReticulumService::class.java).apply {
                             action = com.lxmf.messenger.service.ReticulumService.ACTION_STOP
                         }
-                    context.startForegroundService(stopIntent)
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(context, stopIntent)
 
                     Log.i(TAG, "Service shutdown complete")
                 } catch (e: Exception) {

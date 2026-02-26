@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
@@ -135,11 +136,7 @@ class InterfaceConfigManager
                             Intent(context, ReticulumService::class.java).apply {
                                 action = ReticulumService.ACTION_STOP
                             }
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            context.startForegroundService(stopIntent)
-                        } else {
-                            context.startService(stopIntent)
-                        }
+                        ContextCompat.startForegroundService(context, stopIntent)
                     } else {
                         Log.d(TAG, "Service process not found (may have already stopped)")
                     }
@@ -198,11 +195,7 @@ class InterfaceConfigManager
                     Intent(context, ReticulumService::class.java).apply {
                         action = ReticulumService.ACTION_START
                     }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(startIntent)
-                } else {
-                    context.startService(startIntent)
-                }
+                ContextCompat.startForegroundService(context, startIntent)
                 Log.d(TAG, "✓ Service start initiated")
 
                 // Step 8: Bind to the new service

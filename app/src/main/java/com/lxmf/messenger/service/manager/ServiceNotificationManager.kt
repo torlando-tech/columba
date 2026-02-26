@@ -308,11 +308,13 @@ class ServiceNotificationManager(
                 } else {
                     svc.startForeground(NOTIFICATION_ID, notification)
                 }
-            } catch (e: RuntimeException) {
+            } catch (
                 // startForeground() makes a Binder IPC call; if the system server's ProcessRecord
-                // for this process is null (race during process teardown), it throws a
-                // RemoteException that Parcel re-wraps as RuntimeException on the client side.
-                // Fall back to a plain notify so the notification is still updated.
+                // is null (race during process teardown) it throws a RemoteException that Parcel
+                // re-wraps as RuntimeException on the client side — no more specific type exists.
+                @Suppress("TooGenericExceptionCaught")
+                e: RuntimeException,
+            ) {
                 Log.w(TAG, "startForeground failed during process teardown, falling back to notify", e)
                 notificationManager.notify(NOTIFICATION_ID, notification)
             }

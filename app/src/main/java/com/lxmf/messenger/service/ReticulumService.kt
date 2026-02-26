@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.lxmf.messenger.service.binder.ReticulumServiceBinder
 import com.lxmf.messenger.service.di.ServiceModule
 import kotlinx.coroutines.CoroutineScope
@@ -300,7 +301,7 @@ class ReticulumService : Service() {
                     action = ACTION_START
                 }
             // Start foreground service - Android will handle queueing if process is dying
-            startForegroundService(restartIntent)
+            ContextCompat.startForegroundService(applicationContext, restartIntent)
             Log.d(TAG, "Service restart scheduled")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule service restart", e)

@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.lxmf.messenger.IInitializationCallback
 import com.lxmf.messenger.IReadinessCallback
 import com.lxmf.messenger.IReticulumService
@@ -766,11 +767,7 @@ class ServiceReticulumProtocol(
                         Intent(context, ReticulumService::class.java).apply {
                             action = ReticulumService.ACTION_START
                         }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(startIntent)
-                    } else {
-                        context.startService(startIntent)
-                    }
+                    ContextCompat.startForegroundService(context, startIntent)
 
                     // Bind to service
                     val bindIntent = Intent(context, ReticulumService::class.java)
@@ -949,11 +946,7 @@ class ServiceReticulumProtocol(
                         Intent(context, ReticulumService::class.java).apply {
                             action = ReticulumService.ACTION_START
                         }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(startIntent)
-                    } else {
-                        context.startService(startIntent)
-                    }
+                    ContextCompat.startForegroundService(context, startIntent)
 
                     // Bind to the service
                     val bindIntent = Intent(context, ReticulumService::class.java)

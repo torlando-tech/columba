@@ -298,14 +298,25 @@ class ServiceNotificationManager(
     private fun repostNotification(notification: Notification) {
         val svc = service
         if (svc != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                svc.startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                )
-            } else {
-                svc.startForeground(NOTIFICATION_ID, notification)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    svc.startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                    )
+                } else {
+                    svc.startForeground(NOTIFICATION_ID, notification)
+                }
+            } catch (
+                // startForeground() makes a Binder IPC call; if the system server's ProcessRecord
+                // is null (race during process teardown) it throws a RemoteException that Parcel
+                // re-wraps as RuntimeException on the client side — no more specific type exists.
+                @Suppress("TooGenericExceptionCaught")
+                e: RuntimeException,
+            ) {
+                Log.w(TAG, "startForeground failed during process teardown, falling back to notify", e)
+                notificationManager.notify(NOTIFICATION_ID, notification)
             }
         } else {
             notificationManager.notify(NOTIFICATION_ID, notification)

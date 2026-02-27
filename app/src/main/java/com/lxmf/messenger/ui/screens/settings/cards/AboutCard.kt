@@ -16,10 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.R
+import com.lxmf.messenger.service.AppUpdateResult
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.util.SystemInfo
 import java.util.Locale
@@ -42,6 +45,10 @@ fun AboutCard(
     systemInfo: SystemInfo,
     onCopySystemInfo: () -> Unit,
     onReportBug: () -> Unit,
+    updateCheckResult: AppUpdateResult = AppUpdateResult.Idle,
+    includePrereleaseUpdates: Boolean = false,
+    onCheckForUpdates: () -> Unit = {},
+    onSetIncludePrereleaseUpdates: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -173,6 +180,75 @@ fun AboutCard(
                 Text("LXMF by Mark Qvist", style = MaterialTheme.typography.bodySmall)
                 Text("Material Design 3", style = MaterialTheme.typography.bodySmall)
                 Text("Jetpack Compose", style = MaterialTheme.typography.bodySmall)
+            }
+
+            HorizontalDivider()
+
+            // Updates
+            InfoSection(title = "Updates") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Include pre-releases",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Switch(
+                        checked = includePrereleaseUpdates,
+                        onCheckedChange = onSetIncludePrereleaseUpdates,
+                    )
+                }
+
+                val isChecking = updateCheckResult is AppUpdateResult.Checking
+                OutlinedButton(
+                    onClick = onCheckForUpdates,
+                    enabled = !isChecking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (isChecking) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Check for Updates")
+                }
+
+                when (val result = updateCheckResult) {
+                    is AppUpdateResult.UpToDate ->
+                        Text(
+                            text = "Up to date (v${result.currentVersion})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    is AppUpdateResult.UpdateAvailable ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Update available: ${result.tagName}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.htmlUrl))
+                                    context.startActivity(intent)
+                                },
+                            ) {
+                                Text("View Release")
+                            }
+                        }
+                    is AppUpdateResult.Error ->
+                        Text(
+                            text = result.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    else -> {}
+                }
             }
 
             HorizontalDivider()

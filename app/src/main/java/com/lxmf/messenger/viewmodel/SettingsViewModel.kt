@@ -155,6 +155,9 @@ data class SettingsState(
     // Card expansion states (all collapsed by default)
     val cardExpansionStates: Map<String, Boolean> =
         SettingsCardId.entries.associate { it.name to false },
+    // Update checker state
+    val updateCheckResult: com.lxmf.messenger.service.AppUpdateResult = com.lxmf.messenger.service.AppUpdateResult.Idle,
+    val includePrereleaseUpdates: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -174,6 +177,7 @@ class SettingsViewModel
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val contactRepository: ContactRepository,
+        private val updateChecker: com.lxmf.messenger.service.UpdateChecker,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -182,6 +186,7 @@ class SettingsViewModel
             private const val RETRY_DELAY_MS = 1000L
             private const val SHARED_INSTANCE_MONITOR_INTERVAL_MS = 5_000L // Check every 5 seconds
             private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port (for logging)
+            private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
 
             /**
              * Controls whether shared instance monitors are started in init.
@@ -224,6 +229,8 @@ class SettingsViewModel
             loadTelemetryCollectorSettings()
             // Load contacts for allowed requesters picker
             loadContacts()
+            // Load update checker settings and maybe check on startup
+            loadUpdateSettings()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -1936,6 +1943,45 @@ class SettingsViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.setAllowedRequesters(allowedHashes)
                 Log.d(TAG, "Telemetry allowed requesters saved: ${allowedHashes.size}")
+            }
+        }
+
+        private fun loadUpdateSettings() {
+            viewModelScope.launch {
+                settingsRepository.includePrereleaseUpdates.collect { include ->
+                    _state.update { it.copy(includePrereleaseUpdates = include) }
+                }
+            }
+            viewModelScope.launch {
+                maybeCheckForUpdatesOnStartup()
+            }
+        }
+
+        private suspend fun maybeCheckForUpdatesOnStartup() {
+            val lastCheck = settingsRepository.getLastUpdateCheckTime()
+            val now = System.currentTimeMillis()
+            if (now - lastCheck >= UPDATE_CHECK_INTERVAL_MS) {
+                checkForUpdates()
+            }
+        }
+
+        fun checkForUpdates() {
+            _state.update { it.copy(updateCheckResult = com.lxmf.messenger.service.AppUpdateResult.Checking) }
+            viewModelScope.launch {
+                val includePrerelease = _state.value.includePrereleaseUpdates
+                val result = updateChecker.check(includePrerelease)
+                _state.update { it.copy(updateCheckResult = result) }
+                if (result !is com.lxmf.messenger.service.AppUpdateResult.Error) {
+                    settingsRepository.setLastUpdateCheckTime(System.currentTimeMillis())
+                }
+            }
+        }
+
+        fun setIncludePrereleaseUpdates(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setIncludePrereleaseUpdates(enabled)
+                // Re-check immediately so result reflects new preference
+                checkForUpdates()
             }
         }
     }

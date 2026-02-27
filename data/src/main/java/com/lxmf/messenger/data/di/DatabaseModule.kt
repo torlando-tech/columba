@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Singleton
 
+@Suppress("TooManyFunctions") // Each migration and DAO provider requires a separate function
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {

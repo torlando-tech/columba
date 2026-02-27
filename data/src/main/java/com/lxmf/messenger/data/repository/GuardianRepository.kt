@@ -24,6 +24,7 @@ import javax.inject.Singleton
  * - Contact filtering checks for message blocking
  * - Paired children management (parent side)
  */
+@Suppress("TooManyFunctions") // Guardian repository covers child-side and parent-side APIs; split would break cohesion
 @Singleton
 class GuardianRepository
     @Inject
@@ -250,6 +251,7 @@ class GuardianRepository
          * - Contact is the guardian
          * - Contact is in the allow list
          */
+        @Suppress("ReturnCount") // Early returns for each allow condition improve clarity
         suspend fun isContactAllowed(contactHash: String): Boolean {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return true
             val config = guardianConfigDao.getConfig(activeIdentity.identityHash)
@@ -282,6 +284,7 @@ class GuardianRepository
          * Validate a command's nonce and timestamp (anti-replay protection).
          * Returns true if the command should be processed.
          */
+        @Suppress("ReturnCount") // Each validation check is a distinct security gate
         suspend fun validateCommand(nonce: String, timestamp: Long): Boolean {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
             val config = guardianConfigDao.getConfig(activeIdentity.identityHash) ?: return false

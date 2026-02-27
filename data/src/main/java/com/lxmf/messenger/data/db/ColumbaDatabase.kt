@@ -33,6 +33,7 @@ import com.lxmf.messenger.data.db.entity.PeerIdentityEntity
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.db.entity.RmspServerEntity
 
+@Suppress("TooManyFunctions") // Each entity requires a DAO accessor method
 @Database(
     entities = [
         ConversationEntity::class,

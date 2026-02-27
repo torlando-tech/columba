@@ -1975,10 +1975,9 @@ class SettingsViewModel
             }
         }
 
-        fun checkForUpdates() {
+        fun checkForUpdates(includePrerelease: Boolean = _state.value.includePrereleaseUpdates) {
             _state.update { it.copy(updateCheckResult = com.lxmf.messenger.service.AppUpdateResult.Checking) }
             viewModelScope.launch {
-                val includePrerelease = _state.value.includePrereleaseUpdates
                 val result = updateChecker.check(includePrerelease)
                 _state.update { it.copy(updateCheckResult = result) }
                 if (result !is com.lxmf.messenger.service.AppUpdateResult.Error) {
@@ -1990,8 +1989,8 @@ class SettingsViewModel
         fun setIncludePrereleaseUpdates(enabled: Boolean) {
             viewModelScope.launch {
                 settingsRepository.setIncludePrereleaseUpdates(enabled)
-                // Re-check immediately so result reflects new preference
-                checkForUpdates()
+                // Pass enabled directly to avoid reading potentially stale state
+                checkForUpdates(includePrerelease = enabled)
             }
         }
     }

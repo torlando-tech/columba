@@ -235,6 +235,7 @@ fun MapScreen(
             Pair(latLng.latitude, latLng.longitude)
         }
         val decluttered = calculateDeclutteredPositions(screenMarkers, screenToLatLng)
+        val declutteredMap = decluttered.associateBy { it.hash }
         val offsetMarkers = decluttered.filter { it.isOffset }
         val density = context.resources.displayMetrics.density
 
@@ -242,7 +243,7 @@ fun MapScreen(
         val markerSourceId = "contact-markers-source"
         val markerFeatures =
             markers.map { marker ->
-                val dm = decluttered.find { it.hash == marker.destinationHash }
+                val dm = declutteredMap[marker.destinationHash]
                 val displayLat = dm?.displayLat ?: marker.latitude
                 val displayLng = dm?.displayLng ?: marker.longitude
                 val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"

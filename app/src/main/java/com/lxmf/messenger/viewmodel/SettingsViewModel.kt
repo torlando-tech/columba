@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -1948,12 +1950,17 @@ class SettingsViewModel
 
         private fun loadUpdateSettings() {
             viewModelScope.launch {
-                settingsRepository.includePrereleaseUpdates.collect { include ->
+                // Eagerly read the persisted value before the startup check fires,
+                // so the check uses the correct API endpoint (not the default false).
+                val initial = settingsRepository.includePrereleaseUpdates.first()
+                _state.update { it.copy(includePrereleaseUpdates = initial) }
+
+                maybeCheckForUpdatesOnStartup()
+
+                // Continue observing subsequent changes
+                settingsRepository.includePrereleaseUpdates.drop(1).collect { include ->
                     _state.update { it.copy(includePrereleaseUpdates = include) }
                 }
-            }
-            viewModelScope.launch {
-                maybeCheckForUpdatesOnStartup()
             }
         }
 

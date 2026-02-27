@@ -2,9 +2,11 @@ package com.lxmf.messenger.service.persistence
 
 import android.content.Context
 import com.lxmf.messenger.data.db.ColumbaDatabase
+import com.lxmf.messenger.data.db.dao.AllowedContactDao
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
+import com.lxmf.messenger.data.db.dao.GuardianConfigDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.PeerIconDao
@@ -52,6 +54,8 @@ class ServicePersistenceManagerTest {
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var guardianConfigDao: GuardianConfigDao
+    private lateinit var allowedContactDao: AllowedContactDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
@@ -83,6 +87,13 @@ class ServicePersistenceManagerTest {
         every { database.localIdentityDao() } returns localIdentityDao
         every { database.peerIdentityDao() } returns peerIdentityDao
         every { database.peerIconDao() } returns peerIconDao
+        guardianConfigDao = mockk()
+        allowedContactDao = mockk()
+        every { database.guardianConfigDao() } returns guardianConfigDao
+        every { database.allowedContactDao() } returns allowedContactDao
+
+        // Default: device is not locked (guardian feature is off)
+        coEvery { guardianConfigDao.isLocked(any()) } returns false
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)

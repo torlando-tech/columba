@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -76,11 +77,11 @@ import com.composables.icons.lucide.TreePine
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
-import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
 import com.lxmf.messenger.ui.components.SortModeSelector
 import com.lxmf.messenger.ui.theme.MaterialDesignIcons
+import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -138,8 +139,10 @@ fun DiscoveredInterfacesScreen(
                                 viewModel.setUserLocation(it.latitude, it.longitude)
                             }
                         }
-                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
-                    // Fallback if GMS client creation fails (#567)
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable,
+                ) {
+                    Log.w("DiscoveredInterfacesScreen", "GMS client unavailable on this device, falling back (#567)", e)
                     LocationCompat.getCurrentLocation(context) { location ->
                         location?.let {
                             viewModel.setUserLocation(it.latitude, it.longitude)

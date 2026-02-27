@@ -257,8 +257,10 @@ fun MapScreen(
             if (useGms) {
                 try {
                     LocationServices.getFusedLocationProviderClient(context)
-                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
-                    // GMS client creation failed on this device (#567)
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable,
+                ) {
+                    Log.w("MapScreen", "GMS client unavailable on this device (#567)", e)
                     null
                 }
             } else {

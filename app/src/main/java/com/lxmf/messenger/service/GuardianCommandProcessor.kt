@@ -157,7 +157,6 @@ class GuardianCommandProcessor
                 val cmd = commandData.getString("cmd")
                 val nonceHex = commandData.getString("nonce")
                 val timestamp = commandData.getLong("timestamp")
-                val signature = commandData.getString("signature")
                 val payload = commandData.optJSONObject("payload") ?: JSONObject()
 
                 Log.d(TAG, "Processing guardian command: $cmd")

@@ -100,8 +100,18 @@ class TelemetryCollectorManager
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        // Wrapped in try-catch(Throwable) because GMS shim layers on non-GMS devices
+        // (e.g. GrapheneOS GmsCompatLib) can throw Error subclasses like NoClassDefFoundError
+        // during Hilt singleton creation, crashing the app (#567).
+        private val fusedLocationClient: FusedLocationProviderClient? =
+            try {
+                LocationServices.getFusedLocationProviderClient(context)
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Throwable,
+            ) {
+                Log.w(TAG, "GMS location client unavailable, telemetry location disabled", e)
+                null
+            }
 
         companion object {
             private const val TAG = "TelemetryCollectorManager"
@@ -719,6 +729,10 @@ class TelemetryCollectorManager
 
                 // Check if already cancelled before making the request
                 if (continuation.isActive) {
+                    if (fusedLocationClient == null) {
+                        continuation.resume(null)
+                        return@suspendCancellableCoroutine
+                    }
                     try {
                         fusedLocationClient
                             .getCurrentLocation(

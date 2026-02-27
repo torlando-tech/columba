@@ -125,16 +125,23 @@ fun DiscoveredInterfacesScreen(
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
         if (hasCoarsePermission || hasFinePermission) {
-            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            fusedClient
-                .getCurrentLocation(
-                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                    CancellationTokenSource().token,
-                ).addOnSuccessListener { location ->
-                    location?.let {
-                        viewModel.setUserLocation(it.latitude, it.longitude)
+            try {
+                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+                fusedClient
+                    .getCurrentLocation(
+                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                        CancellationTokenSource().token,
+                    ).addOnSuccessListener { location ->
+                        location?.let {
+                            viewModel.setUserLocation(it.latitude, it.longitude)
+                        }
                     }
-                }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Throwable,
+            ) {
+                // GMS shim can throw Error subclasses on non-GMS devices (#567)
+                android.util.Log.w("DiscoveredInterfacesScreen", "GMS location unavailable (#567)", e)
+            }
         }
     }
 

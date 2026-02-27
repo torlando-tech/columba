@@ -82,8 +82,18 @@ class LocationSharingManager
             private const val CLEANUP_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
         }
 
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        // Wrapped in try-catch(Throwable) because GMS shim layers on non-GMS devices
+        // (e.g. GrapheneOS GmsCompatLib) can throw Error subclasses like NoClassDefFoundError
+        // during Hilt singleton creation, crashing the app (#567).
+        private val fusedLocationClient: FusedLocationProviderClient? =
+            try {
+                LocationServices.getFusedLocationProviderClient(context)
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Throwable,
+            ) {
+                Log.w(TAG, "GMS location client unavailable, location sharing disabled", e)
+                null
+            }
 
         // Active outgoing sharing sessions
         private val _activeSessions = MutableStateFlow<List<SharingSession>>(emptyList())
@@ -159,7 +169,7 @@ class LocationSharingManager
             Log.d(TAG, "Started sharing with ${newSessions.size} contacts, duration=$duration")
 
             // Send last known location immediately (don't wait for first GPS update)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            fusedLocationClient?.lastLocation?.addOnSuccessListener { location ->
                 location?.let {
                     Log.d(TAG, "Sending immediate location to new recipients")
                     sendLocationToRecipients(it)
@@ -199,7 +209,7 @@ class LocationSharingManager
                 Log.d(TAG, "Sending immediate update with cached location")
                 sendLocationToRecipients(lastLocation!!)
             } else {
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                fusedLocationClient?.lastLocation?.addOnSuccessListener { location ->
                     location?.let {
                         Log.d(TAG, "Sending immediate update with fresh location")
                         lastLocation = it
@@ -319,7 +329,7 @@ class LocationSharingManager
                                     setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
                                 }.build()
 
-                        fusedLocationClient.requestLocationUpdates(
+                        fusedLocationClient?.requestLocationUpdates(
                             locationRequest,
                             locationCallback,
                             context.mainLooper,
@@ -336,7 +346,7 @@ class LocationSharingManager
         private fun stopLocationUpdates() {
             locationUpdateJob?.cancel()
             locationUpdateJob = null
-            fusedLocationClient.removeLocationUpdates(locationCallback)
+            fusedLocationClient?.removeLocationUpdates(locationCallback)
             Log.d(TAG, "Location updates stopped")
         }
 

@@ -292,8 +292,8 @@ fun LocationSelectionStep(
 
             if (hasPermission) {
                 isGettingLocation = true
-                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
                 try {
+                    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
                     fusedClient
                         .getCurrentLocation(
                             Priority.PRIORITY_HIGH_ACCURACY,
@@ -306,8 +306,11 @@ fun LocationSelectionStep(
                         }.addOnFailureListener {
                             isGettingLocation = false
                         }
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Location permission denied", e)
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable,
+                ) {
+                    // GMS shim can throw Error subclasses on non-GMS devices (#567)
+                    Log.w(TAG, "GMS location failed (#567)", e)
                     isGettingLocation = false
                 }
             }

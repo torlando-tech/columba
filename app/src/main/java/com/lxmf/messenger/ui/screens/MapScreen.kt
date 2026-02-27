@@ -249,8 +249,19 @@ fun MapScreen(
         mapStyleLoaded = true
     }
 
-    // Location client
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    // Location client — wrapped in try-catch(Throwable) because GMS shim layers on non-GMS
+    // devices (e.g. GrapheneOS) can throw Error subclasses at creation time (#567).
+    val fusedLocationClient =
+        remember {
+            try {
+                LocationServices.getFusedLocationProviderClient(context)
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Throwable,
+            ) {
+                Log.w("MapScreen", "GMS location client unavailable (#567)", e)
+                null
+            }
+        }
 
     // Permission launcher
     val permissionLauncher =
@@ -260,7 +271,7 @@ fun MapScreen(
             val granted = permissions.values.all { it }
             viewModel.onPermissionResult(granted)
             if (granted) {
-                startLocationUpdates(fusedLocationClient, viewModel)
+                fusedLocationClient?.let { startLocationUpdates(it, viewModel) }
             }
         }
 
@@ -269,7 +280,7 @@ fun MapScreen(
         MapLibre.getInstance(context)
         if (LocationPermissionManager.hasPermission(context)) {
             viewModel.onPermissionResult(true)
-            startLocationUpdates(fusedLocationClient, viewModel)
+            fusedLocationClient?.let { startLocationUpdates(it, viewModel) }
         }
         // Permission sheet visibility is now managed by ViewModel state
     }

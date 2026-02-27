@@ -129,6 +129,7 @@ data class SettingsState(
     // Map source state
     val mapSourceHttpEnabled: Boolean = true,
     val mapSourceRmspEnabled: Boolean = false,
+    val mapMarkerDeclutterEnabled: Boolean = true,
     val rmspServerCount: Int = 0,
     val hasOfflineMaps: Boolean = false,
     // Telemetry collector state
@@ -389,6 +390,7 @@ class SettingsViewModel
                             // Preserve map source state from loadMapSourceSettings()
                             mapSourceHttpEnabled = _state.value.mapSourceHttpEnabled,
                             mapSourceRmspEnabled = _state.value.mapSourceRmspEnabled,
+                            mapMarkerDeclutterEnabled = _state.value.mapMarkerDeclutterEnabled,
                             rmspServerCount = _state.value.rmspServerCount,
                             hasOfflineMaps = _state.value.hasOfflineMaps,
                             // Preserve telemetry collector state from loadTelemetryCollectorSettings()
@@ -1704,6 +1706,11 @@ class SettingsViewModel
                     _state.update { it.copy(mapSourceRmspEnabled = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.mapMarkerDeclutterEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(mapMarkerDeclutterEnabled = enabled) }
+                }
+            }
             // Collect RMSP server count from MapTileSourceManager
             viewModelScope.launch {
                 mapTileSourceManager.observeRmspServerCount().collect { count ->
@@ -1747,6 +1754,16 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveMapSourceRmspEnabled(enabled)
                 Log.d(TAG, "RMSP map source ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set whether map marker decluttering is enabled.
+         */
+        fun setMapMarkerDeclutterEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveMapMarkerDeclutterEnabled(enabled)
+                Log.d(TAG, "Map marker declutter ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

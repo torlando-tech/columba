@@ -330,6 +330,8 @@ fun SettingsScreen(
                     onHttpEnabledChange = { viewModel.setMapSourceHttpEnabled(it) },
                     rmspEnabled = state.mapSourceRmspEnabled,
                     onRmspEnabledChange = { viewModel.setMapSourceRmspEnabled(it) },
+                    markerDeclutterEnabled = state.mapMarkerDeclutterEnabled,
+                    onMarkerDeclutterEnabledChange = { viewModel.setMapMarkerDeclutterEnabled(it) },
                     rmspServerCount = state.rmspServerCount,
                     hasOfflineMaps = state.hasOfflineMaps,
                 )

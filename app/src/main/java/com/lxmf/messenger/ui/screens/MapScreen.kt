@@ -217,6 +217,8 @@ fun MapScreen(
     val markerImageIds = remember { mutableMapOf<String, String>() }
     // Mutable ref for latest contact markers — accessed by onCameraIdleListener for declutter
     val latestContactMarkers = remember { mutableStateOf(emptyList<ContactMarker>()) }
+    // Mutable ref for latest declutter toggle state — accessed by onCameraIdleListener
+    val latestDeclutterEnabled = remember { mutableStateOf(true) }
 
     // Helper function to update declutter pin/line sources based on current camera position.
     // Called from both LaunchedEffect(contactMarkers) and onCameraIdleListener.
@@ -224,17 +226,23 @@ fun MapScreen(
         map: MapLibreMap,
         style: Style,
         markers: List<ContactMarker>,
+        declutterEnabled: Boolean,
     ) {
-        val screenMarkers =
-            markers.map { m ->
-                val screenPoint = map.projection.toScreenLocation(LatLng(m.latitude, m.longitude))
-                ScreenMarker(m.destinationHash, m.latitude, m.longitude, screenPoint.x, screenPoint.y)
+        val decluttered =
+            if (declutterEnabled) {
+                val screenMarkers =
+                    markers.map { m ->
+                        val screenPoint = map.projection.toScreenLocation(LatLng(m.latitude, m.longitude))
+                        ScreenMarker(m.destinationHash, m.latitude, m.longitude, screenPoint.x, screenPoint.y)
+                    }
+                val screenToLatLng = ScreenToLatLng { x, y ->
+                    val latLng = map.projection.fromScreenLocation(android.graphics.PointF(x, y))
+                    Pair(latLng.latitude, latLng.longitude)
+                }
+                calculateDeclutteredPositions(screenMarkers, screenToLatLng)
+            } else {
+                emptyList()
             }
-        val screenToLatLng = ScreenToLatLng { x, y ->
-            val latLng = map.projection.fromScreenLocation(android.graphics.PointF(x, y))
-            Pair(latLng.latitude, latLng.longitude)
-        }
-        val decluttered = calculateDeclutteredPositions(screenMarkers, screenToLatLng)
         val declutteredMap = decluttered.associateBy { it.hash }
         val offsetMarkers = decluttered.filter { it.isOffset }
         val density = context.resources.displayMetrics.density
@@ -753,7 +761,12 @@ fun MapScreen(
                             val currentMarkers = latestContactMarkers.value
                             if (currentMarkers.isNotEmpty()) {
                                 map.style?.let { style ->
-                                    updateDeclutterSources(map, style, currentMarkers)
+                                    updateDeclutterSources(
+                                        map = map,
+                                        style = style,
+                                        markers = currentMarkers,
+                                        declutterEnabled = latestDeclutterEnabled.value,
+                                    )
                                 }
                             }
                         }
@@ -764,7 +777,7 @@ fun MapScreen(
         )
 
         // Update contact markers on the map when they change
-        LaunchedEffect(state.contactMarkers, mapStyleLoaded) {
+        LaunchedEffect(state.contactMarkers, state.mapMarkerDeclutterEnabled, mapStyleLoaded) {
             if (!mapStyleLoaded) return@LaunchedEffect
             val map = mapLibreMap ?: return@LaunchedEffect
             val style = map.style ?: return@LaunchedEffect
@@ -820,6 +833,7 @@ fun MapScreen(
 
             // Store latest markers for onCameraIdleListener declutter recalculation
             latestContactMarkers.value = state.contactMarkers
+            latestDeclutterEnabled.value = state.mapMarkerDeclutterEnabled
 
             // Create GeoJSON features from contact markers (original positions for initial source creation)
             val features =
@@ -844,7 +858,12 @@ fun MapScreen(
             if (existingSource != null) {
                 Log.d("MapScreen", "Updating existing source with ${features.size} features")
                 // Use decluttered positions for marker, pin, and line sources
-                updateDeclutterSources(map, style, state.contactMarkers)
+                updateDeclutterSources(
+                    map = map,
+                    style = style,
+                    markers = state.contactMarkers,
+                    declutterEnabled = state.mapMarkerDeclutterEnabled,
+                )
             } else {
                 Log.d("MapScreen", "Creating new source and layers with ${features.size} features")
                 // Add new source and layers with data-driven styling based on marker state
@@ -926,7 +945,12 @@ fun MapScreen(
                 )
 
                 // Apply declutter on initial load too
-                updateDeclutterSources(map, style, state.contactMarkers)
+                updateDeclutterSources(
+                    map = map,
+                    style = style,
+                    markers = state.contactMarkers,
+                    declutterEnabled = state.mapMarkerDeclutterEnabled,
+                )
             }
         }
 

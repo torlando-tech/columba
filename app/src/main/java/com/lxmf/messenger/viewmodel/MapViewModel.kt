@@ -102,6 +102,7 @@ data class MapState(
     val isTelemetryRequestEnabled: Boolean = false,
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
+    val mapMarkerDeclutterEnabled: Boolean = true,
     /** Center coordinates of the default offline map region (fallback when no GPS) */
     val defaultRegionCenter: SavedCameraPosition? = null,
     /** Last camera position for restoring viewport after tab switches */
@@ -255,6 +256,13 @@ class MapViewModel
             viewModelScope.launch {
                 mapTileSourceManager.httpEnabledFlow.collect {
                     refreshMapStyle()
+                }
+            }
+
+            // Collect map marker declutter setting for map rendering behavior.
+            viewModelScope.launch {
+                settingsRepository.mapMarkerDeclutterEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(mapMarkerDeclutterEnabled = enabled) }
                 }
             }
 

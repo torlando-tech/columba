@@ -123,6 +123,7 @@ class SettingsRepository
             // Map source preferences
             val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
+            val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
             // Privacy preferences
@@ -1192,6 +1193,16 @@ class SettingsRepository
                 }.distinctUntilChanged()
 
         /**
+         * Flow of the map marker declutter enabled setting.
+         * When enabled (default), overlapping markers are spread to improve readability.
+         */
+        val mapMarkerDeclutterEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_MARKER_DECLUTTER_ENABLED] ?: true
+                }.distinctUntilChanged()
+
+        /**
          * Get the incoming message size limit in KB (non-flow).
          */
         suspend fun getIncomingMessageSizeLimitKb(): Int =
@@ -1668,6 +1679,15 @@ class SettingsRepository
         suspend fun saveMapSourceRmspEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_SOURCE_RMSP_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Save whether marker decluttering is enabled on the map.
+         */
+        suspend fun saveMapMarkerDeclutterEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAP_MARKER_DECLUTTER_ENABLED] = enabled
             }
         }
 

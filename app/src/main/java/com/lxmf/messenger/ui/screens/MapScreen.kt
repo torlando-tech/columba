@@ -254,7 +254,16 @@ fun MapScreen(
     val useGms = remember { LocationCompat.isPlayServicesAvailable(context) }
     val fusedLocationClient =
         remember {
-            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
+            if (useGms) {
+                try {
+                    LocationServices.getFusedLocationProviderClient(context)
+                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                    // GMS client creation failed on this device (#567)
+                    null
+                }
+            } else {
+                null
+            }
         }
     // Platform LocationListener for cleanup when not using GMS (issue #456)
     var platformLocationListener by remember { mutableStateOf<android.location.LocationListener?>(null) }

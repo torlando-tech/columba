@@ -52,10 +52,16 @@ object LocationCompat {
                                     .getInstance()
                                     .isGooglePlayServicesAvailable(context)
                             result == ConnectionResult.SUCCESS
-                        } catch (e: Exception) {
-                            // GoogleApiAvailability can throw (e.g. missing manifest metadata
-                            // in unit tests or corrupted GMS state on-device). Treat as unavailable.
-                            Log.w(TAG, "Failed to check Google Play Services availability", e)
+                        } catch (
+                            // Catch Throwable (not just Exception) because on devices without
+                            // Google Play Services — such as GrapheneOS, LineageOS, or Huawei
+                            // devices — the GMS shim/compat layer may cause NoClassDefFoundError,
+                            // LinkageError, or other java.lang.Error subclasses that bypass
+                            // catch(Exception). Treat any failure as GMS unavailable. (#567)
+                            @Suppress("TooGenericExceptionCaught")
+                            e: Throwable,
+                        ) {
+                            Log.w(TAG, "Google Play Services check failed, treating as unavailable", e)
                             false
                         }
                     checked = true

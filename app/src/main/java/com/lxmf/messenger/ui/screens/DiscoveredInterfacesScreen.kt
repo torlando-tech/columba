@@ -127,16 +127,25 @@ fun DiscoveredInterfacesScreen(
 
         if (hasCoarsePermission || hasFinePermission) {
             if (LocationCompat.isPlayServicesAvailable(context)) {
-                val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-                fusedClient
-                    .getCurrentLocation(
-                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                        CancellationTokenSource().token,
-                    ).addOnSuccessListener { location ->
+                try {
+                    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+                    fusedClient
+                        .getCurrentLocation(
+                            Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                            CancellationTokenSource().token,
+                        ).addOnSuccessListener { location ->
+                            location?.let {
+                                viewModel.setUserLocation(it.latitude, it.longitude)
+                            }
+                        }
+                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                    // Fallback if GMS client creation fails (#567)
+                    LocationCompat.getCurrentLocation(context) { location ->
                         location?.let {
                             viewModel.setUserLocation(it.latitude, it.longitude)
                         }
                     }
+                }
             } else {
                 // Fallback to platform LocationManager (issue #456)
                 LocationCompat.getCurrentLocation(context) { location ->

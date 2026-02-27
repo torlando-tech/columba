@@ -85,10 +85,21 @@ class LocationSharingManager
         }
 
         // Only initialize FusedLocationProviderClient when Google Play Services is available
-        // to avoid flooding the log with warnings on devices without GMS (issue #456)
-        private val useGms = LocationCompat.isPlayServicesAvailable(context)
+        // to avoid crashing on devices without GMS such as GrapheneOS (#456, #567).
+        // Wrap creation in try-catch(Throwable) because GMS shim layers (e.g. GrapheneOS
+        // GmsCompatLib) can throw Error subclasses like NoClassDefFoundError or LinkageError.
         private val fusedLocationClient: FusedLocationProviderClient? =
-            if (useGms) LocationServices.getFusedLocationProviderClient(context) else null
+            if (LocationCompat.isPlayServicesAvailable(context)) {
+                try {
+                    LocationServices.getFusedLocationProviderClient(context)
+                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                    Log.w(TAG, "Failed to create FusedLocationProviderClient, falling back to platform location", e)
+                    null
+                }
+            } else {
+                null
+            }
+        private val useGms: Boolean = fusedLocationClient != null
 
         // Active outgoing sharing sessions
         private val _activeSessions = MutableStateFlow<List<SharingSession>>(emptyList())

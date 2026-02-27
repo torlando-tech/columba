@@ -208,7 +208,7 @@ class ServicePersistenceManager(
                     val isAllowed = allowedContactDao.isContactAllowed(activeIdentity.identityHash, sourceHash)
                     if (!isAllowed) {
                         Log.d(TAG, "Blocked message from non-allowed contact: $sourceHash (device locked)")
-                        return // Silently drop
+                        return false // Silently drop
                     }
                 }
             }

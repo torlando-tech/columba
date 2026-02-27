@@ -241,12 +241,18 @@ class GuardianViewModel
 
         /**
          * Remove parental controls from this device.
+         * Blocked while the device is locked — the guardian must unlock first.
          */
         suspend fun unpairFromGuardian() {
             try {
-                guardianRepository.removeGuardian()
-                Log.i(TAG, "Unpaired from guardian")
-                loadGuardianState()
+                val removed = guardianRepository.removeGuardian()
+                if (removed) {
+                    Log.i(TAG, "Unpaired from guardian")
+                    loadGuardianState()
+                } else {
+                    Log.w(TAG, "Cannot unpair while device is locked by guardian")
+                    _state.update { it.copy(error = "Device is locked by guardian. Ask your guardian to unlock before unpairing.") }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to unpair from guardian", e)
                 _state.update { it.copy(error = e.message) }

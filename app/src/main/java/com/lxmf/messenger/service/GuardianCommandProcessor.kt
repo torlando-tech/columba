@@ -43,6 +43,7 @@ class GuardianCommandProcessor
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
         private val reticulumProtocol: ReticulumProtocol,
+        private val locationSharingManager: LocationSharingManager,
     ) {
         companion object {
             private const val TAG = "GuardianCommandProcessor"
@@ -174,10 +175,28 @@ class GuardianCommandProcessor
                     return false
                 }
 
-                // TODO: Verify signature using guardianConfig.guardianPublicKey
-                // This requires exposing guardian_verify_command via AIDL
-                // For now, we trust messages from the guardian destination
-                // (This is acceptable for initial implementation since destination is authenticated)
+                // Verify Ed25519 command signature
+                val guardianPublicKey = guardianConfig.guardianPublicKey
+                if (guardianPublicKey == null) {
+                    Log.e(TAG, "Guardian has no public key stored, cannot verify command signature")
+                    return false
+                }
+                val signatureBytes = try {
+                    val sigHex = commandData.getString("signature")
+                    ByteArray(sigHex.length / 2) { i -> sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to decode command signature", e)
+                    return false
+                }
+                val signatureValid = reticulumProtocol.verifyGuardianCommand(
+                    commandDataStr,
+                    signatureBytes,
+                    guardianPublicKey,
+                )
+                if (!signatureValid) {
+                    Log.w(TAG, "Command signature verification FAILED - rejecting command")
+                    return false
+                }
 
                 // Execute command
                 val success = when (cmd) {
@@ -214,7 +233,10 @@ class GuardianCommandProcessor
 
         private suspend fun executeLock(): Boolean {
             guardianRepository.setLockState(true)
-            Log.i(TAG, "Device locked by guardian")
+            // Stop any active location sharing sessions so the child cannot
+            // inadvertently continue sharing location while locked
+            locationSharingManager.stopSharing(null)
+            Log.i(TAG, "Device locked by guardian; all location sharing sessions stopped")
             return true
         }
 

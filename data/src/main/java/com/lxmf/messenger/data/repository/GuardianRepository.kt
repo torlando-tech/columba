@@ -96,11 +96,22 @@ class GuardianRepository
         /**
          * Remove guardian (unpair) for the active identity.
          * Also clears the allow list.
+         *
+         * This operation is blocked while the device is locked. A locked device can only
+         * be unparied by first unlocking via a guardian command. This prevents a child
+         * from bypassing parental controls by simply removing the guardian.
+         *
+         * @return true if removed, false if blocked because device is locked
          */
-        suspend fun removeGuardian() {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+        suspend fun removeGuardian(): Boolean {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            val config = guardianConfigDao.getConfig(activeIdentity.identityHash)
+            if (config != null && config.isLocked) {
+                return false
+            }
             guardianConfigDao.removeGuardian(activeIdentity.identityHash)
             allowedContactDao.deleteAllAllowedContacts(activeIdentity.identityHash)
+            return true
         }
 
         // ========== Lock State ==========

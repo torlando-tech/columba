@@ -80,6 +80,7 @@ object DatabaseModule {
             MIGRATION_38_39,
             MIGRATION_39_40,
             MIGRATION_40_41,
+            MIGRATION_41_42,
         )
     }
 
@@ -1685,10 +1686,10 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 31 to 32: Add paired_children table for parent/guardian tracking
+    // Migration from version 41 to 42: Add paired_children table for parent/guardian tracking
     // Stores information about children paired with this device when acting as guardian
-    private val MIGRATION_31_32 =
-        object : Migration(31, 32) {
+    private val MIGRATION_41_42 =
+        object : Migration(41, 42) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Create paired_children table
                 // Note: No foreign key constraint - matches Room entity definition
@@ -1766,9 +1767,7 @@ object DatabaseModule {
     fun provideAllowedContactDao(database: ColumbaDatabase): AllowedContactDao = database.allowedContactDao()
 
     @Provides
-    fun providePairedChildDao(database: ColumbaDatabase): PairedChildDao {
-        return database.pairedChildDao()
-    }
+    fun providePairedChildDao(database: ColumbaDatabase): PairedChildDao = database.pairedChildDao()
 
     @Provides
     @Singleton

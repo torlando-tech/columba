@@ -695,10 +695,17 @@ class CallManager:
             if not self._tx_batch:
                 self._tx_batch_start = now
             self._tx_batch.append(packet_data)
+            batch_len = len(self._tx_batch)
 
             # Flush when batch is full or timeout elapsed
-            if (len(self._tx_batch) >= self.TX_BATCH_SIZE or
-                    (now - self._tx_batch_start) >= self.TX_BATCH_TIMEOUT):
+            should_flush = (batch_len >= self.TX_BATCH_SIZE or
+                    (now - self._tx_batch_start) >= self.TX_BATCH_TIMEOUT)
+
+            # DIAG: Log batch state for every frame (to catch stall)
+            if self._rx_packet_count <= 50 or self._rx_packet_count % 10 == 0:
+                RNS.log(f"TX-DIAG batch#{self._rx_packet_count}: qlen={batch_len} flush={should_flush} link={link.status if hasattr(link, 'status') else '?'}", RNS.LOG_DEBUG)
+
+            if should_flush:
                 self._flush_tx_batch(link)
 
         except Exception as e:
@@ -722,28 +729,28 @@ class CallManager:
             frame_data = {FIELD_FRAMES: frames}
             packed = umsgpack.packb(frame_data)
 
+            # DIAG: Log EVERY flush attempt (before and after send)
+            pre_count = self._tx_batch_count + 1
+            link_status = link.status if hasattr(link, 'status') else '?'
+            RNS.log(f"TX-DIAG flush-pre#{pre_count}: {len(batch)}frm {len(packed)}B link={link_status}", RNS.LOG_DEBUG)
+
             t0 = time.time()
             RNS.Packet(link, packed, create_receipt=False).send()
             send_time = time.time() - t0
 
             self._tx_batch_count += 1
             self._tx_send_time_sum += send_time
+            avg_send = (self._tx_send_time_sum / self._tx_batch_count) * 1000
 
-            if self._tx_batch_count <= 30 or self._tx_batch_count % 10 == 0:
-                avg_send = (self._tx_send_time_sum / self._tx_batch_count) * 1000
-                # Log first 8 bytes of packed msgpack and first frame details
-                hex8 = " ".join(f"{b:02x}" for b in packed[:8])
-                f0 = batch[0] if batch else b""
-                f0hex = " ".join(f"{b:02x}" for b in f0[:6])
-                RNS.log(
-                    f"TX-DIAG flush#{self._tx_batch_count}: {len(batch)}frm "
-                    f"{len(packed)}B send={send_time*1000:.1f}ms "
-                    f"(avg={avg_send:.1f}ms) rx={self._rx_packet_count} "
-                    f"packed=[{hex8}] f0={len(f0)}B[{f0hex}]",
-                    RNS.LOG_DEBUG
-                )
+            RNS.log(
+                f"TX-DIAG flush#{self._tx_batch_count}: {len(batch)}frm "
+                f"{len(packed)}B send={send_time*1000:.1f}ms "
+                f"(avg={avg_send:.1f}ms) rx={self._rx_packet_count}",
+                RNS.LOG_DEBUG
+            )
         except Exception as e:
-            RNS.log(f"Error sending TX batch #{self._tx_batch_count}: {e}", RNS.LOG_ERROR)
+            self._tx_batch_count += 1
+            RNS.log(f"TX-DIAG flush-ERR#{self._tx_batch_count}: {type(e).__name__}: {e}", RNS.LOG_ERROR)
 
     def receive_signal(self, signal):
         """Receive signal from Kotlin, send to remote via Reticulum.

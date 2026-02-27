@@ -1,16 +1,23 @@
 package com.lxmf.messenger.service
 
 import android.content.Context
+import android.location.Location
 import app.cash.turbine.test
+import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
+import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.util.LocationCompat
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -451,6 +458,135 @@ class TelemetryCollectorManagerTest {
             assertEquals(TelemetrySendResult.NetworkNotReady, result)
 
             manager.stop()
+        }
+
+    @Test
+    fun `sendTelemetryNow stores telemetry locally when collector is self`() =
+        testScope.runTest {
+            mockkObject(LocationCompat)
+            try {
+                every { LocationCompat.isPlayServicesAvailable(any()) } returns false
+                every { LocationCompat.getCurrentLocation(any(), any()) } answers {
+                    val callback = secondArg<(Location?) -> Unit>()
+                    val location = Location("test").apply {
+                        latitude = 48.8566
+                        longitude = 2.3522
+                        accuracy = 5f
+                        time = System.currentTimeMillis()
+                    }
+                    callback(location)
+                }
+
+                val selfHash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                coEvery { mockIdentityRepository.getActiveIdentitySync() } returns
+                    LocalIdentityEntity(
+                        identityHash = "0123456789abcdef0123456789abcdef",
+                        displayName = "Me",
+                        destinationHash = selfHash,
+                        filePath = "/tmp/id",
+                        createdTimestamp = 1L,
+                        lastUsedTimestamp = 1L,
+                        isActive = true,
+                    )
+                coEvery { mockReticulumProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
+
+                manager = createManager()
+                manager.start()
+
+                collectorAddressFlow.value = selfHash
+                hostModeEnabledFlow.value = true
+                networkStatusFlow.value = NetworkStatus.READY
+                advanceUntilIdle()
+
+                val result = manager.sendTelemetryNow()
+
+                assertEquals(TelemetrySendResult.Success, result)
+                coVerify(atLeast = 1) { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+                coVerify(exactly = 1) { mockReticulumProtocol.storeOwnTelemetry(any(), any()) }
+                coVerify(exactly = 0) {
+                    mockReticulumProtocol.sendLocationTelemetry(any(), any(), any(), any())
+                }
+
+                manager.stop()
+            } finally {
+                unmockkObject(LocationCompat)
+            }
+        }
+
+    @Test
+    fun `sendTelemetryNow sends via network when collector is remote`() =
+        testScope.runTest {
+            mockkObject(LocationCompat)
+            try {
+                every { LocationCompat.isPlayServicesAvailable(any()) } returns false
+                every { LocationCompat.getCurrentLocation(any(), any()) } answers {
+                    val callback = secondArg<(Location?) -> Unit>()
+                    val location = Location("test").apply {
+                        latitude = 48.8566
+                        longitude = 2.3522
+                        accuracy = 5f
+                        time = System.currentTimeMillis()
+                    }
+                    callback(location)
+                }
+
+                val serviceProtocol = mockk<ServiceReticulumProtocol>()
+                every { serviceProtocol.networkStatus } returns networkStatusFlow
+                coEvery { serviceProtocol.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
+                coEvery { serviceProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
+                coEvery { serviceProtocol.getLxmfIdentity() } returns
+                    Result.success(
+                        com.lxmf.messenger.reticulum.model.Identity(
+                            hash = ByteArray(16) { 0x01 },
+                            publicKey = ByteArray(32) { 0x02 },
+                            privateKey = null,
+                        ),
+                    )
+                coEvery { serviceProtocol.sendLocationTelemetry(any(), any(), any(), any()) } returns
+                    Result.success(
+                        MessageReceipt(
+                            messageHash = ByteArray(16) { 0x11 },
+                            timestamp = System.currentTimeMillis(),
+                            destinationHash = ByteArray(16) { 0x22 },
+                        ),
+                    )
+
+                val remoteHash = "b1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                coEvery { mockIdentityRepository.getActiveIdentitySync() } returns
+                    LocalIdentityEntity(
+                        identityHash = "0123456789abcdef0123456789abcdef",
+                        displayName = "Me",
+                        destinationHash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+                        filePath = "/tmp/id",
+                        createdTimestamp = 1L,
+                        lastUsedTimestamp = 1L,
+                        isActive = true,
+                    )
+
+                manager =
+                    TelemetryCollectorManager(
+                        context = mockContext,
+                        settingsRepository = mockSettingsRepository,
+                        reticulumProtocol = serviceProtocol,
+                        identityRepository = mockIdentityRepository,
+                        scope = testScope,
+                    )
+                manager.start()
+
+                collectorAddressFlow.value = remoteHash
+                networkStatusFlow.value = NetworkStatus.READY
+                advanceUntilIdle()
+
+                val result = manager.sendTelemetryNow()
+
+                assertEquals(TelemetrySendResult.Success, result)
+                coVerify(exactly = 1) { serviceProtocol.sendLocationTelemetry(any(), any(), any(), any()) }
+                coVerify(exactly = 0) { serviceProtocol.storeOwnTelemetry(any(), any()) }
+
+                manager.stop()
+            } finally {
+                unmockkObject(LocationCompat)
+            }
         }
 
     // ========== TelemetrySendResult Tests ==========

@@ -352,6 +352,19 @@ interface ReticulumProtocol {
     suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit>
 
     /**
+     * Store the host's own location in the collected telemetry so it is included
+     * in FIELD_TELEMETRY_STREAM responses sent to group members.
+     *
+     * @param locationJson JSON string with location data (lat, lng, acc, ts, etc.)
+     * @param iconAppearance Optional icon appearance for the host
+     * @return Result indicating success
+     */
+    suspend fun storeOwnTelemetry(
+        locationJson: String,
+        iconAppearance: IconAppearance? = null,
+    ): Result<Unit>
+
+    /**
      * Set the list of identity hashes allowed to request telemetry in host mode.
      *
      * Only requesters whose identity hash is in the set will receive responses;

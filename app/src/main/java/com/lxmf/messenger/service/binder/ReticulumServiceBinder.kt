@@ -949,6 +949,29 @@ class ReticulumServiceBinder(
             """{"success": false, "error": "${e.message}"}"""
         }
 
+    override fun storeOwnTelemetry(
+        locationJson: String,
+        iconName: String?,
+        iconFgColor: String?,
+        iconBgColor: String?,
+    ): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                val result =
+                    wrapper.callAttr(
+                        "store_own_telemetry",
+                        locationJson,
+                        iconName,
+                        iconFgColor,
+                        iconBgColor,
+                    )
+                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+            } ?: """{"success": false, "error": "Wrapper not available"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error storing own telemetry", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
     // ===========================================
     // Emoji Reactions
     // ===========================================

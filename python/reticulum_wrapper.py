@@ -716,6 +716,75 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "set_telemetry_allowed_requesters", str(e))
             return {'success': False, 'error': str(e)}
 
+    def store_own_telemetry(self, location_json: str,
+                            icon_name: str = None, icon_fg_color: str = None,
+                            icon_bg_color: str = None) -> Dict:
+        """
+        Store the host's own location in collected_telemetry so it is included
+        in FIELD_TELEMETRY_STREAM responses sent to group members.
+
+        Called by Kotlin TelemetryCollectorManager when host mode is active.
+
+        Args:
+            location_json: JSON string with location data (lat, lng, acc, ts, altitude, speed, bearing)
+            icon_name: Optional icon name for appearance
+            icon_fg_color: Optional foreground color hex string (3 bytes RGB)
+            icon_bg_color: Optional background color hex string (3 bytes RGB)
+
+        Returns:
+            Dict with success status
+        """
+        import time
+        try:
+            if not self.telemetry_collector_enabled:
+                return {'success': False, 'error': 'Host mode not enabled'}
+
+            if not self.local_lxmf_destination:
+                return {'success': False, 'error': 'Local LXMF destination not created'}
+
+            location_data = json.loads(location_json)
+
+            # Pack telemetry in Sideband-compatible format
+            packed_telemetry = pack_location_telemetry(
+                lat=location_data['lat'],
+                lon=location_data['lng'],
+                accuracy=location_data.get('acc', 0.0),
+                timestamp_ms=location_data.get('ts', int(time.time() * 1000)),
+                altitude=location_data.get('altitude', 0.0),
+                speed=location_data.get('speed', 0.0),
+                bearing=location_data.get('bearing', 0.0),
+            )
+
+            timestamp_s = int(location_data.get('ts', int(time.time() * 1000)) / 1000)
+
+            # Build appearance data in the same format as FIELD_ICON_APPEARANCE
+            appearance = None
+            if icon_name and icon_fg_color and icon_bg_color:
+                try:
+                    fg_bytes = bytes.fromhex(icon_fg_color)
+                    bg_bytes = bytes.fromhex(icon_bg_color)
+                    appearance = [icon_name, fg_bytes, bg_bytes]
+                except (ValueError, TypeError) as e:
+                    log_warning("ReticulumWrapper", "store_own_telemetry",
+                                f"Invalid icon color format, skipping appearance: {e}")
+
+            # Store using our own destination hash as key
+            own_hash_hex = self.local_lxmf_destination.hexhash
+            self._store_telemetry_for_collector(
+                source_hash_hex=own_hash_hex,
+                packed_telemetry=packed_telemetry,
+                timestamp=timestamp_s,
+                appearance=appearance,
+            )
+
+            log_debug("ReticulumWrapper", "store_own_telemetry",
+                      f"📍 Stored own location (hash={own_hash_hex[:16]})")
+            return {'success': True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "store_own_telemetry", f"Failed: {e}")
+            return {'success': False, 'error': str(e)}
+
     def _cleanup_expired_telemetry(self):
         """
         Remove telemetry entries older than the retention period.

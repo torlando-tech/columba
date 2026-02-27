@@ -315,6 +315,12 @@ fun SettingsScreen(
                     telemetryAllowedRequesters = state.telemetryAllowedRequesters,
                     contacts = state.contacts,
                     onTelemetryAllowedRequestersChange = { viewModel.setTelemetryAllowedRequesters(it) },
+                    // Local identity for "Myself" option in host picker
+                    localDestinationHash = state.destinationHash,
+                    localDisplayName = state.displayName.ifEmpty { state.defaultDisplayName },
+                    localIconName = state.iconName,
+                    localIconForegroundColor = state.iconForegroundColor,
+                    localIconBackgroundColor = state.iconBackgroundColor,
                 )
 
                 MapSourcesCard(

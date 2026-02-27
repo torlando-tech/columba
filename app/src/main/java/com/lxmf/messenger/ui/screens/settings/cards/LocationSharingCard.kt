@@ -111,6 +111,12 @@ fun LocationSharingCard(
     telemetryAllowedRequesters: Set<String>,
     contacts: List<EnrichedContact>,
     onTelemetryAllowedRequestersChange: (Set<String>) -> Unit,
+    // Local identity for "Myself" option in host picker
+    localDestinationHash: String? = null,
+    localDisplayName: String = "Myself",
+    localIconName: String? = null,
+    localIconForegroundColor: String? = null,
+    localIconBackgroundColor: String? = null,
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -189,6 +195,12 @@ fun LocationSharingCard(
             allowedRequesters = telemetryAllowedRequesters,
             contacts = contacts,
             onAllowedRequestersChange = onTelemetryAllowedRequestersChange,
+            // Local identity for "Myself" option
+            localDestinationHash = localDestinationHash,
+            localDisplayName = localDisplayName,
+            localIconName = localIconName,
+            localIconForegroundColor = localIconForegroundColor,
+            localIconBackgroundColor = localIconBackgroundColor,
         )
     }
 
@@ -521,14 +533,29 @@ private fun TelemetryCollectorSection(
     allowedRequesters: Set<String>,
     contacts: List<EnrichedContact>,
     onAllowedRequestersChange: (Set<String>) -> Unit,
+    // Local identity for "Myself" option in host picker
+    localDestinationHash: String? = null,
+    localDisplayName: String = "Myself",
+    localIconName: String? = null,
+    localIconForegroundColor: String? = null,
+    localIconBackgroundColor: String? = null,
 ) {
     var showAllowedRequestersDialog by remember { mutableStateOf(false) }
     var showContactPicker by remember { mutableStateOf(false) }
 
-    // Find the selected contact for display
+    // Check if "Myself" is selected as host
+    val isSelfSelected =
+        localDestinationHash != null &&
+            collectorAddress.equals(localDestinationHash, ignoreCase = true)
+
+    // Find the selected contact for display (null if "Myself" is selected)
     val selectedContact =
-        contacts.find {
-            it.destinationHash.equals(collectorAddress, ignoreCase = true)
+        if (isSelfSelected) {
+            null
+        } else {
+            contacts.find {
+                it.destinationHash.equals(collectorAddress, ignoreCase = true)
+            }
         }
 
     Column(
@@ -605,7 +632,20 @@ private fun TelemetryCollectorSection(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (selectedContact != null) {
+                if (isSelfSelected) {
+                    val hashBytes =
+                        localDestinationHash
+                            ?.chunked(2)
+                            ?.mapNotNull { it.toIntOrNull(16)?.toByte() }
+                            ?.toByteArray() ?: ByteArray(0)
+                    ProfileIcon(
+                        iconName = localIconName,
+                        foregroundColor = localIconForegroundColor,
+                        backgroundColor = localIconBackgroundColor,
+                        size = 24.dp,
+                        fallbackHash = hashBytes,
+                    )
+                } else if (selectedContact != null) {
                     val hashBytes =
                         selectedContact.destinationHash
                             .chunked(2)
@@ -626,10 +666,15 @@ private fun TelemetryCollectorSection(
                     )
                 }
                 Text(
-                    text = selectedContact?.displayName ?: "Select from contacts...",
+                    text =
+                        when {
+                            isSelfSelected -> "$localDisplayName (myself)"
+                            selectedContact != null -> selectedContact.displayName
+                            else -> "Select from contacts..."
+                        },
                     style = MaterialTheme.typography.bodyMedium,
                     color =
-                        if (selectedContact != null) {
+                        if (isSelfSelected || selectedContact != null) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -653,6 +698,17 @@ private fun TelemetryCollectorSection(
                     showContactPicker = false
                 },
                 onDismiss = { showContactPicker = false },
+                localDestinationHash = localDestinationHash,
+                localDisplayName = localDisplayName,
+                localIconName = localIconName,
+                localIconForegroundColor = localIconForegroundColor,
+                localIconBackgroundColor = localIconBackgroundColor,
+                onSelfSelected = {
+                    if (localDestinationHash != null) {
+                        onCollectorAddressChange(localDestinationHash.lowercase())
+                        showContactPicker = false
+                    }
+                },
             )
         }
 
@@ -1217,13 +1273,24 @@ private fun formatTelemetryIntervalDisplay(seconds: Int): String {
  * Dialog for selecting a contact as the group host/collector.
  */
 @Composable
+@Suppress("LongParameterList") // UI composable with display props
 private fun GroupHostPickerDialog(
     contacts: List<EnrichedContact>,
     selectedHash: String?,
     onContactSelected: (EnrichedContact) -> Unit,
     onUnset: () -> Unit,
     onDismiss: () -> Unit,
+    localDestinationHash: String? = null,
+    localDisplayName: String = "Myself",
+    localIconName: String? = null,
+    localIconForegroundColor: String? = null,
+    localIconBackgroundColor: String? = null,
+    onSelfSelected: () -> Unit = {},
 ) {
+    val isSelfSelected =
+        localDestinationHash != null &&
+            selectedHash.equals(localDestinationHash, ignoreCase = true)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Group Host") },
@@ -1233,12 +1300,12 @@ private fun GroupHostPickerDialog(
             ) {
                 // Caution text
                 Text(
-                    text = "The group host will receive your location and can share it with others in the group. Only select someone you trust.",
+                    text = "Select yourself to host the group, or choose a contact to send your location to.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                if (contacts.isEmpty()) {
+                if (contacts.isEmpty() && localDestinationHash == null) {
                     Text(
                         text = "No contacts available. Add contacts first.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -1248,6 +1315,46 @@ private fun GroupHostPickerDialog(
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 350.dp),
                     ) {
+                        // "Myself" option at the top
+                        if (localDestinationHash != null) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable(onClick = onSelfSelected)
+                                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                                ) {
+                                    val hashBytes =
+                                        localDestinationHash
+                                            .chunked(2)
+                                            .mapNotNull { it.toIntOrNull(16)?.toByte() }
+                                            .toByteArray()
+                                    ProfileIcon(
+                                        iconName = localIconName,
+                                        foregroundColor = localIconForegroundColor,
+                                        backgroundColor = localIconBackgroundColor,
+                                        size = 40.dp,
+                                        fallbackHash = hashBytes,
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "$localDisplayName (myself)",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color =
+                                            if (isSelfSelected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                        fontWeight = if (isSelfSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                HorizontalDivider()
+                            }
+                        }
                         // "None" option to unset the group host
                         if (selectedHash != null) {
                             item {

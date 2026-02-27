@@ -2384,6 +2384,27 @@ class ServiceReticulumProtocol(
             Log.d(TAG, "📡 Telemetry collector mode ${if (enabled) "enabled" else "disabled"}")
         }
 
+    override suspend fun storeOwnTelemetry(
+        locationJson: String,
+        iconAppearance: IconAppearance?,
+    ): Result<Unit> =
+        runCatching {
+            val service = this.service ?: throw IllegalStateException("Service not bound")
+
+            val resultJson = service.storeOwnTelemetry(
+                locationJson,
+                iconAppearance?.iconName,
+                iconAppearance?.foregroundColor,
+                iconAppearance?.backgroundColor,
+            )
+            val result = JSONObject(resultJson)
+
+            if (!result.optBoolean("success", false)) {
+                val error = result.optString("error", "Unknown error")
+                throw RuntimeException(error)
+            }
+        }
+
     override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit> =
         runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")

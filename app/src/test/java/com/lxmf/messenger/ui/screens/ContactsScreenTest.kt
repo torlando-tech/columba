@@ -1232,6 +1232,7 @@ class ContactsScreenTest {
         every { mockViewModel.contactCount } returns MutableStateFlow(contactCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.currentRelayInfo } returns MutableStateFlow(currentRelayInfo)
+        every { mockViewModel.isLocked } returns MutableStateFlow(false)
 
         // Mock decodeQrCode to return null by default
         coEvery { mockViewModel.decodeQrCode(any()) } returns null

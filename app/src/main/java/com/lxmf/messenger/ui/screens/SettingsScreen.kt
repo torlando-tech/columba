@@ -431,6 +431,10 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.ABOUT.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.ABOUT, it) },
                     systemInfo = systemInfo,
+                    updateCheckResult = state.updateCheckResult,
+                    includePrereleaseUpdates = state.includePrereleaseUpdates,
+                    onCheckForUpdates = { viewModel.checkForUpdates() },
+                    onSetIncludePrereleaseUpdates = { viewModel.setIncludePrereleaseUpdates(it) },
                     onCopySystemInfo = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText("System Info", DeviceInfoUtil.formatForClipboard(systemInfo))

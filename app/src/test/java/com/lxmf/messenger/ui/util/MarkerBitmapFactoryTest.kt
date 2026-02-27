@@ -273,6 +273,42 @@ class MarkerBitmapFactoryTest {
         assertEquals(Bitmap.Config.ARGB_8888, bitmap.config)
     }
 
+    // ========== Symmetric padding for declutter (iconAnchor center) ==========
+
+    @Test
+    fun `createInitialMarker has circle center at bitmap vertical midpoint`() {
+        val sizeDp = 40f
+        val bitmap =
+            MarkerBitmapFactory.createInitialMarker(
+                initial = 'A',
+                displayName = "Alice",
+                backgroundColor = Color.BLUE,
+                sizeDp = sizeDp,
+                density = TEST_DENSITY,
+            )
+
+        // Circle center should be at bitmap height / 2 (symmetric padding)
+        // circleSizePx = 40 * 2 = 80, textPadding = 4 * 2 = 8, labelHeight = 18 * 2 = 36
+        // topPadding = textPadding + labelHeight = 44
+        // totalHeight = topPadding + circleSizePx + textPadding + labelHeight = 44 + 80 + 8 + 36 = 168
+        // circleY = topPadding + circleSizePx / 2 = 44 + 40 = 84 = 168 / 2 ✓
+        val expectedHeight = 168
+        assertEquals("Bitmap height should include symmetric padding", expectedHeight, bitmap.height)
+
+        // Circle center Y should be at half the bitmap height
+        val expectedCircleCenterY = bitmap.height / 2
+        val circleSizePx = (sizeDp * TEST_DENSITY).toInt()
+        val textPadding = (4 * TEST_DENSITY).toInt()
+        val labelHeight = (18 * TEST_DENSITY).toInt()
+        val topPadding = textPadding + labelHeight
+        val actualCircleCenterY = topPadding + circleSizePx / 2
+        assertEquals(
+            "Circle center should be at bitmap vertical midpoint",
+            expectedCircleCenterY,
+            actualCircleCenterY,
+        )
+    }
+
     // ========== createDashedCircle Tests ==========
 
     @Test

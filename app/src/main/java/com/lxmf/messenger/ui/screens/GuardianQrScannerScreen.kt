@@ -254,11 +254,14 @@ fun GuardianQrScannerScreen(
                     },
                     text = {
                         Text(
-                            "This will pair your device with a guardian. They will be able to:\n\n" +
-                                "• Lock/unlock your messaging\n" +
-                                "• Control who you can message\n" +
-                                "• Restrict app features\n\n" +
-                                "Continue with pairing?",
+                            "This is intended for a parent or guardian to manage a child's device.\n\n" +
+                                "After pairing, they will be able to:\n" +
+                                "• Lock messaging so only approved contacts can message you\n" +
+                                "• Prevent sharing your location\n" +
+                                "• Restrict certain app features\n\n" +
+                                "Only scan this code if a parent or trusted guardian gave it to you. " +
+                                "If you are an adult and this is being used to control your device without your consent, " +
+                                "you can remove these controls (unless locked) in Settings, or factory reset the device.",
                         )
                     },
                     confirmButton = {

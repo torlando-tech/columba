@@ -78,6 +78,8 @@ object DatabaseModule {
             MIGRATION_36_37,
             MIGRATION_37_38,
             MIGRATION_38_39,
+            MIGRATION_39_40,
+            MIGRATION_40_41,
         )
     }
 
@@ -1554,11 +1556,11 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 30 to 31: Add parental control tables
+    // Migration from version 39 to 40: Add parental control tables
     // Creates guardian_config for storing guardian pairing and lock state
     // Creates allowed_contacts for the allow list when device is locked
-    private val MIGRATION_30_31 =
-        object : Migration(30, 31) {
+    private val MIGRATION_39_40 =
+        object : Migration(39, 40) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Create guardian_config table
                 database.execSQL(
@@ -1596,10 +1598,10 @@ object DatabaseModule {
             }
         }
 
-    // Migration from version 31 to 32: Add paired_children table for parent/guardian tracking
+    // Migration from version 40 to 41: Add paired_children table for parent/guardian tracking
     // Stores information about children paired with this device when acting as guardian
-    private val MIGRATION_31_32 =
-        object : Migration(31, 32) {
+    private val MIGRATION_40_41 =
+        object : Migration(40, 41) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Create paired_children table
                 // Note: No foreign key constraint - matches Room entity definition

@@ -424,6 +424,9 @@ class SettingsViewModel
                             bleReticulumVersion = _state.value.bleReticulumVersion,
                             // Preserve card expansion states
                             cardExpansionStates = _state.value.cardExpansionStates,
+                            // Preserve update checker state from loadUpdateSettings()
+                            updateCheckResult = _state.value.updateCheckResult,
+                            includePrereleaseUpdates = _state.value.includePrereleaseUpdates,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         val previousState = _state.value

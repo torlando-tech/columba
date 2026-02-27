@@ -2,6 +2,7 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -67,6 +68,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: com.lxmf.messenger.data.repository.ContactRepository
     private lateinit var updateChecker: com.lxmf.messenger.service.UpdateChecker
+    private lateinit var guardianRepository: GuardianRepository
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -106,6 +108,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
         updateChecker = mockk()
+        guardianRepository = mockk()
         context =
             mockk {
                 val mockEditor =
@@ -194,6 +197,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { propagationNodeManager.availableRelaysState } returns
             MutableStateFlow(AvailableRelaysState.Loaded(emptyList()))
 
+        // Mock GuardianRepository flows
+        every { guardianRepository.getGuardianConfigFlow() } returns flowOf(null)
+        every { guardianRepository.getAllowedContactCount() } returns flowOf(0)
+
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
         coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
@@ -229,6 +236,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
             updateChecker = updateChecker,
+            guardianRepository = guardianRepository,
         )
 
     // ========== Initial State Tests ==========

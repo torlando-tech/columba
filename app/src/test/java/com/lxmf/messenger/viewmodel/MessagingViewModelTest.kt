@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.data.repository.ReplyPreview
 import com.lxmf.messenger.repository.SettingsRepository
@@ -87,6 +88,7 @@ class MessagingViewModelTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
+    private lateinit var guardianRepository: GuardianRepository
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -117,9 +119,13 @@ class MessagingViewModelTest {
         identityRepository = mockk()
         conversationLinkManager = mockk()
         receivedLocationRepository = mockk()
+        guardianRepository = mockk()
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
+
+        // Allow all contacts by default (guardian unlocked)
+        coEvery { guardianRepository.isContactAllowed(any()) } returns true
 
         // Mock activeConversationManager methods
         every { activeConversationManager.setActive(any()) } just Runs
@@ -220,6 +226,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
             testBody()
@@ -243,6 +250,7 @@ class MessagingViewModelTest {
             identityRepository,
             conversationLinkManager,
             receivedLocationRepository,
+            guardianRepository,
         )
 
     @Test
@@ -569,6 +577,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     failingConversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
 
             // Attempt to send message
@@ -1020,6 +1029,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                guardianRepository,
             )
             advanceUntilIdle()
 
@@ -1090,6 +1100,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                guardianRepository,
             )
             advanceUntilIdle()
 
@@ -1158,6 +1169,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                guardianRepository,
             )
             advanceUntilIdle()
 
@@ -1214,6 +1226,7 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                guardianRepository,
             )
             advanceUntilIdle()
 
@@ -1284,6 +1297,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1347,6 +1361,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1410,6 +1425,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1473,6 +1489,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1536,6 +1553,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1598,6 +1616,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1655,6 +1674,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 
@@ -1712,6 +1732,7 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    guardianRepository,
                 )
             advanceUntilIdle()
 

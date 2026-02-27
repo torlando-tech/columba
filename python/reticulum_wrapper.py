@@ -3224,13 +3224,11 @@ class ReticulumWrapper:
 
                         # Process reaction
                         try:
-                            # Use base64 encoding for binary data - Kotlin expects base64, not hex!
-                            import base64
                             reaction_event = {
                                 'reaction_to': field_16.get('reaction_to', ''),
                                 'emoji': field_16.get('emoji', ''),
                                 'sender': field_16.get('sender', ''),
-                                'source_hash': base64.b64encode(lxmf_message.source_hash).decode('ascii'),
+                                'source_hash': lxmf_message.source_hash.hex(),
                                 'timestamp': int(time.time() * 1000)
                             }
 

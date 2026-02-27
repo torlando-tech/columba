@@ -1284,6 +1284,40 @@ fun MessagingScreen(
         reactionModeState?.let { state ->
             key(state.instanceId) {
                 var showFullEmojiPicker by remember { mutableStateOf(false) }
+                var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+                // Delete confirmation dialog
+                if (showDeleteConfirmation) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = {
+                            showDeleteConfirmation = false
+                            viewModel.exitReactionMode()
+                        },
+                        title = { Text("Delete message") },
+                        text = { Text("This message will be permanently deleted from this device.") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showDeleteConfirmation = false
+                                    viewModel.deleteMessage(state.messageId)
+                                    viewModel.exitReactionMode()
+                                },
+                            ) {
+                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showDeleteConfirmation = false
+                                    viewModel.exitReactionMode()
+                                },
+                            ) {
+                                Text("Cancel")
+                            }
+                        },
+                    )
+                }
 
                 // Full emoji picker dialog (shown when "+" is tapped in inline bar)
                 if (showFullEmojiPicker) {
@@ -1332,6 +1366,7 @@ fun MessagingScreen(
                         } else {
                             null
                         },
+                    onDelete = { showDeleteConfirmation = true },
                     onDismissStarted = {
                         // Show original message immediately when dismiss animation starts
                         viewModel.showOriginalMessage()

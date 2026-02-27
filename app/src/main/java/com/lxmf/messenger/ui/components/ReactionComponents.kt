@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -809,6 +810,7 @@ fun ReactionModeOverlay(
     onCopy: () -> Unit,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     /** Called when dismiss animation starts */
     onDismissStarted: () -> Unit = {},
     /** Called when dismiss animation completes */
@@ -930,6 +932,14 @@ fun ReactionModeOverlay(
             }
         }
 
+    val wrappedOnDelete: (() -> Unit)? =
+        onDelete?.let {
+            {
+                it()
+                // Note: Don't dismiss here - delete confirmation dialog handles its own dismiss
+            }
+        }
+
     AnimatedVisibility(
         visible = visible,
         enter =
@@ -1044,6 +1054,7 @@ fun ReactionModeOverlay(
                         onCopy = wrappedOnCopy,
                         onViewDetails = wrappedOnViewDetails,
                         onRetry = wrappedOnRetry,
+                        onDelete = wrappedOnDelete,
                         modifier =
                             Modifier
                                 .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
@@ -1063,6 +1074,7 @@ fun ReactionModeOverlay(
  * @param onCopy Callback for copy action
  * @param onViewDetails Optional callback for view details (shown for sent messages)
  * @param onRetry Optional callback for retry (shown for failed messages)
+ * @param onDelete Optional callback for delete action
  * @param modifier Optional modifier for the buttons container
  */
 @Composable
@@ -1071,6 +1083,7 @@ private fun MessageActionButtons(
     onCopy: () -> Unit,
     onViewDetails: (() -> Unit)?,
     onRetry: (() -> Unit)?,
+    onDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1114,6 +1127,15 @@ private fun MessageActionButtons(
                     icon = Icons.Default.Info,
                     label = "Details",
                     onClick = onViewDetails,
+                )
+            }
+
+            // Delete button (all messages)
+            if (onDelete != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.Delete,
+                    label = "Delete",
+                    onClick = onDelete,
                 )
             }
         }

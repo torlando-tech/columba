@@ -1670,7 +1670,7 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error getting call state", e)
             """{"status": "error", "is_active": false, "is_muted": false, "error": "${e.message}"}"""
         }
-=======
+
     // ===========================================
     // Guardian/Parental Control Methods
     // ===========================================

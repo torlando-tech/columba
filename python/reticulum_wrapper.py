@@ -8552,33 +8552,38 @@ class ReticulumWrapper:
 
     def guardian_verify_command(
         self,
-        public_key_hex: str,
-        signature_hex: str,
-        cmd: str,
-        nonce_hex: str,
-        timestamp: int,
-        payload_hex: str,
+        command_json: str,
+        signature_bytes,
+        public_key_bytes,
     ) -> Dict:
         """
         Verify a parental control command signature.
 
         Args:
-            public_key_hex: Guardian's public key (hex)
-            signature_hex: Command signature (hex)
-            cmd: Command type (LOCK, UNLOCK, etc.)
-            nonce_hex: Command nonce (hex)
-            timestamp: Command timestamp (ms)
-            payload_hex: msgpack payload (hex)
+            command_json: Full command JSON string with cmd, nonce, timestamp, payload fields
+            signature_bytes: 64-byte Ed25519 signature (raw bytes, as passed by Chaquopy)
+            public_key_bytes: 64-byte guardian public key (raw bytes, as passed by Chaquopy)
 
         Returns:
             Dict with result:
             {"success": True, "valid": True/False}
         """
         try:
-            public_key = bytes.fromhex(public_key_hex)
-            signature = bytes.fromhex(signature_hex)
+            import json as json_lib
+
+            command_data = json_lib.loads(command_json)
+            cmd = command_data["cmd"]
+            nonce_hex = command_data["nonce"]
+            timestamp = int(command_data["timestamp"])
+            payload_dict = command_data.get("payload", {})
+
+            # Reconstruct the same bytes that were signed in guardian_send_command
             nonce = bytes.fromhex(nonce_hex)
-            payload = bytes.fromhex(payload_hex)
+            payload = json_lib.dumps(payload_dict).encode("utf-8") if payload_dict else b""
+
+            # Chaquopy passes Java byte arrays; convert to Python bytes
+            public_key = bytes(public_key_bytes)
+            signature = bytes(signature_bytes)
 
             is_valid = guardian_crypto.verify_command(
                 public_key, signature, cmd, nonce, timestamp, payload

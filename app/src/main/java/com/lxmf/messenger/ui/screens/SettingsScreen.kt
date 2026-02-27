@@ -51,6 +51,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
+import com.lxmf.messenger.ui.screens.settings.cards.GuardianCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
 import com.lxmf.messenger.ui.screens.settings.cards.ImageCompressionCard
 import com.lxmf.messenger.ui.screens.settings.cards.LocationSharingCard
@@ -93,6 +94,7 @@ fun SettingsScreen(
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
     onNavigateToApkSharing: () -> Unit = {},
+    onNavigateToGuardian: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
@@ -212,6 +214,7 @@ fun SettingsScreen(
                     sharedInstanceOnline = state.sharedInstanceOnline,
                     transportNodeEnabled = state.transportNodeEnabled,
                     onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
+                    isLocked = state.isGuardianLocked,
                 )
 
                 IdentityCard(
@@ -219,6 +222,15 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.IDENTITY, it) },
                     onViewIdentity = onNavigateToIdentity,
                     onManageIdentities = onNavigateToIdentityManager,
+                    isLocked = state.isGuardianLocked,
+                )
+
+                GuardianCard(
+                    hasGuardian = state.hasGuardian,
+                    isLocked = state.isGuardianLocked,
+                    guardianName = state.guardianName,
+                    allowedContactCount = state.allowedContactCount,
+                    onManageClick = onNavigateToGuardian,
                 )
 
                 PrivacyCard(
@@ -321,6 +333,7 @@ fun SettingsScreen(
                     localIconName = state.iconName,
                     localIconForegroundColor = state.iconForegroundColor,
                     localIconBackgroundColor = state.iconBackgroundColor,
+                    isLocked = state.isGuardianLocked,
                 )
 
                 MapSourcesCard(

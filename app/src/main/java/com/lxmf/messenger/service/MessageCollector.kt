@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
@@ -37,6 +38,7 @@ import com.lxmf.messenger.data.repository.Message as DataMessage
  * - UI updates via repository flows
  * - De-duplication to avoid double-persistence
  */
+@Suppress("LongParameterList") // Dependencies required for message routing, filtering, and persistence
 @Singleton
 class MessageCollector
     @Inject
@@ -46,6 +48,8 @@ class MessageCollector
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
         private val identityRepository: IdentityRepository,
+        private val guardianRepository: GuardianRepository,
+        private val guardianCommandProcessor: GuardianCommandProcessor,
         private val notificationHelper: NotificationHelper,
         private val peerIconDao: PeerIconDao,
         private val conversationLinkManager: ConversationLinkManager,
@@ -85,6 +89,22 @@ class MessageCollector
             scope.launch {
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
+                        // ============ PAIR_ACK CHECK (must run before duplicate check) ============
+                        // PAIR_ACK messages may be persisted by ServicePersistenceManager first,
+                        // so we need to check and process them before the duplicate check skips them.
+                        if (guardianCommandProcessor.isPairAckMessage(receivedMessage)) {
+                            val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                            // Only process if we haven't already (check in-memory cache)
+                            if (receivedMessage.messageHash !in processedMessageIds) {
+                                Log.d(TAG, "Processing PAIR_ACK from $sourceHash")
+                                guardianCommandProcessor.processPairAck(receivedMessage)
+                                processedMessageIds.add(receivedMessage.messageHash)
+                            }
+                            // Don't store PAIR_ACK messages in the regular message list
+                            return@collect
+                        }
+                        // ============ END PAIR_ACK CHECK ============
+
                         // De-duplicate: Skip if we've already processed this message in-memory
                         if (receivedMessage.messageHash in processedMessageIds) {
                             Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (in-memory cache)")
@@ -179,10 +199,41 @@ class MessageCollector
                             return@collect
                         }
 
+                        // ============ PARENTAL CONTROL FILTERING ============
+                        val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
+                        val guardianConfig = guardianRepository.getGuardianConfig()
+
+                        // Check if this is a guardian command message
+                        if (guardianCommandProcessor.isGuardianCommand(receivedMessage, guardianConfig)) {
+                            Log.d(TAG, "Processing guardian command from $sourceHash")
+                            val success = guardianCommandProcessor.processCommand(receivedMessage, guardianConfig!!)
+                            if (success) {
+                                Log.i(TAG, "Guardian command processed successfully")
+                            } else {
+                                Log.w(TAG, "Failed to process guardian command")
+                            }
+                            // Don't persist guardian commands as regular chat messages
+                            return@collect
+                        }
+
+                        // Note: PAIR_ACK check moved to top of collect block (before duplicate check)
+
+                        // Apply allow-list filtering when device is locked
+                        if (guardianConfig != null && guardianConfig.hasGuardian() && guardianConfig.isLocked) {
+                            // Guardian is always allowed
+                            if (sourceHash != guardianConfig.guardianDestinationHash) {
+                                // Check if sender is in the allow list
+                                if (!guardianRepository.isContactAllowed(sourceHash)) {
+                                    Log.d(TAG, "Blocked message from non-allowed contact: $sourceHash (device locked)")
+                                    return@collect // Silently drop
+                                }
+                            }
+                        }
+                        // ============ END PARENTAL CONTROL FILTERING ============
+
                         processedMessageIds.add(receivedMessage.messageHash)
                         _messagesCollected.value++
 
-                        val sourceHash = receivedMessage.sourceHash.joinToString("") { "%02x".format(it) }
                         Log.d(TAG, "Received new message #${_messagesCollected.value} from $sourceHash")
 
                         // Create data message for storage

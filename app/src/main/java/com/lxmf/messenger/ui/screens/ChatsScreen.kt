@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
@@ -93,6 +94,7 @@ fun ChatsScreen(
     onChatClick: (peerHash: String, peerName: String) -> Unit = { _, _ -> },
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
+    isGuardianLocked: Boolean = false,
     viewModel: ChatsViewModel = hiltViewModel(),
     settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel = hiltViewModel(),
     debugViewModel: com.lxmf.messenger.viewmodel.DebugViewModel = hiltViewModel(),
@@ -161,6 +163,15 @@ fun ChatsScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
                 additionalActions = {
+                    // Guardian lock indicator
+                    if (isGuardianLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Parental controls active",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
                     // QR Code button
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(

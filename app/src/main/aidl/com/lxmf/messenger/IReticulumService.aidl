@@ -601,4 +601,64 @@ interface IReticulumService {
      * @return JSON string with call state: {"status": "idle/connecting/ringing/active/ended", "remote_identity": "...", "is_muted": false}
      */
     String getCallState();
+
+    // ==================== GUARDIAN/PARENTAL CONTROL ====================
+
+    /**
+     * Generate a QR code data string for guardian pairing.
+     * Creates a signed payload with the current identity's destination hash and public key.
+     *
+     * @return JSON string: {"success": true, "qr_data": "lxmf-guardian://..."} or {"success": false, "error": "..."}
+     */
+    String guardianGeneratePairingQr();
+
+    /**
+     * Parse and validate a guardian pairing QR code.
+     * Validates the signature and timestamp.
+     *
+     * @param qrData The scanned QR code data
+     * @return JSON string: {"valid": true, "guardian_dest_hash": "...", "guardian_public_key": "base64..."}
+     *         or {"valid": false, "error": "..."}
+     */
+    String guardianParsePairingQr(String qrData);
+
+    /**
+     * Verify a guardian command signature.
+     *
+     * @param commandJson The command JSON string
+     * @param signatureBase64 The signature bytes as base64
+     * @param publicKeyBase64 The guardian's public key as base64
+     * @return JSON string: {"valid": true/false}
+     */
+    String guardianVerifyCommand(String commandJson, String signatureBase64, String publicKeyBase64);
+
+    /**
+     * Sign a guardian command for sending to a child device.
+     *
+     * @param commandJson The command JSON string to sign
+     * @return JSON string: {"success": true, "signature": "base64..."} or {"success": false, "error": "..."}
+     */
+    String guardianSignCommand(String commandJson);
+
+    /**
+     * Send a guardian command to a child device via LXMF.
+     * Creates, signs, and sends the command.
+     *
+     * @param destinationHash The child's destination hash
+     * @param command The command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+     * @param payloadJson JSON string of additional payload
+     * @return JSON: {"success": true} or {"success": false, "error": "message"}
+     */
+    String guardianSendCommand(String destinationHash, String command, String payloadJson);
+
+    /**
+     * Update guardian/parental control configuration in Python.
+     * When locked, incoming links from non-allowed peers will be rejected.
+     *
+     * @param isLocked Whether the device is locked (filtering enabled)
+     * @param guardianHash Destination hash of the guardian (always allowed), or null
+     * @param allowedHashes List of allowed contact destination hashes (hex strings)
+     * @return JSON: {"success": true} or {"success": false, "error": "message"}
+     */
+    String updateGuardianConfig(boolean isLocked, String guardianHash, in List<String> allowedHashes);
 }

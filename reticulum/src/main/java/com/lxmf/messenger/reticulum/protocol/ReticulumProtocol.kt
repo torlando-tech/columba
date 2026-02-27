@@ -461,6 +461,84 @@ interface ReticulumProtocol {
      * @return Result containing CallState
      */
     suspend fun getCallState(): Result<VoiceCallState>
+
+    // ==================== Guardian/Parental Control ====================
+
+    /**
+     * Generate a QR code data string for guardian pairing.
+     * This creates a signed payload containing the current identity's destination hash
+     * and public key, which a child device can scan to establish parental control.
+     *
+     * @return QR code data string in format "lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>"
+     *         or null if generation fails
+     */
+    suspend fun generateGuardianPairingQr(): String?
+
+    /**
+     * Parse and validate a guardian pairing QR code.
+     * Validates the signature and timestamp to ensure the QR is authentic and not expired.
+     *
+     * @param qrData The scanned QR code data
+     * @return Pair of (guardianDestHash, guardianPublicKey) or null if invalid
+     */
+    suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>?
+
+    /**
+     * Verify a guardian command signature.
+     * Used to validate incoming control commands from the guardian.
+     *
+     * @param commandJson The command JSON string
+     * @param signature The signature bytes
+     * @param guardianPublicKey The guardian's public key
+     * @return true if signature is valid
+     */
+    suspend fun verifyGuardianCommand(
+        commandJson: String,
+        signature: ByteArray,
+        guardianPublicKey: ByteArray,
+    ): Boolean
+
+    /**
+     * Sign a guardian command for sending to a child device.
+     * Used by the guardian/parent to create signed control commands.
+     *
+     * @param commandJson The command JSON string to sign
+     * @return The signature bytes or null if signing fails
+     */
+    suspend fun signGuardianCommand(commandJson: String): ByteArray?
+
+    /**
+     * Send a guardian command to a child device via LXMF.
+     * Creates, signs, and sends a guardian command message.
+     *
+     * @param destinationHash The child's destination hash
+     * @param command The command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+     * @param payload Additional command payload (e.g., contact_hash for ALLOW_ADD)
+     * @return True if the message was sent successfully
+     */
+    suspend fun sendGuardianCommand(
+        destinationHash: String,
+        command: String,
+        payload: Map<String, Any> = emptyMap(),
+    ): Boolean
+
+    /**
+     * Update guardian config in the Python layer for link filtering.
+     *
+     * When the device is locked, links from non-allowed peers should be rejected
+     * to prevent revealing online status. This method syncs the current guardian
+     * state to the Python layer so it can filter incoming link requests.
+     *
+     * @param isLocked Whether the device is currently locked
+     * @param guardianHash The guardian's destination hash (hex string), or null if no guardian
+     * @param allowedHashes List of allowed contact destination hashes
+     * @return True if the config was updated successfully
+     */
+    suspend fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>,
+    ): Boolean
 }
 
 /**

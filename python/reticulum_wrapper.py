@@ -17,6 +17,7 @@ import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
 from signal_quality import extract_signal_metrics, add_signal_to_message_event
 from interface_lookup import get_receiving_interface
+import guardian_crypto
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -599,6 +600,13 @@ class ReticulumWrapper:
         self.telemetry_retention_seconds = 86400  # 24 hours TTL
         self.telemetry_allowed_requesters = set()  # Empty = block all; populated = allow only listed identity hashes (lowercase hex)
 
+        # Guardian/parental control state (for link filtering)
+        # When locked, only allow links from guardian and allowed contacts
+        self._guardian_is_locked = False
+        self._guardian_hash = None  # Guardian's destination hash (hex string)
+        self._guardian_allowed_hashes = set()  # Set of allowed contact hashes (hex strings)
+        self._guardian_lock = threading.Lock()  # Protects guardian state
+
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
 
@@ -1004,6 +1012,134 @@ class ReticulumWrapper:
         """
         self.kotlin_reticulum_bridge = bridge
         log_info("ReticulumWrapper", "set_reticulum_bridge", "KotlinReticulumBridge instance set")
+
+    def update_guardian_config(self, is_locked: bool, guardian_hash: str, allowed_hashes: list) -> Dict:
+        """
+        Update the guardian/parental control configuration.
+        Called from Kotlin when guardian state changes.
+
+        When locked, incoming links from non-allowed peers will be rejected.
+
+        Args:
+            is_locked: Whether the device is locked (filtering enabled)
+            guardian_hash: Destination hash of the guardian (always allowed), or None
+            allowed_hashes: List of allowed contact destination hashes (hex strings)
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            with self._guardian_lock:
+                self._guardian_is_locked = is_locked
+                self._guardian_hash = guardian_hash
+                self._guardian_allowed_hashes = set(allowed_hashes) if allowed_hashes else set()
+
+            log_info("ReticulumWrapper", "update_guardian_config",
+                     f"Guardian config updated: locked={is_locked}, "
+                     f"guardian={guardian_hash[:16] if guardian_hash else 'None'}, "
+                     f"allowed_count={len(self._guardian_allowed_hashes)}")
+            return {"success": True}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "update_guardian_config", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _on_lxmf_link_established(self, link):
+        """
+        Callback when an incoming LXMF link is established.
+
+        KNOWN LIMITATION (2025-01-14):
+        Link-level filtering for parental controls is not fully effective because:
+        1. RNS links don't reveal the initiator's identity at establishment time
+        2. The remote_identified_callback only fires if the peer explicitly calls
+           link.identify(), which LXMF doesn't do during normal messaging
+        3. Identity is only revealed in the LXMF message itself (after link established)
+
+        This means a blocked contact can still establish a link (revealing "online"
+        status briefly) before we can identify and block them. Message blocking still
+        works correctly - the message content is filtered at the LXMF layer.
+
+        Future options to consider:
+        - Tear down link immediately after receiving a blocked message
+        - Block ALL incoming links when locked (would also block allowed contacts)
+        - Custom LXMF modifications to require identity proof before link acceptance
+
+        For now, we register the identity callback in case the peer does identify,
+        but this is unlikely to trigger in practice.
+
+        Args:
+            link: The RNS Link that was established
+        """
+        try:
+            # Check if we need to filter at all
+            with self._guardian_lock:
+                if not self._guardian_is_locked:
+                    # Not locked, no need to filter
+                    log_debug("ReticulumWrapper", "_on_lxmf_link_established",
+                              "Link established - device not locked, allowing")
+                    return
+
+            log_debug("ReticulumWrapper", "_on_lxmf_link_established",
+                      "Link established - device locked, registering identity callback")
+
+            # Register a callback for when the remote identity is identified
+            # This fires after the identity proof exchange completes
+            link.set_remote_identified_callback(self._on_link_remote_identified)
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_on_lxmf_link_established",
+                      f"Error in link callback: {e}")
+
+    def _on_link_remote_identified(self, link, identity):
+        """
+        Callback when the remote peer's identity has been verified on a link.
+        This is where we can check if the peer is allowed and tear down if not.
+
+        Args:
+            link: The RNS Link
+            identity: The verified remote Identity
+        """
+        try:
+            remote_hash = identity.hash.hex()
+            log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                      f"Remote identity verified: {remote_hash[:16]}")
+
+            # Check guardian filtering
+            with self._guardian_lock:
+                if not self._guardian_is_locked:
+                    # Not locked anymore, allow
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              "Device no longer locked - allowing link")
+                    return
+
+                # Check if this is the guardian
+                if self._guardian_hash and remote_hash == self._guardian_hash:
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              "Link from guardian - allowed")
+                    return
+
+                # Check if in allowed list
+                if remote_hash in self._guardian_allowed_hashes:
+                    log_debug("ReticulumWrapper", "_on_link_remote_identified",
+                              f"Link from allowed contact {remote_hash[:16]} - allowed")
+                    return
+
+                # Not allowed - tear down the link
+                log_info("ReticulumWrapper", "_on_link_remote_identified",
+                         f"Rejecting link from non-allowed peer: {remote_hash[:16]} (device locked)")
+
+            # Tear down the link (outside lock to avoid deadlock)
+            try:
+                link.teardown()
+                log_info("ReticulumWrapper", "_on_link_remote_identified",
+                         f"Link torn down for non-allowed peer: {remote_hash[:16]}")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "_on_link_remote_identified",
+                            f"Error tearing down link: {e}")
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "_on_link_remote_identified",
+                      f"Error in remote identified callback: {e}")
 
     def set_delivery_status_callback(self, callback):
         """
@@ -2161,6 +2297,14 @@ class ReticulumWrapper:
             self.router.register_delivery_callback(self._on_lxmf_delivery)
             log_info("ReticulumWrapper", "initialize", "✅ Delivery callback registered")
 
+            # Register link established callback for parental control filtering
+            # This allows us to reject links from non-allowed peers when device is locked
+            try:
+                self.local_lxmf_destination.set_link_established_callback(self._on_lxmf_link_established)
+                log_info("ReticulumWrapper", "initialize", "✅ Link established callback registered for guardian filtering")
+            except Exception as e:
+                log_warning("ReticulumWrapper", "initialize", f"Could not set link callback: {e}")
+
             # Add LXMF destination to tracking dict so it can be announced
             self.destinations[self.local_lxmf_destination.hexhash] = self.local_lxmf_destination
             log_debug("ReticulumWrapper", "initialize", "Added LXMF destination to tracking dict")
@@ -2932,7 +3076,9 @@ class ReticulumWrapper:
                                 f"📍 Location-only message detected ({telemetry_source}), skipping message queue")
 
                     # Add source hash and appearance from FIELD_ICON_APPEARANCE
-                    location_event['source_hash'] = lxmf_message.source_hash.hex()
+                    # Use base64 encoding for binary data - Kotlin expects base64, not hex!
+                    import base64
+                    location_event['source_hash'] = base64.b64encode(lxmf_message.source_hash).decode('ascii')
 
                     if FIELD_ICON_APPEARANCE in lxmf_message.fields:
                         try:
@@ -3212,12 +3358,14 @@ class ReticulumWrapper:
             if self.kotlin_message_received_callback:
                 try:
                     # Build full message event with all data
+                    # NOTE: Use base64 encoding for binary data - Kotlin expects base64, not hex!
+                    import base64
                     content = lxmf_message.content.decode('utf-8') if isinstance(lxmf_message.content, bytes) else str(lxmf_message.content)
                     message_event = {
                         'message_hash': lxmf_message.hash.hex() if lxmf_message.hash else "unknown",
                         'content': content,
-                        'source_hash': lxmf_message.source_hash.hex(),
-                        'destination_hash': lxmf_message.destination_hash.hex(),
+                        'source_hash': base64.b64encode(lxmf_message.source_hash).decode('ascii'),
+                        'destination_hash': base64.b64encode(lxmf_message.destination_hash).decode('ascii'),
                         'timestamp': int(lxmf_message.timestamp * 1000) if lxmf_message.timestamp else int(time.time() * 1000),
                         'icon_appearance': icon_appearance,
                         'full_message': True,  # Flag indicating this has full data, no polling needed
@@ -3244,8 +3392,9 @@ class ReticulumWrapper:
                         if source_identity is not None:
                             public_key = source_identity.get_public_key()
                             # Only add if it's actual bytes (not a Mock object)
+                            # Use base64 encoding - Kotlin expects base64, not hex!
                             if isinstance(public_key, bytes):
-                                message_event['public_key'] = public_key.hex()
+                                message_event['public_key'] = base64.b64encode(public_key).decode('ascii')
                     except Exception as e:
                         log_debug("ReticulumWrapper", "_on_lxmf_delivery", f"Could not get public key: {e}")
 
@@ -8244,3 +8393,283 @@ class ReticulumWrapper:
                 "peak_mb": 0.0,
                 "overhead_kb": 0.0,
             }
+
+    # ========================================================================
+    # Guardian (Parental Control) Methods
+    # ========================================================================
+    # These delegate to guardian_crypto module to keep this file manageable
+
+    def guardian_generate_pairing_qr(self) -> Dict:
+        """
+        Generate a guardian pairing QR code for the current active identity.
+
+        Returns:
+            Dict with QR data or error:
+            {
+                "success": True,
+                "qr_string": "lxmf-guardian://...",
+                "destination_hash": "hex...",
+                "public_key": "hex...",
+                "timestamp": 1234567890000
+            }
+        """
+        try:
+            # Use current active LXMF destination
+            if not self.local_lxmf_destination:
+                return {"success": False, "error": "No active LXMF destination"}
+
+            # Get identity from the destination
+            identity = self.local_lxmf_destination.identity
+            if not identity:
+                return {"success": False, "error": "No identity on destination"}
+
+            # Use the destination hash directly
+            dest_hash = self.local_lxmf_destination.hash
+
+            # Generate QR data
+            result = guardian_crypto.generate_pairing_qr_data(identity, dest_hash)
+            if result is None:
+                return {"success": False, "error": "Failed to generate pairing QR"}
+
+            return {
+                "success": True,
+                "qr_string": result["qr_string"],
+                "destination_hash": result["destination_hash"].hex(),
+                "public_key": result["public_key"].hex(),
+                "timestamp": result["timestamp"],
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_generate_pairing_qr", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_parse_pairing_qr(self, qr_string: str) -> Dict:
+        """
+        Parse and validate a guardian pairing QR code.
+
+        Args:
+            qr_string: QR code content
+
+        Returns:
+            Dict with parsed data or error:
+            {
+                "success": True,
+                "destination_hash": "hex...",
+                "public_key": "hex...",
+                "timestamp": 1234567890000
+            }
+        """
+        try:
+            log_info("ReticulumWrapper", "guardian_parse_pairing_qr", f"Parsing QR: {qr_string[:60]}...")
+
+            # Parse QR
+            parsed = guardian_crypto.parse_pairing_qr_data(qr_string)
+            if parsed is None:
+                log_error("ReticulumWrapper", "guardian_parse_pairing_qr", "Failed to parse QR format")
+                return {"success": False, "error": "Invalid QR code format"}
+
+            log_info("ReticulumWrapper", "guardian_parse_pairing_qr", f"Parsed successfully, validating...")
+
+            # Validate (signature + timestamp freshness)
+            is_valid, error_msg = guardian_crypto.validate_pairing_qr(parsed)
+            if not is_valid:
+                log_error("ReticulumWrapper", "guardian_parse_pairing_qr", f"Validation failed: {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            return {
+                "success": True,
+                "destination_hash": parsed["destination_hash"].hex(),
+                "public_key": parsed["public_key"].hex(),
+                "timestamp": parsed["timestamp"],
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_parse_pairing_qr", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_verify_command(
+        self,
+        command_json: str,
+        signature_bytes,
+        public_key_bytes,
+    ) -> Dict:
+        """
+        Verify a parental control command signature.
+
+        Args:
+            command_json: Full command JSON string with cmd, nonce, timestamp, payload fields
+            signature_bytes: 64-byte Ed25519 signature (raw bytes, as passed by Chaquopy)
+            public_key_bytes: 64-byte guardian public key (raw bytes, as passed by Chaquopy)
+
+        Returns:
+            Dict with result:
+            {"success": True, "valid": True/False}
+        """
+        try:
+            import json as json_lib
+
+            command_data = json_lib.loads(command_json)
+            cmd = command_data["cmd"]
+            nonce_hex = command_data["nonce"]
+            timestamp = int(command_data["timestamp"])
+            payload_dict = command_data.get("payload", {})
+
+            # Reconstruct the same bytes that were signed in guardian_send_command
+            nonce = bytes.fromhex(nonce_hex)
+            payload = json_lib.dumps(payload_dict).encode("utf-8") if payload_dict else b""
+
+            # Chaquopy passes Java byte arrays; convert to Python bytes
+            public_key = bytes(public_key_bytes)
+            signature = bytes(signature_bytes)
+
+            is_valid = guardian_crypto.verify_command(
+                public_key, signature, cmd, nonce, timestamp, payload
+            )
+
+            return {"success": True, "valid": is_valid}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_verify_command", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_sign_command(
+        self,
+        identity_hash: str,
+        cmd: str,
+        payload_hex: str,
+    ) -> Dict:
+        """
+        Sign a parental control command (for parent device).
+
+        Args:
+            identity_hash: Guardian's identity hash
+            cmd: Command type
+            payload_hex: msgpack payload (hex)
+
+        Returns:
+            Dict with signed command data:
+            {
+                "success": True,
+                "nonce": "hex...",
+                "timestamp": 1234567890000,
+                "signature": "hex..."
+            }
+        """
+        try:
+            # Resolve identity
+            identity_path = self._resolve_identity_file_path(identity_hash)
+            if not identity_path:
+                return {"success": False, "error": f"Identity not found: {identity_hash}"}
+
+            identity = RNS.Identity.from_file(identity_path)
+            if not identity:
+                return {"success": False, "error": "Failed to load identity"}
+
+            # Generate nonce and timestamp
+            nonce = guardian_crypto.generate_nonce()
+            timestamp = int(time.time() * 1000)
+            payload = bytes.fromhex(payload_hex)
+
+            # Sign
+            signature = guardian_crypto.sign_command(identity, cmd, nonce, timestamp, payload)
+            if signature is None:
+                return {"success": False, "error": "Failed to sign command"}
+
+            return {
+                "success": True,
+                "nonce": nonce.hex(),
+                "timestamp": timestamp,
+                "signature": signature.hex(),
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_sign_command", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def guardian_send_command(
+        self,
+        destination_hash: str,
+        command: str,
+        payload_json: str,
+    ) -> Dict:
+        """
+        Send a guardian control command to a child device via LXMF.
+
+        Args:
+            destination_hash: Child's destination hash (hex)
+            command: Command type (LOCK, UNLOCK, ALLOW_ADD, ALLOW_REMOVE, ALLOW_SET, PAIR_ACK)
+            payload_json: JSON string of additional payload
+
+        Returns:
+            Dict with {"success": True} or {"success": False, "error": "..."}
+        """
+        try:
+            log_info("ReticulumWrapper", "guardian_send_command", f"Sending {command} to {destination_hash}")
+
+            if not self.local_lxmf_destination:
+                return {"success": False, "error": "No active LXMF destination"}
+
+            identity = self.local_lxmf_destination.identity
+            if not identity:
+                return {"success": False, "error": "No identity on destination"}
+
+            # Parse payload JSON
+            import json
+            try:
+                payload_dict = json.loads(payload_json) if payload_json else {}
+            except json.JSONDecodeError:
+                payload_dict = {}
+
+            # Generate nonce and timestamp
+            nonce = guardian_crypto.generate_nonce()
+            timestamp = int(time.time() * 1000)
+
+            # Build command data for signing - use JSON-encoded payload bytes
+            payload_bytes = json.dumps(payload_dict).encode('utf-8') if payload_dict else b""
+
+            # Sign the command
+            signature = guardian_crypto.sign_command(identity, command, nonce, timestamp, payload_bytes)
+            if signature is None:
+                return {"success": False, "error": "Failed to sign command"}
+
+            # Build the full command structure for LXMF field 0x80
+            # Use JSON encoding instead of msgpack for compatibility
+            command_data = {
+                "cmd": command,
+                "nonce": nonce.hex(),
+                "timestamp": timestamp,
+                "payload": payload_dict,
+                "signature": signature.hex(),
+            }
+
+            # Build the command JSON
+            command_json = json.dumps(command_data)
+
+            # Get destination hash as bytes
+            dest_hash_bytes = bytes.fromhex(destination_hash)
+
+            # Get the identity's private key for signing the LXMF message
+            prv_bytes = identity.get_private_key()
+
+            # Send message with command JSON embedded in content
+            # Format: __GUARDIAN_CMD__:<json>
+            # The receiver will parse this and process the command
+            content = f"__GUARDIAN_CMD__:{command_json}"
+
+            result = self.send_lxmf_message(
+                dest_hash=dest_hash_bytes,
+                content=content,
+                source_identity_private_key=prv_bytes,
+            )
+
+            if result.get("success"):
+                log_info("ReticulumWrapper", "guardian_send_command", f"Command {command} sent successfully")
+                return {"success": True}
+            else:
+                return {"success": False, "error": result.get("error", "Failed to send message")}
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "guardian_send_command", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}

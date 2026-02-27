@@ -12,6 +12,7 @@ import androidx.paging.PagingData
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
@@ -82,6 +83,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
+    private lateinit var guardianRepository: GuardianRepository
     private lateinit var viewModel: MessagingViewModel
 
     /**
@@ -103,6 +105,7 @@ class MessagingViewModelImageLoadingTest {
                     locationSharingManager = locationSharingManager,
                     identityRepository = identityRepository,
                     conversationLinkManager = conversationLinkManager,
+                    guardianRepository = guardianRepository,
                 )
             advanceUntilIdle()
             testBody()
@@ -126,6 +129,10 @@ class MessagingViewModelImageLoadingTest {
         locationSharingManager = mockk()
         identityRepository = mockk()
         conversationLinkManager = mockk()
+        guardianRepository = mockk()
+
+        // Allow all contacts by default (guardian unlocked)
+        coEvery { guardianRepository.isContactAllowed(any()) } returns true
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())

@@ -4,6 +4,7 @@ import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
@@ -37,6 +38,8 @@ class MessageCollectorTest {
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var identityRepository: IdentityRepository
+    private lateinit var guardianRepository: GuardianRepository
+    private lateinit var guardianCommandProcessor: GuardianCommandProcessor
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
     private lateinit var conversationLinkManager: ConversationLinkManager
@@ -56,9 +59,17 @@ class MessageCollectorTest {
         announceRepository = mockk()
         contactRepository = mockk()
         identityRepository = mockk()
+        guardianRepository = mockk()
+        guardianCommandProcessor = mockk()
         notificationHelper = mockk()
         peerIconDao = mockk()
         conversationLinkManager = mockk()
+
+        // Guardian stubs: treat all messages as from non-guardian, all contacts allowed
+        coEvery { guardianRepository.getGuardianConfig() } returns null
+        coEvery { guardianRepository.isContactAllowed(any()) } returns true
+        every { guardianCommandProcessor.isPairAckMessage(any()) } returns false
+        every { guardianCommandProcessor.isGuardianCommand(any(), any()) } returns false
 
         // Default behavior for conversationLinkManager
         every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
@@ -101,6 +112,8 @@ class MessageCollectorTest {
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,
                 identityRepository = identityRepository,
+                guardianRepository = guardianRepository,
+                guardianCommandProcessor = guardianCommandProcessor,
                 notificationHelper = notificationHelper,
                 peerIconDao = peerIconDao,
                 conversationLinkManager = conversationLinkManager,

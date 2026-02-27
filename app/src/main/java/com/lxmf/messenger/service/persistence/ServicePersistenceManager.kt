@@ -71,6 +71,8 @@ class ServicePersistenceManager(
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
+    private val guardianConfigDao by lazy { database.guardianConfigDao() }
+    private val allowedContactDao by lazy { database.allowedContactDao() }
 
     /**
      * Persist an announce to the database.
@@ -194,6 +196,23 @@ class ServicePersistenceManager(
             if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) {
                 return false
             }
+
+            // ============ PARENTAL CONTROL FILTERING ============
+            // Check if device is locked and if sender is allowed
+            val isLocked = guardianConfigDao.isLocked(activeIdentity.identityHash) == true
+            if (isLocked) {
+                val guardianHash = guardianConfigDao.getGuardianDestinationHash(activeIdentity.identityHash)
+                // Guardian is always allowed
+                if (sourceHash != guardianHash) {
+                    // Check if sender is in the allow list
+                    val isAllowed = allowedContactDao.isContactAllowed(activeIdentity.identityHash, sourceHash)
+                    if (!isAllowed) {
+                        Log.d(TAG, "Blocked message from non-allowed contact: $sourceHash (device locked)")
+                        return false // Silently drop
+                    }
+                }
+            }
+            // ============ END PARENTAL CONTROL FILTERING ============
 
             // Check for duplicates (composite key is id + identityHash)
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)

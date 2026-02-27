@@ -276,7 +276,7 @@ fun MapScreen(
             pinSource.setGeoJson(FeatureCollection.fromFeatures(pinFeatures))
         } else if (offsetMarkers.isNotEmpty()) {
             style.addSource(GeoJsonSource(pinSourceId, FeatureCollection.fromFeatures(pinFeatures)))
-            style.addLayerBelow(
+            val pinLayer =
                 CircleLayer("contact-pins-layer", pinSourceId)
                     .withProperties(
                         PropertyFactory.circleRadius(PIN_RADIUS_DP * density),
@@ -287,9 +287,12 @@ fun MapScreen(
                         PropertyFactory.circleStrokeColor(
                             Expression.color(android.graphics.Color.WHITE),
                         ),
-                    ),
-                "contact-markers-layer",
-            )
+                    )
+            if (style.getLayer("contact-markers-layer") != null) {
+                style.addLayerBelow(pinLayer, "contact-markers-layer")
+            } else {
+                style.addLayer(pinLayer)
+            }
         }
 
         // --- Update line source (thin lines connecting GPS pin to offset pastille) ---
@@ -310,7 +313,7 @@ fun MapScreen(
             lineSource.setGeoJson(FeatureCollection.fromFeatures(lineFeatures))
         } else if (offsetMarkers.isNotEmpty()) {
             style.addSource(GeoJsonSource(lineSourceId, FeatureCollection.fromFeatures(lineFeatures)))
-            style.addLayerBelow(
+            val lineLayer =
                 LineLayer("contact-lines-layer", lineSourceId)
                     .withProperties(
                         PropertyFactory.lineWidth(LINE_WIDTH_DP * density),
@@ -318,9 +321,18 @@ fun MapScreen(
                             Expression.color(android.graphics.Color.parseColor("#9E9E9E")),
                         ),
                         PropertyFactory.lineOpacity(Expression.literal(0.7f)),
-                    ),
-                "contact-pins-layer",
-            )
+                    )
+            when {
+                style.getLayer("contact-pins-layer") != null -> {
+                    style.addLayerBelow(lineLayer, "contact-pins-layer")
+                }
+                style.getLayer("contact-markers-layer") != null -> {
+                    style.addLayerBelow(lineLayer, "contact-markers-layer")
+                }
+                else -> {
+                    style.addLayer(lineLayer)
+                }
+            }
         }
 
         val offsetCount = offsetMarkers.size

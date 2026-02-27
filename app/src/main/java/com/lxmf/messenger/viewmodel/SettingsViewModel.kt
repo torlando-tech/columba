@@ -205,28 +205,12 @@ class SettingsViewModel
             internal var enableMonitors = true
         }
 
-        // Load initial guardian state synchronously to ensure feature restrictions
-        // (like hiding Map nav button) are applied BEFORE the first UI render.
-        // This MUST happen during property initialization, not in init{}, because
-        // Compose can observe the StateFlow before init{} completes.
-        private val initialGuardianConfig = kotlinx.coroutines.runBlocking {
-            try {
-                guardianRepository.getGuardianConfig()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading initial guardian config", e)
-                null
-            }
-        }
-
         private val _state =
             MutableStateFlow(
                 SettingsState(
                     // Start with default theme - actual theme loads asynchronously in loadSettings()
                     selectedTheme = PresetTheme.VIBRANT,
-                    // Guardian state loaded synchronously to prevent nav bar flicker
-                    hasGuardian = initialGuardianConfig?.hasGuardian() ?: false,
-                    isGuardianLocked = initialGuardianConfig?.isLocked ?: false,
-                    guardianName = initialGuardianConfig?.guardianName,
+                    // Guardian state loads asynchronously via loadGuardianSettings() in init{}
                 ),
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -1773,9 +1757,6 @@ class SettingsViewModel
          * the first UI render. This method sets up Flow collectors for ongoing updates.
          */
         private fun loadGuardianSettings() {
-            Log.d(TAG, "Guardian state initialized: hasGuardian=${initialGuardianConfig?.hasGuardian()}, " +
-                "locked=${initialGuardianConfig?.isLocked}")
-
             // Observe guardian config changes for ongoing updates
             viewModelScope.launch {
                 guardianRepository.getGuardianConfigFlow().collect { config ->

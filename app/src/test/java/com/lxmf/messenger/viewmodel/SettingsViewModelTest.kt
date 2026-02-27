@@ -4,6 +4,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -67,6 +68,7 @@ class SettingsViewModelTest {
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: ContactRepository
     private lateinit var updateChecker: com.lxmf.messenger.service.UpdateChecker
+    private lateinit var guardianRepository: GuardianRepository
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -107,6 +109,7 @@ class SettingsViewModelTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
         updateChecker = mockk()
+        guardianRepository = mockk()
         context =
             mockk {
                 val mockEditor =
@@ -230,6 +233,10 @@ class SettingsViewModelTest {
         every { mapTileSourceManager.observeRmspServerCount() } returns flowOf(0)
         every { mapTileSourceManager.httpEnabledFlow } returns flowOf(true)
         every { locationSharingManager.sendImmediateUpdate() } just Runs
+
+        // Mock GuardianRepository flows
+        every { guardianRepository.getGuardianConfigFlow() } returns flowOf(null)
+        every { guardianRepository.getAllowedContactCount() } returns flowOf(0)
     }
 
     @After
@@ -254,6 +261,7 @@ class SettingsViewModelTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
             updateChecker = updateChecker,
+            guardianRepository = guardianRepository,
         )
 
     // region parseRpcKey Tests
@@ -1581,6 +1589,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    guardianRepository = guardianRepository,
                 )
 
             viewModel.state.test {
@@ -1629,6 +1638,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    guardianRepository = guardianRepository,
                 )
 
             viewModel.state.test {
@@ -2251,6 +2261,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    guardianRepository = guardianRepository,
                 )
 
             // Wait for any potential async operations to settle
@@ -2296,6 +2307,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    guardianRepository = guardianRepository,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol

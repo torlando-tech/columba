@@ -328,5 +328,362 @@ class TestIntegration(unittest.TestCase):
         self.assertTrue(is_valid)
 
 
+# ========== Error Branch Tests for guardian_crypto.py ==========
+
+
+class TestSignDataErrors(unittest.TestCase):
+    """Test sign_data error branches."""
+
+    def test_none_identity_returns_none(self):
+        result = guardian_crypto.sign_data(None, b"test data")
+        self.assertIsNone(result)
+
+    def test_identity_without_sign_method_returns_none(self):
+        class NoSignIdentity:
+            def get_public_key(self):
+                return os.urandom(32)
+        result = guardian_crypto.sign_data(NoSignIdentity(), b"test data")
+        self.assertIsNone(result)
+
+    def test_sign_raises_exception_returns_none(self):
+        class RaisingIdentity:
+            def get_public_key(self):
+                return os.urandom(32)
+            def sign(self, data):
+                raise RuntimeError("Hardware signing failure")
+        result = guardian_crypto.sign_data(RaisingIdentity(), b"test data")
+        self.assertIsNone(result)
+
+
+class TestVerifySignatureErrors(unittest.TestCase):
+    """Test verify_signature error branches."""
+
+    def test_none_public_key_returns_false(self):
+        result = guardian_crypto.verify_signature(None, b'\x00' * 64, b"data")
+        self.assertFalse(result)
+
+    def test_empty_public_key_returns_false(self):
+        result = guardian_crypto.verify_signature(b'', b'\x00' * 64, b"data")
+        self.assertFalse(result)
+
+    def test_none_signature_returns_false(self):
+        result = guardian_crypto.verify_signature(b'\x00' * 64, None, b"data")
+        self.assertFalse(result)
+
+    def test_empty_signature_returns_false(self):
+        result = guardian_crypto.verify_signature(b'\x00' * 64, b'', b"data")
+        self.assertFalse(result)
+
+    def test_none_data_returns_false(self):
+        result = guardian_crypto.verify_signature(b'\x00' * 64, b'\x00' * 64, None)
+        self.assertFalse(result)
+
+    def test_pub_none_after_load_public_key_returns_false(self):
+        """identity.pub is None after load_public_key should return False."""
+        with patch('guardian_crypto.RNS') as mock_rns_local:
+            mock_identity_instance = MagicMock()
+            mock_identity_instance.pub = None
+            mock_rns_local.Identity.return_value = mock_identity_instance
+            result = guardian_crypto.verify_signature(b'\x00' * 64, b'\x00' * 64, b"data")
+            self.assertFalse(result)
+
+    def test_rns_exception_returns_false(self):
+        """Exception raised by RNS should be caught and return False."""
+        with patch('guardian_crypto.RNS') as mock_rns_local:
+            mock_rns_local.Identity.side_effect = Exception("RNS unavailable")
+            result = guardian_crypto.verify_signature(b'\x00' * 64, b'\x00' * 64, b"data")
+            self.assertFalse(result)
+
+
+class TestGeneratePairingQrDataErrors(unittest.TestCase):
+    """Test generate_pairing_qr_data error branches."""
+
+    def test_none_identity_returns_none(self):
+        result = guardian_crypto.generate_pairing_qr_data(None, os.urandom(16))
+        self.assertIsNone(result)
+
+    def test_sign_data_failure_returns_none(self):
+        """When sign_data returns None (identity has no sign method), return None."""
+        class NoSignIdentity:
+            def get_public_key(self):
+                return os.urandom(32)
+        result = guardian_crypto.generate_pairing_qr_data(NoSignIdentity(), os.urandom(16))
+        self.assertIsNone(result)
+
+
+class TestValidatePairingQrErrors(unittest.TestCase):
+    """Test validate_pairing_qr error branches."""
+
+    def test_future_timestamp_returns_false_with_future_message(self):
+        qr_data = {
+            "destination_hash": os.urandom(16),
+            "public_key": b'\x00' * 64,
+            "timestamp": int(time.time() * 1000) + (10 * 60 * 1000),  # 10 min in future
+            "signature": b'\x00' * 64,
+        }
+        is_valid, error = guardian_crypto.validate_pairing_qr(qr_data)
+        self.assertFalse(is_valid)
+        self.assertIn("future", error.lower())
+
+    def test_invalid_signature_returns_false_with_signature_message(self):
+        """Fresh timestamp but invalid signature should fail."""
+        qr_data = {
+            "destination_hash": os.urandom(16),
+            "public_key": b'\x00' * 64,
+            "timestamp": int(time.time() * 1000),  # Fresh
+            "signature": b'\x00' * 64,
+        }
+        with patch('guardian_crypto.verify_signature', return_value=False):
+            is_valid, error = guardian_crypto.validate_pairing_qr(qr_data)
+            self.assertFalse(is_valid)
+            self.assertIn("signature", error.lower())
+
+
+class TestSignCommandException(unittest.TestCase):
+    """Test sign_command exception branch."""
+
+    def test_non_string_cmd_triggers_exception_returns_none(self):
+        """Passing a non-string cmd causes encode() to fail, which is caught gracefully."""
+        result = guardian_crypto.sign_command(
+            MockIdentity(),
+            42,  # int has no .encode() → AttributeError, caught → None
+            guardian_crypto.generate_nonce(),
+            int(time.time() * 1000),
+            b'payload',
+        )
+        self.assertIsNone(result)
+
+
+# ========== Reticulum Wrapper Guardian Config Tests ==========
+
+
+def _make_wrapper():
+    """Create a ReticulumWrapper instance bypassing __init__, with guardian state set up."""
+    import threading
+    import reticulum_wrapper
+    wrapper = reticulum_wrapper.ReticulumWrapper.__new__(reticulum_wrapper.ReticulumWrapper)
+    wrapper._guardian_is_locked = False
+    wrapper._guardian_hash = None
+    wrapper._guardian_allowed_hashes = set()
+    wrapper._guardian_lock = threading.Lock()
+    return wrapper
+
+
+class TestUpdateGuardianConfig(unittest.TestCase):
+    """Test update_guardian_config updates internal state correctly."""
+
+    def setUp(self):
+        self.wrapper = _make_wrapper()
+
+    def test_update_locked_stores_all_fields(self):
+        result = self.wrapper.update_guardian_config(
+            is_locked=True,
+            guardian_hash="abcdef123456789a",
+            allowed_hashes=["aabb1122", "ccdd3344"],
+        )
+        self.assertTrue(result.get("success"))
+        self.assertTrue(self.wrapper._guardian_is_locked)
+        self.assertEqual(self.wrapper._guardian_hash, "abcdef123456789a")
+        self.assertIn("aabb1122", self.wrapper._guardian_allowed_hashes)
+        self.assertIn("ccdd3344", self.wrapper._guardian_allowed_hashes)
+
+    def test_update_unlocked_clears_lock_flag(self):
+        self.wrapper._guardian_is_locked = True
+        result = self.wrapper.update_guardian_config(
+            is_locked=False,
+            guardian_hash=None,
+            allowed_hashes=[],
+        )
+        self.assertTrue(result.get("success"))
+        self.assertFalse(self.wrapper._guardian_is_locked)
+
+    def test_none_allowed_hashes_results_in_empty_set(self):
+        result = self.wrapper.update_guardian_config(
+            is_locked=True,
+            guardian_hash="abc",
+            allowed_hashes=None,
+        )
+        self.assertTrue(result.get("success"))
+        self.assertEqual(self.wrapper._guardian_allowed_hashes, set())
+
+
+# ========== Reticulum Wrapper Link Callback Tests ==========
+
+
+class TestLinkCallbacks(unittest.TestCase):
+    """Test _on_lxmf_link_established and _on_link_remote_identified."""
+
+    def setUp(self):
+        self.wrapper = _make_wrapper()
+
+    def test_link_established_not_locked_no_identity_callback(self):
+        """Not locked: identity callback should not be registered."""
+        mock_link = MagicMock()
+        self.wrapper._guardian_is_locked = False
+        self.wrapper._on_lxmf_link_established(mock_link)
+        mock_link.set_remote_identified_callback.assert_not_called()
+
+    def test_link_established_locked_registers_identity_callback(self):
+        """Locked: _on_link_remote_identified should be registered as callback."""
+        mock_link = MagicMock()
+        self.wrapper._guardian_is_locked = True
+        self.wrapper._on_lxmf_link_established(mock_link)
+        mock_link.set_remote_identified_callback.assert_called_once_with(
+            self.wrapper._on_link_remote_identified
+        )
+
+    def test_remote_identified_not_locked_allows_link(self):
+        """Not locked when identity verified: link not torn down."""
+        mock_link = MagicMock()
+        mock_identity = MagicMock()
+        mock_identity.hash = bytes.fromhex("aabbccdd" * 4)
+        self.wrapper._guardian_is_locked = False
+        self.wrapper._on_link_remote_identified(mock_link, mock_identity)
+        mock_link.teardown.assert_not_called()
+
+    def test_remote_identified_is_guardian_allows_link(self):
+        """Remote is the guardian: link should not be torn down."""
+        remote_hex = "aabbccdd" * 4
+        mock_link = MagicMock()
+        mock_identity = MagicMock()
+        mock_identity.hash = bytes.fromhex(remote_hex)
+        self.wrapper._guardian_is_locked = True
+        self.wrapper._guardian_hash = remote_hex
+        self.wrapper._on_link_remote_identified(mock_link, mock_identity)
+        mock_link.teardown.assert_not_called()
+
+    def test_remote_identified_in_allowed_list_allows_link(self):
+        """Remote in allowed contacts list: link should not be torn down."""
+        remote_hex = "11223344" * 4
+        mock_link = MagicMock()
+        mock_identity = MagicMock()
+        mock_identity.hash = bytes.fromhex(remote_hex)
+        self.wrapper._guardian_is_locked = True
+        self.wrapper._guardian_hash = "aabbccdd" * 4
+        self.wrapper._guardian_allowed_hashes = {remote_hex}
+        self.wrapper._on_link_remote_identified(mock_link, mock_identity)
+        mock_link.teardown.assert_not_called()
+
+    def test_remote_identified_not_allowed_tears_down_link(self):
+        """Remote not in allowed list: link.teardown() must be called."""
+        remote_hex = "deadbeef" * 4
+        mock_link = MagicMock()
+        mock_identity = MagicMock()
+        mock_identity.hash = bytes.fromhex(remote_hex)
+        self.wrapper._guardian_is_locked = True
+        self.wrapper._guardian_hash = "aabbccdd" * 4
+        self.wrapper._guardian_allowed_hashes = {"11223344" * 4}
+        self.wrapper._on_link_remote_identified(mock_link, mock_identity)
+        mock_link.teardown.assert_called_once()
+
+    def test_remote_identified_teardown_exception_handled_gracefully(self):
+        """Teardown exception is caught internally and does not propagate."""
+        remote_hex = "deadbeef" * 4
+        mock_link = MagicMock()
+        mock_link.teardown.side_effect = Exception("Network error during teardown")
+        mock_identity = MagicMock()
+        mock_identity.hash = bytes.fromhex(remote_hex)
+        self.wrapper._guardian_is_locked = True
+        self.wrapper._guardian_hash = "aabbccdd" * 4
+        self.wrapper._guardian_allowed_hashes = set()
+        # Must not raise; the teardown exception is logged and swallowed
+        self.wrapper._on_link_remote_identified(mock_link, mock_identity)
+
+
+# ========== Reticulum Wrapper Guardian Command Tests ==========
+
+
+class TestGuardianVerifyCommand(unittest.TestCase):
+    """Test guardian_verify_command on the wrapper."""
+
+    def setUp(self):
+        import reticulum_wrapper
+        self.wrapper = reticulum_wrapper.ReticulumWrapper.__new__(reticulum_wrapper.ReticulumWrapper)
+
+    def test_valid_json_returns_success_with_valid_flag(self):
+        import json
+        nonce = os.urandom(16)
+        command_data = {
+            "cmd": "LOCK",
+            "nonce": nonce.hex(),
+            "timestamp": 1234567890000,
+            "payload": {"reason": "bedtime"},
+        }
+        command_json = json.dumps(command_data)
+        with patch.object(guardian_crypto, 'verify_command', return_value=False):
+            result = self.wrapper.guardian_verify_command(command_json, b'\x00' * 64, b'\x00' * 64)
+            self.assertTrue(result.get("success"))
+            self.assertFalse(result.get("valid"))
+
+    def test_invalid_json_returns_failure_with_error(self):
+        result = self.wrapper.guardian_verify_command("{{not-valid-json", b'\x00' * 64, b'\x00' * 64)
+        self.assertFalse(result.get("success"))
+        self.assertIn("error", result)
+
+
+class TestGuardianSignCommand(unittest.TestCase):
+    """Test guardian_sign_command on the wrapper."""
+
+    def setUp(self):
+        import reticulum_wrapper
+        self.wrapper = reticulum_wrapper.ReticulumWrapper.__new__(reticulum_wrapper.ReticulumWrapper)
+
+    def test_identity_not_found_returns_failure(self):
+        self.wrapper._resolve_identity_file_path = Mock(return_value=None)
+        result = self.wrapper.guardian_sign_command("nonexistent_hash", "LOCK", "")
+        self.assertFalse(result.get("success"))
+        self.assertIn("not found", result.get("error", "").lower())
+
+    def test_identity_load_returns_none_returns_failure(self):
+        """When RNS.Identity.from_file returns None, sign should fail."""
+        import reticulum_wrapper
+        self.wrapper._resolve_identity_file_path = Mock(return_value="/some/identity/path")
+        # reticulum_wrapper.RNS is None at module level (set during initialize()).
+        # Patch it to mock_rns, then make Identity.from_file return None.
+        with patch.object(reticulum_wrapper, 'RNS', mock_rns):
+            with patch.object(mock_rns, 'Identity') as mock_id_cls:
+                mock_id_cls.from_file.return_value = None
+                result = self.wrapper.guardian_sign_command("hash123", "LOCK", "")
+                self.assertFalse(result.get("success"))
+                self.assertIn("load identity", result.get("error", "").lower())
+
+
+class TestGuardianSendCommand(unittest.TestCase):
+    """Test guardian_send_command on the wrapper."""
+
+    def setUp(self):
+        import reticulum_wrapper
+        self.wrapper = reticulum_wrapper.ReticulumWrapper.__new__(reticulum_wrapper.ReticulumWrapper)
+
+    def test_no_destination_returns_failure(self):
+        self.wrapper.local_lxmf_destination = None
+        result = self.wrapper.guardian_send_command("ab" * 16, "LOCK", "{}")
+        self.assertFalse(result.get("success"))
+        self.assertIn("destination", result.get("error", "").lower())
+
+    def test_no_identity_on_destination_returns_failure(self):
+        mock_dest = MagicMock()
+        mock_dest.identity = None
+        self.wrapper.local_lxmf_destination = mock_dest
+        result = self.wrapper.guardian_send_command("ab" * 16, "LOCK", "{}")
+        self.assertFalse(result.get("success"))
+        self.assertIn("identity", result.get("error", "").lower())
+
+    def test_successful_send_with_mocked_transport(self):
+        """With valid destination/identity and mocked send, command succeeds."""
+        class FullMockIdentity(MockIdentity):
+            def get_private_key(self):
+                return os.urandom(64)
+
+        mock_dest = MagicMock()
+        mock_dest.identity = FullMockIdentity()
+        self.wrapper.local_lxmf_destination = mock_dest
+        self.wrapper.send_lxmf_message = Mock(return_value={"success": True})
+
+        result = self.wrapper.guardian_send_command("ab" * 16, "LOCK", "{}")
+        self.assertTrue(result.get("success"))
+        self.wrapper.send_lxmf_message.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

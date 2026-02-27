@@ -294,8 +294,8 @@ fun LocationSelectionStep(
             if (hasPermission) {
                 isGettingLocation = true
                 if (LocationCompat.isPlayServicesAvailable(context)) {
-                    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
                     try {
+                        val fusedClient = LocationServices.getFusedLocationProviderClient(context)
                         fusedClient
                             .getCurrentLocation(
                                 Priority.PRIORITY_HIGH_ACCURACY,
@@ -308,8 +308,10 @@ fun LocationSelectionStep(
                             }.addOnFailureListener {
                                 isGettingLocation = false
                             }
-                    } catch (e: SecurityException) {
-                        Log.w(TAG, "Location permission denied", e)
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                        // GMS client creation or location request failed (#567),
+                        // fall through to platform fallback below
+                        Log.w(TAG, "GMS location failed, falling back to platform", e)
                         isGettingLocation = false
                     }
                 } else {

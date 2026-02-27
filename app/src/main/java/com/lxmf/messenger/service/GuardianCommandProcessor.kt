@@ -2,15 +2,10 @@ package com.lxmf.messenger.service
 
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.GuardianConfigEntity
-import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -35,12 +30,12 @@ import javax.inject.Singleton
  * - Signature verification uses the stored guardian public key
  * - Replay attacks prevented via nonce + timestamp validation
  */
+@Suppress("TooManyFunctions") // Command processor handles all guardian command types
 @Singleton
 class GuardianCommandProcessor
     @Inject
     constructor(
         private val guardianRepository: GuardianRepository,
-        private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
         private val reticulumProtocol: ReticulumProtocol,
         private val locationSharingManager: LocationSharingManager,
@@ -69,9 +64,6 @@ class GuardianCommandProcessor
             private const val GUARDIAN_CMD_PREFIX = "__GUARDIAN_CMD__:"
         }
 
-        // Coroutine scope for background processing
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
         /**
          * Check if a received message is a guardian command.
          *
@@ -83,6 +75,7 @@ class GuardianCommandProcessor
          * @param guardianConfig Current guardian config (or null if none)
          * @return True if this is a guardian command message
          */
+        @Suppress("ReturnCount")
         fun isGuardianCommand(message: ReceivedMessage, guardianConfig: GuardianConfigEntity?): Boolean {
             if (guardianConfig == null || !guardianConfig.hasGuardian()) {
                 return false
@@ -124,6 +117,7 @@ class GuardianCommandProcessor
          * @param guardianConfig Current guardian config
          * @return True if the command was processed successfully
          */
+        @Suppress("ReturnCount", "CyclomaticComplexMethod") // Security checks require early returns; all command types are handled
         suspend fun processCommand(
             message: ReceivedMessage,
             guardianConfig: GuardianConfigEntity,
@@ -367,6 +361,7 @@ class GuardianCommandProcessor
          * 1. In message content with "__GUARDIAN_CMD__:" prefix
          * 2. In LXMF field 0x80 (legacy format)
          */
+        @Suppress("ReturnCount")
         fun isPairAckMessage(message: ReceivedMessage): Boolean {
             // First check for command embedded in content
             if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
@@ -391,7 +386,7 @@ class GuardianCommandProcessor
 
                 val commandData = JSONObject(commandDataStr)
                 commandData.optString("cmd") == CMD_PAIR_ACK
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
         }
@@ -403,6 +398,7 @@ class GuardianCommandProcessor
          * @param message The received LXMF message containing PAIR_ACK
          * @return True if the child was successfully registered
          */
+        @Suppress("NestedBlockDepth", "SwallowedException") // Display name extraction is best-effort; outer catch handles real errors
         suspend fun processPairAck(message: ReceivedMessage): Boolean {
             try {
                 // sourceHash is now correctly 16 bytes (32 hex chars) after fixing the base64/hex encoding mismatch

@@ -38,6 +38,7 @@ import com.lxmf.messenger.data.repository.Message as DataMessage
  * - UI updates via repository flows
  * - De-duplication to avoid double-persistence
  */
+@Suppress("LongParameterList") // Dependencies required for message routing, filtering, and persistence
 @Singleton
 class MessageCollector
     @Inject

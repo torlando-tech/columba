@@ -445,6 +445,7 @@ private fun ContactPickerItem(
     }
 }
 
+@Suppress("UnusedParameter") // lockedTimestamp reserved for future "locked since" display
 @Composable
 private fun ChildDeviceSection(
     guardianName: String?,

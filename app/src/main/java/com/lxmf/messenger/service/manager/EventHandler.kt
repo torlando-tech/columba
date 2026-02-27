@@ -227,6 +227,7 @@ class EventHandler(
     /**
      * Process a message directly from JSON callback data (truly event-driven).
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // LXMF message parsing requires handling all field types and routing cases
     private suspend fun processMessageFromJson(json: JSONObject) {
         try {
             val messageHash = json.optString("message_hash", "")

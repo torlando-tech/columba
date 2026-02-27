@@ -555,7 +555,7 @@ private class GuardianQrCodeAnalyzer(
                         Log.d(TAG, "QR code detected but not a guardian QR (prefix: ${qrText.take(20)})")
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // No QR code found in this frame - this is normal, don't log
             } finally {
                 reader.reset()

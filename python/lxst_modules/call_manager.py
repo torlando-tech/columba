@@ -683,6 +683,13 @@ class CallManager:
             if not isinstance(packet_data, bytes):
                 packet_data = bytes(packet_data)
 
+            # TX-DIAG: log first 30 packets, then every 10
+            if self._rx_packet_count <= 30 or self._rx_packet_count % 10 == 0:
+                hdr = packet_data[0] if len(packet_data) > 0 else 0
+                toc = packet_data[1] if len(packet_data) > 1 else 0
+                hex4 = " ".join(f"{b:02x}" for b in packet_data[:4])
+                RNS.log(f"TX-DIAG py#{self._rx_packet_count}: {len(packet_data)}B hdr=0x{hdr:02x} toc=0x{toc:02x} [{hex4}]", RNS.LOG_DEBUG)
+
             # Accumulate frame into batch
             now = time.time()
             if not self._tx_batch:
@@ -722,13 +729,17 @@ class CallManager:
             self._tx_batch_count += 1
             self._tx_send_time_sum += send_time
 
-            if self._tx_batch_count <= 5 or self._tx_batch_count % 50 == 0:
+            if self._tx_batch_count <= 30 or self._tx_batch_count % 10 == 0:
                 avg_send = (self._tx_send_time_sum / self._tx_batch_count) * 1000
+                # Log first 8 bytes of packed msgpack and first frame details
+                hex8 = " ".join(f"{b:02x}" for b in packed[:8])
+                f0 = batch[0] if batch else b""
+                f0hex = " ".join(f"{b:02x}" for b in f0[:6])
                 RNS.log(
-                    f"TX batch #{self._tx_batch_count}: {len(batch)} frames, "
-                    f"{len(packed)} bytes, send={send_time*1000:.1f}ms "
-                    f"(avg={avg_send:.1f}ms), "
-                    f"total_rx={self._rx_packet_count}",
+                    f"TX-DIAG flush#{self._tx_batch_count}: {len(batch)}frm "
+                    f"{len(packed)}B send={send_time*1000:.1f}ms "
+                    f"(avg={avg_send:.1f}ms) rx={self._rx_packet_count} "
+                    f"packed=[{hex8}] f0={len(f0)}B[{f0hex}]",
                     RNS.LOG_DEBUG
                 )
         except Exception as e:

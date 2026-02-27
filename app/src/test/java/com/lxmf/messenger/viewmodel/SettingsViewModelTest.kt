@@ -160,6 +160,7 @@ class SettingsViewModelTest {
         every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(false)
         every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
         every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
+        every { settingsRepository.mapMarkerDeclutterEnabledFlow } returns flowOf(true)
         every { settingsRepository.incomingMessageSizeLimitKbFlow } returns flowOf(500)
         every { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
         every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
@@ -192,6 +193,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveImageCompressionPreset(any()) } just Runs
         coEvery { settingsRepository.saveMapSourceHttpEnabled(any()) } just Runs
         coEvery { settingsRepository.saveMapSourceRmspEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveMapMarkerDeclutterEnabled(any()) } just Runs
         coEvery { settingsRepository.getCustomThemeById(any()) } returns null
         coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs
         coEvery { settingsRepository.saveBlockUnknownSenders(any()) } just Runs

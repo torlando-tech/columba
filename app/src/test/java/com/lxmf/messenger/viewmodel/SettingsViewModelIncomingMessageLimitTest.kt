@@ -160,6 +160,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.lastTelemetrySendTimeFlow } returns MutableStateFlow<Long?>(null)
         every { settingsRepository.mapSourceHttpEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.mapSourceRmspEnabledFlow } returns MutableStateFlow(false)
+        every { settingsRepository.mapMarkerDeclutterEnabledFlow } returns MutableStateFlow(true)
         every { mapTileSourceManager.observeRmspServerCount() } returns flowOf(0)
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
         every { identityRepository.activeIdentity } returns activeIdentityFlow
@@ -198,6 +199,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Mock methods called during setIncomingMessageSizeLimit
         coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
+        coEvery { settingsRepository.saveMapMarkerDeclutterEnabled(any()) } just Runs
         every { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(any()) } just Runs
     }
 

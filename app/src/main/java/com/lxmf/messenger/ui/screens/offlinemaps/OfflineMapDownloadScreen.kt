@@ -308,11 +308,18 @@ fun LocationSelectionStep(
                             }.addOnFailureListener {
                                 isGettingLocation = false
                             }
-                    } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") e: Throwable,
+                    ) {
                         // GMS client creation or location request failed (#567),
-                        // fall through to platform fallback below
+                        // fall back to platform LocationManager
                         Log.w(TAG, "GMS location failed, falling back to platform", e)
-                        isGettingLocation = false
+                        LocationCompat.getCurrentLocation(context) { location ->
+                            isGettingLocation = false
+                            if (location != null) {
+                                onCurrentLocationRequest(location)
+                            }
+                        }
                     }
                 } else {
                     // Fallback to platform LocationManager (issue #456)

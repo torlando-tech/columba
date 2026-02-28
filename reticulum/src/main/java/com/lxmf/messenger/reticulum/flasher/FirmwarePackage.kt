@@ -344,41 +344,44 @@ class FirmwareRepository(
             )
     }
 
-    private val firmwareDir: File by lazy {
-        File(context.filesDir, FIRMWARE_DIR).also { it.mkdirs() }
-    }
+    private fun firmwareDir(source: FirmwareSource): File = File(context.filesDir, "$FIRMWARE_DIR/${source.id}").also { it.mkdirs() }
 
     /**
-     * Get all downloaded firmware packages.
+     * Get all downloaded firmware packages for a specific source.
      */
-    fun getDownloadedFirmware(): List<FirmwarePackage> =
-        firmwareDir.listFiles()?.filter { it.extension == "zip" }?.mapNotNull { file ->
+    fun getDownloadedFirmware(source: FirmwareSource): List<FirmwarePackage> =
+        firmwareDir(source).listFiles()?.filter { it.extension == "zip" }?.mapNotNull { file ->
             parseFirmwareFile(file)
         } ?: emptyList()
 
     /**
-     * Get firmware packages for a specific board.
+     * Get firmware packages for a specific board and source.
      */
-    fun getFirmwareForBoard(board: RNodeBoard): List<FirmwarePackage> = getDownloadedFirmware().filter { it.board == board }
+    fun getFirmwareForBoard(
+        source: FirmwareSource,
+        board: RNodeBoard,
+    ): List<FirmwarePackage> = getDownloadedFirmware(source).filter { it.board == board }
 
     /**
-     * Get the latest firmware package for a board.
+     * Get the latest firmware package for a board from a specific source.
      */
     fun getLatestFirmware(
+        source: FirmwareSource,
         board: RNodeBoard,
         frequencyBand: FrequencyBand,
     ): FirmwarePackage? =
-        getFirmwareForBoard(board)
+        getFirmwareForBoard(source, board)
             .filter { it.frequencyBand == frequencyBand }
             .maxByOrNull { it.version }
 
     /**
-     * Check if firmware update is available for a device.
+     * Check if firmware update is available for a device (checks the official source).
      */
     fun isUpdateAvailable(deviceInfo: RNodeDeviceInfo): Boolean {
         val currentVersion = deviceInfo.firmwareVersion ?: return false
         val latestPackage =
             getLatestFirmware(
+                FirmwareSource.Official,
                 deviceInfo.board,
                 FrequencyBand.fromModelCode(deviceInfo.model),
             ) ?: return false
@@ -387,9 +390,10 @@ class FirmwareRepository(
     }
 
     /**
-     * Save a downloaded firmware package.
+     * Save a downloaded firmware package for a specific source.
      */
     fun saveFirmware(
+        source: FirmwareSource,
         board: RNodeBoard,
         version: String,
         frequencyBand: FrequencyBand,
@@ -397,7 +401,7 @@ class FirmwareRepository(
         sha256: String? = null,
     ): FirmwarePackage? {
         val filename = "${board.firmwarePrefix}${frequencyBand.modelSuffix}_v$version.zip"
-        val file = File(firmwareDir, filename)
+        val file = File(firmwareDir(source), filename)
 
         return try {
             file.writeBytes(data)
@@ -428,16 +432,31 @@ class FirmwareRepository(
     }
 
     /**
-     * Delete all downloaded firmware.
+     * Delete downloaded firmware for a specific source, or all sources if null.
      */
-    fun clearCache() {
-        firmwareDir.listFiles()?.forEach { it.delete() }
+    fun clearCache(source: FirmwareSource? = null) {
+        if (source != null) {
+            firmwareDir(source).listFiles()?.forEach { it.delete() }
+        } else {
+            listOf(
+                FirmwareSource.Official,
+                FirmwareSource.MicroReticulum,
+                FirmwareSource.CommunityEdition,
+                FirmwareSource.Custom,
+            ).forEach { src -> firmwareDir(src).listFiles()?.forEach { it.delete() } }
+        }
     }
 
     /**
-     * Get total size of cached firmware.
+     * Get total size of all cached firmware across all sources.
      */
-    fun getCacheSize(): Long = firmwareDir.listFiles()?.sumOf { it.length() } ?: 0
+    fun getCacheSize(): Long =
+        listOf(
+            FirmwareSource.Official,
+            FirmwareSource.MicroReticulum,
+            FirmwareSource.CommunityEdition,
+            FirmwareSource.Custom,
+        ).sumOf { src -> firmwareDir(src).listFiles()?.sumOf { it.length() } ?: 0L }
 
     private fun parseFirmwareFile(file: File): FirmwarePackage? {
         val name = file.nameWithoutExtension

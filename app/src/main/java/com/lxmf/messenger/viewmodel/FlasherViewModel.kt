@@ -1,10 +1,13 @@
 package com.lxmf.messenger.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.reticulum.flasher.FirmwareDownloader
 import com.lxmf.messenger.reticulum.flasher.FirmwarePackage
+import com.lxmf.messenger.reticulum.flasher.FirmwareSource
 import com.lxmf.messenger.reticulum.flasher.FrequencyBand
 import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 import com.lxmf.messenger.reticulum.flasher.RNodeDeviceInfo
@@ -64,6 +67,9 @@ data class FlasherUiState(
     val detectionError: String? = null,
     val useManualBoardSelection: Boolean = false,
     // Step 3: Firmware Selection
+    val selectedFirmwareSource: FirmwareSource = FirmwareSource.Official,
+    val customFirmwareUri: Uri? = null,
+    val customFirmwareUrl: String = "",
     val selectedBoard: RNodeBoard? = null,
     val selectedBand: FrequencyBand = FrequencyBand.BAND_868_915,
     val bandExplicitlySelected: Boolean = false, // User must click a band chip
@@ -379,6 +385,44 @@ class FlasherViewModel
             loadAvailableFirmware()
         }
 
+        fun selectFirmwareSource(source: FirmwareSource) {
+            _state.update {
+                it.copy(
+                    selectedFirmwareSource = source,
+                    selectedFirmware = null,
+                    selectedVersion = null,
+                    customFirmwareUri = null,
+                    customFirmwareUrl = "",
+                    availableFirmware = emptyList(),
+                    availableVersions = emptyList(),
+                )
+            }
+            // Fetch cached firmware + GitHub versions for GitHub-backed sources
+            if (source != FirmwareSource.Custom) {
+                loadAvailableFirmware()
+            }
+        }
+
+        fun setCustomFirmwareUri(uri: Uri) {
+            _state.update {
+                it.copy(
+                    customFirmwareUri = uri,
+                    customFirmwareUrl = "",
+                    selectedFirmware = null,
+                )
+            }
+        }
+
+        fun setCustomFirmwareUrl(url: String) {
+            _state.update {
+                it.copy(
+                    customFirmwareUrl = url,
+                    customFirmwareUri = null,
+                    selectedFirmware = null,
+                )
+            }
+        }
+
         fun selectBoard(board: RNodeBoard) {
             _state.update {
                 it.copy(
@@ -415,13 +459,17 @@ class FlasherViewModel
         private fun loadAvailableFirmware() {
             val board = _state.value.selectedBoard ?: return
             val band = _state.value.selectedBand
+            val source = _state.value.selectedFirmwareSource
+
+            // Custom source doesn't use the cached-firmware list
+            if (source == FirmwareSource.Custom) return
 
             viewModelScope.launch {
                 try {
-                    // Get cached firmware
+                    // Get cached firmware for this source
                     val cachedFirmware =
                         flasher.firmwareRepository
-                            .getFirmwareForBoard(board)
+                            .getFirmwareForBoard(source, board)
                             .filter { it.frequencyBand == band }
 
                     _state.update {
@@ -441,9 +489,14 @@ class FlasherViewModel
         }
 
         private fun fetchAvailableVersions() {
+            val source = _state.value.selectedFirmwareSource
+
+            // Custom source has no GitHub releases to fetch
+            if (source == FirmwareSource.Custom) return
+
             viewModelScope.launch {
                 try {
-                    val releases = flasher.firmwareDownloader.getAvailableReleases()
+                    val releases = flasher.firmwareDownloader.getAvailableReleases(source)
                     if (releases != null) {
                         // Filter out versions that are already cached for this board+band
                         val cachedVersions =
@@ -497,14 +550,18 @@ class FlasherViewModel
 
         fun canProceedFromFirmwareSelection(): Boolean {
             val currentState = _state.value
-            // Require:
-            // 1. Board selection
-            // 2. Explicit band selection (user clicked a band chip OR detected from device)
-            // 3. Either a cached firmware OR a version to download
-            return currentState.selectedBoard != null &&
-                currentState.bandExplicitlySelected &&
-                !currentState.isDownloadingFirmware &&
-                (currentState.selectedFirmware != null || currentState.selectedVersion != null)
+            if (currentState.selectedBoard == null ||
+                !currentState.bandExplicitlySelected ||
+                currentState.isDownloadingFirmware
+            ) {
+                return false
+            }
+            return when (currentState.selectedFirmwareSource) {
+                FirmwareSource.Custom ->
+                    currentState.customFirmwareUri != null || currentState.customFirmwareUrl.isNotEmpty()
+                else ->
+                    currentState.selectedFirmware != null || currentState.selectedVersion != null
+            }
         }
 
         // ==================== Step 4: Flash Progress ====================
@@ -532,9 +589,14 @@ class FlasherViewModel
 
             viewModelScope.launch {
                 try {
-                    val selectedFirmware = _state.value.selectedFirmware
+                    val currentState = _state.value
+                    val selectedFirmware = currentState.selectedFirmware
+                    val source = currentState.selectedFirmwareSource
+
                     val success =
-                        if (selectedFirmware != null) {
+                        if (source == FirmwareSource.Custom) {
+                            flashCustomFirmware(device.deviceId, board, band)
+                        } else if (selectedFirmware != null) {
                             // Use cached firmware
                             flasher.flashFirmware(
                                 deviceId = device.deviceId,
@@ -542,12 +604,13 @@ class FlasherViewModel
                                 consoleImage = flasher.getConsoleImageStream(),
                             )
                         } else {
-                            // Download and flash
+                            // Download and flash from GitHub
                             flasher.downloadAndFlash(
                                 deviceId = device.deviceId,
                                 board = board,
                                 frequencyBand = band,
-                                version = _state.value.selectedVersion,
+                                version = currentState.selectedVersion,
+                                source = source,
                             )
                         }
 
@@ -567,6 +630,96 @@ class FlasherViewModel
                     }
                 }
             }
+        }
+
+        private suspend fun flashCustomFirmware(
+            deviceId: Int,
+            board: RNodeBoard,
+            band: FrequencyBand,
+        ): Boolean {
+            val currentState = _state.value
+            val uri = currentState.customFirmwareUri
+            val url = currentState.customFirmwareUrl
+
+            // Resolve firmware bytes from URI or URL
+            val firmwareBytes: ByteArray? =
+                if (uri != null) {
+                    try {
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to read custom firmware URI", e)
+                        null
+                    }
+                } else if (url.isNotEmpty()) {
+                    var downloaded: ByteArray? = null
+                    flasher.firmwareDownloader.downloadFromUrl(
+                        url,
+                        object : FirmwareDownloader.DownloadCallback {
+                            override fun onProgress(
+                                bytesDownloaded: Long,
+                                totalBytes: Long,
+                            ) {
+                                val percent =
+                                    if (totalBytes > 0) (bytesDownloaded * 20 / totalBytes).toInt() else 5
+                                _state.update {
+                                    it.copy(
+                                        flashProgress = percent,
+                                        flashMessage = "Downloading: ${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB",
+                                    )
+                                }
+                            }
+
+                            override fun onComplete(data: ByteArray) {
+                                downloaded = data
+                            }
+
+                            override fun onError(error: String) {
+                                Log.e(TAG, "Custom URL download error: $error")
+                            }
+                        },
+                    )
+                    downloaded
+                } else {
+                    null
+                }
+
+            if (firmwareBytes == null) {
+                _state.update {
+                    it.copy(
+                        currentStep = FlasherStep.COMPLETE,
+                        isFlashing = false,
+                        flashResult = FlashResult.Failure("Failed to read custom firmware"),
+                    )
+                }
+                return false
+            }
+
+            // Save to custom cache dir and flash
+            val firmwarePackage =
+                flasher.firmwareRepository.saveFirmware(
+                    FirmwareSource.Custom,
+                    board,
+                    "custom",
+                    band,
+                    firmwareBytes,
+                )
+
+            if (firmwarePackage == null) {
+                _state.update {
+                    it.copy(
+                        currentStep = FlasherStep.COMPLETE,
+                        isFlashing = false,
+                        flashResult = FlashResult.Failure("Failed to save custom firmware"),
+                    )
+                }
+                return false
+            }
+
+            return flasher.flashFirmware(
+                deviceId = deviceId,
+                firmwarePackage = firmwarePackage,
+                consoleImage = flasher.getConsoleImageStream(),
+            )
         }
 
         fun showCancelConfirmation() {

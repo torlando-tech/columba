@@ -1068,7 +1068,17 @@ fun MessagingScreen(
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
                     isProcessingFile = isProcessingFile,
-                    onFileAttachmentClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                    onFileAttachmentClick = {
+                        try {
+                            filePickerLauncher.launch(arrayOf("*/*"))
+                        } catch (e: android.content.ActivityNotFoundException) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.error_no_file_manager),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
                     onSendClick = {
                         if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {

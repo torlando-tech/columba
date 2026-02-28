@@ -171,6 +171,23 @@ interface AnnounceDao {
     suspend fun deleteAllAnnouncesExceptContacts(identityHash: String)
 
     /**
+     * Delete announces older than a cutoff time, preserving favorites and contacts.
+     * Contacts are protected across all identities (not scoped to a single identity).
+     *
+     * @param cutoffTime Epoch millis; announces with lastSeenTimestamp < this are eligible for deletion
+     * @return Number of deleted rows
+     */
+    @Query(
+        """
+        DELETE FROM announces
+        WHERE lastSeenTimestamp < :cutoffTime
+        AND isFavorite = 0
+        AND destinationHash NOT IN (SELECT destinationHash FROM contacts)
+    """,
+    )
+    suspend fun deleteStaleAnnounces(cutoffTime: Long): Int
+
+    /**
      * Get count of all announces
      */
     @Query("SELECT COUNT(*) FROM announces")

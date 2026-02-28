@@ -31,8 +31,7 @@ object NodeTypeDetector {
                 "lxmf.propagation" -> return NodeType.PROPAGATION_NODE
                 "nomadnetwork.node" -> return NodeType.NODE
                 "lxmf.delivery" -> return NodeType.PEER
-                // Audio call service destinations - these are SERVICE nodes, not messaging peers
-                "call.audio" -> return NodeType.NODE
+                "lxst.telephony" -> return NodeType.PHONE
                 // Meshchat room destinations - these are also SERVICE nodes
                 "meshchat.room" -> return NodeType.NODE
                 else -> {
@@ -161,5 +160,6 @@ object NodeTypeDetector {
             NodeType.PEER -> "LXMF messaging peer"
             NodeType.NODE -> "Content/service node"
             NodeType.PROPAGATION_NODE -> "Message relay node"
+            NodeType.PHONE -> "LXST telephony destination"
         }
 }

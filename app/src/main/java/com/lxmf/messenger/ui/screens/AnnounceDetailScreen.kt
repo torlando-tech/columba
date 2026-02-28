@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Hub
@@ -75,6 +76,7 @@ fun AnnounceDetailScreen(
     destinationHash: String,
     onBackClick: () -> Unit,
     onStartChat: (destinationHash: String, peerName: String) -> Unit,
+    onViewAnnounce: (destinationHash: String) -> Unit,
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -87,6 +89,9 @@ fun AnnounceDetailScreen(
 
     // Observe if this contact is the current relay
     val isMyRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
+
+    // Cross-linked announces (e.g., telephony <-> messaging for the same identity)
+    val linkedAnnounces by viewModel.getLinkedAnnouncesFlow(destinationHash).collectAsState(initial = emptyList())
 
     // Dialog state for remove confirmation
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -288,6 +293,70 @@ fun AnnounceDetailScreen(
                     }
                 }
 
+                // Cross-link buttons: show when telephony and messaging destinations share an identity
+                if (linkedAnnounces.isNotEmpty()) {
+                    when (announceNonNull.aspect) {
+                        "lxst.telephony" -> {
+                            val linkedPeer = linkedAnnounces.firstOrNull { it.aspect == "lxmf.delivery" }
+                            if (linkedPeer != null) {
+                                Button(
+                                    onClick = { onViewAnnounce(linkedPeer.destinationHash) },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary,
+                                        ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Chat,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "View messaging destination",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                        "lxmf.delivery" -> {
+                            val linkedPhone = linkedAnnounces.firstOrNull { it.nodeType == "PHONE" }
+                            if (linkedPhone != null) {
+                                Button(
+                                    onClick = { onViewAnnounce(linkedPhone.destinationHash) },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary,
+                                        ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Call,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "View telephony destination",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Block button
                 androidx.compose.material3.OutlinedButton(
                     onClick = { showBlockDialog = true },
@@ -371,7 +440,7 @@ fun AnnounceDetailScreen(
                     subtitle =
                         when (announceNonNull.aspect) {
                             "lxmf.delivery" -> "LXMF messaging peer"
-                            "call.audio" -> "Audio call destination"
+                            "lxst.telephony" -> "LXST telephony destination"
                             "lxmf.propagation" -> "Message relay/propagation node"
                             "nomadnetwork.node" -> "NomadNet content node"
                             null -> "No aspect information available"

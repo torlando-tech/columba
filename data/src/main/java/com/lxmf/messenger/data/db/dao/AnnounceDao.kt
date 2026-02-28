@@ -81,6 +81,16 @@ interface AnnounceDao {
     suspend fun getAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
 
     /**
+     * Find all announces sharing the same identity hash, excluding one destination.
+     * Used for cross-linking telephony and messaging destinations of the same peer.
+     */
+    @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash AND destinationHash != :excludeHash")
+    suspend fun getAnnouncesByIdentityHashExcluding(
+        identityHash: String,
+        excludeHash: String,
+    ): List<AnnounceEntity>
+
+    /**
      * Check if an announce exists for a given destination hash
      */
     @Query("SELECT EXISTS(SELECT 1 FROM announces WHERE destinationHash = :destinationHash)")

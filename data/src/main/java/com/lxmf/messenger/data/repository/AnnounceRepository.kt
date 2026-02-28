@@ -27,7 +27,7 @@ data class Announce(
     val nodeType: String,
     val receivingInterface: String? = null,
     val receivingInterfaceType: String? = null,
-    val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "call.audio")
+    val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "lxst.telephony")
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
     val stampCost: Int? = null, // Stamp cost for message delivery
@@ -261,6 +261,15 @@ class AnnounceRepository
                 )
             announceDao.upsertAnnounce(entity)
         }
+
+        /**
+         * Find all announces for the same identity, excluding a given destination hash.
+         * Used for cross-linking telephony and messaging destinations of the same peer.
+         */
+        suspend fun getLinkedAnnounces(
+            identityHash: String,
+            excludeHash: String,
+        ): List<Announce> = announceDao.getAnnouncesByIdentityHashExcluding(identityHash, excludeHash).map { it.toAnnounce() }
 
         /**
          * Delete an announce

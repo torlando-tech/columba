@@ -4,6 +4,7 @@ enum class NodeType {
     NODE, // General mesh network node
     PEER, // Node we can message with
     PROPAGATION_NODE, // Relay/repeater node for signal propagation
+    PHONE, // lxst.telephony — callable audio/telephony destination
 }
 
 data class AnnounceEvent(

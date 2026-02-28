@@ -12,19 +12,21 @@ import java.net.URL
 /**
  * Downloads RNode firmware from GitHub releases.
  *
- * Firmware is hosted at: https://github.com/markqvist/RNode_Firmware/releases
+ * Firmware is hosted at GitHub. The specific owner/repo is determined by the
+ * [FirmwareSource] passed to each method, defaulting to the official source.
  */
 class FirmwareDownloader {
     companion object {
         private const val TAG = "Columba:FirmwareDownload"
-        private const val GITHUB_API_BASE = "https://api.github.com/repos/markqvist/RNode_Firmware"
-        private const val GITHUB_RELEASES = "$GITHUB_API_BASE/releases"
+        private const val GITHUB_API_BASE = "https://api.github.com/repos"
         private const val CONNECT_TIMEOUT_MS = 15000
         private const val READ_TIMEOUT_MS = 60000
 
         // User agent for GitHub API
         private const val USER_AGENT = "Columba-RNode-Flasher/1.0"
     }
+
+    private fun githubReleasesUrl(source: FirmwareSource): String = "$GITHUB_API_BASE/${source.owner}/${source.repo}/releases"
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -45,10 +47,10 @@ class FirmwareDownloader {
     /**
      * Get available firmware releases from GitHub.
      */
-    suspend fun getAvailableReleases(): List<GitHubRelease>? =
+    suspend fun getAvailableReleases(source: FirmwareSource = FirmwareSource.Official): List<GitHubRelease>? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL(GITHUB_RELEASES)
+                val url = URL(githubReleasesUrl(source))
                 val connection = url.openConnection() as HttpURLConnection
 
                 connection.requestMethod = "GET"
@@ -73,10 +75,10 @@ class FirmwareDownloader {
     /**
      * Get the latest release.
      */
-    suspend fun getLatestRelease(): GitHubRelease? =
+    suspend fun getLatestRelease(source: FirmwareSource = FirmwareSource.Official): GitHubRelease? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL("$GITHUB_RELEASES/latest")
+                val url = URL("${githubReleasesUrl(source)}/latest")
                 val connection = url.openConnection() as HttpURLConnection
 
                 connection.requestMethod = "GET"

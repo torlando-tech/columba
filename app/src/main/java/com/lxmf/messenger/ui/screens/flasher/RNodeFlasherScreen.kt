@@ -1,6 +1,8 @@
 package com.lxmf.messenger.ui.screens.flasher
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -68,6 +70,14 @@ fun RNodeFlasherScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showExitConfirmation by remember { mutableStateOf(false) }
+
+    // File picker for custom firmware ZIP
+    val pickFileLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                viewModel.setCustomFirmwareUri(uri)
+            }
+        }
 
     // Handle skip detection mode (for bootloader flashing)
     androidx.compose.runtime.LaunchedEffect(skipDetection) {
@@ -234,6 +244,9 @@ fun RNodeFlasherScreen(
 
                     FlasherStep.FIRMWARE_SELECTION ->
                         FirmwareSelectionStep(
+                            selectedFirmwareSource = state.selectedFirmwareSource,
+                            customFirmwareUri = state.customFirmwareUri,
+                            customFirmwareUrl = state.customFirmwareUrl,
                             selectedBoard = state.selectedBoard,
                             selectedBand = state.selectedBand,
                             bandExplicitlySelected = state.bandExplicitlySelected,
@@ -245,6 +258,9 @@ fun RNodeFlasherScreen(
                             downloadProgress = state.downloadProgress,
                             downloadError = state.downloadError,
                             useManualSelection = state.useManualBoardSelection,
+                            onFirmwareSourceSelected = { viewModel.selectFirmwareSource(it) },
+                            onCustomUrlChanged = { viewModel.setCustomFirmwareUrl(it) },
+                            onPickFile = { pickFileLauncher.launch("*/*") },
                             onBoardSelected = { viewModel.selectBoard(it) },
                             onBandSelected = { viewModel.selectFrequencyBand(it) },
                             onFirmwareSelected = { viewModel.selectFirmware(it) },

@@ -382,6 +382,17 @@ class AnnounceRepository
         }
 
         /**
+         * Delete announces older than [maxAgeMillis], preserving favorites and contacts.
+         *
+         * @param maxAgeMillis Maximum age in milliseconds; announces older than this are deleted
+         * @return Number of deleted rows
+         */
+        suspend fun deleteStaleAnnounces(maxAgeMillis: Long): Int {
+            val cutoffTime = System.currentTimeMillis() - maxAgeMillis
+            return announceDao.deleteStaleAnnounces(cutoffTime)
+        }
+
+        /**
          * Get count of announces grouped by nodeType.
          * Used for debugging relay selection issues.
          * Returns list of (nodeType, count) pairs.

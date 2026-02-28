@@ -32,6 +32,7 @@ class ServicePersistenceManager(
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
+        private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
     }
 
     /**
@@ -499,6 +500,24 @@ class ServicePersistenceManager(
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
+
+    /**
+     * Delete announces older than 30 days, preserving favorites and contacts.
+     * Intended to be called once per service lifecycle (e.g., in onCreate).
+     */
+    fun cleanupStaleAnnounces() {
+        scope.launch {
+            try {
+                val cutoffTime = System.currentTimeMillis() - ANNOUNCE_TTL_MS
+                val deleted = announceDao.deleteStaleAnnounces(cutoffTime)
+                if (deleted > 0) {
+                    Log.d(TAG, "Cleaned up $deleted stale announces (>30 days old)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cleaning up stale announces", e)
+            }
+        }
+    }
 
     /**
      * Close the database connection.

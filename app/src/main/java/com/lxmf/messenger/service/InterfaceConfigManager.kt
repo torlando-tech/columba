@@ -18,8 +18,10 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -111,8 +113,15 @@ class InterfaceConfigManager
                         val serviceConnection = (reticulumProtocol as ServiceReticulumProtocol)
                         // We need to access the service directly
                         // For now, let's trigger via unbind which will at least disconnect us
-                        reticulumProtocol.shutdown().getOrNull() // Try to shutdown (has internal polling)
-                        reticulumProtocol.unbindService() // Unbind our connection
+                        try {
+                            withTimeout(3000L) {
+                                reticulumProtocol.shutdown().getOrNull()
+                            }
+                            reticulumProtocol.unbindService()
+                        } catch (e: TimeoutCancellationException) {
+                            Log.w(TAG, "Shutdown timed out after 3s, proceeding with unbind")
+                            reticulumProtocol.unbindService()
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "Error during service shutdown: ${e.message}")
                     }

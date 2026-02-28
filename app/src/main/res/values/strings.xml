@@ -8,4 +8,5 @@
     <string name="call_decline">Decline</string>
     <string name="call_answer_content_description">Answer call</string>
     <string name="call_decline_content_description">Decline call</string>
+    <string name="error_no_file_manager">No file manager app found on this device</string>
 </resources>

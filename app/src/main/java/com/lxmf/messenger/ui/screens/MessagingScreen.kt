@@ -1259,7 +1259,15 @@ fun MessagingScreen(
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             onFileClick = {
-                                filePickerLauncher.launch(arrayOf("*/*"))
+                                try {
+                                    filePickerLauncher.launch(arrayOf("*/*"))
+                                } catch (e: android.content.ActivityNotFoundException) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.error_no_file_manager),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             modifier = Modifier.navigationBarsPadding(),

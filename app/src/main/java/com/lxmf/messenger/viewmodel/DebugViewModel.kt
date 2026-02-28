@@ -191,7 +191,9 @@ class DebugViewModel
                 }
 
                 // Get failed interfaces
-                val failedInterfaces = reticulumProtocol.getFailedInterfaces()
+                val failedInterfaces = withContext(Dispatchers.IO) {
+                    reticulumProtocol.getFailedInterfaces()
+                }
                 val failedInterfaceInfos =
                     failedInterfaces.map { failed ->
                         InterfaceInfo(

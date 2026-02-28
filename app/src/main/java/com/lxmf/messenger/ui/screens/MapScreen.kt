@@ -148,6 +148,20 @@ private const val EMPTY_MAP_STYLE = """
 private const val PIN_RADIUS_DP = 4f
 private const val LINE_WIDTH_DP = 1.5f
 
+private fun adaptivePinRadiusDp(context: Context): Float {
+    val densityDpi = context.resources.displayMetrics.densityDpi
+    return when {
+        densityDpi >= 400 -> 2.5f
+        densityDpi >= 320 -> 3f
+        else -> PIN_RADIUS_DP
+    }
+}
+
+internal fun deduplicateMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
+    markers
+        .groupBy { it.destinationHash.lowercase() }
+        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+
 /**
  * Map screen displaying user location and contact markers.
  *
@@ -228,10 +242,14 @@ fun MapScreen(
         markers: List<ContactMarker>,
         declutterEnabled: Boolean,
     ) {
+        // Keep only the newest marker per destination hash to avoid duplicate declutter
+        // connectors/pins when multiple location rows exist for the same sender.
+        val uniqueMarkers = deduplicateMarkersByDestination(markers)
+
         val decluttered =
             if (declutterEnabled) {
                 val screenMarkers =
-                    markers.map { m ->
+                    uniqueMarkers.map { m ->
                         val screenPoint = map.projection.toScreenLocation(LatLng(m.latitude, m.longitude))
                         ScreenMarker(m.destinationHash, m.latitude, m.longitude, screenPoint.x, screenPoint.y)
                     }
@@ -246,11 +264,12 @@ fun MapScreen(
         val declutteredMap = decluttered.associateBy { it.hash }
         val offsetMarkers = decluttered.filter { it.isOffset }
         val density = context.resources.displayMetrics.density
+        val pinRadiusDp = adaptivePinRadiusDp(context)
 
         // --- Update marker source with decluttered display positions ---
         val markerSourceId = "contact-markers-source"
         val markerFeatures =
-            markers.map { marker ->
+            uniqueMarkers.map { marker ->
                 val dm = declutteredMap[marker.destinationHash]
                 val displayLat = dm?.displayLat ?: marker.latitude
                 val displayLng = dm?.displayLng ?: marker.longitude
@@ -282,12 +301,15 @@ fun MapScreen(
         val pinSource = style.getSourceAs<GeoJsonSource>(pinSourceId)
         if (pinSource != null) {
             pinSource.setGeoJson(FeatureCollection.fromFeatures(pinFeatures))
+            style.getLayerAs<CircleLayer>("contact-pins-layer")?.setProperties(
+                PropertyFactory.circleRadius(pinRadiusDp * density),
+            )
         } else if (offsetMarkers.isNotEmpty()) {
             style.addSource(GeoJsonSource(pinSourceId, FeatureCollection.fromFeatures(pinFeatures)))
             val pinLayer =
                 CircleLayer("contact-pins-layer", pinSourceId)
                     .withProperties(
-                        PropertyFactory.circleRadius(PIN_RADIUS_DP * density),
+                        PropertyFactory.circleRadius(pinRadiusDp * density),
                         PropertyFactory.circleColor(
                             Expression.color(android.graphics.Color.parseColor("#616161")),
                         ),

@@ -71,6 +71,11 @@ data class ContactMarker(
     val publicKey: ByteArray? = null,
 )
 
+internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
+    markers
+        .groupBy { it.destinationHash.lowercase() }
+        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+
 /**
  * Saved camera position for restoring viewport across tab switches.
  */
@@ -341,7 +346,7 @@ class MapViewModel
                             iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
                             publicKey = announce?.publicKey,
                         )
-                    }
+                    }.let(::deduplicateContactMarkersByDestination)
                 }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(

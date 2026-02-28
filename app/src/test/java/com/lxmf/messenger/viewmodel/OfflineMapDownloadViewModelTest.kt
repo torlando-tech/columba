@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.content.Context
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
@@ -18,7 +19,6 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -117,10 +117,13 @@ class OfflineMapDownloadViewModelTest {
 
     @After
     fun tearDown() {
+        // Reset Main dispatcher BEFORE canceling viewModelScope so that IO coroutine
+        // cleanup (e.g., geocoder check on Dispatchers.IO) doesn't route cancellation
+        // exceptions through the test dispatcher, which causes UncaughtExceptionsBeforeTest
+        Dispatchers.resetMain()
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
-        Dispatchers.resetMain()
         clearAllMocks()
     }
 

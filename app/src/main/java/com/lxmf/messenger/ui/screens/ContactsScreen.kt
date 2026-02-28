@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -581,10 +580,10 @@ fun ContactsScreen(
                                         )
                                     }
                                 }
-                                itemsIndexed(
+                                items(
                                     contactsState.groupedContacts.all,
-                                    key = { index, contact -> "all_${contact.destinationHash}_$index" },
-                                ) { _, contact ->
+                                    key = { contact -> "all_${contact.destinationHash.lowercase()}" },
+                                ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
                                         onClick = {

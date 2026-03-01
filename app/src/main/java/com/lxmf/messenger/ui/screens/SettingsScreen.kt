@@ -75,6 +75,7 @@ import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -502,7 +503,9 @@ fun SettingsScreen(
 
         // Service Restart Dialog
         if (state.isRestarting) {
-            ServiceRestartDialog()
+            ServiceRestartDialog(
+                onCancel = { viewModel.cancelRestart() },
+            )
         }
 
         // Crash Report Dialog
@@ -578,9 +581,16 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ServiceRestartDialog() {
+private fun ServiceRestartDialog(onCancel: () -> Unit) {
+    var showCancel by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(15_000)
+        showCancel = true
+    }
+
     AlertDialog(
-        onDismissRequest = { /* Cannot dismiss - blocking */ },
+        onDismissRequest = { if (showCancel) onCancel() },
         icon = {
             CircularProgressIndicator(
                 modifier = Modifier.size(48.dp),
@@ -604,6 +614,12 @@ private fun ServiceRestartDialog() {
                 )
             }
         },
-        confirmButton = { /* No button - auto dismisses when done */ },
+        confirmButton = {
+            if (showCancel) {
+                androidx.compose.material3.TextButton(onClick = onCancel) {
+                    Text("Cancel")
+                }
+            }
+        },
     )
 }

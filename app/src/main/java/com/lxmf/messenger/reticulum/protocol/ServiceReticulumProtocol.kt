@@ -1582,31 +1582,33 @@ class ServiceReticulumProtocol(
         timeoutSeconds: Float,
         deliveryMethod: String,
     ): LinkSpeedProbeResult {
-        return try {
-            val service =
-                this.service ?: return LinkSpeedProbeResult(
-                    status = "not_bound",
-                    establishmentRateBps = null,
-                    expectedRateBps = null,
-                    rttSeconds = null,
-                    hops = null,
-                    linkReused = false,
-                    error = "Service not bound",
-                )
-
-            val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds, deliveryMethod)
-            val result = JSONObject(resultJson)
-
-            LinkSpeedProbeResult(
-                status = result.optString("status", "error"),
-                establishmentRateBps = if (result.isNull("establishment_rate_bps")) null else result.optLong("establishment_rate_bps"),
-                expectedRateBps = if (result.isNull("expected_rate_bps")) null else result.optLong("expected_rate_bps"),
-                rttSeconds = if (result.isNull("rtt_seconds")) null else result.optDouble("rtt_seconds"),
-                hops = if (result.isNull("hops")) null else result.optInt("hops"),
-                linkReused = result.optBoolean("link_reused", false),
-                nextHopBitrateBps = if (result.isNull("next_hop_bitrate_bps")) null else result.optLong("next_hop_bitrate_bps"),
-                error = result.optString("error").takeIf { it.isNotEmpty() },
+        val service =
+            this.service ?: return LinkSpeedProbeResult(
+                status = "not_bound",
+                establishmentRateBps = null,
+                expectedRateBps = null,
+                rttSeconds = null,
+                hops = null,
+                linkReused = false,
+                error = "Service not bound",
             )
+
+        return try {
+            withContext(Dispatchers.IO) {
+                val resultJson = service.probeLinkSpeed(destinationHash, timeoutSeconds, deliveryMethod)
+                val result = JSONObject(resultJson)
+
+                LinkSpeedProbeResult(
+                    status = result.optString("status", "error"),
+                    establishmentRateBps = if (result.isNull("establishment_rate_bps")) null else result.optLong("establishment_rate_bps"),
+                    expectedRateBps = if (result.isNull("expected_rate_bps")) null else result.optLong("expected_rate_bps"),
+                    rttSeconds = if (result.isNull("rtt_seconds")) null else result.optDouble("rtt_seconds"),
+                    hops = if (result.isNull("hops")) null else result.optInt("hops"),
+                    linkReused = result.optBoolean("link_reused", false),
+                    nextHopBitrateBps = if (result.isNull("next_hop_bitrate_bps")) null else result.optLong("next_hop_bitrate_bps"),
+                    error = result.optString("error").takeIf { it.isNotEmpty() },
+                )
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error probing link speed", e)
             LinkSpeedProbeResult(
@@ -1846,7 +1848,7 @@ class ServiceReticulumProtocol(
      * Restore announce identities from stored public keys to enable message sending to announced peers.
      * Uses bulk restore with direct dict population for maximum performance.
      */
-    fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> =
+    suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> =
         runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
@@ -1878,7 +1880,10 @@ class ServiceReticulumProtocol(
 
             Log.d(TAG, "restoreAnnounceIdentities: Built JSON array with ${announcesArray.length()} announces")
 
-            val resultJson = service.restoreAnnounceIdentities(announcesArray.toString())
+            val resultJson =
+                withContext(Dispatchers.IO) {
+                    service.restoreAnnounceIdentities(announcesArray.toString())
+                }
             Log.d(TAG, "restoreAnnounceIdentities: Got result from service: $resultJson")
 
             val result = JSONObject(resultJson)
@@ -2391,12 +2396,13 @@ class ServiceReticulumProtocol(
         runCatching {
             val service = this.service ?: throw IllegalStateException("Service not bound")
 
-            val resultJson = service.storeOwnTelemetry(
-                locationJson,
-                iconAppearance?.iconName,
-                iconAppearance?.foregroundColor,
-                iconAppearance?.backgroundColor,
-            )
+            val resultJson =
+                service.storeOwnTelemetry(
+                    locationJson,
+                    iconAppearance?.iconName,
+                    iconAppearance?.foregroundColor,
+                    iconAppearance?.backgroundColor,
+                )
             val result = JSONObject(resultJson)
 
             if (!result.optBoolean("success", false)) {

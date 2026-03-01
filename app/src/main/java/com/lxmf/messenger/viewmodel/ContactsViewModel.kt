@@ -138,14 +138,16 @@ class ContactsViewModel
         val contactsState: StateFlow<ContactsState> =
             filteredContacts
                 .map { contacts ->
-                    val relay = contacts.find { it.isMyRelay }
-                    Log.d(TAG, "ContactsState: ${contacts.size} filtered, hasRelay=${relay != null}")
+                    // Deduplicate by destinationHash to prevent duplicate LazyColumn keys
+                    val dedupedContacts = contacts.distinctBy { it.destinationHash }
+                    val relay = dedupedContacts.find { it.isMyRelay }
+                    Log.d(TAG, "ContactsState: ${dedupedContacts.size} filtered, hasRelay=${relay != null}")
                     ContactsState(
                         groupedContacts =
                             ContactGroups(
                                 relay = relay,
-                                pinned = contacts.filter { it.isPinned && !it.isMyRelay },
-                                all = contacts.filterNot { it.isPinned || it.isMyRelay },
+                                pinned = dedupedContacts.filter { it.isPinned && !it.isMyRelay },
+                                all = dedupedContacts.filterNot { it.isPinned || it.isMyRelay },
                             ),
                         isLoading = false,
                     )

@@ -38,6 +38,7 @@ class EventHandler(
 ) {
     companion object {
         private const val TAG = "EventHandler"
+        private const val MAX_MESSAGE_JSON_SIZE = 10 * 1024 * 1024 // 10 MB
 
         /**
          * Helper to convert ByteArray to Base64 string.
@@ -194,6 +195,10 @@ class EventHandler(
             scope.launch(Dispatchers.IO) {
                 try {
                     Log.d(TAG, "Message coroutine started on ${Thread.currentThread().name}")
+                    if (messageJson.length > MAX_MESSAGE_JSON_SIZE) {
+                        Log.e(TAG, "Message JSON too large (${messageJson.length} chars), dropping to prevent OOM")
+                        return@launch
+                    }
                     val json = JSONObject(messageJson)
 
                     // Check if this is a full message (truly event-driven) or just a notification
@@ -260,6 +265,9 @@ class EventHandler(
                 } else {
                     null
                 }
+
+            // Resolve staging file references from Python (large attachments written to disk)
+            fieldsJson = resolveStagingFiles(messageHash, fieldsJson)
 
             // Check if message has file attachments
             val hasFileAttachments = fieldsJson?.optJSONArray("5")?.let { it.length() > 0 } ?: false
@@ -586,6 +594,73 @@ class EventHandler(
             fieldsJson?.let { put("fields", it) }
             publicKey?.let { put("public_key", it.toBase64()) }
         }
+
+    /**
+     * Resolve staging file references from Python's large attachment handling.
+     *
+     * When Python writes large attachments to staging files instead of hex-encoding inline,
+     * the JSON contains `file_path` keys. This method moves staging files to permanent
+     * attachment storage and replaces `file_path` with `_binary_ref` for downstream loading.
+     */
+    private fun resolveStagingFiles(
+        messageHash: String,
+        fields: JSONObject?,
+    ): JSONObject? {
+        if (fields == null || attachmentStorage == null) return fields
+
+        val modifiedFields = JSONObject(fields.toString())
+
+        // Field 5: file attachments with file_path
+        modifiedFields.optJSONArray("5")?.let { attachments ->
+            for (i in 0 until attachments.length()) {
+                val attachment = attachments.optJSONObject(i) ?: continue
+                val stagingPath = attachment.optString("file_path", "").takeIf { it.isNotEmpty() } ?: continue
+
+                val stagingFile = java.io.File(stagingPath)
+                if (!stagingFile.exists()) {
+                    Log.w(TAG, "Staging file not found: $stagingPath")
+                    continue
+                }
+
+                // Move staging file to permanent attachment storage
+                val destDir = java.io.File(attachmentStorage.attachmentsDir, messageHash).also { it.mkdirs() }
+                val destFile = java.io.File(destDir, "5_$i.bin")
+                stagingFile.renameTo(destFile)
+
+                attachment.remove("file_path")
+                attachment.put("_binary_ref", destFile.absolutePath)
+                Log.d(TAG, "Resolved staging file for field 5[$i]: ${destFile.absolutePath}")
+            }
+        }
+
+        // Fields 6/7: media with file_path in 3rd array element [mime, null, path]
+        for (key in listOf("6", "7")) {
+            val fieldArray = modifiedFields.optJSONArray(key) ?: continue
+            if (fieldArray.length() < 3) continue
+
+            val stagingPath = fieldArray.optString(2, "").takeIf { it.isNotEmpty() } ?: continue
+            val stagingFile = java.io.File(stagingPath)
+            if (!stagingFile.exists()) {
+                Log.w(TAG, "Staging file not found for field $key: $stagingPath")
+                continue
+            }
+
+            val destDir = java.io.File(attachmentStorage.attachmentsDir, messageHash).also { it.mkdirs() }
+            val destFile = java.io.File(destDir, "$key.bin")
+            stagingFile.renameTo(destFile)
+
+            // Replace array with file reference object
+            val refObj =
+                JSONObject().apply {
+                    put("_binary_ref", destFile.absolutePath)
+                    put("mime_type", fieldArray.optString(0, ""))
+                }
+            modifiedFields.put(key, refObj)
+            Log.d(TAG, "Resolved staging file for field $key: ${destFile.absolutePath}")
+        }
+
+        return modifiedFields
+    }
 
     /**
      * Extract large attachments from fields and save to disk.

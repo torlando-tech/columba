@@ -36,7 +36,7 @@ interface ContactDao {
      */
     @Query(
         """
-        SELECT
+        SELECT DISTINCT
             c.destinationHash,
             c.publicKey,
             c.customNickname,

@@ -532,7 +532,7 @@ fun ContactsScreen(
                                 }
                                 items(
                                     contactsState.groupedContacts.pinned,
-                                    key = { contact -> "pinned_${contact.destinationHash}" },
+                                    key = { contact -> "pinned_${contact.destinationHash.lowercase()}" },
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
@@ -582,7 +582,7 @@ fun ContactsScreen(
                                 }
                                 items(
                                     contactsState.groupedContacts.all,
-                                    key = { contact -> "all_${contact.destinationHash}" },
+                                    key = { contact -> "all_${contact.destinationHash.lowercase()}" },
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,

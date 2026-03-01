@@ -447,6 +447,43 @@ class ContactsViewModelTest {
             }
         }
 
+    @Test
+    fun `groupedContacts - all group deduplicates destination hash case-insensitively`() =
+        runTest {
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "DUP_HASH",
+                            displayName = "Duplicate Upper",
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "dup_hash",
+                            displayName = "Duplicate Lower",
+                        ),
+                        TestFactories.createEnrichedContact(
+                            destinationHash = "unique_hash",
+                            displayName = "Unique",
+                        ),
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+
+            newViewModel.contactsState.test {
+                var groups = awaitItem().groupedContacts
+                while (groups.all.isEmpty()) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
+
+                assertEquals(2, groups.all.size)
+                assertEquals(1, groups.all.count { it.destinationHash.equals("dup_hash", ignoreCase = true) })
+                assertEquals(1, groups.all.count { it.destinationHash.equals("unique_hash", ignoreCase = true) })
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     // ========== Contact Operations Tests ==========
 
     @Test

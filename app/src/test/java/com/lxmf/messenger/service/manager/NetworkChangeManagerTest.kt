@@ -140,17 +140,18 @@ class NetworkChangeManagerTest {
 
     @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
-    fun `first network available does not trigger callback`() {
+    fun `first network available triggers callback for hot-add`() {
         networkChangeManager.start()
 
-        // Simulate first network connection
+        // Simulate first network connection (e.g., WiFi connects after starting without it)
         val network = mockk<android.net.Network>(relaxed = true)
         every { network.toString() } returns "network1"
 
         callbackSlot.captured.onAvailable(network)
 
-        // First network should not trigger callback (no previous network)
-        assertTrue("Callback should not trigger on first network", networkChangedCallCount == 0)
+        // First network SHOULD trigger callback so AutoInterface can hot-add the new interface
+        assertTrue("Callback should trigger on first network", networkChangedCallCount == 1)
+        verify(exactly = 1) { lockManager.acquireAll() }
     }
 
     @Suppress("NoRelaxedMocks") // Android Network framework class
@@ -158,24 +159,24 @@ class NetworkChangeManagerTest {
     fun `network change triggers callback and reacquires locks`() {
         networkChangeManager.start()
 
-        // Simulate first network
+        // Simulate first network (triggers once for initial connection)
         val network1 = mockk<android.net.Network>(relaxed = true)
         every { network1.toString() } returns "network1"
         callbackSlot.captured.onAvailable(network1)
 
-        // Simulate network change
+        // Simulate network change (triggers again for the switch)
         val network2 = mockk<android.net.Network>(relaxed = true)
         every { network2.toString() } returns "network2"
         callbackSlot.captured.onAvailable(network2)
 
-        // Should trigger callback and reacquire locks
-        assertTrue("Callback should trigger on network change", networkChangedCallCount == 1)
-        verify(exactly = 1) { lockManager.acquireAll() }
+        // Should trigger callback for both first connection and network switch
+        assertTrue("Callback should trigger on both connections", networkChangedCallCount == 2)
+        verify(exactly = 2) { lockManager.acquireAll() }
     }
 
     @Suppress("NoRelaxedMocks") // Android Network framework class
     @Test
-    fun `same network reconnecting does not trigger callback`() {
+    fun `same network reconnecting does not trigger callback again`() {
         networkChangeManager.start()
 
         // Simulate network
@@ -186,8 +187,9 @@ class NetworkChangeManagerTest {
         callbackSlot.captured.onAvailable(network)
         callbackSlot.captured.onAvailable(network)
 
-        // Should not trigger callback for same network
-        assertTrue("Callback should not trigger for same network", networkChangedCallCount == 0)
+        // Should trigger once for first connection, but not for same-network reconnect
+        assertTrue("Callback should only trigger once for same network", networkChangedCallCount == 1)
+        verify(exactly = 1) { lockManager.acquireAll() }
     }
 
     @Suppress("NoRelaxedMocks") // Android Network framework class
@@ -197,18 +199,20 @@ class NetworkChangeManagerTest {
 
         networkChangeManager.start()
 
+        // First connection triggers callback despite lock error
         val network1 = mockk<android.net.Network>(relaxed = true)
         every { network1.toString() } returns "network1"
         callbackSlot.captured.onAvailable(network1)
 
+        // Network switch also triggers callback despite lock error
         val network2 = mockk<android.net.Network>(relaxed = true)
         every { network2.toString() } returns "network2"
 
         // Should not throw despite lock acquisition failure
         callbackSlot.captured.onAvailable(network2)
 
-        // Callback should still be invoked
-        assertTrue("Callback should still be invoked after lock error", networkChangedCallCount == 1)
+        // Callback should be invoked for both connections
+        assertTrue("Callback should be invoked for both connections after lock error", networkChangedCallCount == 2)
     }
 
     @Suppress("NoRelaxedMocks") // Android Network framework class

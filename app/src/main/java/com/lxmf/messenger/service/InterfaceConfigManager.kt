@@ -119,7 +119,7 @@ class InterfaceConfigManager
                             }
                             reticulumProtocol.unbindService()
                         } catch (e: TimeoutCancellationException) {
-                            Log.w(TAG, "Shutdown timed out after 3s, proceeding with unbind")
+                            Log.w(TAG, "Shutdown timed out after 3s, proceeding with unbind", e)
                             reticulumProtocol.unbindService()
                         }
                     } catch (e: Exception) {

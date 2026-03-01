@@ -610,56 +610,78 @@ class EventHandler(
 
         val modifiedFields = JSONObject(fields.toString())
 
-        // Field 5: file attachments with file_path
         modifiedFields.optJSONArray("5")?.let { attachments ->
             for (i in 0 until attachments.length()) {
-                val attachment = attachments.optJSONObject(i) ?: continue
-                val stagingPath = attachment.optString("file_path", "").takeIf { it.isNotEmpty() } ?: continue
-
-                val stagingFile = java.io.File(stagingPath)
-                if (!stagingFile.exists()) {
-                    Log.w(TAG, "Staging file not found: $stagingPath")
-                    continue
-                }
-
-                // Move staging file to permanent attachment storage
-                val destDir = java.io.File(attachmentStorage.attachmentsDir, messageHash).also { it.mkdirs() }
-                val destFile = java.io.File(destDir, "5_$i.bin")
-                stagingFile.renameTo(destFile)
-
-                attachment.remove("file_path")
-                attachment.put("_binary_ref", destFile.absolutePath)
-                Log.d(TAG, "Resolved staging file for field 5[$i]: ${destFile.absolutePath}")
+                resolveFileAttachmentStaging(messageHash, attachments, i)
             }
         }
 
-        // Fields 6/7: media with file_path in 3rd array element [mime, null, path]
         for (key in listOf("6", "7")) {
-            val fieldArray = modifiedFields.optJSONArray(key) ?: continue
-            if (fieldArray.length() < 3) continue
-
-            val stagingPath = fieldArray.optString(2, "").takeIf { it.isNotEmpty() } ?: continue
-            val stagingFile = java.io.File(stagingPath)
-            if (!stagingFile.exists()) {
-                Log.w(TAG, "Staging file not found for field $key: $stagingPath")
-                continue
-            }
-
-            val destDir = java.io.File(attachmentStorage.attachmentsDir, messageHash).also { it.mkdirs() }
-            val destFile = java.io.File(destDir, "$key.bin")
-            stagingFile.renameTo(destFile)
-
-            // Replace array with file reference object
-            val refObj =
-                JSONObject().apply {
-                    put("_binary_ref", destFile.absolutePath)
-                    put("mime_type", fieldArray.optString(0, ""))
-                }
-            modifiedFields.put(key, refObj)
-            Log.d(TAG, "Resolved staging file for field $key: ${destFile.absolutePath}")
+            resolveMediaStaging(messageHash, key, modifiedFields)
         }
 
         return modifiedFields
+    }
+
+    private fun resolveFileAttachmentStaging(
+        messageHash: String,
+        attachments: JSONArray,
+        index: Int,
+    ) {
+        val attachment = attachments.optJSONObject(index) ?: return
+        val stagingPath = attachment.optString("file_path", "").takeIf { it.isNotEmpty() } ?: return
+
+        val stagingFile = java.io.File(stagingPath)
+        if (!stagingFile.exists()) {
+            Log.w(TAG, "Staging file not found: $stagingPath")
+            return
+        }
+
+        val destDir = java.io.File(attachmentStorage!!.attachmentsDir, messageHash).also { it.mkdirs() }
+        val destFile = java.io.File(destDir, "5_$index.bin")
+        moveFile(stagingFile, destFile)
+
+        attachment.remove("file_path")
+        attachment.put("_binary_ref", destFile.absolutePath)
+        Log.d(TAG, "Resolved staging file for field 5[$index]: ${destFile.absolutePath}")
+    }
+
+    private fun resolveMediaStaging(
+        messageHash: String,
+        key: String,
+        modifiedFields: JSONObject,
+    ) {
+        val fieldArray = modifiedFields.optJSONArray(key)?.takeIf { it.length() >= 3 } ?: return
+        val stagingPath = fieldArray.optString(2, "").takeIf { it.isNotEmpty() } ?: return
+
+        val stagingFile = java.io.File(stagingPath)
+        if (!stagingFile.exists()) {
+            Log.w(TAG, "Staging file not found for field $key: $stagingPath")
+            return
+        }
+
+        val destDir = java.io.File(attachmentStorage!!.attachmentsDir, messageHash).also { it.mkdirs() }
+        val destFile = java.io.File(destDir, "$key.bin")
+        moveFile(stagingFile, destFile)
+
+        val refObj =
+            JSONObject().apply {
+                put("_binary_ref", destFile.absolutePath)
+                put("mime_type", fieldArray.optString(0, ""))
+            }
+        modifiedFields.put(key, refObj)
+        Log.d(TAG, "Resolved staging file for field $key: ${destFile.absolutePath}")
+    }
+
+    private fun moveFile(
+        source: java.io.File,
+        dest: java.io.File,
+    ) {
+        if (!source.renameTo(dest)) {
+            Log.w(TAG, "renameTo failed for ${source.name}, falling back to copy")
+            source.copyTo(dest, overwrite = true)
+            source.delete()
+        }
     }
 
     /**

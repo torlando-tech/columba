@@ -7038,6 +7038,25 @@ class ReticulumWrapper:
                      f"Error getting interface stats: {e}")
             return None
 
+    # ==================== AutoInterface Hot-Add ====================
+
+    def restart_auto_interface(self) -> str:
+        """
+        Hot-add new network interfaces to an existing AutoInterface.
+
+        Delegates to auto_interface_manager.hot_add_interfaces() which scans for
+        network interfaces not yet adopted and adds them with full multicast
+        discovery + data server setup. See that module for details.
+
+        Returns:
+            JSON string with result: {"success": true/false, "action": "...", ...}
+        """
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return json.dumps({"success": False, "error": "not initialized"})
+
+        from auto_interface_manager import hot_add_interfaces
+        return hot_add_interfaces()
+
     # ==================== RNS 1.1.x Interface Discovery ====================
 
     def get_discovered_interfaces(self) -> str:

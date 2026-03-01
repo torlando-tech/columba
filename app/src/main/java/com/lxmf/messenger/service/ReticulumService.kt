@@ -64,18 +64,23 @@ class ReticulumService : Service() {
                     triggerServiceRestart()
                 },
                 onNetworkChanged = {
-                    // Trigger LXMF announce when network changes so peers can discover us
+                    // Trigger AutoInterface hot-add + LXMF announce when network changes.
                     // CRITICAL: Run in coroutine scope to avoid blocking the ConnectivityManager
                     // callback thread. Blocking that thread can cause Android's watchdog to kill
                     // the service, leading to "Service not bound" errors.
-                    Log.d(TAG, "Network changed - triggering LXMF announce")
+                    Log.d(TAG, "Network changed - restarting AutoInterface and triggering LXMF announce")
                     // Guard: binder property must be initialized AND Reticulum must be ready
                     // This prevents announces during service initialization, which can cause
                     // DataStore race conditions and service crashes
                     if (::binder.isInitialized && binder.isInitialized()) {
                         serviceScope.launch {
                             try {
-                                withTimeout(5000L) {
+                                withTimeout(10_000L) {
+                                    // Hot-add any new network interfaces to AutoInterface FIRST,
+                                    // so the subsequent announce goes out on the new interface.
+                                    // This fixes the bug where starting without WiFi and later
+                                    // connecting never discovers AutoInterface peers.
+                                    binder.restartAutoInterface()
                                     binder.announceLxmfDestination()
                                 }
                                 // Signal main app's AutoAnnounceManager to reset its timer

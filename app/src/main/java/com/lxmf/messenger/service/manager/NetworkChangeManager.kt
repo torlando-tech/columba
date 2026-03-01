@@ -52,8 +52,12 @@ class NetworkChangeManager(
                     val networkId = network.toString()
                     Log.d(TAG, "Network available: $networkId (previous: $lastNetworkId)")
 
-                    // Only trigger if this is a new network (not initial connection)
-                    if (lastNetworkId != null && lastNetworkId != networkId) {
+                    // Trigger on first connection OR network switch.
+                    // First-connection case (lastNetworkId == null) handles the scenario where
+                    // the app starts without WiFi and later connects — AutoInterface needs to
+                    // scan for the new network interface. The caller guards against premature
+                    // invocation before Reticulum is initialized.
+                    if (lastNetworkId == null || lastNetworkId != networkId) {
                         Log.i(TAG, "Network changed - reacquiring locks and triggering announce")
                         handleNetworkChange()
                     }
@@ -77,7 +81,8 @@ class NetworkChangeManager(
             }
 
         val request =
-            NetworkRequest.Builder()
+            NetworkRequest
+                .Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
 

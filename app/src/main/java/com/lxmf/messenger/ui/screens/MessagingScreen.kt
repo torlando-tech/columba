@@ -153,6 +153,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.lxmf.messenger.R
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.AttachmentPanel
@@ -1259,7 +1260,17 @@ fun MessagingScreen(
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             onFileClick = {
-                                filePickerLauncher.launch(arrayOf("*/*"))
+                                try {
+                                    filePickerLauncher.launch(arrayOf("*/*"))
+                                } catch (e: android.content.ActivityNotFoundException) {
+                                    Log.w("MessagingScreen", "No file manager found", e)
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            context.getString(R.string.error_no_file_manager),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                }
                                 inputPanelMode = InputPanelMode.NONE
                             },
                             modifier = Modifier.navigationBarsPadding(),

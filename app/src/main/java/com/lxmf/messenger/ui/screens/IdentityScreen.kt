@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +83,7 @@ import com.lxmf.messenger.viewmodel.DebugInfo
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.InterfaceInfo
 import com.lxmf.messenger.viewmodel.TestAnnounceResult
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -215,7 +217,9 @@ fun IdentityScreen(
 
     // Service Restart Dialog
     if (isRestarting) {
-        ServiceRestartDialog()
+        ServiceRestartDialog(
+            onCancel = { viewModel.cancelRestart() },
+        )
     }
 }
 
@@ -1444,11 +1448,19 @@ private fun ServiceControlCard(
 
 /**
  * Blocking dialog shown while restarting the Reticulum service.
+ * Shows a cancel button after 15 seconds as an escape hatch.
  */
 @Composable
-private fun ServiceRestartDialog() {
+private fun ServiceRestartDialog(onCancel: () -> Unit) {
+    var showCancel by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(15_000)
+        showCancel = true
+    }
+
     androidx.compose.material3.AlertDialog(
-        onDismissRequest = { /* Cannot dismiss - blocking */ },
+        onDismissRequest = { if (showCancel) onCancel() },
         icon = {
             CircularProgressIndicator(
                 modifier = Modifier.size(48.dp),
@@ -1472,6 +1484,12 @@ private fun ServiceRestartDialog() {
                 )
             }
         },
-        confirmButton = { /* No buttons - blocking */ },
+        confirmButton = {
+            if (showCancel) {
+                androidx.compose.material3.TextButton(onClick = onCancel) {
+                    Text("Cancel")
+                }
+            }
+        },
     )
 }

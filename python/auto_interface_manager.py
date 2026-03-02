@@ -28,6 +28,14 @@ class _IPv6UDPServer(socketserver.UDPServer):
     address_family = socket.AF_INET6
 
 
+# Serializes concurrent hot_add_interfaces() calls.  Rapid network changes
+# (e.g. WiFi toggling) fire multiple serviceScope.launch coroutines on the
+# Kotlin side, and the Python GIL is released during socket syscalls, so
+# without this lock two calls could both see the same interface as unadopted
+# and race to bind the same ports.
+_hot_add_lock = threading.Lock()
+
+
 def hot_add_interfaces() -> str:
     """
     Scan for network interfaces not yet adopted by the AutoInterface and add them.
@@ -41,57 +49,58 @@ def hot_add_interfaces() -> str:
     Returns:
         JSON string: {"success": true/false, "action": "...", "count": N}
     """
-    try:
-        import RNS
-        from RNS.Interfaces.AutoInterface import AutoInterface as AutoInterfaceClass
-        from RNS.Interfaces import netinfo
-    except ImportError:
-        return json.dumps({"success": False, "error": "RNS not available"})
-
-    # Find the existing AutoInterface in Transport
-    auto_iface = _find_auto_interface(RNS)
-    if auto_iface is None:
-        return json.dumps({"success": False, "error": "no AutoInterface in Transport"})
-
-    # Scan for interfaces not yet adopted
-    new_adopted = _scan_new_interfaces(auto_iface, AutoInterfaceClass, netinfo)
-    if not new_adopted:
-        log_debug(TAG, "hot_add_interfaces",
-                  f"No new interfaces (adopted: {list(auto_iface.adopted_interfaces.keys())})")
-        return json.dumps({"success": True, "action": "no_new_interfaces"})
-
-    # Add each new interface
-    added_count = 0
-    for ifname, link_local_addr in new_adopted.items():
+    with _hot_add_lock:
         try:
-            _add_interface(auto_iface, AutoInterfaceClass, ifname, link_local_addr)
-            added_count += 1
-            RNS.log(
-                f"{auto_iface} Hot-added interface {ifname} "
-                f"with address {link_local_addr}",
-                RNS.LOG_NOTICE
-            )
-        except Exception as e:
-            log_error(TAG, "hot_add_interfaces", f"Failed to hot-add {ifname}: {e}")
-            RNS.log(
-                f"Could not hot-add interface {ifname} to {auto_iface}: {e}",
-                RNS.LOG_ERROR
-            )
+            import RNS
+            from RNS.Interfaces.AutoInterface import AutoInterface as AutoInterfaceClass
+            from RNS.Interfaces import netinfo
+        except ImportError:
+            return json.dumps({"success": False, "error": "RNS not available"})
 
-    # Ensure AutoInterface is marked as active
-    if added_count > 0:
-        if not auto_iface.receives:
-            auto_iface.receives = True
-        if not auto_iface.OUT:
-            auto_iface.OUT = True
-        auto_iface.carrier_changed = True
+        # Find the existing AutoInterface in Transport
+        auto_iface = _find_auto_interface(RNS)
+        if auto_iface is None:
+            return json.dumps({"success": False, "error": "no AutoInterface in Transport"})
 
-    log_info(TAG, "hot_add_interfaces", f"Hot-added {added_count} interface(s)")
-    return json.dumps({
-        "success": True,
-        "action": "added_interfaces",
-        "count": added_count
-    })
+        # Scan for interfaces not yet adopted
+        new_adopted = _scan_new_interfaces(auto_iface, AutoInterfaceClass, netinfo)
+        if not new_adopted:
+            log_debug(TAG, "hot_add_interfaces",
+                      f"No new interfaces (adopted: {list(auto_iface.adopted_interfaces.keys())})")
+            return json.dumps({"success": True, "action": "no_new_interfaces"})
+
+        # Add each new interface
+        added_count = 0
+        for ifname, link_local_addr in new_adopted.items():
+            try:
+                _add_interface(auto_iface, AutoInterfaceClass, ifname, link_local_addr)
+                added_count += 1
+                RNS.log(
+                    f"{auto_iface} Hot-added interface {ifname} "
+                    f"with address {link_local_addr}",
+                    RNS.LOG_NOTICE
+                )
+            except Exception as e:
+                log_error(TAG, "hot_add_interfaces", f"Failed to hot-add {ifname}: {e}")
+                RNS.log(
+                    f"Could not hot-add interface {ifname} to {auto_iface}: {e}",
+                    RNS.LOG_ERROR
+                )
+
+        # Ensure AutoInterface is marked as active
+        if added_count > 0:
+            if not auto_iface.receives:
+                auto_iface.receives = True
+            if not auto_iface.OUT:
+                auto_iface.OUT = True
+            auto_iface.carrier_changed = True
+
+        log_info(TAG, "hot_add_interfaces", f"Hot-added {added_count} interface(s)")
+        return json.dumps({
+            "success": True,
+            "action": "added_interfaces",
+            "count": added_count
+        })
 
 
 def _find_auto_interface(rns_module) -> Optional[object]:
@@ -192,8 +201,8 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
             )
         ds.bind(addr_info[0][4])
 
-        # --- Start discovery threads ---
-        # Factory functions capture loop variables properly (avoids late-binding closure bug)
+        # --- Factory functions for discovery threads ---
+        # Capture loop variables properly (avoids late-binding closure bug)
         def _make_discovery_loop(sock, name):
             def loop():
                 auto_iface.discovery_handler(sock, name)
@@ -204,10 +213,9 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
                 auto_iface.discovery_handler(sock, name, announce=False)
             return loop
 
-        threading.Thread(target=_make_discovery_loop(ds, ifname), daemon=True).start()
-        threading.Thread(target=_make_unicast_loop(uds, ifname), daemon=True).start()
-
-        # --- Create UDP data server ---
+        # --- Create UDP data server BEFORE starting any threads ---
+        # If this fails, no threads are running yet, so socket cleanup in
+        # the except block is clean (no threads blocking on recvfrom).
         local_addr = link_local_addr + "%" + str(if_index)
         addr_info = socket.getaddrinfo(
             local_addr, auto_iface.data_port,
@@ -217,6 +225,10 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
             addr_info[0][4],
             auto_iface.handler_factory(auto_iface.process_incoming)
         )
+
+        # --- Start ALL threads only after all resources are created ---
+        threading.Thread(target=_make_discovery_loop(ds, ifname), daemon=True).start()
+        threading.Thread(target=_make_unicast_loop(uds, ifname), daemon=True).start()
         thread = threading.Thread(target=udp_server.serve_forever)
         thread.daemon = True
         thread.start()

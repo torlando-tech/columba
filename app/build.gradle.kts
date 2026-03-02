@@ -362,6 +362,7 @@ dependencies {
     implementation(project(":data"))
     implementation("tech.torlando:lxst")
     implementation(project(":reticulum"))
+    implementation(project(":micron"))
 
     // Core
     implementation(libs.core.ktx)

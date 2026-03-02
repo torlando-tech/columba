@@ -90,6 +90,7 @@ import com.lxmf.messenger.ui.screens.MessageDetailScreen
 import com.lxmf.messenger.ui.screens.MessagingScreen
 import com.lxmf.messenger.ui.screens.MigrationScreen
 import com.lxmf.messenger.ui.screens.MyIdentityScreen
+import com.lxmf.messenger.ui.screens.NomadNetBrowserScreen
 import com.lxmf.messenger.ui.screens.NotificationSettingsScreen
 import com.lxmf.messenger.ui.screens.QrScannerScreen
 import com.lxmf.messenger.ui.screens.SettingsScreen
@@ -951,6 +952,7 @@ fun ColumbaNavigation(
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
+            "nomadnet_browser/",
         )
     val shouldShowBottomNav =
         currentRoute != null &&
@@ -1981,6 +1983,24 @@ fun ColumbaNavigation(
                                     val encodedName = Uri.encode(peerName)
                                     navController.navigate("messaging/$encodedHash/$encodedName")
                                 },
+                                onBrowseNode = { destHash ->
+                                    navController.navigate("nomadnet_browser/$destHash")
+                                },
+                            )
+                        }
+
+                        // NomadNet Browser screen
+                        composable(
+                            route = "nomadnet_browser/{destinationHash}",
+                            arguments =
+                                listOf(
+                                    navArgument("destinationHash") { type = NavType.StringType },
+                                ),
+                        ) { backStackEntry ->
+                            val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                            NomadNetBrowserScreen(
+                                destinationHash = destHash,
+                                onBackClick = { navController.popBackStack() },
                             )
                         }
 

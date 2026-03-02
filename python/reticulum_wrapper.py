@@ -6990,6 +6990,239 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "get_link_status", f"Error: {e}")
             return {"active": False, "error": str(e)}
 
+    # ===========================================
+    # NomadNet Page Browser
+    # ===========================================
+
+    def request_nomadnet_page(self, dest_hash: bytes, path: str = "/page/index.mu",
+                              form_data_json: str = None, timeout_seconds: float = 45.0) -> Dict:
+        """
+        Request a page from a NomadNet node.
+
+        Creates or reuses a link to the nomadnetwork.node destination,
+        then sends a page request over that link.
+
+        Args:
+            dest_hash: Destination hash as bytes (16 bytes)
+            path: Page path (e.g., "/page/index.mu")
+            form_data_json: Optional JSON string of form field values
+            timeout_seconds: Total timeout for the operation
+
+        Returns:
+            Dict with:
+            - success: True if page was received
+            - content: Page content as UTF-8 string
+            - path: Requested path
+            - error: Error message (if failed)
+        """
+        if not RETICULUM_AVAILABLE or not self.router:
+            return {"success": False, "error": "Not initialized"}
+
+        try:
+            dest_hash = bytes(dest_hash)
+            dest_hash_hex = dest_hash.hex()
+            log_info("ReticulumWrapper", "request_nomadnet_page",
+                     f"Requesting page {path} from {dest_hash_hex[:16]}...")
+
+            # Initialize link cache if needed
+            if not hasattr(self, '_nomadnet_links'):
+                self._nomadnet_links = {}
+
+            # Initialize cancellation flag
+            self._nomadnet_cancel_flag = False
+
+            # Parse form data if provided
+            request_data = None
+            if form_data_json:
+                try:
+                    import json
+                    raw_data = json.loads(form_data_json)
+                    if isinstance(raw_data, dict) and len(raw_data) > 0:
+                        # Prefix field names with "field_" for NomadNet convention
+                        request_data = {}
+                        for key, value in raw_data.items():
+                            if not key.startswith("field_") and not key.startswith("var_"):
+                                request_data["field_" + key] = value
+                            else:
+                                request_data[key] = value
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "request_nomadnet_page",
+                               f"Failed to parse form data: {e}")
+
+            # Check for existing cached link FIRST — avoids identity recall
+            # when we already have an active connection to the node
+            link = self._nomadnet_links.get(dest_hash_hex)
+            if link is not None and link.status != RNS.Link.ACTIVE:
+                # Stale link, remove it
+                log_debug("ReticulumWrapper", "request_nomadnet_page",
+                         f"Stale link to {dest_hash_hex[:16]}, will re-establish")
+                self._nomadnet_links.pop(dest_hash_hex, None)
+                link = None
+
+            # Only recall identity and establish link if no cached active link
+            if link is not None:
+                log_info("ReticulumWrapper", "request_nomadnet_page",
+                         f"Reusing cached active link to {dest_hash_hex[:16]}")
+
+            if link is None:
+                # Recall identity — only needed when establishing a new link
+                recipient_identity = RNS.Identity.recall(dest_hash)
+                if not recipient_identity:
+                    recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
+                if not recipient_identity and dest_hash_hex in self.identities:
+                    recipient_identity = self.identities[dest_hash_hex]
+
+                # If identity not known, request path — the node's announce
+                # response will populate the identity in known_destinations
+                if not recipient_identity:
+                    log_info("ReticulumWrapper", "request_nomadnet_page",
+                             f"Identity not cached, requesting path to discover {dest_hash_hex[:16]}...")
+                    RNS.Transport.request_path(dest_hash)
+                    path_timeout = time.time() + min(timeout_seconds / 2, 15.0)
+                    while time.time() < path_timeout:
+                        if self._nomadnet_cancel_flag:
+                            return {"success": False, "error": "Cancelled"}
+                        # Check if identity became available (from announce response)
+                        recipient_identity = RNS.Identity.recall(dest_hash)
+                        if recipient_identity:
+                            break
+                        time.sleep(0.25)
+
+                if not recipient_identity:
+                    return {"success": False, "error": "Could not discover identity for this node. The node may be offline."}
+
+                # Create NomadNet node destination (different aspect than lxmf.delivery)
+                node_dest = RNS.Destination(
+                    recipient_identity,
+                    RNS.Destination.OUT,
+                    RNS.Destination.SINGLE,
+                    "nomadnetwork",
+                    "node"
+                )
+
+                # Check/request path (may already have it from the identity discovery step)
+                if not RNS.Transport.has_path(node_dest.hash):
+                    RNS.Transport.request_path(node_dest.hash)
+                    path_timeout = time.time() + min(timeout_seconds / 2, 15.0)
+                    while time.time() < path_timeout:
+                        if self._nomadnet_cancel_flag:
+                            return {"success": False, "error": "Cancelled"}
+                        if RNS.Transport.has_path(node_dest.hash):
+                            break
+                        time.sleep(0.25)
+                    if not RNS.Transport.has_path(node_dest.hash):
+                        return {"success": False, "error": "No path to node"}
+
+                # Establish link
+                link_established = threading.Event()
+                link_failed = [False]
+
+                def on_link_established(established_link):
+                    log_info("ReticulumWrapper", "request_nomadnet_page",
+                             f"Link established to {dest_hash_hex[:16]}")
+                    link_established.set()
+
+                def on_link_closed(closed_link):
+                    link_failed[0] = True
+                    link_established.set()
+
+                link = RNS.Link(node_dest,
+                                established_callback=on_link_established,
+                                closed_callback=on_link_closed)
+
+                # Wait for link establishment
+                link_timeout = min(timeout_seconds / 2, 20.0)
+                link_established.wait(timeout=link_timeout)
+
+                if self._nomadnet_cancel_flag:
+                    try:
+                        link.teardown()
+                    except:
+                        pass
+                    return {"success": False, "error": "Cancelled"}
+
+                if link_failed[0] or link.status != RNS.Link.ACTIVE:
+                    status_str = str(link.status) if link else "unknown"
+                    log_warning("ReticulumWrapper", "request_nomadnet_page",
+                               f"Link to {dest_hash_hex[:16]} failed (status={status_str}, rejected={link_failed[0]})")
+                    try:
+                        link.teardown()
+                    except:
+                        pass
+                    if link_failed[0]:
+                        return {"success": False, "error": "Connection rejected by node"}
+                    return {"success": False, "error": "Connection timed out. Node may be offline or unreachable."}
+
+                # Cache the link
+                self._nomadnet_links[dest_hash_hex] = link
+
+            # Make page request over the link
+            response_event = threading.Event()
+            response_data = [None]
+            response_error = [None]
+
+            def response_received(request_receipt):
+                try:
+                    response_data[0] = request_receipt.response
+                    log_info("ReticulumWrapper", "request_nomadnet_page",
+                             f"Page received: {len(response_data[0])} bytes")
+                except Exception as e:
+                    response_error[0] = str(e)
+                response_event.set()
+
+            def request_failed(request_receipt=None):
+                response_error[0] = "Request failed"
+                log_warning("ReticulumWrapper", "request_nomadnet_page",
+                           f"Page request failed for {path}")
+                response_event.set()
+
+            log_debug("ReticulumWrapper", "request_nomadnet_page",
+                     f"Sending request for path: {path}")
+
+            link.request(
+                path,
+                data=request_data,
+                response_callback=response_received,
+                failed_callback=request_failed
+            )
+
+            # Wait for response
+            remaining_timeout = max(timeout_seconds - (timeout_seconds / 2), 10.0)
+            response_event.wait(timeout=remaining_timeout)
+
+            if self._nomadnet_cancel_flag:
+                return {"success": False, "error": "Cancelled"}
+
+            if response_error[0]:
+                return {"success": False, "error": response_error[0]}
+
+            if response_data[0] is None:
+                log_warning("ReticulumWrapper", "request_nomadnet_page",
+                           f"Page request timed out for {path} on {dest_hash_hex[:16]}")
+                return {"success": False, "error": "Page request timed out"}
+
+            # Decode response
+            try:
+                content = response_data[0].decode("utf-8")
+            except Exception:
+                content = str(response_data[0])
+
+            return {
+                "success": True,
+                "content": content,
+                "path": path
+            }
+
+        except Exception as e:
+            log_error("ReticulumWrapper", "request_nomadnet_page", f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
+    def cancel_nomadnet_page_request(self):
+        """Set cancellation flag for any in-progress NomadNet page request."""
+        self._nomadnet_cancel_flag = True
+
     def get_debug_info(self) -> Dict:
         """
         Get comprehensive debug information about Reticulum status.

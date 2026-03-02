@@ -1,0 +1,263 @@
+package com.lxmf.messenger.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.ui.components.MicronPageContent
+import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel
+import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.BrowserState
+import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.RenderingMode
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NomadNetBrowserScreen(
+    destinationHash: String,
+    onBackClick: () -> Unit,
+    viewModel: NomadNetBrowserViewModel = hiltViewModel(),
+) {
+    val browserState by viewModel.browserState.collectAsState()
+    val formFields by viewModel.formFields.collectAsState()
+    val renderingMode by viewModel.renderingMode.collectAsState()
+    val isDark = isSystemInDarkTheme()
+    var showMenu by remember { mutableStateOf(false) }
+
+    // Load initial page
+    LaunchedEffect(destinationHash) {
+        if (browserState is BrowserState.Initial) {
+            viewModel.loadPage(destinationHash)
+        }
+    }
+
+    // Handle system back — go back in browser history first
+    BackHandler(enabled = viewModel.canGoBack) {
+        viewModel.goBack()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "NomadNet Browser",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        val currentPath = (browserState as? BrowserState.PageLoaded)?.path
+                        if (currentPath != null) {
+                            Text(
+                                text = currentPath,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (!viewModel.goBack()) {
+                            onBackClick()
+                        }
+                    }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (browserState is BrowserState.PageLoaded) {
+                        IconButton(onClick = { viewModel.refresh() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                        ) {
+                            RenderingMode.entries.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = {
+                                        val label =
+                                            when (mode) {
+                                                RenderingMode.MONOSPACE_SCROLL -> "Monospace (scroll)"
+                                                RenderingMode.MONOSPACE_ZOOM -> "Monospace (zoom)"
+                                                RenderingMode.PROPORTIONAL_WRAP -> "Proportional (wrap)"
+                                            }
+                                        Text(label)
+                                    },
+                                    leadingIcon = {
+                                        RadioButton(
+                                            selected = renderingMode == mode,
+                                            onClick = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setRenderingMode(mode)
+                                        showMenu = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+            )
+        },
+    ) { paddingValues ->
+        when (val state = browserState) {
+            is BrowserState.Initial -> {
+                // Nothing to show yet
+            }
+
+            is BrowserState.Loading -> {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = state.statusMessage,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(onClick = { viewModel.cancelLoading() }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+
+            is BrowserState.PageLoaded -> {
+                PullToRefreshBox(
+                    isRefreshing = false,
+                    onRefresh = { viewModel.refresh() },
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                ) {
+                    LazyColumn(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        items(
+                            items = state.document.lines,
+                            key = null,
+                        ) { line ->
+                            MicronPageContent(
+                                document =
+                                    com.lxmf.messenger.micron
+                                        .MicronDocument(listOf(line)),
+                                formFields = formFields,
+                                renderingMode = renderingMode,
+                                isDark = isDark,
+                                onLinkClick = { destination, fieldNames ->
+                                    viewModel.navigateToLink(destination, fieldNames)
+                                },
+                                onFieldUpdate = { name, value ->
+                                    viewModel.updateField(name, value)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            is BrowserState.Error -> {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = "Failed to load page",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { viewModel.loadPage(destinationHash) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Retry")
+                    }
+                }
+            }
+        }
+    }
+}

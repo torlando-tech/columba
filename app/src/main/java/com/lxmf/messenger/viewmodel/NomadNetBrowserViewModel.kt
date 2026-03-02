@@ -1,0 +1,259 @@
+package com.lxmf.messenger.viewmodel
+
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.micron.MicronDocument
+import com.lxmf.messenger.micron.MicronParser
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import javax.inject.Inject
+
+@HiltViewModel
+class NomadNetBrowserViewModel
+    @Inject
+    constructor(
+        private val reticulumProtocol: ReticulumProtocol,
+    ) : ViewModel() {
+        companion object {
+            private const val TAG = "NomadNetBrowserVM"
+            private const val DEFAULT_PATH = "/page/index.mu"
+            private const val PAGE_TIMEOUT_SECONDS = 45f
+        }
+
+        sealed class BrowserState {
+            data object Initial : BrowserState()
+
+            data class Loading(
+                val statusMessage: String,
+            ) : BrowserState()
+
+            data class PageLoaded(
+                val document: MicronDocument,
+                val path: String,
+                val nodeHash: String,
+            ) : BrowserState()
+
+            data class Error(
+                val message: String,
+            ) : BrowserState()
+        }
+
+        enum class RenderingMode {
+            MONOSPACE_SCROLL,
+            MONOSPACE_ZOOM,
+            PROPORTIONAL_WRAP,
+        }
+
+        private data class HistoryEntry(
+            val nodeHash: String,
+            val path: String,
+            val formFields: Map<String, String>,
+        )
+
+        private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
+        val browserState: StateFlow<BrowserState> = _browserState.asStateFlow()
+
+        private val _formFields = MutableStateFlow<Map<String, String>>(emptyMap())
+        val formFields: StateFlow<Map<String, String>> = _formFields.asStateFlow()
+
+        private val _renderingMode = MutableStateFlow(RenderingMode.MONOSPACE_SCROLL)
+        val renderingMode: StateFlow<RenderingMode> = _renderingMode.asStateFlow()
+
+        private val history = mutableListOf<HistoryEntry>()
+        private var currentNodeHash = ""
+
+        val canGoBack: Boolean get() = history.isNotEmpty()
+
+        fun loadPage(
+            destinationHash: String,
+            path: String = DEFAULT_PATH,
+        ) {
+            currentNodeHash = destinationHash
+            _formFields.value = emptyMap()
+            _browserState.value = BrowserState.Loading("Requesting page...")
+
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                    if (protocol == null) {
+                        _browserState.value = BrowserState.Error("Service not available")
+                        return@launch
+                    }
+
+                    _browserState.value = BrowserState.Loading("Connecting to node...")
+
+                    val result =
+                        protocol.requestNomadnetPage(
+                            destinationHash = destinationHash,
+                            path = path,
+                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                        )
+
+                    result.fold(
+                        onSuccess = { pageResult ->
+                            val document = MicronParser.parse(pageResult.content)
+                            _browserState.value =
+                                BrowserState.PageLoaded(
+                                    document = document,
+                                    path = pageResult.path,
+                                    nodeHash = destinationHash,
+                                )
+                        },
+                        onFailure = { error ->
+                            _browserState.value =
+                                BrowserState.Error(
+                                    error.message ?: "Unknown error",
+                                )
+                        },
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading page", e)
+                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                }
+            }
+        }
+
+        fun navigateToLink(
+            destination: String,
+            fieldNames: List<String>,
+        ) {
+            // Save current page to history
+            val currentState = _browserState.value
+            if (currentState is BrowserState.PageLoaded) {
+                history.add(
+                    HistoryEntry(
+                        nodeHash = currentState.nodeHash,
+                        path = currentState.path,
+                        formFields = _formFields.value.toMap(),
+                    ),
+                )
+            }
+
+            // Collect form field values for submission
+            val formDataJson =
+                if (fieldNames.isNotEmpty()) {
+                    val data = JSONObject()
+                    for (fieldName in fieldNames) {
+                        val value = _formFields.value[fieldName] ?: ""
+                        data.put(fieldName, value)
+                    }
+                    data.toString()
+                } else {
+                    null
+                }
+
+            // Parse destination per NomadNet format:
+            //   "/page/path.mu" = same node
+            //   "nnn@<hash>/page/path.mu" or "nomadnetwork.node@<hash>/page/path.mu" = cross-node
+            val nodeHash: String
+            val path: String
+            if (destination.contains("@")) {
+                // Cross-node link: "type@hash/path"
+                val afterAt = destination.substringAfter("@")
+                // Hash is 32 hex chars, followed by optional /path
+                if (afterAt.length >= 32) {
+                    val hashPart = afterAt.take(32)
+                    val pathPart = afterAt.drop(32)
+                    nodeHash = hashPart
+                    path = pathPart.ifEmpty { DEFAULT_PATH }
+                } else {
+                    // Malformed cross-node link, treat as same-node
+                    nodeHash = currentNodeHash
+                    path = destination
+                }
+            } else {
+                nodeHash = currentNodeHash
+                path = destination
+            }
+
+            _formFields.value = emptyMap()
+            _browserState.value = BrowserState.Loading("Requesting page...")
+
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                    if (protocol == null) {
+                        _browserState.value = BrowserState.Error("Service not available")
+                        return@launch
+                    }
+
+                    val result =
+                        protocol.requestNomadnetPage(
+                            destinationHash = nodeHash,
+                            path = path,
+                            formDataJson = formDataJson,
+                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                        )
+
+                    result.fold(
+                        onSuccess = { pageResult ->
+                            currentNodeHash = nodeHash
+                            val document = MicronParser.parse(pageResult.content)
+                            _browserState.value =
+                                BrowserState.PageLoaded(
+                                    document = document,
+                                    path = pageResult.path,
+                                    nodeHash = nodeHash,
+                                )
+                        },
+                        onFailure = { error ->
+                            _browserState.value =
+                                BrowserState.Error(
+                                    error.message ?: "Unknown error",
+                                )
+                        },
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error navigating", e)
+                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                }
+            }
+        }
+
+        fun goBack(): Boolean {
+            if (history.isEmpty()) return false
+
+            val entry = history.removeLast()
+            _formFields.value = entry.formFields
+            loadPage(entry.nodeHash, entry.path)
+            return true
+        }
+
+        fun refresh() {
+            val currentState = _browserState.value
+            if (currentState is BrowserState.PageLoaded) {
+                loadPage(currentState.nodeHash, currentState.path)
+            }
+        }
+
+        fun cancelLoading() {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    (reticulumProtocol as? ServiceReticulumProtocol)?.cancelNomadnetPageRequest()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error cancelling", e)
+                }
+            }
+            _browserState.value = BrowserState.Error("Cancelled")
+        }
+
+        fun updateField(
+            name: String,
+            value: String,
+        ) {
+            _formFields.update { it + (name to value) }
+        }
+
+        fun setRenderingMode(mode: RenderingMode) {
+            _renderingMode.value = mode
+        }
+    }

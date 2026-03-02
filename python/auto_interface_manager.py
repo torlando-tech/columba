@@ -149,76 +149,93 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
     if_index = auto_iface.interface_name_to_index(ifname)
     if_struct = struct.pack("I", if_index)
 
-    # --- Unicast discovery socket ---
-    uds = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-    uds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if hasattr(socket, "SO_REUSEPORT"):
-        uds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    addr_info = socket.getaddrinfo(
-        link_local_addr + "%" + ifname,
-        auto_iface.unicast_discovery_port,
-        socket.AF_INET6, socket.SOCK_DGRAM
-    )
-    uds.bind(addr_info[0][4])
-
-    # --- Multicast discovery socket ---
-    mcast_addr = auto_iface.mcast_discovery_address
-    ds = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-    ds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if hasattr(socket, "SO_REUSEPORT"):
-        ds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    ds.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_IF, if_struct)
-
-    # Join multicast group
-    mcast_group = socket.inet_pton(socket.AF_INET6, mcast_addr) + if_struct
-    ds.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mcast_group)
-
-    # Bind multicast socket
-    if auto_iface.discovery_scope == auto_cls.SCOPE_LINK:
+    uds = None
+    ds = None
+    udp_server = None
+    try:
+        # --- Unicast discovery socket ---
+        uds = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        uds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            uds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         addr_info = socket.getaddrinfo(
-            mcast_addr + "%" + ifname,
-            auto_iface.discovery_port,
+            link_local_addr + "%" + ifname,
+            auto_iface.unicast_discovery_port,
             socket.AF_INET6, socket.SOCK_DGRAM
         )
-    else:
+        uds.bind(addr_info[0][4])
+
+        # --- Multicast discovery socket ---
+        mcast_addr = auto_iface.mcast_discovery_address
+        ds = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        ds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            ds.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        ds.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_IF, if_struct)
+
+        # Join multicast group
+        mcast_group = socket.inet_pton(socket.AF_INET6, mcast_addr) + if_struct
+        ds.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mcast_group)
+
+        # Bind multicast socket
+        if auto_iface.discovery_scope == auto_cls.SCOPE_LINK:
+            addr_info = socket.getaddrinfo(
+                mcast_addr + "%" + ifname,
+                auto_iface.discovery_port,
+                socket.AF_INET6, socket.SOCK_DGRAM
+            )
+        else:
+            addr_info = socket.getaddrinfo(
+                mcast_addr,
+                auto_iface.discovery_port,
+                socket.AF_INET6, socket.SOCK_DGRAM
+            )
+        ds.bind(addr_info[0][4])
+
+        # --- Start discovery threads ---
+        # Factory functions capture loop variables properly (avoids late-binding closure bug)
+        def _make_discovery_loop(sock, name):
+            def loop():
+                auto_iface.discovery_handler(sock, name)
+            return loop
+
+        def _make_unicast_loop(sock, name):
+            def loop():
+                auto_iface.discovery_handler(sock, name, announce=False)
+            return loop
+
+        threading.Thread(target=_make_discovery_loop(ds, ifname), daemon=True).start()
+        threading.Thread(target=_make_unicast_loop(uds, ifname), daemon=True).start()
+
+        # --- Create UDP data server ---
+        local_addr = link_local_addr + "%" + str(if_index)
         addr_info = socket.getaddrinfo(
-            mcast_addr,
-            auto_iface.discovery_port,
+            local_addr, auto_iface.data_port,
             socket.AF_INET6, socket.SOCK_DGRAM
         )
-    ds.bind(addr_info[0][4])
+        udp_server = _IPv6UDPServer(
+            addr_info[0][4],
+            auto_iface.handler_factory(auto_iface.process_incoming)
+        )
+        thread = threading.Thread(target=udp_server.serve_forever)
+        thread.daemon = True
+        thread.start()
 
-    # --- Start discovery threads ---
-    # Factory functions capture loop variables properly (avoids late-binding closure bug)
-    def _make_discovery_loop(sock, name):
-        def loop():
-            auto_iface.discovery_handler(sock, name)
-        return loop
-
-    def _make_unicast_loop(sock, name):
-        def loop():
-            auto_iface.discovery_handler(sock, name, announce=False)
-        return loop
-
-    threading.Thread(target=_make_discovery_loop(ds, ifname), daemon=True).start()
-    threading.Thread(target=_make_unicast_loop(uds, ifname), daemon=True).start()
-
-    # --- Create UDP data server ---
-    local_addr = link_local_addr + "%" + str(if_index)
-    addr_info = socket.getaddrinfo(
-        local_addr, auto_iface.data_port,
-        socket.AF_INET6, socket.SOCK_DGRAM
-    )
-    udp_server = _IPv6UDPServer(
-        addr_info[0][4],
-        auto_iface.handler_factory(auto_iface.process_incoming)
-    )
-    thread = threading.Thread(target=udp_server.serve_forever)
-    thread.daemon = True
-    thread.start()
-
-    # Register in AutoInterface state ONLY after successful setup
-    auto_iface.link_local_addresses.append(link_local_addr)
-    auto_iface.adopted_interfaces[ifname] = link_local_addr
-    auto_iface.multicast_echoes[ifname] = time.time()
-    auto_iface.interface_servers[ifname] = udp_server
+        # Register in AutoInterface state ONLY after successful setup
+        auto_iface.link_local_addresses.append(link_local_addr)
+        auto_iface.adopted_interfaces[ifname] = link_local_addr
+        auto_iface.multicast_echoes[ifname] = time.time()
+        auto_iface.interface_servers[ifname] = udp_server
+    except Exception:
+        for s in (uds, ds):
+            if s:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+        if udp_server:
+            try:
+                udp_server.server_close()
+            except OSError:
+                pass
+        raise

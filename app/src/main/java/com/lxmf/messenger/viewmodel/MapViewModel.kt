@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
-import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
@@ -132,7 +131,6 @@ class MapViewModel
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
-        private val identityRepository: IdentityRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -276,12 +274,9 @@ class MapViewModel
                     contacts,
                     announceDao.getEnrichedAnnounces(),
                     _refreshTrigger,
-                    identityRepository.activeIdentity,
-                ) { locations, contactList, announceList, _, activeIdentity ->
+                ) { locations, contactList, announceList, _ ->
                     val currentTime = System.currentTimeMillis()
-                    val localHashes =
-                        listOfNotNull(activeIdentity?.destinationHash, activeIdentity?.identityHash)
-                            .map { it.lowercase() }
+                    val localHashes = telemetryCollectorManager.getLocalIdentityHashes()
 
                     // Create lookup maps from contacts
                     val contactMap = contactList.associateBy { it.destinationHash }

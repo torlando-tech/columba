@@ -158,10 +158,13 @@ private fun hasImageField(fieldsJson: String?): Boolean {
         when {
             field6 is JSONObject && (field6.has(FILE_REF_KEY) || field6.has(BINARY_REF_KEY)) -> true
             field6 is String && field6.isNotEmpty() -> true
-            // Handle array format from Python: ["format", "hex_data"]
+            // Handle array format from Python: ["format", "hex_data"] or ["format", null, "staging_path"]
             field6 is JSONArray &&
                 field6.length() >= 2 &&
-                (field6.opt(1) as? String)?.isNotEmpty() == true -> true
+                (
+                    (field6.opt(1) as? String)?.isNotEmpty() == true ||
+                        (field6.length() >= 3 && (field6.opt(2) as? String)?.isNotEmpty() == true)
+                ) -> true
             else -> false
         }
     } catch (e: Exception) {
@@ -308,7 +311,7 @@ fun decodeImageWithAnimation(
  * @param fieldsJson The message's fields JSON containing the image data
  * @return Raw image bytes, or null if not found
  */
-@Suppress("ReturnCount")
+@Suppress("ReturnCount", "CyclomaticComplexMethod")
 private fun extractImageBytes(fieldsJson: String?): ByteArray? {
     if (fieldsJson == null) return null
 
@@ -320,6 +323,12 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
         if (field6 is JSONObject && field6.has(BINARY_REF_KEY)) {
             val filePath = field6.getString(BINARY_REF_KEY)
             return loadBinaryFromDisk(filePath)
+        }
+
+        // Array format: ["format", "hex_data"] or ["format", null, "staging_path"]
+        if (field6 is JSONArray && field6.length() >= 3 && field6.isNull(1)) {
+            val stagingPath = field6.optString(2, "")
+            if (stagingPath.isNotEmpty()) return loadBinaryFromDisk(stagingPath)
         }
 
         val hexImageData: String =
@@ -355,6 +364,7 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
  *
  * Returns null if no image field exists or decoding fails.
  */
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
 private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
     if (fieldsJson == null) return null
 
@@ -369,6 +379,15 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
             val filePath = field6.getString(BINARY_REF_KEY)
             val imageBytes = loadBinaryFromDisk(filePath) ?: return null
             return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
+        }
+
+        // Array format: ["format", null, "staging_path"] (unresolved staging)
+        if (field6 is JSONArray && field6.length() >= 3 && field6.isNull(1)) {
+            val stagingPath = field6.optString(2, "")
+            if (stagingPath.isNotEmpty()) {
+                val imageBytes = loadBinaryFromDisk(stagingPath) ?: return null
+                return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
+            }
         }
 
         val hexImageData: String =

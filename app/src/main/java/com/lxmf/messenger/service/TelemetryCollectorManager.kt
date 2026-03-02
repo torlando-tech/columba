@@ -402,6 +402,17 @@ class TelemetryCollectorManager
         }
 
         /**
+         * Return local identity hashes used to detect self-echo telemetry entries.
+         */
+        suspend fun getLocalIdentityHashes(): List<String> =
+            identityRepository
+                .getActiveIdentitySync()
+                ?.let { activeIdentity ->
+                    listOfNotNull(activeIdentity.destinationHash, activeIdentity.identityHash)
+                        .map { it.lowercase() }
+                } ?: emptyList()
+
+        /**
          * Sync allowed requesters with Python layer.
          * Called when the setting changes.
          */

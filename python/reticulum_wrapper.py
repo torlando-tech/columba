@@ -30,6 +30,10 @@ RETICULUM_AVAILABLE = False
 RNS = None
 LXMF = None
 
+# Max binary bytes to hex-encode inline in message JSON.
+# Larger attachments are written to staging files to prevent OOM in Kotlin JSON parsing.
+_MAX_INLINE_ATTACHMENT_BYTES = 2 * 1024 * 1024  # 2 MB
+
 
 
 
@@ -601,6 +605,20 @@ class ReticulumWrapper:
 
         # Don't initialize here - wait for explicit initialize() call
         log_info("ReticulumWrapper", "__init__", f"Created with storage path: {storage_path}")
+
+    def _write_attachment_staging(self, msg_hash, field_id, data_bytes):
+        """Write large attachment data to a staging file instead of hex-encoding inline.
+
+        Returns the absolute file path for Kotlin to read from.
+        """
+        staging_dir = os.path.join(os.path.dirname(self.storage_path), "cache", "attachment_staging")
+        os.makedirs(staging_dir, exist_ok=True)
+        file_path = os.path.join(staging_dir, f"{msg_hash}_{field_id}.bin")
+        with open(file_path, "wb") as f:
+            f.write(data_bytes)
+        log_info("ReticulumWrapper", "_write_attachment_staging",
+                 f"Wrote {len(data_bytes)} bytes to staging: {file_path}")
+        return file_path
 
     def set_ble_bridge(self, bridge):
         """
@@ -3252,19 +3270,28 @@ class ReticulumWrapper:
                     # Extract LXMF fields (attachments, reactions, etc.)
                     if hasattr(lxmf_message, 'fields') and lxmf_message.fields:
                         fields_serialized = {}
+                        msg_hash = message_event.get('message_hash', 'unknown')
                         for key, value in lxmf_message.fields.items():
                             if key == 5 and isinstance(value, list):
                                 # Field 5: file attachments
                                 serialized_attachments = []
-                                for attachment in value:
+                                for i, attachment in enumerate(value):
                                     if isinstance(attachment, (list, tuple)) and len(attachment) >= 2:
                                         filename, file_data = attachment[0], attachment[1]
                                         if isinstance(file_data, bytes):
-                                            serialized_attachments.append({
-                                                'filename': str(filename),
-                                                'data': file_data.hex(),
-                                                'size': len(file_data)
-                                            })
+                                            if len(file_data) > _MAX_INLINE_ATTACHMENT_BYTES:
+                                                temp_path = self._write_attachment_staging(msg_hash, f"f5_{i}", file_data)
+                                                serialized_attachments.append({
+                                                    'filename': str(filename),
+                                                    'file_path': temp_path,
+                                                    'size': len(file_data)
+                                                })
+                                            else:
+                                                serialized_attachments.append({
+                                                    'filename': str(filename),
+                                                    'data': file_data.hex(),
+                                                    'size': len(file_data)
+                                                })
                                 if serialized_attachments:
                                     fields_serialized['5'] = serialized_attachments
                             elif key == 16 and isinstance(value, dict):
@@ -3276,7 +3303,11 @@ class ReticulumWrapper:
                             elif key in (6, 7) and isinstance(value, (list, tuple)) and len(value) >= 2:
                                 # Field 6/7: image/audio
                                 if isinstance(value[1], bytes):
-                                    fields_serialized[str(key)] = [value[0], value[1].hex()]
+                                    if len(value[1]) > _MAX_INLINE_ATTACHMENT_BYTES:
+                                        temp_path = self._write_attachment_staging(msg_hash, f"f{key}", value[1])
+                                        fields_serialized[str(key)] = [value[0], None, temp_path]
+                                    else:
+                                        fields_serialized[str(key)] = [value[0], value[1].hex()]
                             else:
                                 fields_serialized[str(key)] = str(value)
                         if fields_serialized:

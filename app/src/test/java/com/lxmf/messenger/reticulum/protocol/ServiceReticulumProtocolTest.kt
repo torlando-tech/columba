@@ -675,61 +675,65 @@ class ServiceReticulumProtocolTest {
     // ===========================================
 
     @Test
-    fun `restoreAnnounceIdentities - returns error when service not bound`() {
-        // When
-        val result = protocol.restoreAnnounceIdentities(emptyList())
+    fun `restoreAnnounceIdentities - returns error when service not bound`() =
+        runTest {
+            // When
+            val result = protocol.restoreAnnounceIdentities(emptyList())
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
-    }
-
-    @Test
-    fun `restoreAnnounceIdentities - returns success with count when service returns success`() {
-        // Given: Inject mock service via reflection
-        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":10}"""
-        injectMockService(protocol, mockService)
-
-        // When
-        val announces =
-            listOf(
-                Pair("destHash1", byteArrayOf(1, 2, 3)),
-                Pair("destHash2", byteArrayOf(4, 5, 6)),
-            )
-        val result = protocol.restoreAnnounceIdentities(announces)
-
-        // Then
-        assertTrue("Result should be success", result.isSuccess)
-        assertEquals(10, result.getOrNull())
-    }
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("not bound") == true)
+        }
 
     @Test
-    fun `restoreAnnounceIdentities - returns failure when service returns error`() {
-        // Given: Inject mock service via reflection
-        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":false,"error":"Announce restore failed"}"""
-        injectMockService(protocol, mockService)
+    fun `restoreAnnounceIdentities - returns success with count when service returns success`() =
+        runTest {
+            // Given: Inject mock service via reflection
+            every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":10}"""
+            injectMockService(protocol, mockService)
 
-        // When
-        val result = protocol.restoreAnnounceIdentities(emptyList())
+            // When
+            val announces =
+                listOf(
+                    Pair("destHash1", byteArrayOf(1, 2, 3)),
+                    Pair("destHash2", byteArrayOf(4, 5, 6)),
+                )
+            val result = protocol.restoreAnnounceIdentities(announces)
 
-        // Then
-        assertTrue("Result should be failure", result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("Announce restore failed") == true)
-    }
+            // Then
+            assertTrue("Result should be success", result.isSuccess)
+            assertEquals(10, result.getOrNull())
+        }
 
     @Test
-    fun `restoreAnnounceIdentities - handles empty list`() {
-        // Given: Inject mock service via reflection
-        every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":0}"""
-        injectMockService(protocol, mockService)
+    fun `restoreAnnounceIdentities - returns failure when service returns error`() =
+        runTest {
+            // Given: Inject mock service via reflection
+            every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":false,"error":"Announce restore failed"}"""
+            injectMockService(protocol, mockService)
 
-        // When
-        val result = protocol.restoreAnnounceIdentities(emptyList())
+            // When
+            val result = protocol.restoreAnnounceIdentities(emptyList())
 
-        // Then
-        assertTrue("Result should be success for empty list", result.isSuccess)
-        assertEquals(0, result.getOrNull())
-    }
+            // Then
+            assertTrue("Result should be failure", result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("Announce restore failed") == true)
+        }
+
+    @Test
+    fun `restoreAnnounceIdentities - handles empty list`() =
+        runTest {
+            // Given: Inject mock service via reflection
+            every { mockService.restoreAnnounceIdentities(any()) } returns """{"success":true,"restored_count":0}"""
+            injectMockService(protocol, mockService)
+
+            // When
+            val result = protocol.restoreAnnounceIdentities(emptyList())
+
+            // Then
+            assertTrue("Result should be success for empty list", result.isSuccess)
+            assertEquals(0, result.getOrNull())
+        }
 
     // Helper to inject mock service via reflection
     private fun injectMockService(

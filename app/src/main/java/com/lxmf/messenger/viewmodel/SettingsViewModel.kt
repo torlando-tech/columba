@@ -341,6 +341,8 @@ class SettingsViewModel
                         val retrievalIntervalSeconds = flows[14] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
+                        val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
+                        val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
 
                         SettingsState(
                             displayName = displayName,
@@ -354,8 +356,8 @@ class SettingsViewModel
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
                             manualAnnounceError = _state.value.manualAnnounceError,
-                            identityHash = identityInfo.first ?: activeIdentity?.identityHash,
-                            destinationHash = identityInfo.second ?: activeIdentity?.destinationHash,
+                            identityHash = resolvedIdentityHash,
+                            destinationHash = resolvedDestinationHash,
                             showQrDialog = _state.value.showQrDialog,
                             // Profile icon from active identity
                             iconName = activeIdentity?.iconName,

@@ -2380,7 +2380,7 @@ class ReticulumWrapper:
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
-                'identity_hash': destination_hash,  # For single destinations
+                'identity_hash': announced_identity.hash if announced_identity else destination_hash,
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
                 'display_name': display_name,  # Pre-parsed by LXMF (may be None)
@@ -7021,8 +7021,16 @@ class ReticulumWrapper:
         try:
             dest_hash = bytes(dest_hash)
             dest_hash_hex = dest_hash.hex()
+            # Sanitize path — strip any colon prefix that wasn't handled by the caller
+            if path and path.startswith(":"):
+                path = path[1:]
+            if not path or not path.startswith("/"):
+                path = "/page/index.mu"
             log_info("ReticulumWrapper", "request_nomadnet_page",
                      f"Requesting page {path} from {dest_hash_hex[:16]}...")
+
+            # Use absolute deadline — each phase gets whatever time remains
+            deadline = time.time() + timeout_seconds
 
             # Initialize link cache if needed
             if not hasattr(self, '_nomadnet_links'):
@@ -7078,11 +7086,9 @@ class ReticulumWrapper:
                     log_info("ReticulumWrapper", "request_nomadnet_page",
                              f"Identity not cached, requesting path to discover {dest_hash_hex[:16]}...")
                     RNS.Transport.request_path(dest_hash)
-                    path_timeout = time.time() + min(timeout_seconds / 2, 15.0)
-                    while time.time() < path_timeout:
+                    while time.time() < deadline - 15:  # Reserve 15s for link + request
                         if self._nomadnet_cancel_flag:
                             return {"success": False, "error": "Cancelled"}
-                        # Check if identity became available (from announce response)
                         recipient_identity = RNS.Identity.recall(dest_hash)
                         if recipient_identity:
                             break
@@ -7100,11 +7106,27 @@ class ReticulumWrapper:
                     "node"
                 )
 
-                # Check/request path (may already have it from the identity discovery step)
-                if not RNS.Transport.has_path(node_dest.hash):
-                    RNS.Transport.request_path(node_dest.hash)
-                    path_timeout = time.time() + min(timeout_seconds / 2, 15.0)
-                    while time.time() < path_timeout:
+                # Verify destination hash matches what we expect
+                node_dest_hex = node_dest.hash.hex()
+                if node_dest.hash != dest_hash:
+                    log_warning("ReticulumWrapper", "request_nomadnet_page",
+                               f"Destination hash mismatch! passed={dest_hash_hex} computed={node_dest_hex}")
+                    # The computed hash is the correct nomadnetwork.node destination;
+                    # use it even if it differs from what was passed (which may have
+                    # been an identity hash stored incorrectly by the announce handler)
+
+                hops = RNS.Transport.hops_to(node_dest.hash)
+                has_existing_path = RNS.Transport.has_path(node_dest.hash)
+                log_info("ReticulumWrapper", "request_nomadnet_page",
+                         f"Node {node_dest_hex[:16]}: hops={hops}, has_path={has_existing_path}")
+
+                # Always request a fresh path to ensure routing info is current,
+                # even if we already have one cached from an older announce
+                RNS.Transport.request_path(node_dest.hash)
+
+                if not has_existing_path:
+                    # No path at all — wait for one
+                    while time.time() < deadline - 10:  # Reserve 10s for link + request
                         if self._nomadnet_cancel_flag:
                             return {"success": False, "error": "Cancelled"}
                         if RNS.Transport.has_path(node_dest.hash):
@@ -7112,27 +7134,45 @@ class ReticulumWrapper:
                         time.sleep(0.25)
                     if not RNS.Transport.has_path(node_dest.hash):
                         return {"success": False, "error": "No path to node"}
+                else:
+                    # Already have a path; give 2s for a potentially fresher one
+                    time.sleep(min(2.0, max(deadline - time.time() - 20, 0.5)))
 
-                # Establish link
+                hops = RNS.Transport.hops_to(node_dest.hash)
+                log_info("ReticulumWrapper", "request_nomadnet_page",
+                         f"Creating link to {node_dest_hex[:16]} (hops={hops})")
+
+                # Establish link — gets all remaining time minus 10s for the page request
                 link_established = threading.Event()
-                link_failed = [False]
+                link_closed_reason = [None]  # Will hold teardown_reason
 
                 def on_link_established(established_link):
                     log_info("ReticulumWrapper", "request_nomadnet_page",
-                             f"Link established to {dest_hash_hex[:16]}")
+                             f"Link established to {dest_hash_hex[:16]} (RTT={established_link.rtt})")
                     link_established.set()
 
                 def on_link_closed(closed_link):
-                    link_failed[0] = True
+                    reason = getattr(closed_link, 'teardown_reason', None)
+                    reason_str = {0x01: "TIMEOUT", 0x02: "INITIATOR_CLOSED", 0x03: "DESTINATION_CLOSED"}.get(reason, str(reason))
+                    log_warning("ReticulumWrapper", "request_nomadnet_page",
+                               f"Link to {dest_hash_hex[:16]} closed during establishment (reason={reason_str}, status={closed_link.status})")
+                    link_closed_reason[0] = reason
                     link_established.set()
 
                 link = RNS.Link(node_dest,
                                 established_callback=on_link_established,
                                 closed_callback=on_link_closed)
 
-                # Wait for link establishment
-                link_timeout = min(timeout_seconds / 2, 20.0)
-                link_established.wait(timeout=link_timeout)
+                # Log the RNS-computed establishment timeout
+                est_timeout = getattr(link, 'establishment_timeout', None)
+                log_info("ReticulumWrapper", "request_nomadnet_page",
+                         f"Link establishment_timeout={est_timeout:.1f}s" if est_timeout else "Link establishment_timeout=unknown")
+
+                # Wait for link establishment — use remaining time minus reserve for page request
+                link_wait = max(deadline - time.time() - 10, 5.0)
+                log_debug("ReticulumWrapper", "request_nomadnet_page",
+                         f"Waiting up to {link_wait:.0f}s for link to {dest_hash_hex[:16]}")
+                link_established.wait(timeout=link_wait)
 
                 if self._nomadnet_cancel_flag:
                     try:
@@ -7141,17 +7181,24 @@ class ReticulumWrapper:
                         pass
                     return {"success": False, "error": "Cancelled"}
 
-                if link_failed[0] or link.status != RNS.Link.ACTIVE:
+                if link_closed_reason[0] is not None or link.status != RNS.Link.ACTIVE:
                     status_str = str(link.status) if link else "unknown"
+                    reason = link_closed_reason[0]
                     log_warning("ReticulumWrapper", "request_nomadnet_page",
-                               f"Link to {dest_hash_hex[:16]} failed (status={status_str}, rejected={link_failed[0]})")
+                               f"Link to {dest_hash_hex[:16]} failed (status={status_str}, teardown_reason={reason})")
                     try:
                         link.teardown()
                     except:
                         pass
-                    if link_failed[0]:
-                        return {"success": False, "error": "Connection rejected by node"}
-                    return {"success": False, "error": "Connection timed out. Node may be offline or unreachable."}
+                    # Provide accurate error message based on teardown reason
+                    if reason == 0x03:  # DESTINATION_CLOSED
+                        return {"success": False, "error": "Connection closed by node"}
+                    elif reason == 0x01 or link.status == RNS.Link.PENDING:  # TIMEOUT
+                        return {"success": False, "error": f"Connection timed out ({hops} hops). Node may be offline or unreachable."}
+                    elif link.status == RNS.Link.PENDING:
+                        return {"success": False, "error": "Connection timed out. Node may be offline or unreachable."}
+                    else:
+                        return {"success": False, "error": f"Connection failed (status={status_str})"}
 
                 # Cache the link
                 self._nomadnet_links[dest_hash_hex] = link
@@ -7186,9 +7233,9 @@ class ReticulumWrapper:
                 failed_callback=request_failed
             )
 
-            # Wait for response
-            remaining_timeout = max(timeout_seconds - (timeout_seconds / 2), 10.0)
-            response_event.wait(timeout=remaining_timeout)
+            # Wait for response — use all remaining time
+            response_wait = max(deadline - time.time(), 5.0)
+            response_event.wait(timeout=response_wait)
 
             if self._nomadnet_cancel_flag:
                 return {"success": False, "error": "Cancelled"}

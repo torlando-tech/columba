@@ -26,7 +26,7 @@ class NomadNetBrowserViewModel
         companion object {
             private const val TAG = "NomadNetBrowserVM"
             private const val DEFAULT_PATH = "/page/index.mu"
-            private const val PAGE_TIMEOUT_SECONDS = 45f
+            private const val PAGE_TIMEOUT_SECONDS = 60f
         }
 
         sealed class BrowserState {
@@ -151,26 +151,54 @@ class NomadNetBrowserViewModel
                     null
                 }
 
-            // Parse destination per NomadNet format:
-            //   "/page/path.mu" = same node
-            //   "nnn@<hash>/page/path.mu" or "nomadnetwork.node@<hash>/page/path.mu" = cross-node
+            // Parse destination per NomadNet URL format:
+            //   ":/page/path.mu" = same node (colon with empty hash)
+            //   "/page/path.mu" = same node (direct path)
+            //   "<32-char-hash>:/page/path.mu" = cross-node by hash
+            //   "<32-char-hash>" = cross-node, default path
+            //   "type@<hash>:<path>" = cross-type link (e.g., lxmf@hash)
             val nodeHash: String
             val path: String
             if (destination.contains("@")) {
-                // Cross-node link: "type@hash/path"
+                // Cross-type link: "type@hash:path" or "type@hash/path"
                 val afterAt = destination.substringAfter("@")
-                // Hash is 32 hex chars, followed by optional /path
-                if (afterAt.length >= 32) {
+                val colonIdx = afterAt.indexOf(':')
+                if (colonIdx >= 32) {
+                    // hash:path format
+                    nodeHash = afterAt.substring(0, 32)
+                    path = afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
+                } else if (afterAt.length >= 32) {
                     val hashPart = afterAt.take(32)
                     val pathPart = afterAt.drop(32)
                     nodeHash = hashPart
+                    path = if (pathPart.startsWith(":")) pathPart.drop(1).ifEmpty { DEFAULT_PATH } else pathPart.ifEmpty { DEFAULT_PATH }
+                } else {
+                    nodeHash = currentNodeHash
+                    path = destination
+                }
+            } else if (destination.startsWith(":")) {
+                // Same-node link with colon prefix: ":/page/path.mu"
+                nodeHash = currentNodeHash
+                path = destination.drop(1).ifEmpty { DEFAULT_PATH }
+            } else if (destination.startsWith("/")) {
+                // Same-node link with direct path: "/page/path.mu"
+                nodeHash = currentNodeHash
+                path = destination
+            } else if (destination.contains(":")) {
+                // Cross-node link: "hash:/page/path.mu" or "hash:path"
+                val colonIdx = destination.indexOf(':')
+                val hashPart = destination.substring(0, colonIdx)
+                val pathPart = destination.substring(colonIdx + 1)
+                if (hashPart.length == 32 && hashPart.all { it in '0'..'9' || it in 'a'..'f' }) {
+                    nodeHash = hashPart
                     path = pathPart.ifEmpty { DEFAULT_PATH }
                 } else {
-                    // Malformed cross-node link, treat as same-node
+                    // Not a valid hash, treat as same-node path
                     nodeHash = currentNodeHash
                     path = destination
                 }
             } else {
+                // Bare hash or unknown format
                 nodeHash = currentNodeHash
                 path = destination
             }

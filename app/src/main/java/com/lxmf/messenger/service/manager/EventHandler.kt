@@ -625,7 +625,9 @@ class EventHandler(
 
     private fun isValidStagingFile(path: String): java.io.File? {
         val file = java.io.File(path)
-        if (!file.canonicalPath.contains("/cache/attachment_staging/")) {
+        val stagingDir =
+            java.io.File(attachmentStorage?.attachmentsDir?.parentFile, "cache/attachment_staging")
+        if (!file.canonicalPath.startsWith(stagingDir.canonicalPath + java.io.File.separator)) {
             Log.w(TAG, "Rejecting staging path outside expected directory: $path")
             return null
         }
@@ -649,7 +651,7 @@ class EventHandler(
         val storage = attachmentStorage ?: return
         val destDir = java.io.File(storage.attachmentsDir, messageHash).also { it.mkdirs() }
         val destFile = java.io.File(destDir, "5_$index.bin")
-        moveFile(stagingFile, destFile)
+        if (!moveFile(stagingFile, destFile)) return
 
         attachment.remove("file_path")
         attachment.put("_binary_ref", destFile.absolutePath)
@@ -669,7 +671,7 @@ class EventHandler(
         val storage = attachmentStorage ?: return
         val destDir = java.io.File(storage.attachmentsDir, messageHash).also { it.mkdirs() }
         val destFile = java.io.File(destDir, "$key.bin")
-        moveFile(stagingFile, destFile)
+        if (!moveFile(stagingFile, destFile)) return
 
         val refObj =
             JSONObject().apply {
@@ -683,11 +685,18 @@ class EventHandler(
     private fun moveFile(
         source: java.io.File,
         dest: java.io.File,
-    ) {
-        if (!source.renameTo(dest)) {
+    ): Boolean {
+        if (source.renameTo(dest)) return true
+        return try {
             Log.w(TAG, "renameTo failed for ${source.name}, falling back to copy")
             source.copyTo(dest, overwrite = true)
-            source.delete()
+            if (!source.delete()) {
+                Log.w(TAG, "Failed to delete staging file after copy: ${source.absolutePath}")
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to move staging file ${source.name}", e)
+            false
         }
     }
 

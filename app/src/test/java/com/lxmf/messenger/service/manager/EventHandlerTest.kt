@@ -522,8 +522,9 @@ class EventHandlerTest {
     @Test
     fun `resolveStagingFiles moves field 5 staging file and replaces with binary ref`() =
         runTest {
-            val attachmentsDir = newTempDir("att")
-            val stagingDir = File(newTempDir("stg"), "cache/attachment_staging").also { it.mkdirs() }
+            val filesDir = newTempDir("files")
+            val attachmentsDir = File(filesDir, "attachments").also { it.mkdirs() }
+            val stagingDir = File(filesDir, "cache/attachment_staging").also { it.mkdirs() }
             val stagingFile = File(stagingDir, "upload.bin").apply { writeText("fake-binary-data") }
 
             val storage = mockk<AttachmentStorageManager>()
@@ -692,8 +693,9 @@ class EventHandlerTest {
     @Test
     fun `resolveStagingFiles moves field 6 media staging file and replaces with binary ref`() =
         runTest {
-            val attachmentsDir = newTempDir("att")
-            val stagingDir = File(newTempDir("stg"), "cache/attachment_staging").also { it.mkdirs() }
+            val filesDir = newTempDir("files")
+            val attachmentsDir = File(filesDir, "attachments").also { it.mkdirs() }
+            val stagingDir = File(filesDir, "cache/attachment_staging").also { it.mkdirs() }
             val stagingFile = File(stagingDir, "image.bin").apply { writeText("fake-image-data") }
 
             val storage = mockk<AttachmentStorageManager>()

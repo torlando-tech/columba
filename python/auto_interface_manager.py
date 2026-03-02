@@ -23,6 +23,11 @@ from logging_utils import log_debug, log_error, log_info
 TAG = "AutoInterfaceManager"
 
 
+class _IPv6UDPServer(socketserver.UDPServer):
+    """UDPServer subclass bound to IPv6, avoiding global class mutation."""
+    address_family = socket.AF_INET6
+
+
 def hot_add_interfaces() -> str:
     """
     Scan for network interfaces not yet adopted by the AutoInterface and add them.
@@ -141,11 +146,6 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
     """
     log_info(TAG, "_add_interface", f"Hot-adding {ifname} ({link_local_addr})")
 
-    # Register in AutoInterface state
-    auto_iface.link_local_addresses.append(link_local_addr)
-    auto_iface.adopted_interfaces[ifname] = link_local_addr
-    auto_iface.multicast_echoes[ifname] = time.time()
-
     if_index = auto_iface.interface_name_to_index(ifname)
     if_struct = struct.pack("I", if_index)
 
@@ -204,17 +204,21 @@ def _add_interface(auto_iface, auto_cls, ifname: str, link_local_addr: str):
     threading.Thread(target=_make_unicast_loop(uds, ifname), daemon=True).start()
 
     # --- Create UDP data server ---
-    socketserver.UDPServer.address_family = socket.AF_INET6
     local_addr = link_local_addr + "%" + str(if_index)
     addr_info = socket.getaddrinfo(
         local_addr, auto_iface.data_port,
         socket.AF_INET6, socket.SOCK_DGRAM
     )
-    udp_server = socketserver.UDPServer(
+    udp_server = _IPv6UDPServer(
         addr_info[0][4],
         auto_iface.handler_factory(auto_iface.process_incoming)
     )
-    auto_iface.interface_servers[ifname] = udp_server
     thread = threading.Thread(target=udp_server.serve_forever)
     thread.daemon = True
     thread.start()
+
+    # Register in AutoInterface state ONLY after successful setup
+    auto_iface.link_local_addresses.append(link_local_addr)
+    auto_iface.adopted_interfaces[ifname] = link_local_addr
+    auto_iface.multicast_echoes[ifname] = time.time()
+    auto_iface.interface_servers[ifname] = udp_server

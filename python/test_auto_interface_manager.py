@@ -354,10 +354,10 @@ class TestAddInterface(unittest.TestCase):
         auto_iface.interface_servers = {}
         return auto_iface
 
-    @patch('auto_interface_manager.socketserver')
+    @patch('auto_interface_manager._IPv6UDPServer')
     @patch('auto_interface_manager.threading')
     @patch('auto_interface_manager.socket')
-    def test_registers_interface_in_adopted(self, mock_socket, mock_threading, mock_ss):
+    def test_registers_interface_in_adopted(self, mock_socket, mock_threading, mock_udp_cls):
         """Should register the interface in AutoInterface state dictionaries."""
         self._make_socket_mocks(mock_socket)
         auto_iface = self._make_auto_iface()
@@ -365,7 +365,7 @@ class TestAddInterface(unittest.TestCase):
         auto_cls.SCOPE_LINK = 0
 
         mock_threading.Thread.return_value = MagicMock()
-        mock_ss.UDPServer.return_value = MagicMock()
+        mock_udp_cls.return_value = MagicMock()
 
         auto_interface_manager._add_interface(auto_iface, auto_cls, "wlan0", "fe80::1")
 
@@ -373,10 +373,10 @@ class TestAddInterface(unittest.TestCase):
         self.assertEqual(auto_iface.adopted_interfaces["wlan0"], "fe80::1")
         self.assertIn("wlan0", auto_iface.multicast_echoes)
 
-    @patch('auto_interface_manager.socketserver')
+    @patch('auto_interface_manager._IPv6UDPServer')
     @patch('auto_interface_manager.threading')
     @patch('auto_interface_manager.socket')
-    def test_starts_three_threads(self, mock_socket, mock_threading, mock_ss):
+    def test_starts_three_threads(self, mock_socket, mock_threading, mock_udp_cls):
         """Should start 2 discovery threads + 1 UDP server thread = 3 total."""
         self._make_socket_mocks(mock_socket)
         auto_iface = self._make_auto_iface()
@@ -385,16 +385,16 @@ class TestAddInterface(unittest.TestCase):
 
         mock_thread = MagicMock()
         mock_threading.Thread.return_value = mock_thread
-        mock_ss.UDPServer.return_value = MagicMock()
+        mock_udp_cls.return_value = MagicMock()
 
         auto_interface_manager._add_interface(auto_iface, auto_cls, "wlan0", "fe80::1")
 
         self.assertEqual(mock_thread.start.call_count, 3)
 
-    @patch('auto_interface_manager.socketserver')
+    @patch('auto_interface_manager._IPv6UDPServer')
     @patch('auto_interface_manager.threading')
     @patch('auto_interface_manager.socket')
-    def test_creates_and_registers_udp_server(self, mock_socket, mock_threading, mock_ss):
+    def test_creates_and_registers_udp_server(self, mock_socket, mock_threading, mock_udp_cls):
         """Should create UDP data server and register in interface_servers."""
         self._make_socket_mocks(mock_socket)
         auto_iface = self._make_auto_iface()
@@ -403,17 +403,17 @@ class TestAddInterface(unittest.TestCase):
 
         mock_threading.Thread.return_value = MagicMock()
         mock_server = MagicMock()
-        mock_ss.UDPServer.return_value = mock_server
+        mock_udp_cls.return_value = mock_server
 
         auto_interface_manager._add_interface(auto_iface, auto_cls, "wlan0", "fe80::1")
 
         self.assertEqual(auto_iface.interface_servers["wlan0"], mock_server)
-        mock_ss.UDPServer.assert_called_once()
+        mock_udp_cls.assert_called_once()
 
-    @patch('auto_interface_manager.socketserver')
+    @patch('auto_interface_manager._IPv6UDPServer')
     @patch('auto_interface_manager.threading')
     @patch('auto_interface_manager.socket')
-    def test_joins_multicast_group(self, mock_socket, mock_threading, mock_ss):
+    def test_joins_multicast_group(self, mock_socket, mock_threading, mock_udp_cls):
         """Should join the IPv6 multicast group on the new interface."""
         mock_sock = self._make_socket_mocks(mock_socket)
         auto_iface = self._make_auto_iface()
@@ -421,7 +421,7 @@ class TestAddInterface(unittest.TestCase):
         auto_cls.SCOPE_LINK = 0
 
         mock_threading.Thread.return_value = MagicMock()
-        mock_ss.UDPServer.return_value = MagicMock()
+        mock_udp_cls.return_value = MagicMock()
 
         auto_interface_manager._add_interface(auto_iface, auto_cls, "wlan0", "fe80::1")
 
@@ -432,10 +432,10 @@ class TestAddInterface(unittest.TestCase):
         ]
         self.assertEqual(len(join_calls), 1)
 
-    @patch('auto_interface_manager.socketserver')
+    @patch('auto_interface_manager._IPv6UDPServer')
     @patch('auto_interface_manager.threading')
     @patch('auto_interface_manager.socket')
-    def test_creates_two_sockets(self, mock_socket, mock_threading, mock_ss):
+    def test_creates_two_sockets(self, mock_socket, mock_threading, mock_udp_cls):
         """Should create unicast + multicast discovery sockets (2 total)."""
         self._make_socket_mocks(mock_socket)
         auto_iface = self._make_auto_iface()
@@ -443,7 +443,7 @@ class TestAddInterface(unittest.TestCase):
         auto_cls.SCOPE_LINK = 0
 
         mock_threading.Thread.return_value = MagicMock()
-        mock_ss.UDPServer.return_value = MagicMock()
+        mock_udp_cls.return_value = MagicMock()
 
         auto_interface_manager._add_interface(auto_iface, auto_cls, "wlan0", "fe80::1")
 

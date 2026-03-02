@@ -75,6 +75,7 @@ object DatabaseModule {
             MIGRATION_36_37,
             MIGRATION_37_38,
             MIGRATION_38_39,
+            MIGRATION_39_40,
         )
     }
 
@@ -1548,6 +1549,93 @@ object DatabaseModule {
                 database.execSQL("ALTER TABLE local_identities ADD COLUMN passwordSalt BLOB")
                 // Add passwordVerificationHash for verifying password correctness
                 database.execSQL("ALTER TABLE local_identities ADD COLUMN passwordVerificationHash BLOB")
+            }
+        }
+
+    /**
+     * Migration 39→40: Normalize all hex hash columns to lowercase.
+     *
+     * Hex encoding is case-insensitive (0xABCD == 0xabcd), but SQLite string
+     * comparisons are case-sensitive. Mixed-case hashes from backup imports
+     * caused JOIN mismatches and duplicate LazyColumn keys.
+     *
+     * Strategy: disable FK checks → dedup PK columns → lowercase everything → re-enable FKs.
+     */
+    private val MIGRATION_39_40 =
+        object : Migration(39, 40) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Disable FK enforcement — lowercasing conversations.peerHash before
+                // messages.conversationHash would temporarily violate the FK constraint.
+                database.execSQL("PRAGMA foreign_keys = OFF")
+
+                // --- PK tables: dedup (keep lowest rowid) then lowercase ---
+
+                // contacts (composite PK: destinationHash + identityHash)
+                database.execSQL(
+                    """
+                    DELETE FROM contacts WHERE rowid NOT IN (
+                        SELECT MIN(rowid) FROM contacts GROUP BY LOWER(destinationHash), identityHash
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("UPDATE contacts SET destinationHash = LOWER(destinationHash)")
+
+                // announces (PK: destinationHash)
+                database.execSQL(
+                    """
+                    DELETE FROM announces WHERE rowid NOT IN (
+                        SELECT MIN(rowid) FROM announces GROUP BY LOWER(destinationHash)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("UPDATE announces SET destinationHash = LOWER(destinationHash)")
+
+                // peer_icons (PK: destinationHash)
+                database.execSQL(
+                    """
+                    DELETE FROM peer_icons WHERE rowid NOT IN (
+                        SELECT MIN(rowid) FROM peer_icons GROUP BY LOWER(destinationHash)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("UPDATE peer_icons SET destinationHash = LOWER(destinationHash)")
+
+                // rmsp_servers (PK: destinationHash)
+                database.execSQL(
+                    """
+                    DELETE FROM rmsp_servers WHERE rowid NOT IN (
+                        SELECT MIN(rowid) FROM rmsp_servers GROUP BY LOWER(destinationHash)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("UPDATE rmsp_servers SET destinationHash = LOWER(destinationHash)")
+
+                // conversations (composite PK: peerHash + identityHash)
+                database.execSQL(
+                    """
+                    DELETE FROM conversations WHERE rowid NOT IN (
+                        SELECT MIN(rowid) FROM conversations GROUP BY LOWER(peerHash), identityHash
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("UPDATE conversations SET peerHash = LOWER(peerHash)")
+
+                // --- FK / plain columns: no collision risk, just lowercase ---
+
+                // messages (FK: conversationHash → conversations.peerHash)
+                database.execSQL("UPDATE messages SET conversationHash = LOWER(conversationHash)")
+
+                // drafts (FK: conversationHash → conversations.peerHash)
+                database.execSQL("UPDATE drafts SET conversationHash = LOWER(conversationHash)")
+
+                // local_identities (plain column, PK is identityHash)
+                database.execSQL("UPDATE local_identities SET destinationHash = LOWER(destinationHash)")
+
+                // received_locations (plain column, PK is id)
+                database.execSQL("UPDATE received_locations SET senderHash = LOWER(senderHash)")
+
+                // Re-enable FK enforcement
+                database.execSQL("PRAGMA foreign_keys = ON")
             }
         }
 

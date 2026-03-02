@@ -353,7 +353,7 @@ class MigrationImporter
             val entities =
                 conversations.map { conv ->
                     ConversationEntity(
-                        peerHash = conv.peerHash,
+                        peerHash = conv.peerHash.lowercase(),
                         identityHash = conv.identityHash,
                         peerName = conv.peerName,
                         peerPublicKey = conv.peerPublicKey?.let { Base64.decode(it, Base64.NO_WRAP) },
@@ -376,7 +376,7 @@ class MigrationImporter
                 messages.map { msg ->
                     MessageEntity(
                         id = msg.id,
-                        conversationHash = msg.conversationHash,
+                        conversationHash = msg.conversationHash.lowercase(),
                         identityHash = msg.identityHash,
                         content = msg.content,
                         timestamp = msg.timestamp,
@@ -428,7 +428,7 @@ class MigrationImporter
                     }
 
                     ContactEntity(
-                        destinationHash = contact.destinationHash,
+                        destinationHash = contact.destinationHash.lowercase(),
                         identityHash = contact.identityHash,
                         publicKey = contact.publicKey?.let { Base64.decode(it, Base64.NO_WRAP) },
                         customNickname = contact.customNickname,
@@ -458,7 +458,7 @@ class MigrationImporter
 
                     val decodedPublicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP)
                     AnnounceEntity(
-                        destinationHash = announce.destinationHash,
+                        destinationHash = announce.destinationHash.lowercase(),
                         peerName = announce.peerName,
                         publicKey = decodedPublicKey,
                         appData = announce.appData?.let { Base64.decode(it, Base64.NO_WRAP) },
@@ -732,13 +732,14 @@ class MigrationImporter
             }
 
             // Encrypt the key data with device key for secure storage
-            val (encryptedKeyData, keyVersion) = try {
-                val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
-                encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to encrypt key for storage", e)
-                null to 0
-            }
+            val (encryptedKeyData, keyVersion) =
+                try {
+                    val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                    encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to encrypt key for storage", e)
+                    null to 0
+                }
 
             // Insert into database with encrypted key and profile icon data
             @Suppress("DEPRECATION")

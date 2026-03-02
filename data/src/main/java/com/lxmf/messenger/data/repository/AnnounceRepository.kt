@@ -234,13 +234,14 @@ class AnnounceRepository
             peeringCost: Int? = null,
             propagationTransferLimitKb: Int? = null,
         ) {
+            val normalizedHash = destinationHash.lowercase()
             // Preserve favorite status if announce already exists
             // Note: Icons are stored separately in peer_icons table (from LXMF messages)
-            val existing = announceDao.getAnnounce(destinationHash)
+            val existing = announceDao.getAnnounce(normalizedHash)
 
             val entity =
                 AnnounceEntity(
-                    destinationHash = destinationHash,
+                    destinationHash = normalizedHash,
                     peerName = peerName,
                     publicKey = publicKey,
                     appData = appData,

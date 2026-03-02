@@ -623,6 +623,20 @@ class EventHandler(
         return modifiedFields
     }
 
+    private fun isValidStagingFile(path: String): java.io.File? {
+        val file = java.io.File(path)
+        if (!file.canonicalPath.contains("/cache/attachment_staging/")) {
+            Log.w(TAG, "Rejecting staging path outside expected directory: $path")
+            return null
+        }
+        if (!file.exists()) {
+            Log.w(TAG, "Staging file not found: $path")
+            return null
+        }
+        return file
+    }
+
+    @Suppress("ReturnCount")
     private fun resolveFileAttachmentStaging(
         messageHash: String,
         attachments: JSONArray,
@@ -630,14 +644,10 @@ class EventHandler(
     ) {
         val attachment = attachments.optJSONObject(index) ?: return
         val stagingPath = attachment.optString("file_path", "").takeIf { it.isNotEmpty() } ?: return
+        val stagingFile = isValidStagingFile(stagingPath) ?: return
 
-        val stagingFile = java.io.File(stagingPath)
-        if (!stagingFile.exists()) {
-            Log.w(TAG, "Staging file not found: $stagingPath")
-            return
-        }
-
-        val destDir = java.io.File(attachmentStorage!!.attachmentsDir, messageHash).also { it.mkdirs() }
+        val storage = attachmentStorage ?: return
+        val destDir = java.io.File(storage.attachmentsDir, messageHash).also { it.mkdirs() }
         val destFile = java.io.File(destDir, "5_$index.bin")
         moveFile(stagingFile, destFile)
 
@@ -646,6 +656,7 @@ class EventHandler(
         Log.d(TAG, "Resolved staging file for field 5[$index]: ${destFile.absolutePath}")
     }
 
+    @Suppress("ReturnCount")
     private fun resolveMediaStaging(
         messageHash: String,
         key: String,
@@ -653,14 +664,10 @@ class EventHandler(
     ) {
         val fieldArray = modifiedFields.optJSONArray(key)?.takeIf { it.length() >= 3 } ?: return
         val stagingPath = fieldArray.optString(2, "").takeIf { it.isNotEmpty() } ?: return
+        val stagingFile = isValidStagingFile(stagingPath) ?: return
 
-        val stagingFile = java.io.File(stagingPath)
-        if (!stagingFile.exists()) {
-            Log.w(TAG, "Staging file not found for field $key: $stagingPath")
-            return
-        }
-
-        val destDir = java.io.File(attachmentStorage!!.attachmentsDir, messageHash).also { it.mkdirs() }
+        val storage = attachmentStorage ?: return
+        val destDir = java.io.File(storage.attachmentsDir, messageHash).also { it.mkdirs() }
         val destFile = java.io.File(destDir, "$key.bin")
         moveFile(stagingFile, destFile)
 

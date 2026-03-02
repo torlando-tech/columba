@@ -262,6 +262,19 @@ class TelemetryCollectorManager
                         syncAllowedRequestersWithPython(allowedHashes)
                     }
             }
+
+            // Settings can emit before Reticulum network reaches READY.
+            // Re-apply current host-mode + allowlist once READY to avoid stale Python-side state.
+            launch {
+                reticulumProtocol.networkStatus
+                    .collect { status ->
+                        if (status is NetworkStatus.READY) {
+                            Log.d(TAG, "Network became READY, re-syncing host mode + allowed requesters")
+                            syncHostModeWithPython(_isHostModeEnabled.value)
+                            syncAllowedRequestersWithPython(_allowedRequesters.value)
+                        }
+                    }
+            }
         }
 
         /**

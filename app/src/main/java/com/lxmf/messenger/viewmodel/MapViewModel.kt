@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
@@ -131,6 +132,7 @@ class MapViewModel
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
+        private val identityRepository: IdentityRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -274,8 +276,12 @@ class MapViewModel
                     contacts,
                     announceDao.getEnrichedAnnounces(),
                     _refreshTrigger,
-                ) { locations, contactList, announceList, _ ->
+                    identityRepository.activeIdentity,
+                ) { locations, contactList, announceList, _, activeIdentity ->
                     val currentTime = System.currentTimeMillis()
+                    val localHashes =
+                        listOfNotNull(activeIdentity?.destinationHash, activeIdentity?.identityHash)
+                            .map { it.lowercase() }
 
                     // Create lookup maps from contacts
                     val contactMap = contactList.associateBy { it.destinationHash }
@@ -288,12 +294,25 @@ class MapViewModel
                     Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
 
                     locations.mapNotNull { loc ->
+                        // Ignore self-echo telemetry entries from collector streams.
+                        val senderHash = loc.senderHash.lowercase()
+                        val isSelfEcho =
+                            localHashes.any { localHash ->
+                                senderHash == localHash ||
+                                    senderHash.startsWith(localHash) ||
+                                    localHash.startsWith(senderHash)
+                            }
+                        if (isSelfEcho) {
+                            return@mapNotNull null
+                        }
+
                         // Calculate marker state - returns null if marker should be hidden
-                        // Use receivedAt for staleness (when we got the update) rather than
-                        // sender's timestamp to avoid issues with clock skew between devices
+                        // Use sender emission timestamp for freshness/staleness semantics:
+                        // a coordinate emitted long ago should be treated as stale,
+                        // even if it was received only recently.
                         val markerState =
                             calculateMarkerState(
-                                timestamp = loc.receivedAt,
+                                timestamp = loc.timestamp,
                                 expiresAt = loc.expiresAt,
                                 currentTime = currentTime,
                             ) ?: return@mapNotNull null
@@ -324,6 +343,8 @@ class MapViewModel
                             latitude = loc.latitude,
                             longitude = loc.longitude,
                             accuracy = loc.accuracy,
+                            // Display sender emission timestamp in UI (requested behavior).
+                            // Fresh/stale state remains based on receivedAt above.
                             timestamp = loc.timestamp,
                             expiresAt = loc.expiresAt,
                             state = markerState,

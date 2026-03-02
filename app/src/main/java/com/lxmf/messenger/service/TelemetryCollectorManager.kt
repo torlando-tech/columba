@@ -153,6 +153,12 @@ class TelemetryCollectorManager
         private var periodicSendJob: Job? = null
         private var periodicRequestJob: Job? = null
 
+        // Last attempt timestamps (success OR failure) used to throttle retries.
+        // We keep last successful timestamps in SettingsRepository for UI/history,
+        // and use these in-memory values only for scheduler pacing.
+        private var lastSendAttemptAt: Long? = null
+        private var lastRequestAttemptAt: Long? = null
+
         /**
          * Start the manager - begin observing settings and schedule periodic sends.
          * Call this when the Reticulum service becomes ready.
@@ -482,7 +488,9 @@ class TelemetryCollectorManager
 
                     while (true) {
                         val intervalSeconds = _sendIntervalSeconds.value
-                        val lastSend = _lastSendTime.value ?: 0L
+                        val lastSuccessfulSend = _lastSendTime.value ?: 0L
+                        val lastAttempt = lastSendAttemptAt ?: 0L
+                        val lastSend = maxOf(lastSuccessfulSend, lastAttempt)
                         val now = System.currentTimeMillis()
                         val nextSendTime = lastSend + (intervalSeconds * 1000L)
 
@@ -490,6 +498,7 @@ class TelemetryCollectorManager
                             // Time to send - capture address to avoid race condition
                             val currentCollector = _collectorAddress.value
                             if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                                lastSendAttemptAt = now
                                 Log.d(TAG, "📡 Periodic telemetry send to collector")
                                 val result = sendTelemetryToCollector(currentCollector)
                                 when (result) {
@@ -540,7 +549,9 @@ class TelemetryCollectorManager
 
                     while (true) {
                         val intervalSeconds = _requestIntervalSeconds.value
-                        val lastRequest = _lastRequestTime.value ?: 0L
+                        val lastSuccessfulRequest = _lastRequestTime.value ?: 0L
+                        val lastAttempt = lastRequestAttemptAt ?: 0L
+                        val lastRequest = maxOf(lastSuccessfulRequest, lastAttempt)
                         val now = System.currentTimeMillis()
                         val nextRequestTime = lastRequest + (intervalSeconds * 1000L)
 
@@ -548,6 +559,7 @@ class TelemetryCollectorManager
                             // Time to request - capture address to avoid race condition
                             val currentCollector = _collectorAddress.value
                             if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                                lastRequestAttemptAt = now
                                 Log.d(TAG, "📡 Periodic telemetry request from collector")
                                 val result = requestTelemetryFromCollector(currentCollector)
                                 when (result) {

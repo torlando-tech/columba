@@ -429,16 +429,21 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
  * @param filePath Absolute path to attachment file
  * @return Attachment data (hex-encoded string), or null if not found
  */
+private const val MAX_ATTACHMENT_BYTES = 50L * 1024 * 1024 // 50 MB safety cap
+
 private fun loadAttachmentFromDisk(filePath: String): String? =
     try {
         val file = File(filePath)
-        if (file.exists()) {
+        if (!file.exists()) {
+            Log.w(TAG, "Attachment file not found: $filePath")
+            null
+        } else if (file.length() > MAX_ATTACHMENT_BYTES) {
+            Log.e(TAG, "Attachment file too large (${file.length()} bytes): $filePath")
+            null
+        } else {
             file.readText().also {
                 Log.d(TAG, "Loaded attachment from disk: $filePath (${it.length} chars)")
             }
-        } else {
-            Log.w(TAG, "Attachment file not found: $filePath")
-            null
         }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to load attachment from disk: $filePath", e)
@@ -451,13 +456,16 @@ private fun loadAttachmentFromDisk(filePath: String): String? =
 private fun loadBinaryFromDisk(filePath: String): ByteArray? =
     try {
         val file = File(filePath)
-        if (file.exists()) {
+        if (!file.exists()) {
+            Log.w(TAG, "Binary file not found: $filePath")
+            null
+        } else if (file.length() > MAX_ATTACHMENT_BYTES) {
+            Log.e(TAG, "Binary file too large (${file.length()} bytes): $filePath")
+            null
+        } else {
             file.readBytes().also {
                 Log.d(TAG, "Loaded binary from disk: $filePath (${it.size} bytes)")
             }
-        } else {
-            Log.w(TAG, "Binary file not found: $filePath")
-            null
         }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to load binary from disk: $filePath", e)

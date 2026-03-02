@@ -1429,6 +1429,25 @@ class ReticulumServiceBinder(
         }
     }
 
+    /**
+     * Hot-add new network interfaces to the AutoInterface.
+     *
+     * Called when network connectivity changes (e.g., WiFi connects after the app
+     * started without it). Scans for network interfaces not yet adopted by the
+     * AutoInterface and adds them with full multicast discovery + data server setup.
+     */
+    internal fun restartAutoInterface() {
+        try {
+            val resultStr =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("restart_auto_interface")?.toString()
+                }
+            Log.d(TAG, "restartAutoInterface result: $resultStr")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restarting AutoInterface", e)
+        }
+    }
+
     // ==================== PROTOCOL VERSION INFORMATION ====================
 
     override fun getReticulumVersion(): String? =

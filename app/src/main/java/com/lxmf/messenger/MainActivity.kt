@@ -228,7 +228,8 @@ class MainActivity : ComponentActivity() {
         // Splash screen will be displayed until theme is loaded, preventing flash
         val splashScreen = installSplashScreen()
         var isThemeReady = false
-        splashScreen.setKeepOnScreenCondition { !isThemeReady }
+        var isOnboardingReady = false
+        splashScreen.setKeepOnScreenCondition { !isThemeReady || !isOnboardingReady }
 
         super.onCreate(savedInstanceState)
 
@@ -269,6 +270,18 @@ class MainActivity : ComponentActivity() {
                 if (!settingsState.isLoading) {
                     isThemeReady = true
                     Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.displayName} - dismissing splash")
+                }
+            }
+
+            // Wait for onboarding status to resolve before dismissing splash.
+            // This ensures startDestination is computed with the correct value,
+            // preventing the wizard from flashing on upgrade.
+            val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+            val onboardingState by onboardingViewModel.state.collectAsState()
+            LaunchedEffect(onboardingState.isLoading) {
+                if (!onboardingState.isLoading) {
+                    isOnboardingReady = true
+                    Log.d(TAG, "Onboarding status resolved: completed=${onboardingState.hasCompletedOnboarding}")
                 }
             }
 

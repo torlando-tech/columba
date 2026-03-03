@@ -5,8 +5,6 @@ import android.location.Location
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
@@ -14,6 +12,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,14 +21,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
 
 /**
  * Result of a telemetry send operation.
@@ -109,6 +107,7 @@ class TelemetryCollectorManager
 
         companion object {
             private const val TAG = "TelemetryCollectorManager"
+            private const val DEST_HASH_LENGTH = 32
         }
 
         // State flows for UI observation
@@ -153,6 +152,16 @@ class TelemetryCollectorManager
         private var periodicSendJob: Job? = null
         private var periodicRequestJob: Job? = null
 
+        // Continuous location tracking (keeps a recent valid fix for background sends).
+        private val locationTracker = TelemetryLocationTracker(context, useGms, fusedLocationClient)
+
+        // Last attempt timestamps (success OR failure) used to throttle retries.
+        // We keep last successful timestamps in SettingsRepository for UI/history,
+        // and use these in-memory values only for scheduler pacing.
+        // Initialize from persisted values to avoid immediate retry after process death.
+        private var lastSendAttemptAt: Long? = _lastSendTime.value
+        private var lastRequestAttemptAt: Long? = _lastRequestTime.value
+
         /**
          * Start the manager - begin observing settings and schedule periodic sends.
          * Call this when the Reticulum service becomes ready.
@@ -175,6 +184,7 @@ class TelemetryCollectorManager
             // Start periodic sending and requesting
             restartPeriodicSend()
             restartPeriodicRequest()
+            locationTracker.update(shouldTrackLocation())
         }
 
         private fun CoroutineScope.launchSendSettingsObservers() {
@@ -182,10 +192,27 @@ class TelemetryCollectorManager
                 settingsRepository.telemetryCollectorAddressFlow
                     .distinctUntilChanged()
                     .collect { address ->
+                        // Migrate legacy truncated collector addresses: earlier versions
+                        // could persist a truncated destination hash prefix. Only treat as
+                        // legacy when the short address is a prefix of the local identity
+                        // hash — non-Columba peers may use valid shorter representations.
+                        if (address != null && address.length < DEST_HASH_LENGTH) {
+                            val localDestHash = identityRepository.getActiveIdentitySync()?.destinationHash?.lowercase()
+                            if (localDestHash != null && localDestHash.startsWith(address.lowercase())) {
+                                Log.i(TAG, "Migrating truncated collector address (${address.length} chars) to full local destination hash")
+                                settingsRepository.saveTelemetryCollectorAddress(localDestHash)
+                                return@collect // The save will re-emit via the flow
+                            } else {
+                                Log.w(TAG, "Collector address is ${address.length} chars (expected $DEST_HASH_LENGTH) — not a local prefix, clearing")
+                                settingsRepository.saveTelemetryCollectorAddress(null)
+                                return@collect
+                            }
+                        }
                         _collectorAddress.value = address
-                        Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
+                        Log.d(TAG, "Collector address updated: ${address ?: "none"}")
                         restartPeriodicSend()
                         restartPeriodicRequest()
+                        locationTracker.update(shouldTrackLocation())
                     }
             }
             launch {
@@ -195,6 +222,7 @@ class TelemetryCollectorManager
                         _isEnabled.value = enabled
                         Log.d(TAG, "Collector enabled: $enabled")
                         restartPeriodicSend()
+                        locationTracker.update(shouldTrackLocation())
                     }
             }
             launch {
@@ -262,6 +290,19 @@ class TelemetryCollectorManager
                         syncAllowedRequestersWithPython(allowedHashes)
                     }
             }
+
+            // Settings can emit before Reticulum network reaches READY.
+            // Re-apply current host-mode + allowlist once READY to avoid stale Python-side state.
+            launch {
+                reticulumProtocol.networkStatus
+                    .collect { status ->
+                        if (status is NetworkStatus.READY) {
+                            Log.d(TAG, "Network became READY, re-syncing host mode + allowed requesters")
+                            syncHostModeWithPython(_isHostModeEnabled.value)
+                            syncAllowedRequestersWithPython(_allowedRequesters.value)
+                        }
+                    }
+            }
         }
 
         /**
@@ -272,10 +313,14 @@ class TelemetryCollectorManager
             settingsObserverJob?.cancel()
             periodicSendJob?.cancel()
             periodicRequestJob?.cancel()
+            locationTracker.stop()
             settingsObserverJob = null
             periodicSendJob = null
             periodicRequestJob = null
         }
+
+        private fun shouldTrackLocation(): Boolean =
+            _isEnabled.value && _collectorAddress.value != null
 
         /**
          * Update the collector address.
@@ -383,6 +428,17 @@ class TelemetryCollectorManager
         }
 
         /**
+         * Return local identity hashes used to detect self-echo telemetry entries.
+         */
+        suspend fun getLocalIdentityHashes(): List<String> =
+            identityRepository
+                .getActiveIdentitySync()
+                ?.let { activeIdentity ->
+                    listOfNotNull(activeIdentity.destinationHash, activeIdentity.identityHash)
+                        .map { it.lowercase() }
+                } ?: emptyList()
+
+        /**
          * Sync allowed requesters with Python layer.
          * Called when the setting changes.
          */
@@ -460,46 +516,55 @@ class TelemetryCollectorManager
 
             periodicSendJob =
                 scope.launch {
-                    // Wait for any in-progress send to complete before starting new schedule
-                    _isSending.first { !it }
+                    try {
+                        _isSending.first { !it }
+                        reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                        Log.d(TAG, "Network ready, starting periodic telemetry sends")
 
-                    // Wait for network to be ready before starting periodic sends
-                    reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
-                    Log.d(TAG, "Network ready, starting periodic telemetry sends")
-
-                    while (true) {
-                        val intervalSeconds = _sendIntervalSeconds.value
-                        val lastSend = _lastSendTime.value ?: 0L
-                        val now = System.currentTimeMillis()
-                        val nextSendTime = lastSend + (intervalSeconds * 1000L)
-
-                        if (now >= nextSendTime) {
-                            // Time to send - capture address to avoid race condition
-                            val currentCollector = _collectorAddress.value
-                            if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
-                                Log.d(TAG, "📡 Periodic telemetry send to collector")
-                                val result = sendTelemetryToCollector(currentCollector)
-                                when (result) {
-                                    is TelemetrySendResult.Success ->
-                                        Log.i(TAG, "✅ Periodic telemetry sent successfully")
-                                    is TelemetrySendResult.Error ->
-                                        Log.w(TAG, "❌ Periodic telemetry send failed: ${result.message}")
-                                    else ->
-                                        Log.d(TAG, "Periodic send skipped: $result")
-                                }
-                            } else if (currentCollector == null) {
-                                Log.d(TAG, "No collector configured, skipping periodic send")
-                            } else {
-                                Log.d(TAG, "Network not ready, skipping periodic send")
-                            }
+                        while (isActive) {
+                            val nextSendTime = executePeriodicSendIteration()
+                            delayUntil(nextSendTime)
                         }
-
-                        // Calculate time until next send, cap at 30 seconds for responsiveness
-                        val timeUntilNextSend = maxOf(0L, nextSendTime - System.currentTimeMillis())
-                        val delayTime = minOf(timeUntilNextSend, 30_000L)
-                        delay(if (delayTime > 0) delayTime else 30_000L)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Periodic send job crashed", e)
+                        if (_isEnabled.value && _collectorAddress.value != null) {
+                            delay(5_000L)
+                            restartPeriodicSend()
+                        }
                     }
                 }
+        }
+
+        /**
+         * Execute one iteration of the periodic send loop.
+         * @return The next scheduled send time (epoch ms).
+         */
+        private suspend fun executePeriodicSendIteration(): Long {
+            val intervalSeconds = _sendIntervalSeconds.value
+            val lastSend = maxOf(_lastSendTime.value ?: 0L, lastSendAttemptAt ?: 0L)
+            val nextSendTime = lastSend + (intervalSeconds * 1000L)
+
+            if (System.currentTimeMillis() >= nextSendTime) {
+                val currentCollector = _collectorAddress.value
+                if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                    lastSendAttemptAt = System.currentTimeMillis()
+                    Log.d(TAG, "📡 Periodic telemetry send to collector")
+                    logSendResult(sendTelemetryToCollector(currentCollector))
+                } else {
+                    Log.d(TAG, "Skipping periodic send (collector=${currentCollector != null}, network=${reticulumProtocol.networkStatus.value})")
+                }
+            }
+            return nextSendTime
+        }
+
+        private fun logSendResult(result: TelemetrySendResult) {
+            when (result) {
+                is TelemetrySendResult.Success -> Log.i(TAG, "✅ Periodic telemetry sent successfully")
+                is TelemetrySendResult.Error -> Log.w(TAG, "❌ Periodic telemetry send failed: ${result.message}")
+                else -> Log.d(TAG, "Periodic send skipped: $result")
+            }
         }
 
         /**
@@ -518,46 +583,63 @@ class TelemetryCollectorManager
 
             periodicRequestJob =
                 scope.launch {
-                    // Wait for any in-progress request to complete before starting new schedule
-                    _isRequesting.first { !it }
+                    try {
+                        _isRequesting.first { !it }
+                        reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                        Log.d(TAG, "Network ready, starting periodic telemetry requests")
 
-                    // Wait for network to be ready before starting periodic requests
-                    reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
-                    Log.d(TAG, "Network ready, starting periodic telemetry requests")
-
-                    while (true) {
-                        val intervalSeconds = _requestIntervalSeconds.value
-                        val lastRequest = _lastRequestTime.value ?: 0L
-                        val now = System.currentTimeMillis()
-                        val nextRequestTime = lastRequest + (intervalSeconds * 1000L)
-
-                        if (now >= nextRequestTime) {
-                            // Time to request - capture address to avoid race condition
-                            val currentCollector = _collectorAddress.value
-                            if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
-                                Log.d(TAG, "📡 Periodic telemetry request from collector")
-                                val result = requestTelemetryFromCollector(currentCollector)
-                                when (result) {
-                                    is TelemetryRequestResult.Success ->
-                                        Log.i(TAG, "✅ Periodic telemetry request sent successfully")
-                                    is TelemetryRequestResult.Error ->
-                                        Log.w(TAG, "❌ Periodic telemetry request failed: ${result.message}")
-                                    else ->
-                                        Log.d(TAG, "Periodic request skipped: $result")
-                                }
-                            } else if (currentCollector == null) {
-                                Log.d(TAG, "No collector configured, skipping periodic request")
-                            } else {
-                                Log.d(TAG, "Network not ready, skipping periodic request")
-                            }
+                        while (isActive) {
+                            val nextRequestTime = executePeriodicRequestIteration()
+                            delayUntil(nextRequestTime)
                         }
-
-                        // Calculate time until next request, cap at 30 seconds for responsiveness
-                        val timeUntilNextRequest = maxOf(0L, nextRequestTime - System.currentTimeMillis())
-                        val delayTime = minOf(timeUntilNextRequest, 30_000L)
-                        delay(if (delayTime > 0) delayTime else 30_000L)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Periodic request job crashed", e)
+                        if (_isRequestEnabled.value && _collectorAddress.value != null) {
+                            delay(5_000L)
+                            restartPeriodicRequest()
+                        }
                     }
                 }
+        }
+
+        /**
+         * Execute one iteration of the periodic request loop.
+         * @return The next scheduled request time (epoch ms).
+         */
+        private suspend fun executePeriodicRequestIteration(): Long {
+            val intervalSeconds = _requestIntervalSeconds.value
+            val lastRequest = maxOf(_lastRequestTime.value ?: 0L, lastRequestAttemptAt ?: 0L)
+            val nextRequestTime = lastRequest + (intervalSeconds * 1000L)
+
+            if (System.currentTimeMillis() >= nextRequestTime) {
+                val currentCollector = _collectorAddress.value
+                if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                    lastRequestAttemptAt = System.currentTimeMillis()
+                    Log.d(TAG, "📡 Periodic telemetry request from collector")
+                    logRequestResult(requestTelemetryFromCollector(currentCollector))
+                } else {
+                    Log.d(TAG, "Skipping periodic request (collector=${currentCollector != null}, network=${reticulumProtocol.networkStatus.value})")
+                }
+            }
+            return nextRequestTime
+        }
+
+        private fun logRequestResult(result: TelemetryRequestResult) {
+            when (result) {
+                is TelemetryRequestResult.Success -> Log.i(TAG, "✅ Periodic telemetry request sent successfully")
+                is TelemetryRequestResult.Error -> Log.w(TAG, "❌ Periodic telemetry request failed: ${result.message}")
+                else -> Log.d(TAG, "Periodic request skipped: $result")
+            }
+        }
+
+        /**
+         * Delay until [targetTimeMs], capping at 30 seconds for responsiveness.
+         */
+        private suspend fun delayUntil(targetTimeMs: Long) {
+            val timeUntil = maxOf(0L, targetTimeMs - System.currentTimeMillis())
+            delay(minOf(timeUntil, 30_000L))
         }
 
         /**
@@ -592,10 +674,10 @@ class TelemetryCollectorManager
             _isSending.value = true
 
             try {
-                // Get current location
-                val location = getCurrentLocation()
+                // Use continuously tracked location when available; otherwise try a fresh one-shot fix.
+                val location = locationTracker.getTelemetryLocation()
                 if (location == null) {
-                    Log.w(TAG, "No location available")
+                    Log.w(TAG, "No recent valid location available")
                     return TelemetrySendResult.NoLocationAvailable
                 }
 
@@ -733,60 +815,6 @@ class TelemetryCollectorManager
                 _isRequesting.value = false
             }
         }
-
-        /**
-         * Get the current device location.
-         * Uses FusedLocationProviderClient when GMS is available, otherwise falls back
-         * to Android's LocationManager (issue #456).
-         */
-        @Suppress("MissingPermission") // Permission checked at higher level
-        private suspend fun getCurrentLocation(): Location? =
-            suspendCancellableCoroutine { continuation ->
-                if (useGms) {
-                    val cancellationTokenSource = CancellationTokenSource()
-
-                    continuation.invokeOnCancellation {
-                        cancellationTokenSource.cancel()
-                    }
-
-                    // Check if already cancelled before making the request
-                    if (continuation.isActive) {
-                        try {
-                            fusedLocationClient!!
-                                .getCurrentLocation(
-                                    Priority.PRIORITY_HIGH_ACCURACY,
-                                    cancellationTokenSource.token,
-                                ).addOnSuccessListener { location ->
-                                    if (continuation.isActive) {
-                                        continuation.resume(location)
-                                    }
-                                }.addOnFailureListener { exception ->
-                                    Log.e(TAG, "Failed to get location", exception)
-                                    if (continuation.isActive) {
-                                        continuation.resume(null)
-                                    }
-                                }
-                        } catch (e: IllegalArgumentException) {
-                            // CancellationToken was already cancelled - this can happen in race conditions
-                            Log.w(TAG, "Location request cancelled before it could start", e)
-                            if (continuation.isActive) {
-                                continuation.resume(null)
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback to platform LocationManager.
-                    // Note: cancellation is not forwarded to LocationCompat; the platform
-                    // request will self-clean via its internal 10s timeout if cancelled.
-                    if (continuation.isActive) {
-                        LocationCompat.getCurrentLocation(context) { location ->
-                            if (continuation.isActive) {
-                                continuation.resume(location)
-                            }
-                        }
-                    }
-                }
-            }
 
         /**
          * Convert hex string to ByteArray.

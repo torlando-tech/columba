@@ -1509,7 +1509,9 @@ class SettingsRepository
         val telemetryAllowedRequestersFlow: Flow<Set<String>> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
+                    normalizeTelemetryAllowedRequesters(
+                        preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet(),
+                    )
                 }.distinctUntilChanged()
 
         /**
@@ -1518,7 +1520,9 @@ class SettingsRepository
         suspend fun getTelemetryAllowedRequesters(): Set<String> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet()
+                    normalizeTelemetryAllowedRequesters(
+                        preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] ?: emptySet(),
+                    )
                 }.first()
 
         /**
@@ -1527,13 +1531,23 @@ class SettingsRepository
          * @param allowedHashes Set of 32-character hex identity hashes. Empty set blocks all requests.
          */
         suspend fun saveTelemetryAllowedRequesters(allowedHashes: Set<String>) {
+            val normalized = normalizeTelemetryAllowedRequesters(allowedHashes)
             context.dataStore.edit { preferences ->
-                if (allowedHashes.isEmpty()) {
+                if (normalized.isEmpty()) {
                     preferences.remove(PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS)
                 } else {
-                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] = allowedHashes
+                    preferences[PreferencesKeys.TELEMETRY_ALLOWED_REQUESTERS] = normalized
                 }
             }
+        }
+
+        private fun normalizeTelemetryAllowedRequesters(allowedHashes: Set<String>): Set<String> {
+            val hex32 = Regex("^[0-9a-f]{32}$")
+            return allowedHashes
+                .asSequence()
+                .map { it.trim().lowercase() }
+                .filter { hex32.matches(it) }
+                .toSet()
         }
 
         companion object {

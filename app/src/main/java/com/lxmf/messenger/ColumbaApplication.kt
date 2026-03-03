@@ -243,6 +243,12 @@ class ColumbaApplication : Application() {
                     propagationNodeManager.start()
                     android.util.Log.d("ColumbaApplication", "PropagationNodeManager started early (relay sync)")
 
+                    // Start telemetry settings observation early so map UI state
+                    // (collector address + send/request toggles) is available even if
+                    // startup exits early while service is INITIALIZING/RESTARTING.
+                    telemetryCollectorManager.start()
+                    android.util.Log.d("ColumbaApplication", "TelemetryCollectorManager started early after bind")
+
                     // Check if service is already initialized (handle service process surviving app restart)
                     // Use timeout to prevent ANR if service is slow
                     val currentStatus =

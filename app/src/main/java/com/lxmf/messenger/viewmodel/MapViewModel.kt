@@ -276,6 +276,7 @@ class MapViewModel
                     _refreshTrigger,
                 ) { locations, contactList, announceList, _ ->
                     val currentTime = System.currentTimeMillis()
+                    val localHashes = telemetryCollectorManager.getLocalIdentityHashes()
 
                     // Create lookup maps from contacts
                     val contactMap = contactList.associateBy { it.destinationHash }
@@ -288,12 +289,20 @@ class MapViewModel
                     Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
 
                     locations.mapNotNull { loc ->
+                        // Ignore self-echo telemetry entries from collector streams.
+                        val senderHash = loc.senderHash.lowercase()
+                        val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
+                        if (isSelfEcho) {
+                            return@mapNotNull null
+                        }
+
                         // Calculate marker state - returns null if marker should be hidden
-                        // Use receivedAt for staleness (when we got the update) rather than
-                        // sender's timestamp to avoid issues with clock skew between devices
+                        // Use sender emission timestamp for freshness/staleness semantics:
+                        // a coordinate emitted long ago should be treated as stale,
+                        // even if it was received only recently.
                         val markerState =
                             calculateMarkerState(
-                                timestamp = loc.receivedAt,
+                                timestamp = loc.timestamp,
                                 expiresAt = loc.expiresAt,
                                 currentTime = currentTime,
                             ) ?: return@mapNotNull null
@@ -324,6 +333,8 @@ class MapViewModel
                             latitude = loc.latitude,
                             longitude = loc.longitude,
                             accuracy = loc.accuracy,
+                            // Display sender emission timestamp in UI (requested behavior).
+                            // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
                             timestamp = loc.timestamp,
                             expiresAt = loc.expiresAt,
                             state = markerState,

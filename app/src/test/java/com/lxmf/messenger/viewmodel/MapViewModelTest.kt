@@ -105,6 +105,7 @@ class MapViewModelTest {
         every { telemetryCollectorManager.isRequestEnabled } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isSending } returns MutableStateFlow(false)
         every { telemetryCollectorManager.isRequesting } returns MutableStateFlow(false)
+        coEvery { telemetryCollectorManager.getLocalIdentityHashes() } returns emptyList()
         coEvery { offlineMapRegionRepository.getDefaultRegion() } returns null
     }
 

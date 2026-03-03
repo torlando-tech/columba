@@ -20,6 +20,7 @@ import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -255,11 +256,22 @@ class SettingsViewModel
                 val activeIdentity = identityRepository.getActiveIdentitySync()
                 val defaultName = activeIdentity?.displayName ?: "Unknown Peer"
 
+                // Seed identity fields immediately from DB to keep host picker stable
+                // on cold starts before Reticulum identity APIs are ready.
+                if (activeIdentity != null) {
+                    _state.update {
+                        it.copy(
+                            identityHash = it.identityHash ?: activeIdentity.identityHash,
+                            destinationHash = it.destinationHash ?: activeIdentity.destinationHash,
+                        )
+                    }
+                }
+
                 // Load identity information from Reticulum
                 val identityInfo = loadIdentityInfo()
 
                 Log.d(TAG, "Loaded active identity: ${activeIdentity?.displayName} (${activeIdentity?.identityHash?.take(8)})")
-                Log.d(TAG, "Loaded identity hash from Reticulum: ${identityInfo.first}")
+                Log.d(TAG, "Loaded identity hash from Reticulum: ${identityInfo.first?.take(8)}")
 
                 // Collect all settings flows and update state
                 try {
@@ -341,6 +353,8 @@ class SettingsViewModel
                         val retrievalIntervalSeconds = flows[14] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
+                        val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
+                        val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
 
                         SettingsState(
                             displayName = displayName,
@@ -354,8 +368,8 @@ class SettingsViewModel
                             isManualAnnouncing = _state.value.isManualAnnouncing,
                             showManualAnnounceSuccess = _state.value.showManualAnnounceSuccess,
                             manualAnnounceError = _state.value.manualAnnounceError,
-                            identityHash = identityInfo.first ?: activeIdentity?.identityHash,
-                            destinationHash = identityInfo.second ?: activeIdentity?.destinationHash,
+                            identityHash = resolvedIdentityHash,
+                            destinationHash = resolvedDestinationHash,
                             showQrDialog = _state.value.showQrDialog,
                             // Profile icon from active identity
                             iconName = activeIdentity?.iconName,
@@ -429,79 +443,91 @@ class SettingsViewModel
                             includePrereleaseUpdates = _state.value.includePrereleaseUpdates,
                         )
                     }.distinctUntilChanged().collect { newState ->
-                        val previousState = _state.value
-
-                        // Initialize sharedInstanceOnline on first load:
-                        // If isSharedInstance is true at startup, the shared instance was online when we connected
-                        val isFirstLoadWithSharedInstance =
-                            previousState.isLoading && !newState.isLoading && newState.isSharedInstance
-                        val needsOnlineInit = isFirstLoadWithSharedInstance && !newState.sharedInstanceOnline
-                        val initializedOnline =
-                            if (needsOnlineInit) {
-                                Log.d(
-                                    TAG,
-                                    "Initializing sharedInstanceOnline=true since isSharedInstance=true at startup",
-                                )
-                                true
-                            } else {
-                                newState.sharedInstanceOnline
-                            }
-
-                        // Log state for debugging
-                        if (previousState.isSharedInstance != newState.isSharedInstance) {
-                            Log.i(
-                                TAG,
-                                "isSharedInstance changed: ${previousState.isSharedInstance} -> ${newState.isSharedInstance}, " +
-                                    "preferOwnInstance=${newState.preferOwnInstance}",
-                            )
-                        }
-
-                        // Detect transition: was using shared instance, now not, and user didn't choose this
-                        // This indicates the shared instance went offline and RNS auto-switched
-                        val wasUsingShared =
-                            if (previousState.isSharedInstance &&
-                                !newState.isSharedInstance &&
-                                !newState.preferOwnInstance // User didn't actively choose own instance
-                            ) {
-                                Log.i(
-                                    TAG,
-                                    "Detected shared instance went offline - " +
-                                        "Columba auto-switched to own instance",
-                                )
-                                true
-                            } else {
-                                // Keep current value unless shared comes back online
-                                previousState.wasUsingSharedInstance
-                            }
-
-                        _state.value =
-                            newState.copy(
-                                sharedInstanceOnline = initializedOnline,
-                                wasUsingSharedInstance = wasUsingShared,
-                            )
-                        Log.d(
-                            TAG,
-                            "Settings updated: displayName=${newState.displayName}, " +
-                                "autoAnnounce=${newState.autoAnnounceEnabled}, " +
-                                "interval=${newState.autoAnnounceIntervalHours}h, " +
-                                "theme=${newState.selectedTheme}, " +
-                                "customThemes=${newState.customThemes.size}",
-                        )
+                        applySettingsUpdate(newState)
                     }
+                } catch (e: CancellationException) {
+                    Log.d(TAG, "Settings flow collection cancelled")
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error collecting settings flows", e)
+                    val preservedIdentityHash = identityInfo.first ?: _state.value.identityHash
+                    val preservedDestinationHash = identityInfo.second ?: _state.value.destinationHash
                     // Still set loading to false so UI doesn't hang
                     _state.value =
                         _state.value.copy(
                             displayName = defaultName,
                             defaultDisplayName = defaultName,
                             isLoading = false,
-                            identityHash = identityInfo.first,
-                            destinationHash = identityInfo.second,
+                            identityHash = preservedIdentityHash,
+                            destinationHash = preservedDestinationHash,
                             selectedTheme = PresetTheme.VIBRANT,
                         )
                 }
             }
+        }
+
+        /**
+         * Apply a new settings state snapshot, handling shared-instance transitions.
+         */
+        private fun applySettingsUpdate(newState: SettingsState) {
+            val previousState = _state.value
+
+            // Initialize sharedInstanceOnline on first load:
+            // If isSharedInstance is true at startup, the shared instance was online when we connected
+            val isFirstLoadWithSharedInstance =
+                previousState.isLoading && !newState.isLoading && newState.isSharedInstance
+            val needsOnlineInit = isFirstLoadWithSharedInstance && !newState.sharedInstanceOnline
+            val initializedOnline =
+                if (needsOnlineInit) {
+                    Log.d(
+                        TAG,
+                        "Initializing sharedInstanceOnline=true since isSharedInstance=true at startup",
+                    )
+                    true
+                } else {
+                    newState.sharedInstanceOnline
+                }
+
+            // Log state for debugging
+            if (previousState.isSharedInstance != newState.isSharedInstance) {
+                Log.i(
+                    TAG,
+                    "isSharedInstance changed: ${previousState.isSharedInstance} -> ${newState.isSharedInstance}, " +
+                        "preferOwnInstance=${newState.preferOwnInstance}",
+                )
+            }
+
+            // Detect transition: was using shared instance, now not, and user didn't choose this
+            // This indicates the shared instance went offline and RNS auto-switched
+            val wasUsingShared =
+                if (previousState.isSharedInstance &&
+                    !newState.isSharedInstance &&
+                    !newState.preferOwnInstance // User didn't actively choose own instance
+                ) {
+                    Log.i(
+                        TAG,
+                        "Detected shared instance went offline - " +
+                            "Columba auto-switched to own instance",
+                    )
+                    true
+                } else {
+                    // Keep current value unless shared comes back online
+                    previousState.wasUsingSharedInstance
+                }
+
+            _state.value =
+                newState.copy(
+                    sharedInstanceOnline = initializedOnline,
+                    wasUsingSharedInstance = wasUsingShared,
+                )
+            Log.d(
+                TAG,
+                "Settings updated: displayName=${newState.displayName}, " +
+                    "autoAnnounce=${newState.autoAnnounceEnabled}, " +
+                    "interval=${newState.autoAnnounceIntervalHours}h, " +
+                    "theme=${newState.selectedTheme}, " +
+                    "customThemes=${newState.customThemes.size}",
+            )
         }
 
         /**

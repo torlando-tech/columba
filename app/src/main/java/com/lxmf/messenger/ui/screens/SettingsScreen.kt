@@ -113,7 +113,18 @@ fun SettingsScreen(
     // Track what action to take after permission is granted
     var pendingTelemetryAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    // Permission launcher for telemetry collector
+    // Background permission launcher must be declared first (referenced by foreground launcher)
+    val telemetryBackgroundPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                pendingTelemetryAction?.invoke()
+            }
+            pendingTelemetryAction = null
+        }
+
+    // Permission launcher for telemetry collector (foreground location)
     val telemetryPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -132,16 +143,6 @@ fun SettingsScreen(
             } else {
                 pendingTelemetryAction = null
             }
-        }
-
-    val telemetryBackgroundPermissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-        ) { granted ->
-            if (granted) {
-                pendingTelemetryAction?.invoke()
-            }
-            pendingTelemetryAction = null
         }
 
     // Check for pending crash report on launch

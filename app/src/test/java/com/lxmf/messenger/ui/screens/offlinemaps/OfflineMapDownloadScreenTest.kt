@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens.offlinemaps
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -611,6 +612,43 @@ class OfflineMapDownloadScreenTest {
 
         assertEquals(40.0, receivedLat)
         assertEquals(-74.0, receivedLon)
+    }
+
+    @Test
+    fun locationStep_errorClearsWhenLocationSetExternally() {
+        // Simulates: user types invalid lat, then GPS/address sets a valid location
+        val latState = mutableStateOf<Double?>(null)
+
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = latState.value != null,
+                latitude = latState.value,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        // Type an invalid latitude — error should appear
+        composeTestRule.onNodeWithText("Latitude").performTextInput("123")
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+
+        // Simulate GPS setting a valid latitude (recomposition with new prop)
+        latState.value = 40.0
+
+        // Error should be cleared because latitude prop changed, resetting the remember key
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
     }
 
     // ========== RadiusSelectionStep Tests ==========

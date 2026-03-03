@@ -398,8 +398,8 @@ fun LocationSelectionStep(
             // Manual coordinate entry
             var latText by remember(latitude) { mutableStateOf(latitude?.toString() ?: "") }
             var lonText by remember(longitude) { mutableStateOf(longitude?.toString() ?: "") }
-            var latError by remember { mutableStateOf<String?>(null) }
-            var lonError by remember { mutableStateOf<String?>(null) }
+            var latError by remember(latitude) { mutableStateOf<String?>(null) }
+            var lonError by remember(longitude) { mutableStateOf<String?>(null) }
 
             OutlinedTextField(
                 value = latText,

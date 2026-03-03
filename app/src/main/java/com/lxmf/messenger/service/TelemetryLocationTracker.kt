@@ -35,11 +35,11 @@ internal class TelemetryLocationTracker(
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
     }
 
-    private var locationTrackingActive = false
-    private var gmsLocationTrackingCallback: LocationCallback? = null
-    private var platformLocationTrackingListener: LocationListener? = null
-    private var latestTrackedLocation: Location? = null
-    private var latestTrackedLocationRecordedAtMs: Long? = null
+    @Volatile private var locationTrackingActive = false
+    @Volatile private var gmsLocationTrackingCallback: LocationCallback? = null
+    @Volatile private var platformLocationTrackingListener: LocationListener? = null
+    @Volatile private var latestTrackedLocation: Location? = null
+    @Volatile private var latestTrackedLocationRecordedAtMs: Long? = null
 
     val isTracking: Boolean get() = locationTrackingActive
 

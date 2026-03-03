@@ -28,17 +28,13 @@ object LocationPermissionManager {
 
         /**
          * Location permission is denied.
-         * @param shouldShowRationale Whether we should show a rationale before requesting
+         * @param shouldShowRationale Whether we should show a rationale before requesting.
+         *   Note: Permanent denial detection requires an Activity context
+         *   (via shouldShowRequestPermissionRationale) and must be handled at the call site.
          */
         data class Denied(
             val shouldShowRationale: Boolean = false,
         ) : PermissionStatus()
-
-        /**
-         * Permission was permanently denied (user selected "Don't ask again").
-         * User must be directed to settings.
-         */
-        object PermanentlyDenied : PermissionStatus()
     }
 
     /**

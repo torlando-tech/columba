@@ -87,6 +87,33 @@ object LocationPermissionManager {
     }
 
     /**
+     * Whether this Android version requires explicit background location permission.
+     */
+    fun requiresBackgroundLocationPermission(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+
+    /**
+     * Check if explicit background location permission is granted.
+     * On API levels below 29, this is treated as granted.
+     */
+    fun hasBackgroundLocationPermission(context: Context): Boolean {
+        if (!requiresBackgroundLocationPermission()) {
+            return true
+        }
+
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * Check if permissions are sufficient for telemetry sending while app is inactive.
+     */
+    fun hasTelemetryBackgroundPermission(context: Context): Boolean =
+        hasPermission(context) && hasBackgroundLocationPermission(context)
+
+    /**
      * Check permission status and return detailed information.
      *
      * @param context Application context

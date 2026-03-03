@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -120,6 +121,16 @@ fun SettingsScreen(
             val granted = permissions.values.any { it }
             if (granted) {
                 // Execute pending action (enable toggle or send now)
+                pendingTelemetryAction?.invoke()
+            }
+            pendingTelemetryAction = null
+        }
+
+    val telemetryBackgroundPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
                 pendingTelemetryAction?.invoke()
             }
             pendingTelemetryAction = null
@@ -277,9 +288,12 @@ fun SettingsScreen(
                     isSendingTelemetry = state.isSendingTelemetry,
                     onTelemetryEnabledChange = { enabled ->
                         if (enabled) {
-                            // Check permission before enabling
-                            if (LocationPermissionManager.hasPermission(context)) {
+                            if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
                                 viewModel.setTelemetryCollectorEnabled(true)
+                            } else if (LocationPermissionManager.hasPermission(context)) {
+                                // Foreground location is granted, now request background access.
+                                pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
+                                telemetryBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                             } else {
                                 // Show permission sheet, then enable after permission granted
                                 pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }

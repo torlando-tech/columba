@@ -20,6 +20,7 @@ import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -255,11 +256,22 @@ class SettingsViewModel
                 val activeIdentity = identityRepository.getActiveIdentitySync()
                 val defaultName = activeIdentity?.displayName ?: "Unknown Peer"
 
+                // Seed identity fields immediately from DB to keep host picker stable
+                // on cold starts before Reticulum identity APIs are ready.
+                if (activeIdentity != null) {
+                    _state.update {
+                        it.copy(
+                            identityHash = it.identityHash ?: activeIdentity.identityHash,
+                            destinationHash = it.destinationHash ?: activeIdentity.destinationHash,
+                        )
+                    }
+                }
+
                 // Load identity information from Reticulum
                 val identityInfo = loadIdentityInfo()
 
                 Log.d(TAG, "Loaded active identity: ${activeIdentity?.displayName} (${activeIdentity?.identityHash?.take(8)})")
-                Log.d(TAG, "Loaded identity hash from Reticulum: ${identityInfo.first}")
+                Log.d(TAG, "Loaded identity hash from Reticulum: ${identityInfo.first?.take(8)}")
 
                 // Collect all settings flows and update state
                 try {
@@ -490,16 +502,21 @@ class SettingsViewModel
                                 "customThemes=${newState.customThemes.size}",
                         )
                     }
+                } catch (e: CancellationException) {
+                    Log.d(TAG, "Settings flow collection cancelled")
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error collecting settings flows", e)
+                    val preservedIdentityHash = identityInfo.first ?: _state.value.identityHash
+                    val preservedDestinationHash = identityInfo.second ?: _state.value.destinationHash
                     // Still set loading to false so UI doesn't hang
                     _state.value =
                         _state.value.copy(
                             displayName = defaultName,
                             defaultDisplayName = defaultName,
                             isLoading = false,
-                            identityHash = identityInfo.first,
-                            destinationHash = identityInfo.second,
+                            identityHash = preservedIdentityHash,
+                            destinationHash = preservedDestinationHash,
                             selectedTheme = PresetTheme.VIBRANT,
                         )
                 }

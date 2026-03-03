@@ -1,7 +1,6 @@
 package com.lxmf.messenger.service
 
 import android.content.Context
-import android.location.Location
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -209,7 +208,7 @@ class TelemetryCollectorManager
                             }
                         }
                         _collectorAddress.value = address
-                        Log.d(TAG, "Collector address updated: ${address ?: "none"}")
+                        Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
                         restartPeriodicSend()
                         restartPeriodicRequest()
                         locationTracker.update(shouldTrackLocation())
@@ -319,8 +318,7 @@ class TelemetryCollectorManager
             periodicRequestJob = null
         }
 
-        private fun shouldTrackLocation(): Boolean =
-            _isEnabled.value && _collectorAddress.value != null
+        private fun shouldTrackLocation(): Boolean = _isEnabled.value && _collectorAddress.value != null
 
         /**
          * Update the collector address.

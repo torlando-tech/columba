@@ -41,8 +41,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.composables.icons.lucide.Antenna
-import com.composables.icons.lucide.Lucide
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -283,7 +283,7 @@ fun InterfaceTypeIcon(
             InterfaceType.AUTO_INTERFACE -> Icons.Default.Wifi to "WiFi"
             InterfaceType.TCP_CLIENT -> Icons.Default.Public to "Internet"
             InterfaceType.ANDROID_BLE -> Icons.Default.Bluetooth to "Bluetooth"
-            InterfaceType.RNODE -> Lucide.Antenna to "LoRa/RNode"
+            InterfaceType.RNODE -> ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna) to "LoRa/RNode"
             InterfaceType.UNKNOWN -> return
         }
 

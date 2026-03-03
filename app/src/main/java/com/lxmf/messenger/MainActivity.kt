@@ -109,6 +109,7 @@ import com.lxmf.messenger.viewmodel.SettingsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
@@ -228,7 +229,8 @@ class MainActivity : ComponentActivity() {
         // Splash screen will be displayed until theme is loaded, preventing flash
         val splashScreen = installSplashScreen()
         var isThemeReady = false
-        splashScreen.setKeepOnScreenCondition { !isThemeReady }
+        var isOnboardingReady = false
+        splashScreen.setKeepOnScreenCondition { !isThemeReady || !isOnboardingReady }
 
         super.onCreate(savedInstanceState)
 
@@ -270,6 +272,18 @@ class MainActivity : ComponentActivity() {
                     isThemeReady = true
                     Log.d(TAG, "Theme loaded: ${settingsState.selectedTheme.displayName} - dismissing splash")
                 }
+            }
+
+            // Wait for onboarding status to resolve before dismissing splash.
+            // startDestination is memoised via remember{}, so it captures the first
+            // composed value. The LaunchedEffect in ColumbaNavigation redirects
+            // upgraders to Chats once onboardingState resolves; the extended splash
+            // screen hides that redirect, preventing the wizard from flashing.
+            val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+            LaunchedEffect(Unit) {
+                val resolved = onboardingViewModel.state.first { !it.isLoading }
+                isOnboardingReady = true
+                Log.d(TAG, "Onboarding status resolved: completed=${resolved.hasCompletedOnboarding}")
             }
 
             ColumbaNavigation(

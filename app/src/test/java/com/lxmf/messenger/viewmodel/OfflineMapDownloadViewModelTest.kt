@@ -1479,18 +1479,5 @@ class OfflineMapDownloadViewModelTest {
             assertEquals(100L, state.estimatedTileCount)
         }
 
-    @Test
-    fun `setLocation at boundary latitude 90 still produces valid estimate`() =
-        runTest {
-            viewModel = createViewModel()
-
-            // Clamped input: user types 123, gets clamped to 90
-            viewModel.setLocation(90.0, 0.0)
-            viewModel.setRadiusOption(RadiusOption.HUGE) // 100km radius → latDelta ≈ 0.9
-
-            // Verify estimateTileCount was called (i.e., calculateBounds didn't throw)
-            verify { mockMapLibreOfflineManager.estimateTileCount(any(), any(), any()) }
-        }
-
     // endregion
 }

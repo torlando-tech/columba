@@ -401,12 +401,21 @@ fun LocationSelectionStep(
             var latError by remember(latitude) { mutableStateOf<String?>(null) }
             var lonError by remember(longitude) { mutableStateOf<String?>(null) }
 
+            fun validateAndSetLocation(
+                lat: Double?,
+                lon: Double?,
+            ) {
+                val hasValidValues = lat != null && lon != null
+                if (hasValidValues && latError == null && lonError == null) {
+                    onLocationSet(lat!!, lon!!)
+                }
+            }
+
             OutlinedTextField(
                 value = latText,
                 onValueChange = {
                     latText = it
                     val lat = it.toDoubleOrNull()
-                    val lon = lonText.toDoubleOrNull()
                     latError =
                         when {
                             it.isEmpty() || it == "-" -> null
@@ -414,13 +423,7 @@ fun LocationSelectionStep(
                             lat !in -90.0..90.0 -> "Must be between -90 and 90"
                             else -> null
                         }
-                    if (lat != null &&
-                        lon != null &&
-                        lat in -90.0..90.0 &&
-                        lon in -180.0..180.0
-                    ) {
-                        onLocationSet(lat, lon)
-                    }
+                    validateAndSetLocation(lat, lonText.toDoubleOrNull())
                 },
                 label = { Text("Latitude") },
                 modifier = Modifier.fillMaxWidth(),
@@ -438,7 +441,6 @@ fun LocationSelectionStep(
                 value = lonText,
                 onValueChange = {
                     lonText = it
-                    val lat = latText.toDoubleOrNull()
                     val lon = it.toDoubleOrNull()
                     lonError =
                         when {
@@ -447,13 +449,7 @@ fun LocationSelectionStep(
                             lon !in -180.0..180.0 -> "Must be between -180 and 180"
                             else -> null
                         }
-                    if (lat != null &&
-                        lon != null &&
-                        lat in -90.0..90.0 &&
-                        lon in -180.0..180.0
-                    ) {
-                        onLocationSet(lat, lon)
-                    }
+                    validateAndSetLocation(latText.toDoubleOrNull(), lon)
                 },
                 label = { Text("Longitude") },
                 modifier = Modifier.fillMaxWidth(),

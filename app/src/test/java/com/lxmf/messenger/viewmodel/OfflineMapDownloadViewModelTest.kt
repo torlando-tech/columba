@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.content.Context
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
@@ -18,7 +19,6 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -1357,6 +1357,123 @@ class OfflineMapDownloadViewModelTest {
 
             // Verify both calls completed successfully without exception
             assertTrue(true)
+        }
+
+    // endregion
+
+    // region Coordinate Validation & Bounds Clamping Tests (Issue #574)
+
+    @Test
+    fun `setLocation clamps latitude exceeding 90 to 90`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(123.0, -74.0)
+                val state = awaitItem()
+
+                assertEquals(90.0, state.centerLatitude)
+                assertEquals(-74.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps latitude below negative 90 to negative 90`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(-120.0, 50.0)
+                val state = awaitItem()
+
+                assertEquals(-90.0, state.centerLatitude)
+                assertEquals(50.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps longitude exceeding 180 to 180`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(40.0, 200.0)
+                val state = awaitItem()
+
+                assertEquals(40.0, state.centerLatitude)
+                assertEquals(180.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps longitude below negative 180 to negative 180`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(40.0, -200.0)
+                val state = awaitItem()
+
+                assertEquals(40.0, state.centerLatitude)
+                assertEquals(-180.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation at max latitude does not crash with updateEstimate`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // This is the core crash scenario from issue #574:
+            // latitude = 90.0, radius adds latDelta, LatLng(90+delta) would crash
+            // without the coerceIn fix in calculateBounds
+            viewModel.setLocation(90.0, 0.0)
+
+            val state = viewModel.state.value
+            assertEquals(90.0, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
+        }
+
+    @Test
+    fun `setLocation at min latitude does not crash with updateEstimate`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocation(-90.0, 0.0)
+
+            val state = viewModel.state.value
+            assertEquals(-90.0, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
+        }
+
+    @Test
+    fun `setLocation near pole with large radius does not crash`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocation(89.5, 170.0)
+            // Use largest radius — latDelta = 100/111 ≈ 0.9, so 89.5+0.9 = 90.4 > 90
+            viewModel.setRadiusOption(RadiusOption.HUGE)
+
+            val state = viewModel.state.value
+            assertEquals(89.5, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
         }
 
     // endregion

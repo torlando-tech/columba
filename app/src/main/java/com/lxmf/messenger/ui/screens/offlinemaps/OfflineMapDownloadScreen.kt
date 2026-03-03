@@ -398,20 +398,41 @@ fun LocationSelectionStep(
             // Manual coordinate entry
             var latText by remember(latitude) { mutableStateOf(latitude?.toString() ?: "") }
             var lonText by remember(longitude) { mutableStateOf(longitude?.toString() ?: "") }
+            var latError by remember(latitude) { mutableStateOf<String?>(null) }
+            var lonError by remember(longitude) { mutableStateOf<String?>(null) }
+
+            fun validateAndSetLocation(
+                lat: Double?,
+                lon: Double?,
+            ) {
+                if (lat == null || lon == null) return
+                if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return
+                if (latError != null || lonError != null) return
+                onLocationSet(lat, lon)
+            }
 
             OutlinedTextField(
                 value = latText,
                 onValueChange = {
                     latText = it
                     val lat = it.toDoubleOrNull()
-                    val lon = lonText.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        onLocationSet(lat, lon)
-                    }
+                    latError =
+                        when {
+                            it.isEmpty() || it == "-" -> null
+                            lat == null -> "Invalid number"
+                            lat !in -90.0..90.0 -> "Must be between -90 and 90"
+                            else -> null
+                        }
+                    validateAndSetLocation(lat, lonText.toDoubleOrNull())
                 },
                 label = { Text("Latitude") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = latError != null,
+                supportingText =
+                    latError?.let {
+                        { Text(it) }
+                    },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -420,15 +441,24 @@ fun LocationSelectionStep(
                 value = lonText,
                 onValueChange = {
                     lonText = it
-                    val lat = latText.toDoubleOrNull()
                     val lon = it.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        onLocationSet(lat, lon)
-                    }
+                    lonError =
+                        when {
+                            it.isEmpty() || it == "-" -> null
+                            lon == null -> "Invalid number"
+                            lon !in -180.0..180.0 -> "Must be between -180 and 180"
+                            else -> null
+                        }
+                    validateAndSetLocation(latText.toDoubleOrNull(), lon)
                 },
                 label = { Text("Longitude") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = lonError != null,
+                supportingText =
+                    lonError?.let {
+                        { Text(it) }
+                    },
             )
 
             Spacer(modifier = Modifier.height(16.dp))

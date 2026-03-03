@@ -170,8 +170,13 @@ class MapTileSourceManager
                             Log.d(TAG, "Using cached inlined style JSON: $cachedPath")
                             MapStyleResult.OfflineWithLocalStyle(cachedPath)
                         } else {
-                            Log.w(TAG, "No MBTiles or cached style found, falling back to HTTP style URL")
-                            MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                            // Without a cached inlined style, offline tiles are unreachable
+                            // after the TileJSON HTTP cache expires (~24h). Don't pretend
+                            // offline maps work — tell the user to re-download.
+                            Log.w(TAG, "Offline regions exist but no cached style found — tiles unreachable")
+                            MapStyleResult.Unavailable(
+                                "Offline maps need to be re-downloaded. The cached style expired and tiles are unreachable.",
+                            )
                         }
                     }
                 }

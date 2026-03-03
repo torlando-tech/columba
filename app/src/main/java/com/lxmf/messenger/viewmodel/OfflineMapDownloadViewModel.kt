@@ -160,6 +160,11 @@ class OfflineMapDownloadViewModel
 
             // Rough estimate: ~20KB per tile on average (varies widely by zoom and content)
             private const val ESTIMATED_BYTES_PER_TILE = 20_000L
+
+            // Style caching: retry parameters for fetching and inlining TileJSON
+            private const val STYLE_CACHE_MAX_RETRIES = 3
+            private const val STYLE_FETCH_TIMEOUT_MS = 10_000L
+            private const val STYLE_CACHE_RETRY_DELAY_MS = 2_000L
         }
 
         private val _state = MutableStateFlow(OfflineMapDownloadState())
@@ -649,9 +654,21 @@ class OfflineMapDownloadViewModel
                                         }
                                     }
 
-                                    // Fetch and cache style JSON for offline rendering (async, non-blocking)
-                                    // Launch in separate coroutine so it doesn't block UI state updates
-                                    launch { fetchAndCacheStyleJson(regionId) }
+                                    // Fetch and cache style JSON — required for offline
+                                    // rendering. Without this, the TileJSON HTTP cache
+                                    // expires after ~24h and tiles become unreachable.
+                                    val styleCached = fetchAndCacheStyleJson(regionId)
+                                    if (!styleCached) {
+                                        Log.w(TAG, "Style caching failed — offline map may not work after 24h")
+                                        _state.update {
+                                            it.copy(
+                                                errorMessage =
+                                                    "Map tiles saved, but offline style caching failed. " +
+                                                        "The map may stop working offline after 24 hours. " +
+                                                        "Try re-downloading while connected to the internet.",
+                                            )
+                                        }
+                                    }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to mark region complete in database", e)
                                     _state.update {
@@ -710,43 +727,49 @@ class OfflineMapDownloadViewModel
          * the tile URL templates after the TileJSON cache expires, making downloaded
          * offline tiles unreachable.
          *
-         * This is non-fatal - if it fails, the download is still considered successful.
+         * Retries up to 3 times on failure. Returns true if style was cached successfully.
          */
-        private suspend fun fetchAndCacheStyleJson(regionId: Long) {
+        private suspend fun fetchAndCacheStyleJson(regionId: Long): Boolean =
             withContext(Dispatchers.IO) {
-                try {
-                    // Fetch style JSON from the same URL MapLibre uses
-                    val rawStyleJson =
-                        kotlinx.coroutines.withTimeout(5000) {
-                            java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
-                        }
-
-                    // Inline TileJSON references so the style is fully self-contained.
-                    // Without this, MapLibre needs to resolve TileJSON URLs at render time,
-                    // which fails offline after the HTTP cache expires (~24h).
-                    val styleJson =
-                        OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
-                            kotlinx.coroutines.withTimeout(5000) {
-                                java.net.URL(url).readText()
+                repeat(STYLE_CACHE_MAX_RETRIES) { attempt ->
+                    try {
+                        // Fetch style JSON from the same URL MapLibre uses
+                        val rawStyleJson =
+                            kotlinx.coroutines.withTimeout(STYLE_FETCH_TIMEOUT_MS) {
+                                java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
                             }
+
+                        // Inline TileJSON references so the style is fully self-contained.
+                        // Without this, MapLibre needs to resolve TileJSON URLs at render time,
+                        // which fails offline after the HTTP cache expires (~24h).
+                        val styleJson =
+                            OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
+                                kotlinx.coroutines.withTimeout(STYLE_FETCH_TIMEOUT_MS) {
+                                    java.net.URL(url).readText()
+                                }
+                            }
+
+                        // Save to local file: filesDir/offline_styles/{regionId}.json
+                        val styleDir = java.io.File(context.filesDir, "offline_styles")
+                        styleDir.mkdirs()
+                        val styleFile = java.io.File(styleDir, "$regionId.json")
+                        styleFile.writeText(styleJson)
+
+                        // Persist path to database
+                        offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
+
+                        Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
+                        return@withContext true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Style cache attempt ${attempt + 1}/$STYLE_CACHE_MAX_RETRIES failed for region $regionId", e)
+                        if (attempt < STYLE_CACHE_MAX_RETRIES - 1) {
+                            kotlinx.coroutines.delay(STYLE_CACHE_RETRY_DELAY_MS * (attempt + 1))
                         }
-
-                    // Save to local file: filesDir/offline_styles/{regionId}.json
-                    val styleDir = java.io.File(context.filesDir, "offline_styles")
-                    styleDir.mkdirs()
-                    val styleFile = java.io.File(styleDir, "$regionId.json")
-                    styleFile.writeText(styleJson)
-
-                    // Persist path to database
-                    offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
-
-                    Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
-                } catch (e: Exception) {
-                    // Non-fatal: download already succeeded, tiles are saved
-                    Log.w(TAG, "Failed to cache style JSON for region $regionId (non-fatal)", e)
+                    }
                 }
+                Log.e(TAG, "All style cache attempts failed for region $regionId")
+                false
             }
-        }
 
         override fun onCleared() {
             super.onCleared()

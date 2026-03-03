@@ -124,9 +124,9 @@ class MapTileSourceManagerTest {
         }
 
     @Test
-    fun `getMapStyle returns Offline when HTTP disabled but offline maps exist`() =
+    fun `getMapStyle returns Unavailable when HTTP disabled and offline maps have no cached style`() =
         runTest {
-            // Setup: HTTP disabled, offline maps available
+            // Setup: HTTP disabled, offline region exists but has no cached style JSON
             coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
             coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
 
@@ -154,9 +154,9 @@ class MapTileSourceManagerTest {
 
             val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-            // Should return Offline with the default style URL (not Unavailable)
-            assertTrue("Expected Offline but got ${result::class.simpleName}", result is MapStyleResult.Offline)
-            assertEquals(MapTileSourceManager.DEFAULT_STYLE_URL, (result as MapStyleResult.Offline).styleUrl)
+            // Without a cached inlined style, tiles are unreachable after TileJSON expires
+            assertTrue("Expected Unavailable but got ${result::class.simpleName}", result is MapStyleResult.Unavailable)
+            assertTrue((result as MapStyleResult.Unavailable).reason.contains("re-downloaded"))
         }
 
     @Test

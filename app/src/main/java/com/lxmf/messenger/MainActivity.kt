@@ -274,8 +274,10 @@ class MainActivity : ComponentActivity() {
             }
 
             // Wait for onboarding status to resolve before dismissing splash.
-            // This ensures startDestination is computed with the correct value,
-            // preventing the wizard from flashing on upgrade.
+            // startDestination is memoised via remember{}, so it captures the first
+            // composed value. The LaunchedEffect in ColumbaNavigation redirects
+            // upgraders to Chats once onboardingState resolves; the extended splash
+            // screen hides that redirect, preventing the wizard from flashing.
             val onboardingViewModel: OnboardingViewModel = hiltViewModel()
             val onboardingState by onboardingViewModel.state.collectAsState()
             LaunchedEffect(onboardingState.isLoading) {

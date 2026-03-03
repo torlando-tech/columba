@@ -226,8 +226,29 @@ class OnboardingViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertTrue(state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
             }
             coVerify(exactly = 0) { mockIdentityRepository.getActiveIdentitySync() }
+        }
+
+    @Test
+    fun `upgrade check failure still dismisses loading and does not mark onboarding complete`() =
+        runTest {
+            // Given: DataStore returns false and identity check throws
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } throws RuntimeException("DB error")
+
+            // When: ViewModel is created
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then: Should not be stuck loading, and onboarding should not be marked complete
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
+            }
+            coVerify(exactly = 0) { mockSettingsRepository.markOnboardingCompleted() }
         }
 
     // ========== Display Name Tests ==========

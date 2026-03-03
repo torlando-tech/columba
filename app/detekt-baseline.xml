@@ -8,6 +8,9 @@
     <ID>CyclomaticComplexMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>CyclomaticComplexMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
     <ID>CyclomaticComplexMethod:NodeTypeDetector.kt$NodeTypeDetector$fun detectNodeType( appData: ByteArray?, aspect: String? = null, ): NodeType</ID>
+    <ID>CyclomaticComplexMethod:SettingsViewModel.kt$SettingsViewModel$@Suppress("LongMethod") // Complex flow combination logic is best kept together for readability private fun loadSettings()</ID>
+    <ID>CyclomaticComplexMethod:TelemetryCollectorManager.kt$TelemetryCollectorManager$private fun restartPeriodicRequest()</ID>
+    <ID>CyclomaticComplexMethod:TelemetryCollectorManager.kt$TelemetryCollectorManager$private fun restartPeriodicSend()</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createEmptyJson(): String</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createIncompleteJson(): String</ID>
     <ID>FunctionOnlyReturningConstant:BleTestFixtures.kt$BleTestFixtures$fun createMalformedJson(): String</ID>
@@ -15,22 +18,19 @@
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%06X", argb and 0xFFFFFF)</ID>
     <ID>ImplicitDefaultLocale:ThemeColorGenerator.kt$ThemeColorGenerator$String.format("#%08X", argb)</ID>
     <ID>InstanceOfCheckForException:ServiceNotificationManager.kt$ServiceNotificationManager$e is android.app.ForegroundServiceStartNotAllowedException</ID>
-    <ID>LargeClass:MessagingViewModel.kt$MessagingViewModel : ViewModel</ID>
     <ID>LargeClass:ReticulumServiceBinder.kt$ReticulumServiceBinder : Stub</ID>
     <ID>LargeClass:ServiceReticulumProtocol.kt$ServiceReticulumProtocol : ReticulumProtocol</ID>
+    <ID>LargeClass:TelemetryCollectorManager.kt$TelemetryCollectorManager</ID>
     <ID>LongMethod:ColumbaApplication.kt$ColumbaApplication$override fun onCreate()</ID>
     <ID>LongMethod:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>LongMethod:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
     <ID>LongMethod:MessageCollector.kt$MessageCollector$fun startCollecting()</ID>
-    <ID>LongMethod:ReticulumServiceBinder.kt$ReticulumServiceBinder$private fun setupBridges()</ID>
     <ID>LongParameterList:BleTestFixtures.kt$BleTestFixtures$( identityHash: String = "abcd1234efgh5678ijkl9012mnop3456", peerName: String = "RNS-TestPeer", currentMac: String = "AA:BB:CC:DD:EE:FF", connectionType: ConnectionType = ConnectionType.BOTH, rssi: Int = -70, mtu: Int = 512, connectedAt: Long = System.currentTimeMillis() - 60000, // 1 minute ago firstSeen: Long = System.currentTimeMillis() - 300000, // 5 minutes ago lastSeen: Long = System.currentTimeMillis(), bytesReceived: Long = 1024, bytesSent: Long = 2048, packetsReceived: Long = 10, packetsSent: Long = 20, successRate: Double = 1.0, )</ID>
     <ID>LongParameterList:MarkerBitmapFactory.kt$MarkerBitmapFactory$( sizeDp: Float = 28f, fillColor: Int, strokeColor: Int, fillOpacity: Float = 0.6f, strokeWidthDp: Float = 3f, dashLengthDp: Float = 4f, gapLengthDp: Float = 4f, density: Float, )</ID>
-    <ID>LongParameterList:ReticulumServiceBinder.kt$ReticulumServiceBinder$( private val context: Context, private val state: ServiceState, private val wrapperManager: PythonWrapperManager, private val identityManager: IdentityManager, private val routingManager: RoutingManager, private val messagingManager: MessagingManager, private val pollingManager: PollingManager, private val broadcaster: CallbackBroadcaster, private val lockManager: LockManager, private val maintenanceManager: MaintenanceManager, private val notificationManager: ServiceNotificationManager, private val bleCoordinator: BleCoordinator, private val scope: CoroutineScope, private val onInitialized: () -&gt; Unit, private val onShutdown: () -&gt; Unit, private val onForceExit: () -&gt; Unit, )</ID>
     <ID>LoopWithTooManyJumpStatements:ConfigFileParser.kt$ConfigFileParser$for</ID>
     <ID>LoopWithTooManyJumpStatements:RNodeWizardViewModel.kt$RNodeWizardViewModel$while</ID>
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
-    <ID>MaxLineLength:SettingsViewModel.kt$SettingsViewModel$"Settings updated: displayName=${newState.displayName}, autoAnnounce=${newState.autoAnnounceEnabled}, interval=${newState.autoAnnounceIntervalMinutes}min, theme=${newState.selectedTheme}, customThemes=${newState.customThemes.size}"</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
     <ID>NestedBlockDepth:SettingsViewModel.kt$SettingsViewModel$private suspend fun loadIdentityInfo(): Pair&lt;String?, String?&gt;</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
@@ -97,13 +97,10 @@
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel.Companion$private const val DEFAULT_IDENTITY_FILE = "default_identity"</ID>
     <ID>UnusedPrivateProperty:IdentityScreen.kt$val context = LocalContext.current</ID>
-    <ID>UnusedPrivateProperty:InterfaceConfigManager.kt$InterfaceConfigManager$val serviceConnection = (reticulumProtocol as ServiceReticulumProtocol)</ID>
     <ID>UnusedPrivateProperty:InterfaceDatabase.kt$InterfaceDatabase.Callback$private val applicationScope: CoroutineScope</ID>
     <ID>UnusedPrivateProperty:InterfaceDatabase.kt$InterfaceDatabase.Callback$private val database: Provider&lt;InterfaceDatabase&gt;</ID>
-    <ID>UnusedPrivateProperty:MessageOrderingTest.kt$MessageOrderingTest$private val testPeerName = "Test Peer"</ID>
     <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_MARK_READ = "com.lxmf.messenger.ACTION_MARK_READ"</ID>
     <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_REPLY = "com.lxmf.messenger.ACTION_REPLY"</ID>
-    <ID>UnusedPrivateProperty:PythonWrapperManager.kt$PythonWrapperManager$private val scope: CoroutineScope</ID>
     <ID>UnusedPrivateProperty:ThemeEditorViewModel.kt$ThemeEditorViewModel.Companion$private const val TAG = "ThemeEditorViewModel"</ID>
     <ID>UseCheckOrError:AppRestarter.kt$AppRestarter$throw IllegalStateException("Unable to get launch intent for app")</ID>
     <ID>UseCheckOrError:ReticulumService.kt$ReticulumService$throw IllegalStateException("Service not initialized")</ID>

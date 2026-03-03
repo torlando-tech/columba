@@ -405,10 +405,10 @@ fun LocationSelectionStep(
                 lat: Double?,
                 lon: Double?,
             ) {
-                val hasValidValues = lat != null && lon != null
-                if (hasValidValues && latError == null && lonError == null) {
-                    onLocationSet(lat!!, lon!!)
-                }
+                if (lat == null || lon == null) return
+                if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return
+                if (latError != null || lonError != null) return
+                onLocationSet(lat, lon)
             }
 
             OutlinedTextField(

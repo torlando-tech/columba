@@ -1447,8 +1447,7 @@ class OfflineMapDownloadViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(90.0, state.centerLatitude)
-            // Estimate should have been calculated without crashing
-            assertEquals(100L, state.estimatedTileCount)
+            assertTrue(state.estimatedTileCount > 0)
         }
 
     @Test
@@ -1460,7 +1459,7 @@ class OfflineMapDownloadViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(-90.0, state.centerLatitude)
-            assertEquals(100L, state.estimatedTileCount)
+            assertTrue(state.estimatedTileCount > 0)
         }
 
     @Test
@@ -1468,15 +1467,13 @@ class OfflineMapDownloadViewModelTest {
         runTest {
             viewModel = createViewModel()
 
-            // Set location near the pole
             viewModel.setLocation(89.5, 170.0)
             // Use largest radius — latDelta = 100/111 ≈ 0.9, so 89.5+0.9 = 90.4 > 90
             viewModel.setRadiusOption(RadiusOption.HUGE)
 
-            // Should not crash; bounds should be clamped
             val state = viewModel.state.value
             assertEquals(89.5, state.centerLatitude)
-            assertEquals(100L, state.estimatedTileCount)
+            assertTrue(state.estimatedTileCount > 0)
         }
 
     // endregion

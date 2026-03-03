@@ -120,10 +120,18 @@ fun SettingsScreen(
         ) { permissions ->
             val granted = permissions.values.any { it }
             if (granted) {
-                // Execute pending action (enable toggle or send now)
-                pendingTelemetryAction?.invoke()
+                // Foreground granted; check if background is also needed
+                if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
+                    pendingTelemetryAction?.invoke()
+                    pendingTelemetryAction = null
+                } else {
+                    // Now request background before enabling telemetry
+                    telemetryBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    // pendingTelemetryAction is preserved for the background launcher
+                }
+            } else {
+                pendingTelemetryAction = null
             }
-            pendingTelemetryAction = null
         }
 
     val telemetryBackgroundPermissionLauncher =

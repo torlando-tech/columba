@@ -291,12 +291,7 @@ class MapViewModel
                     locations.mapNotNull { loc ->
                         // Ignore self-echo telemetry entries from collector streams.
                         val senderHash = loc.senderHash.lowercase()
-                        val isSelfEcho =
-                            localHashes.any { localHash ->
-                                senderHash == localHash ||
-                                    senderHash.startsWith(localHash) ||
-                                    localHash.startsWith(senderHash)
-                            }
+                        val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
                         if (isSelfEcho) {
                             return@mapNotNull null
                         }

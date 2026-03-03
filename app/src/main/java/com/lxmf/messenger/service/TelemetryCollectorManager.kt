@@ -635,8 +635,7 @@ class TelemetryCollectorManager
          */
         private suspend fun delayUntil(targetTimeMs: Long) {
             val timeUntil = maxOf(0L, targetTimeMs - System.currentTimeMillis())
-            val capped = minOf(timeUntil, 30_000L)
-            delay(if (capped > 0) capped else 30_000L)
+            delay(minOf(timeUntil, 30_000L))
         }
 
         /**

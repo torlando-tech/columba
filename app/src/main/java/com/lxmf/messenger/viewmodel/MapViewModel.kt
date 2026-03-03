@@ -339,7 +339,7 @@ class MapViewModel
                             longitude = loc.longitude,
                             accuracy = loc.accuracy,
                             // Display sender emission timestamp in UI (requested behavior).
-                            // Fresh/stale state remains based on receivedAt above.
+                            // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
                             timestamp = loc.timestamp,
                             expiresAt = loc.expiresAt,
                             state = markerState,

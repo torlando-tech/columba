@@ -170,6 +170,87 @@ class OnboardingViewModelTest {
             }
         }
 
+    // ========== Upgrade Detection Tests ==========
+
+    @Test
+    fun `detects upgrade when identity exists but onboarding not marked complete`() =
+        runTest {
+            // Given: DataStore has no onboarding key (returns false) but an identity exists
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns createTestIdentity()
+
+            // When: ViewModel is created
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then: Upgrade should be detected, onboarding marked complete
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue("Should detect upgrade and mark onboarding complete", state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
+            }
+            coVerify { mockSettingsRepository.markOnboardingCompleted() }
+        }
+
+    @Test
+    fun `does not mark upgrade when no identity exists`() =
+        runTest {
+            // Given: DataStore has no onboarding key and no identity exists (fresh install)
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
+
+            // When: ViewModel is created
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then: Should show onboarding wizard
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse("Fresh install should not skip onboarding", state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
+            }
+            coVerify(exactly = 0) { mockSettingsRepository.markOnboardingCompleted() }
+        }
+
+    @Test
+    fun `skips identity check when onboarding already completed`() =
+        runTest {
+            // Given: Onboarding already marked complete in DataStore
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(true)
+
+            // When: ViewModel is created
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then: Should skip identity check entirely
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
+            }
+            coVerify(exactly = 0) { mockIdentityRepository.getActiveIdentitySync() }
+        }
+
+    @Test
+    fun `upgrade check failure still dismisses loading and does not mark onboarding complete`() =
+        runTest {
+            // Given: DataStore returns false and identity check throws
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } throws RuntimeException("DB error")
+
+            // When: ViewModel is created
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then: Should not be stuck loading, and onboarding should not be marked complete
+            viewModel.state.test {
+                val state = awaitItem()
+                assertFalse(state.hasCompletedOnboarding)
+                assertFalse(state.isLoading)
+            }
+            coVerify(exactly = 0) { mockSettingsRepository.markOnboardingCompleted() }
+        }
+
     // ========== Display Name Tests ==========
 
     @Test
@@ -351,7 +432,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -371,7 +453,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -593,7 +676,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (skipOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
             advanceUntilIdle()

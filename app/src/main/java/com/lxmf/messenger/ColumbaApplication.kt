@@ -371,14 +371,8 @@ class ColumbaApplication : Application() {
                                 try {
                                     delay(1000) // Wait 1 second for identity file creation
 
-                                    // Check if this is an upgrade (existing identity) vs fresh install
-                                    // If we already have identities, mark onboarding as completed
-                                    // so returning users don't see the welcome screen
-                                    val existingIdentity = identityRepository.getActiveIdentitySync()
-                                    if (existingIdentity != null) {
-                                        android.util.Log.d("ColumbaApplication", "Existing identity found - marking onboarding complete for upgrade")
-                                        settingsRepository.markOnboardingCompleted()
-                                    }
+                                    // Upgrade detection (marking onboarding complete for existing users)
+                                    // is now handled immediately in OnboardingViewModel.checkOnboardingStatus()
 
                                     // Get identity hashes from service
                                     val identity =

@@ -619,6 +619,24 @@ class OfflineMapDownloadViewModel
 
                             viewModelScope.launch {
                                 try {
+                                    // Cache style JSON BEFORE marking as complete.
+                                    // markCompleteWithMaplibreId triggers Flow emissions
+                                    // that cause MapTileSourceManager to look for the
+                                    // localStylePath — if it's still null, the user sees
+                                    // a misleading "re-download" error.
+                                    val styleCached = fetchAndCacheStyleJson(regionId)
+                                    if (!styleCached) {
+                                        Log.w(TAG, "Style caching failed — offline map may not work after 24h")
+                                        _state.update {
+                                            it.copy(
+                                                errorMessage =
+                                                    "Map tiles saved, but offline style caching failed. " +
+                                                        "The map may stop working offline after 24 hours. " +
+                                                        "Try re-downloading while connected to the internet.",
+                                            )
+                                        }
+                                    }
+
                                     // Mark as complete in database with MapLibre region ID
                                     offlineMapRegionRepository.markCompleteWithMaplibreId(
                                         id = regionId,
@@ -650,22 +668,6 @@ class OfflineMapDownloadViewModel
                                             it.copy(
                                                 isComplete = true,
                                                 downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                            )
-                                        }
-                                    }
-
-                                    // Fetch and cache style JSON — required for offline
-                                    // rendering. Without this, the TileJSON HTTP cache
-                                    // expires after ~24h and tiles become unreachable.
-                                    val styleCached = fetchAndCacheStyleJson(regionId)
-                                    if (!styleCached) {
-                                        Log.w(TAG, "Style caching failed — offline map may not work after 24h")
-                                        _state.update {
-                                            it.copy(
-                                                errorMessage =
-                                                    "Map tiles saved, but offline style caching failed. " +
-                                                        "The map may stop working offline after 24 hours. " +
-                                                        "Try re-downloading while connected to the internet.",
                                             )
                                         }
                                     }
@@ -760,6 +762,8 @@ class OfflineMapDownloadViewModel
 
                         Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
                         return@withContext true
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Log.w(TAG, "Style cache attempt ${attempt + 1}/$STYLE_CACHE_MAX_RETRIES failed for region $regionId", e)
                         if (attempt < STYLE_CACHE_MAX_RETRIES - 1) {

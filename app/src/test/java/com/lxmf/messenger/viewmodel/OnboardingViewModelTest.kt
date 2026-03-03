@@ -432,7 +432,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -452,7 +453,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -674,7 +676,8 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
+            // First call (upgrade check in init) returns null, second call (skipOnboarding) returns identity
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
             advanceUntilIdle()

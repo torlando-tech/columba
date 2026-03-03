@@ -109,6 +109,7 @@ import com.lxmf.messenger.viewmodel.SettingsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
@@ -279,12 +280,10 @@ class MainActivity : ComponentActivity() {
             // upgraders to Chats once onboardingState resolves; the extended splash
             // screen hides that redirect, preventing the wizard from flashing.
             val onboardingViewModel: OnboardingViewModel = hiltViewModel()
-            val onboardingState by onboardingViewModel.state.collectAsState()
-            LaunchedEffect(onboardingState.isLoading) {
-                if (!onboardingState.isLoading) {
-                    isOnboardingReady = true
-                    Log.d(TAG, "Onboarding status resolved: completed=${onboardingState.hasCompletedOnboarding}")
-                }
+            LaunchedEffect(Unit) {
+                val resolved = onboardingViewModel.state.first { !it.isLoading }
+                isOnboardingReady = true
+                Log.d(TAG, "Onboarding status resolved: completed=${resolved.hasCompletedOnboarding}")
             }
 
             ColumbaNavigation(

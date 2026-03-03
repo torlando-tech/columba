@@ -31,6 +31,7 @@ object MicronParser {
     ): MicronDocument {
         var pageBackground: MicronColor? = null
         var pageForeground: MicronColor? = null
+        var cacheTime: Int? = null
 
         // Parser state that persists across lines
         var currentStyle = MicronStyle()
@@ -84,6 +85,9 @@ object MicronParser {
                         }
                         directive.startsWith("fg=") -> {
                             pageForeground = MicronColor.parse(directive.substring(3))
+                        }
+                        directive.startsWith("c=") -> {
+                            cacheTime = directive.substring(2).toIntOrNull()
                         }
                     }
                 }
@@ -163,6 +167,7 @@ object MicronParser {
             lines = outputLines,
             pageBackground = pageBackground,
             pageForeground = pageForeground,
+            cacheTime = cacheTime,
         )
     }
 

@@ -4,6 +4,7 @@ data class MicronDocument(
     val lines: List<MicronLine>,
     val pageBackground: MicronColor? = null,
     val pageForeground: MicronColor? = null,
+    val cacheTime: Int? = null,
 )
 
 data class MicronLine(

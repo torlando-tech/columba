@@ -59,6 +59,40 @@ class MicronParserTest {
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), doc.pageForeground)
     }
 
+    // ==================== Cache Directive ====================
+
+    @Test
+    fun `cache directive parsed`() {
+        val doc = MicronParser.parse("#!c=300\ntext")
+        assertEquals(300, doc.cacheTime)
+    }
+
+    @Test
+    fun `cache directive zero means no cache`() {
+        val doc = MicronParser.parse("#!c=0\ntext")
+        assertEquals(0, doc.cacheTime)
+    }
+
+    @Test
+    fun `no cache directive means null`() {
+        val doc = MicronParser.parse("just text")
+        assertNull(doc.cacheTime)
+    }
+
+    @Test
+    fun `cache directive with other directives`() {
+        val doc = MicronParser.parse("#!bg=000\n#!c=600\n#!fg=ddd\ntext")
+        assertEquals(MicronColor.Hex(0x00, 0x00, 0x00), doc.pageBackground)
+        assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), doc.pageForeground)
+        assertEquals(600, doc.cacheTime)
+    }
+
+    @Test
+    fun `invalid cache directive ignored`() {
+        val doc = MicronParser.parse("#!c=abc\ntext")
+        assertNull(doc.cacheTime)
+    }
+
     // ==================== Headings ====================
 
     @Test

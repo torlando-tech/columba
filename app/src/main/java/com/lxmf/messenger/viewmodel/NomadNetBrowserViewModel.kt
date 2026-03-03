@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronParser
+import com.lxmf.messenger.nomadnet.NomadNetPageCache
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ class NomadNetBrowserViewModel
     @Inject
     constructor(
         private val reticulumProtocol: ReticulumProtocol,
+        private val pageCache: NomadNetPageCache,
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
@@ -57,6 +59,7 @@ class NomadNetBrowserViewModel
             val nodeHash: String,
             val path: String,
             val formFields: Map<String, String>,
+            val document: MicronDocument,
         )
 
         private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
@@ -79,54 +82,28 @@ class NomadNetBrowserViewModel
         ) {
             currentNodeHash = destinationHash
             _formFields.value = emptyMap()
-            _browserState.value = BrowserState.Loading("Requesting page...")
 
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                    if (protocol == null) {
-                        _browserState.value = BrowserState.Error("Service not available")
-                        return@launch
-                    }
-
-                    _browserState.value = BrowserState.Loading("Connecting to node...")
-
-                    val result =
-                        protocol.requestNomadnetPage(
-                            destinationHash = destinationHash,
-                            path = path,
-                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
-                        )
-
-                    result.fold(
-                        onSuccess = { pageResult ->
-                            val document = MicronParser.parse(pageResult.content)
-                            _browserState.value =
-                                BrowserState.PageLoaded(
-                                    document = document,
-                                    path = pageResult.path,
-                                    nodeHash = destinationHash,
-                                )
-                        },
-                        onFailure = { error ->
-                            _browserState.value =
-                                BrowserState.Error(
-                                    error.message ?: "Unknown error",
-                                )
-                        },
+            // Check cache before showing loading spinner
+            val cached = pageCache.get(destinationHash, path)
+            if (cached != null) {
+                val document = MicronParser.parse(cached)
+                _browserState.value =
+                    BrowserState.PageLoaded(
+                        document = document,
+                        path = path,
+                        nodeHash = destinationHash,
                     )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading page", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
-                }
+                return
             }
+
+            fetchPage(destinationHash, path, cacheResponse = true)
         }
 
         fun navigateToLink(
             destination: String,
             fieldNames: List<String>,
         ) {
-            // Save current page to history
+            // Save current page to history (with document for instant back-nav)
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
                 history.add(
@@ -134,13 +111,15 @@ class NomadNetBrowserViewModel
                         nodeHash = currentState.nodeHash,
                         path = currentState.path,
                         formFields = _formFields.value.toMap(),
+                        document = currentState.document,
                     ),
                 )
             }
 
             // Collect form field values for submission
+            val isFormSubmission = fieldNames.isNotEmpty()
             val formDataJson =
-                if (fieldNames.isNotEmpty()) {
+                if (isFormSubmission) {
                     val data = JSONObject()
                     for (fieldName in fieldNames) {
                         val value = _formFields.value[fieldName] ?: ""
@@ -204,62 +183,91 @@ class NomadNetBrowserViewModel
             }
 
             _formFields.value = emptyMap()
-            _browserState.value = BrowserState.Loading("Requesting page...")
 
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                    if (protocol == null) {
-                        _browserState.value = BrowserState.Error("Service not available")
-                        return@launch
-                    }
+            // Form submissions always fetch fresh (response depends on submitted data)
+            if (isFormSubmission) {
+                _browserState.value = BrowserState.Loading("Requesting page...")
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                        if (protocol == null) {
+                            _browserState.value = BrowserState.Error("Service not available")
+                            return@launch
+                        }
 
-                    val result =
-                        protocol.requestNomadnetPage(
-                            destinationHash = nodeHash,
-                            path = path,
-                            formDataJson = formDataJson,
-                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                        val result =
+                            protocol.requestNomadnetPage(
+                                destinationHash = nodeHash,
+                                path = path,
+                                formDataJson = formDataJson,
+                                timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                            )
+
+                        result.fold(
+                            onSuccess = { pageResult ->
+                                currentNodeHash = nodeHash
+                                val document = MicronParser.parse(pageResult.content)
+                                // Don't cache form responses
+                                _browserState.value =
+                                    BrowserState.PageLoaded(
+                                        document = document,
+                                        path = pageResult.path,
+                                        nodeHash = nodeHash,
+                                    )
+                            },
+                            onFailure = { error ->
+                                _browserState.value =
+                                    BrowserState.Error(
+                                        error.message ?: "Unknown error",
+                                    )
+                            },
                         )
-
-                    result.fold(
-                        onSuccess = { pageResult ->
-                            currentNodeHash = nodeHash
-                            val document = MicronParser.parse(pageResult.content)
-                            _browserState.value =
-                                BrowserState.PageLoaded(
-                                    document = document,
-                                    path = pageResult.path,
-                                    nodeHash = nodeHash,
-                                )
-                        },
-                        onFailure = { error ->
-                            _browserState.value =
-                                BrowserState.Error(
-                                    error.message ?: "Unknown error",
-                                )
-                        },
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error navigating", e)
-                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error navigating", e)
+                        _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                    }
                 }
+                return
             }
+
+            // Non-form link: check cache first
+            val cached = pageCache.get(nodeHash, path)
+            if (cached != null) {
+                currentNodeHash = nodeHash
+                val document = MicronParser.parse(cached)
+                _browserState.value =
+                    BrowserState.PageLoaded(
+                        document = document,
+                        path = path,
+                        nodeHash = nodeHash,
+                    )
+                return
+            }
+
+            fetchPage(nodeHash, path, cacheResponse = true)
         }
 
         fun goBack(): Boolean {
             if (history.isEmpty()) return false
 
             val entry = history.removeLast()
+            currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
-            loadPage(entry.nodeHash, entry.path)
+            // Instant back-navigation using the stored document
+            _browserState.value =
+                BrowserState.PageLoaded(
+                    document = entry.document,
+                    path = entry.path,
+                    nodeHash = entry.nodeHash,
+                )
             return true
         }
 
         fun refresh() {
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
-                loadPage(currentState.nodeHash, currentState.path)
+                // Bypass cache read, but still cache the fresh response
+                fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
             }
         }
 
@@ -283,5 +291,60 @@ class NomadNetBrowserViewModel
 
         fun setRenderingMode(mode: RenderingMode) {
             _renderingMode.value = mode
+        }
+
+        /**
+         * Fetch a page from the network, optionally caching the response.
+         */
+        private fun fetchPage(
+            nodeHash: String,
+            path: String,
+            cacheResponse: Boolean,
+        ) {
+            _browserState.value = BrowserState.Loading("Requesting page...")
+
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                    if (protocol == null) {
+                        _browserState.value = BrowserState.Error("Service not available")
+                        return@launch
+                    }
+
+                    _browserState.value = BrowserState.Loading("Connecting to node...")
+
+                    val result =
+                        protocol.requestNomadnetPage(
+                            destinationHash = nodeHash,
+                            path = path,
+                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                        )
+
+                    result.fold(
+                        onSuccess = { pageResult ->
+                            currentNodeHash = nodeHash
+                            val document = MicronParser.parse(pageResult.content)
+                            if (cacheResponse) {
+                                pageCache.put(nodeHash, pageResult.path, pageResult.content, document.cacheTime)
+                            }
+                            _browserState.value =
+                                BrowserState.PageLoaded(
+                                    document = document,
+                                    path = pageResult.path,
+                                    nodeHash = nodeHash,
+                                )
+                        },
+                        onFailure = { error ->
+                            _browserState.value =
+                                BrowserState.Error(
+                                    error.message ?: "Unknown error",
+                                )
+                        },
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading page", e)
+                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                }
+            }
         }
     }

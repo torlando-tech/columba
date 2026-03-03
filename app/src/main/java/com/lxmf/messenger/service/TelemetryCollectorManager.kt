@@ -107,6 +107,7 @@ class TelemetryCollectorManager
 
         companion object {
             private const val TAG = "TelemetryCollectorManager"
+            private const val DEST_HASH_LENGTH = 32
         }
 
         // State flows for UI observation
@@ -157,8 +158,9 @@ class TelemetryCollectorManager
         // Last attempt timestamps (success OR failure) used to throttle retries.
         // We keep last successful timestamps in SettingsRepository for UI/history,
         // and use these in-memory values only for scheduler pacing.
-        private var lastSendAttemptAt: Long? = null
-        private var lastRequestAttemptAt: Long? = null
+        // Initialize from persisted values to avoid immediate retry after process death.
+        private var lastSendAttemptAt: Long? = _lastSendTime.value
+        private var lastRequestAttemptAt: Long? = _lastRequestTime.value
 
         /**
          * Start the manager - begin observing settings and schedule periodic sends.
@@ -190,16 +192,18 @@ class TelemetryCollectorManager
                 settingsRepository.telemetryCollectorAddressFlow
                     .distinctUntilChanged()
                     .collect { address ->
-                        // Migrate legacy truncated collector addresses to full 32-char hashes.
-                        // Earlier versions could persist a truncated destination hash prefix.
-                        if (address != null && address.length != 32) {
+                        // Migrate legacy truncated collector addresses: earlier versions
+                        // could persist a truncated destination hash prefix. Only treat as
+                        // legacy when the short address is a prefix of the local identity
+                        // hash — non-Columba peers may use valid shorter representations.
+                        if (address != null && address.length < DEST_HASH_LENGTH) {
                             val localDestHash = identityRepository.getActiveIdentitySync()?.destinationHash?.lowercase()
                             if (localDestHash != null && localDestHash.startsWith(address.lowercase())) {
-                                Log.i(TAG, "Migrating truncated collector address (${address.length} chars) to full destination hash")
+                                Log.i(TAG, "Migrating truncated collector address (${address.length} chars) to full local destination hash")
                                 settingsRepository.saveTelemetryCollectorAddress(localDestHash)
                                 return@collect // The save will re-emit via the flow
                             } else {
-                                Log.w(TAG, "Truncated collector address (${address.length} chars) does not match local identity, clearing")
+                                Log.w(TAG, "Collector address is ${address.length} chars (expected $DEST_HASH_LENGTH) — not a local prefix, clearing")
                                 settingsRepository.saveTelemetryCollectorAddress(null)
                                 return@collect
                             }

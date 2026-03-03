@@ -9,10 +9,12 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import com.lxmf.messenger.viewmodel.AddressSearchResult
 import com.lxmf.messenger.viewmodel.DownloadProgress
 import com.lxmf.messenger.viewmodel.RadiusOption
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -66,7 +68,8 @@ class OfflineMapDownloadScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Choose the center point for your offline map region.")
+        composeTestRule
+            .onNodeWithText("Choose the center point for your offline map region.")
             .assertIsDisplayed()
     }
 
@@ -396,6 +399,218 @@ class OfflineMapDownloadScreenTest {
         composeTestRule.onNodeWithText("Use Current Location").assertExists()
         composeTestRule.onNodeWithText("Latitude").assertExists()
         composeTestRule.onNodeWithText("Geohash").assertExists()
+    }
+
+    // ========== LocationSelectionStep Validation Tests (Issue #574) ==========
+
+    @Test
+    fun locationStep_showsErrorForLatitudeAbove90() {
+        var receivedLat: Double? = null
+
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { lat, _ -> receivedLat = lat },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        // Type an out-of-range latitude
+        composeTestRule.onNodeWithText("Latitude").performTextInput("123")
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+        // Should NOT have called onLocationSet with invalid value
+        assert(receivedLat == null) { "onLocationSet should not be called with out-of-range latitude" }
+    }
+
+    @Test
+    fun locationStep_showsErrorForLatitudeBelowNegative90() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Latitude").performTextInput("-91")
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertExists()
+    }
+
+    @Test
+    fun locationStep_showsErrorForLongitudeAbove180() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Longitude").performTextInput("200")
+        composeTestRule.onNodeWithText("Must be between -180 and 180").assertExists()
+    }
+
+    @Test
+    fun locationStep_noErrorForValidLatitude() {
+        var receivedLat: Double? = null
+
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { lat, _ -> receivedLat = lat },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        // Type valid lat; note: lon is still empty so onLocationSet won't fire (lon is null)
+        composeTestRule.onNodeWithText("Latitude").performTextInput("45")
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Invalid number").assertDoesNotExist()
+    }
+
+    @Test
+    fun locationStep_noErrorWhileTypingNegativeSign() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        // Typing just "-" should not show an error (user is still typing)
+        composeTestRule.onNodeWithText("Latitude").performTextInput("-")
+        composeTestRule.onNodeWithText("Invalid number").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Must be between -90 and 90").assertDoesNotExist()
+    }
+
+    @Test
+    fun locationStep_showsInvalidNumberForNonNumericInput() {
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { _, _ -> },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Latitude").performTextInput("abc")
+        composeTestRule.onNodeWithText("Invalid number").assertExists()
+    }
+
+    @Test
+    fun locationStep_callsOnLocationSetWithValidCoordinates() {
+        var receivedLat: Double? = null
+        var receivedLon: Double? = null
+
+        composeTestRule.setContent {
+            LocationSelectionStep(
+                hasLocation = false,
+                latitude = null,
+                longitude = null,
+                isGeocoderAvailable = false,
+                addressQuery = "",
+                addressSearchResults = emptyList(),
+                isSearchingAddress = false,
+                addressSearchError = null,
+                onLocationSet = { lat, lon ->
+                    receivedLat = lat
+                    receivedLon = lon
+                },
+                onCurrentLocationRequest = {},
+                onAddressQueryChange = {},
+                onSearchAddress = {},
+                onSelectAddressResult = {},
+                httpEnabled = true,
+                onEnableHttp = {},
+                onNext = {},
+            )
+        }
+
+        // Type valid longitude first, then latitude — onLocationSet fires when both are valid
+        composeTestRule.onNodeWithText("Longitude").performTextInput("-74")
+        composeTestRule.onNodeWithText("Latitude").performTextInput("40")
+
+        assertEquals(40.0, receivedLat)
+        assertEquals(-74.0, receivedLon)
     }
 
     // ========== RadiusSelectionStep Tests ==========

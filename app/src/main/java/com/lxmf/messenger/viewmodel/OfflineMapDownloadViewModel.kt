@@ -110,6 +110,7 @@ data class OfflineMapDownloadState(
     val isGeocoderAvailable: Boolean = true, // Checked on init
     val httpEnabled: Boolean = true, // HTTP map source enabled (needed for downloads)
     val httpAutoDisabled: Boolean = false, // True when HTTP was auto-disabled after download
+    val styleCacheWarning: String? = null, // Non-null when style caching failed but tiles were saved
 ) {
     /**
      * Check if the location is set.
@@ -619,25 +620,11 @@ class OfflineMapDownloadViewModel
 
                             viewModelScope.launch {
                                 try {
-                                    // Cache style JSON BEFORE marking as complete.
-                                    // markCompleteWithMaplibreId triggers Flow emissions
-                                    // that cause MapTileSourceManager to look for the
-                                    // localStylePath — if it's still null, the user sees
-                                    // a misleading "re-download" error.
-                                    val styleCached = fetchAndCacheStyleJson(regionId)
-                                    if (!styleCached) {
-                                        Log.w(TAG, "Style caching failed — offline map may not work after 24h")
-                                        _state.update {
-                                            it.copy(
-                                                errorMessage =
-                                                    "Map tiles saved, but offline style caching failed. " +
-                                                        "The map may stop working offline after 24 hours. " +
-                                                        "Try re-downloading while connected to the internet.",
-                                            )
-                                        }
-                                    }
-
-                                    // Mark as complete in database with MapLibre region ID
+                                    // 1. Mark COMPLETE immediately so the database
+                                    //    reflects reality (tiles are saved in
+                                    //    mbgl-offline.db). If the app is killed after
+                                    //    this point, the region won't appear stuck in
+                                    //    DOWNLOADING state on next launch.
                                     offlineMapRegionRepository.markCompleteWithMaplibreId(
                                         id = regionId,
                                         tileCount =
@@ -648,28 +635,40 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
-                                    // Check if HTTP was enabled specifically for this download
+                                    // 2. Cache the inlined style JSON. This must
+                                    //    happen BEFORE HTTP is auto-disabled so that
+                                    //    MapTileSourceManager returns Online (not
+                                    //    Unavailable) if anything queries the map
+                                    //    while style caching is still in progress.
+                                    val styleCached = fetchAndCacheStyleJson(regionId)
+                                    val styleCacheWarning =
+                                        if (!styleCached) {
+                                            Log.w(TAG, "Style caching failed — offline map may not work after 24h")
+                                            "Map tiles saved, but offline style caching failed. " +
+                                                "The map may stop working offline after 24 hours. " +
+                                                "Try re-downloading while connected to the internet."
+                                        } else {
+                                            null
+                                        }
+
+                                    // 3. Now safe to auto-disable HTTP — the cached
+                                    //    style (if successful) is already persisted.
                                     val wasEnabledForDownload =
                                         settingsRepository.httpEnabledForDownloadFlow.first()
                                     if (wasEnabledForDownload) {
-                                        // Auto-disable HTTP and clear the flag
                                         Log.d(TAG, "Auto-disabling HTTP after download (was enabled for download)")
                                         mapTileSourceManager.setHttpEnabled(false)
                                         settingsRepository.setHttpEnabledForDownload(false)
-                                        _state.update {
-                                            it.copy(
-                                                isComplete = true,
-                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                                httpAutoDisabled = true,
-                                            )
-                                        }
-                                    } else {
-                                        _state.update {
-                                            it.copy(
-                                                isComplete = true,
-                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                            )
-                                        }
+                                    }
+
+                                    // 4. Signal completion with any style cache warning.
+                                    _state.update {
+                                        it.copy(
+                                            isComplete = true,
+                                            downloadProgress = it.downloadProgress?.copy(isComplete = true),
+                                            httpAutoDisabled = wasEnabledForDownload,
+                                            styleCacheWarning = styleCacheWarning,
+                                        )
                                     }
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to mark region complete in database", e)

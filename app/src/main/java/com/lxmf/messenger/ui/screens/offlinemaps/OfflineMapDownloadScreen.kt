@@ -89,10 +89,16 @@ fun OfflineMapDownloadScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCancelDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    // Handle completion
+    // Handle completion — show style cache warning before navigating away
     LaunchedEffect(state.isComplete) {
         if (state.isComplete) {
+            state.styleCacheWarning?.let { warning ->
+                android.widget.Toast
+                    .makeText(context, warning, android.widget.Toast.LENGTH_LONG)
+                    .show()
+            }
             onDownloadComplete()
         }
     }
@@ -106,7 +112,6 @@ fun OfflineMapDownloadScreen(
     }
 
     // Show toast when HTTP was auto-disabled after download
-    val context = LocalContext.current
     LaunchedEffect(state.httpAutoDisabled) {
         if (state.httpAutoDisabled) {
             android.widget.Toast

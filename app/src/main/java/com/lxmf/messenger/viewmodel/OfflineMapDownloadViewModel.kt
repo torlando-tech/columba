@@ -525,8 +525,16 @@ class OfflineMapDownloadViewModel
             // 1 degree longitude ≈ 111 * cos(lat) km
             val lonDelta = radiusKm / (111.0 * cos(Math.toRadians(centerLat)))
 
-            val southwest = LatLng(centerLat - latDelta, centerLon - lonDelta)
-            val northeast = LatLng(centerLat + latDelta, centerLon + lonDelta)
+            val southwest =
+                LatLng(
+                    (centerLat - latDelta).coerceIn(-90.0, 90.0),
+                    (centerLon - lonDelta).coerceIn(-180.0, 180.0),
+                )
+            val northeast =
+                LatLng(
+                    (centerLat + latDelta).coerceIn(-90.0, 90.0),
+                    (centerLon + lonDelta).coerceIn(-180.0, 180.0),
+                )
 
             return LatLngBounds
                 .Builder()

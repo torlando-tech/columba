@@ -3006,14 +3006,9 @@ class ReticulumWrapper:
 
                                             # ✅ Check allowed requesters list (must be explicitly allowed)
                                             # allowlist values are canonicalized to lowercase 32-hex at source.
-                                            allowed_hashes = [
-                                                h.lower() for h in self.telemetry_allowed_requesters
-                                                if isinstance(h, str) and len(h) > 0
-                                            ]
-
-                                            if requester_hash not in allowed_hashes:
+                                            if requester_hash not in self.telemetry_allowed_requesters:
                                                 allowed_preview = ", ".join(
-                                                    f"{h[:16]}(len={len(h)})" for h in allowed_hashes[:5]
+                                                    f"{h[:16]}(len={len(h)})" for h in list(self.telemetry_allowed_requesters)[:5]
                                                 ) or "none"
                                                 log_info("ReticulumWrapper", "_on_lxmf_delivery",
                                                         f"📡 Telemetry request BLOCKED from {requester_hash[:16]} (not in allowed list; allowed={allowed_preview})")

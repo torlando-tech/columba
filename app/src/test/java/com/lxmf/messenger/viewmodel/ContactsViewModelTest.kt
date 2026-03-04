@@ -892,4 +892,25 @@ class ContactsViewModelTest {
 
             assertNull(result)
         }
+
+    @Test
+    fun `getContactLocation returns null when location has expired`() =
+        runTest {
+            val entity =
+                ReceivedLocationEntity(
+                    id = "loc-2",
+                    senderHash = testDestHash,
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                    accuracy = 10f,
+                    timestamp = System.currentTimeMillis() - 60_000,
+                    expiresAt = System.currentTimeMillis() - 1_000,
+                    receivedAt = System.currentTimeMillis() - 60_000,
+                )
+            coEvery { receivedLocationDao.getLatestLocationForSender(testDestHash) } returns entity
+
+            val result = viewModel.getContactLocation(testDestHash)
+
+            assertNull(result)
+        }
 }

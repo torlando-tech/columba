@@ -536,6 +536,8 @@ class ContactsViewModel
          */
         suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? {
             val location = receivedLocationDao.getLatestLocationForSender(destinationHash)
-            return location?.let { Pair(it.latitude, it.longitude) }
+            val expires = location?.expiresAt
+            return location?.takeIf { expires == null || expires > System.currentTimeMillis() }
+                ?.let { Pair(it.latitude, it.longitude) }
         }
     }

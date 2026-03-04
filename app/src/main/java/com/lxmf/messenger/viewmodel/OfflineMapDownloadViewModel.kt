@@ -161,6 +161,7 @@ class OfflineMapDownloadViewModel
     ) : ViewModel() {
         /** URL fetcher — overridable for testing. */
         internal var urlFetcher: (String) -> String = ::defaultFetchUrl
+
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
 
@@ -168,8 +169,8 @@ class OfflineMapDownloadViewModel
             private const val ESTIMATED_BYTES_PER_TILE = 20_000L
 
             // Style caching: retry parameters for fetching and inlining TileJSON
-            private const val STYLE_CACHE_MAX_RETRIES = 3
-            private const val STYLE_FETCH_TIMEOUT_MS = 10_000L
+            internal const val STYLE_CACHE_MAX_RETRIES = 3
+            internal const val STYLE_FETCH_TIMEOUT_MS = 10_000L
             private const val STYLE_CACHE_RETRY_DELAY_MS = 2_000L
         }
 
@@ -800,10 +801,11 @@ class OfflineMapDownloadViewModel
  * connect/read timeouts are enforced at the OS level, not via cooperative cancellation.
  */
 private fun defaultFetchUrl(url: String): String {
+    val timeoutMs = OfflineMapDownloadViewModel.STYLE_FETCH_TIMEOUT_MS.toInt()
     val connection =
         (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 10_000
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
         }
     return try {
         connection.inputStream.bufferedReader().use { it.readText() }

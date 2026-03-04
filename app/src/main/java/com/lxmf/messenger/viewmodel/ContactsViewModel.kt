@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -77,6 +78,7 @@ class ContactsViewModel
     constructor(
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val receivedLocationDao: ReceivedLocationDao,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -526,5 +528,14 @@ class ContactsViewModel
                     Log.e(TAG, "Error retrying identity resolution", e)
                 }
             }
+        }
+
+        /**
+         * Get the latest known location for a peer.
+         * Returns a Pair(latitude, longitude) or null if no location is known.
+         */
+        suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? {
+            val location = receivedLocationDao.getLatestLocationForSender(destinationHash)
+            return location?.let { Pair(it.latitude, it.longitude) }
         }
     }

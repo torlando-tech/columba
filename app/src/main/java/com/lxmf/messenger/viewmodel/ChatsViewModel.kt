@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
@@ -37,6 +38,7 @@ class ChatsViewModel
         private val conversationRepository: ConversationRepository,
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val receivedLocationDao: ReceivedLocationDao,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ChatsViewModel"
@@ -183,5 +185,14 @@ class ChatsViewModel
                     Log.e(TAG, "Error triggering manual sync", e)
                 }
             }
+        }
+
+        /**
+         * Get the latest known location for a peer.
+         * Returns a Pair(latitude, longitude) or null if no location is known.
+         */
+        suspend fun getContactLocation(peerHash: String): Pair<Double, Double>? {
+            val location = receivedLocationDao.getLatestLocationForSender(peerHash)
+            return location?.let { Pair(it.latitude, it.longitude) }
         }
     }

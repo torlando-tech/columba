@@ -9,6 +9,7 @@ import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.db.entity.MessageEntity
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
@@ -85,6 +86,7 @@ class MessagingViewModelTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
+    private lateinit var receivedLocationDao: ReceivedLocationDao
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -114,6 +116,7 @@ class MessagingViewModelTest {
         locationSharingManager = mockk()
         identityRepository = mockk()
         conversationLinkManager = mockk()
+        receivedLocationDao = mockk()
 
         // Mock activeConversationManager methods
         every { activeConversationManager.setActive(any()) } just Runs
@@ -213,6 +216,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
             testBody()
@@ -235,6 +239,7 @@ class MessagingViewModelTest {
             locationSharingManager,
             identityRepository,
             conversationLinkManager,
+            receivedLocationDao,
         )
 
     @Test
@@ -560,6 +565,7 @@ class MessagingViewModelTest {
                     failingLocationSharingManager,
                     identityRepository,
                     failingConversationLinkManager,
+                    receivedLocationDao,
                 )
 
             // Attempt to send message
@@ -1010,6 +1016,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                receivedLocationDao,
             )
             advanceUntilIdle()
 
@@ -1079,6 +1086,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                receivedLocationDao,
             )
             advanceUntilIdle()
 
@@ -1146,6 +1154,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                receivedLocationDao,
             )
             advanceUntilIdle()
 
@@ -1201,6 +1210,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                receivedLocationDao,
             )
             advanceUntilIdle()
 
@@ -1270,6 +1280,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1332,6 +1343,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1394,6 +1406,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1456,6 +1469,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1518,6 +1532,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1579,6 +1594,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1635,6 +1651,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 
@@ -1691,6 +1708,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    receivedLocationDao,
                 )
             advanceUntilIdle()
 

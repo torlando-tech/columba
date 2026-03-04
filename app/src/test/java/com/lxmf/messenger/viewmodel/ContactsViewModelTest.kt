@@ -3,6 +3,8 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -55,6 +57,7 @@ class ContactsViewModelTest {
 
     private lateinit var contactRepository: ContactRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var receivedLocationDao: ReceivedLocationDao
     private lateinit var viewModel: ContactsViewModel
 
     private val currentRelayFlow = MutableStateFlow<RelayInfo?>(null)
@@ -77,12 +80,13 @@ class ContactsViewModelTest {
 
         contactRepository = mockk()
         propagationNodeManager = mockk()
+        receivedLocationDao = mockk()
 
         every { contactRepository.getEnrichedContacts() } returns contactsFlow
         every { contactRepository.getContactCountFlow() } returns contactCountFlow
         every { propagationNodeManager.currentRelay } returns currentRelayFlow
 
-        viewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+        viewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
     }
 
     @After
@@ -113,7 +117,7 @@ class ContactsViewModelTest {
             val testContactsFlow = MutableStateFlow(listOf(contact1, contact2))
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
 
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             newViewModel.contacts.test {
                 awaitItem() // Initial empty
@@ -324,7 +328,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -361,7 +365,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -393,7 +397,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             // Then: Should be in relay, not pinned - wait for data to propagate
             newViewModel.contactsState.test {
@@ -432,7 +436,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -468,7 +472,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationDao)
 
             newViewModel.contactsState.test {
                 var groups = awaitItem().groupedContacts
@@ -854,5 +858,38 @@ class ContactsViewModelTest {
             // Then: Verify attempt was made and error was handled gracefully
             assertTrue("updateNickname should handle errors gracefully", result.isSuccess)
             coVerify { contactRepository.updateNickname(testDestHash, "Name") }
+        }
+
+    // ========== Contact Location Tests ==========
+
+    @Test
+    fun `getContactLocation returns lat lon when location exists`() =
+        runTest {
+            val entity =
+                ReceivedLocationEntity(
+                    id = "loc-1",
+                    senderHash = testDestHash,
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                    accuracy = 10f,
+                    timestamp = System.currentTimeMillis(),
+                    expiresAt = null,
+                    receivedAt = System.currentTimeMillis(),
+                )
+            coEvery { receivedLocationDao.getLatestLocationForSender(testDestHash) } returns entity
+
+            val result = viewModel.getContactLocation(testDestHash)
+
+            assertEquals(Pair(48.8566, 2.3522), result)
+        }
+
+    @Test
+    fun `getContactLocation returns null when no location exists`() =
+        runTest {
+            coEvery { receivedLocationDao.getLatestLocationForSender("unknown") } returns null
+
+            val result = viewModel.getContactLocation("unknown")
+
+            assertNull(result)
         }
 }

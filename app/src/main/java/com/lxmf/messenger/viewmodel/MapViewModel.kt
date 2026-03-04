@@ -71,6 +71,11 @@ data class ContactMarker(
     val publicKey: ByteArray? = null,
 )
 
+internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
+    markers
+        .groupBy { it.destinationHash.lowercase() }
+        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+
 /**
  * Saved camera position for restoring viewport across tab switches.
  */
@@ -225,6 +230,10 @@ class MapViewModel
         // Refresh trigger for periodic staleness recalculation
         private val _refreshTrigger = MutableStateFlow(0L)
 
+        // One-shot pending focus on a contact marker (set from Chats "Locate on Map", consumed by MapScreen)
+        private val _pendingFocusContact = MutableStateFlow<String?>(null)
+        val pendingFocusContact: StateFlow<String?> = _pendingFocusContact.asStateFlow()
+
         // Contacts from repository (exposed for ShareLocationBottomSheet)
         // Use Lazily instead of WhileSubscribed to prevent flow cancellation when switching tabs
         // This ensures markers are immediately available when returning to the map
@@ -344,7 +353,7 @@ class MapViewModel
                             iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
                             publicKey = announce?.publicKey,
                         )
-                    }
+                    }.let(::deduplicateContactMarkersByDestination)
                 }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(
@@ -595,6 +604,22 @@ class MapViewModel
             viewModelScope.launch {
                 telemetryCollectorManager.requestTelemetryNow()
             }
+        }
+
+        /**
+         * Request the map to focus on an existing contact marker.
+         * Used by "Locate on Map" from the Chats context menu.
+         * The MapScreen will look up the marker and animate the camera to it.
+         */
+        fun focusOnContact(destinationHash: String) {
+            _pendingFocusContact.value = destinationHash
+        }
+
+        /**
+         * Consume the pending focus after the MapScreen has animated to it.
+         */
+        fun consumePendingFocus() {
+            _pendingFocusContact.value = null
         }
 
         /**

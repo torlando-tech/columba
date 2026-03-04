@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.IdentityQrCodeUtils
@@ -77,6 +78,7 @@ class ContactsViewModel
     constructor(
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val receivedLocationRepository: ReceivedLocationRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -527,4 +529,11 @@ class ContactsViewModel
                 }
             }
         }
+
+        /**
+         * Get the latest known, non-expired location for a peer.
+         * Returns a Pair(latitude, longitude) or null if no valid location is known.
+         */
+        suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? =
+            receivedLocationRepository.getContactLocation(destinationHash)
     }

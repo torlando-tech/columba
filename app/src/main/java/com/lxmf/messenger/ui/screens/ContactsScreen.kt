@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
@@ -112,6 +113,8 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.util.validation.ValidationResult
+import androidx.compose.ui.res.stringResource
+import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -126,6 +129,7 @@ private const val TAG = "ContactsScreen"
 fun ContactsScreen(
     onContactClick: (destinationHash: String, displayName: String) -> Unit = { _, _ -> },
     onViewPeerDetails: (destinationHash: String) -> Unit = { },
+    onLocateOnMap: (destinationHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
     pendingDeepLinkContact: String? = null,
     onDeepLinkContactProcessed: () -> Unit = {},
@@ -516,6 +520,8 @@ fun ContactsScreen(
                                             relayToUnset = relay
                                             showUnsetRelayDialog = true
                                         },
+                                        onLocateOnMap = { onLocateOnMap(relay.destinationHash) },
+                                        getContactLocation = { viewModel.getContactLocation(it) },
                                     )
                                 }
                             }
@@ -564,6 +570,8 @@ fun ContactsScreen(
                                         },
                                         onViewDetails = { onViewPeerDetails(contact.destinationHash) },
                                         onRemove = { viewModel.deleteContact(contact.destinationHash) },
+                                        onLocateOnMap = { onLocateOnMap(contact.destinationHash) },
+                                        getContactLocation = { viewModel.getContactLocation(it) },
                                     )
                                 }
                             }
@@ -614,6 +622,8 @@ fun ContactsScreen(
                                         },
                                         onViewDetails = { onViewPeerDetails(contact.destinationHash) },
                                         onRemove = { viewModel.deleteContact(contact.destinationHash) },
+                                        onLocateOnMap = { onLocateOnMap(contact.destinationHash) },
+                                        getContactLocation = { viewModel.getContactLocation(it) },
                                     )
                                 }
                             }
@@ -914,9 +924,21 @@ private fun ContactListItemWithMenu(
     onEditNickname: () -> Unit,
     onViewDetails: () -> Unit,
     onRemove: () -> Unit,
+    onLocateOnMap: () -> Unit = {},
+    getContactLocation: suspend (String) -> Pair<Double, Double>? = { null },
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
+    var hasLocation by remember { mutableStateOf(false) }
+
+    // Fetch contact location when menu opens; clear on close
+    LaunchedEffect(showMenu) {
+        if (showMenu) {
+            hasLocation = getContactLocation(contact.destinationHash) != null
+        } else {
+            hasLocation = false
+        }
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         ContactListItem(
@@ -949,6 +971,11 @@ private fun ContactListItemWithMenu(
             },
             onRemove = {
                 onRemove()
+                showMenu = false
+            },
+            hasLocation = hasLocation,
+            onLocateOnMap = {
+                onLocateOnMap()
                 showMenu = false
             },
         )
@@ -1260,6 +1287,8 @@ fun ContactContextMenu(
     onEditNickname: () -> Unit,
     onViewDetails: () -> Unit,
     onRemove: () -> Unit,
+    hasLocation: Boolean = false,
+    onLocateOnMap: () -> Unit = {},
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1298,6 +1327,23 @@ fun ContactContextMenu(
             },
             onClick = onViewDetails,
         )
+
+        // Locate on map (only shown if contact has a known location)
+        if (hasLocation) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                text = {
+                    Text(stringResource(R.string.locate_on_map))
+                },
+                onClick = onLocateOnMap,
+            )
+        }
 
         HorizontalDivider()
 

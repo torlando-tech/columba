@@ -110,6 +110,8 @@ class MessagingScreenTest {
         every { mockViewModel.recentPhotos } returns MutableStateFlow(emptyList())
         // Message font scale mock (text size dialog)
         every { mockViewModel.messageFontScale } returns MutableStateFlow(1.0f)
+        // Contact location mock (locate on map feature)
+        every { mockViewModel.hasContactLocation } returns MutableStateFlow(false)
     }
 
     // ========== Empty State Tests ==========

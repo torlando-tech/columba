@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
@@ -86,6 +87,7 @@ class MessagingViewModel
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val conversationLinkManager: ConversationLinkManager,
+        private val receivedLocationRepository: ReceivedLocationRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -336,6 +338,21 @@ class MessagingViewModel
                 started = SharingStarted.WhileSubscribed(5000L),
                 initialValue = LocationSharingState.NONE,
             )
+
+        // Whether the current peer has a known location (for "Locate on Map" button)
+        val hasContactLocation: StateFlow<Boolean> =
+            _currentConversation
+                .flatMapLatest { hash ->
+                    if (hash == null) {
+                        flowOf(false)
+                    } else {
+                        receivedLocationRepository.observeHasLocation(hash)
+                    }
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = false,
+                )
 
         // Contact toggle result events for toast notifications
         private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()

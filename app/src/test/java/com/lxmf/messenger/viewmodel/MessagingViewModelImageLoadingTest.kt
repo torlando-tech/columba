@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.paging.PagingData
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
@@ -82,6 +83,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
+    private lateinit var receivedLocationRepository: ReceivedLocationRepository
     private lateinit var viewModel: MessagingViewModel
 
     /**
@@ -103,6 +105,7 @@ class MessagingViewModelImageLoadingTest {
                     locationSharingManager = locationSharingManager,
                     identityRepository = identityRepository,
                     conversationLinkManager = conversationLinkManager,
+                    receivedLocationRepository = receivedLocationRepository,
                 )
             advanceUntilIdle()
             testBody()
@@ -126,6 +129,10 @@ class MessagingViewModelImageLoadingTest {
         locationSharingManager = mockk()
         identityRepository = mockk()
         conversationLinkManager = mockk()
+        receivedLocationRepository = mockk()
+
+        // Mock receivedLocationRepository to return no location by default
+        every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())

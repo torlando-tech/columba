@@ -556,7 +556,7 @@ class LocationSharingManager
         private suspend fun handleReceivedLocation(locationJson: String) {
             try {
                 val json = JSONObject(locationJson)
-                val senderHash = json.getString("source_hash")
+                val senderHash = json.getString("source_hash").lowercase()
 
                 // Check for cease flag - sender has stopped sharing
                 if (json.optBoolean("cease", false)) {

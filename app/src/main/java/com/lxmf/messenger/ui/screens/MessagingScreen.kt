@@ -77,6 +77,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
@@ -154,6 +155,7 @@ import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.R
+import androidx.compose.ui.res.stringResource
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.AttachmentPanel
@@ -318,6 +320,7 @@ fun MessagingScreen(
     onPeerClick: () -> Unit = {},
     onViewMessageDetails: (messageId: String) -> Unit = {},
     onVoiceCall: (profileCode: Int) -> Unit = {},
+    onLocateOnMap: (peerHash: String) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -414,6 +417,7 @@ fun MessagingScreen(
 
     // Location sharing state
     val locationSharingState by viewModel.locationSharingState.collectAsStateWithLifecycle()
+    val hasContactLocation by viewModel.hasContactLocation.collectAsStateWithLifecycle()
     var showShareLocationSheet by remember { mutableStateOf(false) }
     val shareLocationSheetState = rememberModalBottomSheetState()
     var showLocationPermissionSheet by remember { mutableStateOf(false) }
@@ -955,6 +959,19 @@ fun MessagingScreen(
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                         )
+                    }
+
+                    // Locate on map button (only visible when contact has a known location)
+                    if (hasContactLocation) {
+                        IconButton(
+                            onClick = { onLocateOnMap(destinationHash) },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = stringResource(R.string.locate_on_map),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
 
                     // Star toggle button for contact status

@@ -4,9 +4,8 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
-import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -43,7 +42,7 @@ class ChatsViewModelTest {
 
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var contactRepository: ContactRepository
-    private lateinit var receivedLocationDao: ReceivedLocationDao
+    private lateinit var receivedLocationRepository: ReceivedLocationRepository
     private lateinit var viewModel: ChatsViewModel
 
     private val testConversation1 =
@@ -89,7 +88,7 @@ class ChatsViewModelTest {
         contactRepository = mockk()
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
-        receivedLocationDao = mockk()
+        receivedLocationRepository = mockk()
 
         // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
@@ -99,7 +98,7 @@ class ChatsViewModelTest {
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
-        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager, receivedLocationDao)
+        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager, receivedLocationRepository)
     }
 
     @After
@@ -128,7 +127,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.chatsState.test {
@@ -158,7 +157,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -227,7 +226,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
             advanceUntilIdle()
 
             newViewModel.chatsState.test {
@@ -266,7 +265,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -295,7 +294,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -324,7 +323,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(duplicateConversations)
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             // When: chatsState is collected
             newViewModel.chatsState.test {
@@ -354,7 +353,7 @@ class ChatsViewModelTest {
                     ),
                 )
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationDao)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
 
             // When: Search query is set
             newViewModel.searchQuery.value = "alice"
@@ -391,20 +390,9 @@ class ChatsViewModelTest {
     // ========== Contact Location Tests ==========
 
     @Test
-    fun `getContactLocation returns lat lon when location exists`() =
+    fun `getContactLocation delegates to repository`() =
         runTest {
-            val entity =
-                ReceivedLocationEntity(
-                    id = "loc-1",
-                    senderHash = "peer1",
-                    latitude = 48.8566,
-                    longitude = 2.3522,
-                    accuracy = 10f,
-                    timestamp = System.currentTimeMillis(),
-                    expiresAt = null,
-                    receivedAt = System.currentTimeMillis(),
-                )
-            coEvery { receivedLocationDao.getLatestLocationForSender("peer1") } returns entity
+            coEvery { receivedLocationRepository.getContactLocation("peer1") } returns Pair(48.8566, 2.3522)
 
             val result = viewModel.getContactLocation("peer1")
 
@@ -412,32 +400,11 @@ class ChatsViewModelTest {
         }
 
     @Test
-    fun `getContactLocation returns null when no location exists`() =
+    fun `getContactLocation returns null when repository returns null`() =
         runTest {
-            coEvery { receivedLocationDao.getLatestLocationForSender("unknown") } returns null
+            coEvery { receivedLocationRepository.getContactLocation("unknown") } returns null
 
             val result = viewModel.getContactLocation("unknown")
-
-            assertNull(result)
-        }
-
-    @Test
-    fun `getContactLocation returns null when location has expired`() =
-        runTest {
-            val entity =
-                ReceivedLocationEntity(
-                    id = "loc-2",
-                    senderHash = "peer1",
-                    latitude = 48.8566,
-                    longitude = 2.3522,
-                    accuracy = 10f,
-                    timestamp = System.currentTimeMillis() - 60_000,
-                    expiresAt = System.currentTimeMillis() - 1_000,
-                    receivedAt = System.currentTimeMillis() - 60_000,
-                )
-            coEvery { receivedLocationDao.getLatestLocationForSender("peer1") } returns entity
-
-            val result = viewModel.getContactLocation("peer1")
 
             assertNull(result)
         }

@@ -16,6 +16,7 @@ import com.lxmf.messenger.map.OfflineStyleInliner
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +72,7 @@ data class DownloadProgress(
     val requiredResources: Long = 0L,
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
+    val statusMessage: String? = null, // Shown during post-download finalization (e.g., style caching)
 )
 
 /**
@@ -155,6 +157,7 @@ class OfflineMapDownloadViewModel
         private val mapLibreOfflineManager: MapLibreOfflineManager,
         private val mapTileSourceManager: MapTileSourceManager,
         private val settingsRepository: SettingsRepository,
+        private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : ViewModel() {
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
@@ -635,7 +638,19 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
-                                    // 2. Cache the inlined style JSON. This must
+                                    // 2. Show "Finalizing..." while style caching runs.
+                                    //    This can take up to ~36s worst-case (3 retries ×
+                                    //    10s timeout + backoff delays).
+                                    _state.update {
+                                        it.copy(
+                                            downloadProgress =
+                                                it.downloadProgress?.copy(
+                                                    statusMessage = "Finalizing offline style…",
+                                                ),
+                                        )
+                                    }
+
+                                    // 3. Cache the inlined style JSON. This must
                                     //    happen BEFORE HTTP is auto-disabled so that
                                     //    MapTileSourceManager returns Online (not
                                     //    Unavailable) if anything queries the map
@@ -651,7 +666,7 @@ class OfflineMapDownloadViewModel
                                             null
                                         }
 
-                                    // 3. Now safe to auto-disable HTTP — the cached
+                                    // 4. Now safe to auto-disable HTTP — the cached
                                     //    style (if successful) is already persisted.
                                     val wasEnabledForDownload =
                                         settingsRepository.httpEnabledForDownloadFlow.first()
@@ -661,7 +676,10 @@ class OfflineMapDownloadViewModel
                                         settingsRepository.setHttpEnabledForDownload(false)
                                     }
 
-                                    // 4. Signal completion with any style cache warning.
+                                    // 5. Signal completion with any warnings.
+                                    //    Both httpAutoDisabled and styleCacheWarning
+                                    //    are set atomically so the UI can consolidate
+                                    //    them into a single notification.
                                     _state.update {
                                         it.copy(
                                             isComplete = true,
@@ -731,7 +749,7 @@ class OfflineMapDownloadViewModel
          * Retries up to 3 times on failure. Returns true if style was cached successfully.
          */
         private suspend fun fetchAndCacheStyleJson(regionId: Long): Boolean =
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 repeat(STYLE_CACHE_MAX_RETRIES) { attempt ->
                     try {
                         // Fetch style JSON from the same URL MapLibre uses

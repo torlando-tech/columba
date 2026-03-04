@@ -91,12 +91,19 @@ fun OfflineMapDownloadScreen(
     var showCancelDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // Handle completion — show style cache warning before navigating away
+    // Handle completion — consolidate all post-download notifications
+    // into a single Toast so they don't conflict or get lost on navigation.
     LaunchedEffect(state.isComplete) {
         if (state.isComplete) {
-            state.styleCacheWarning?.let { warning ->
+            val message =
+                when {
+                    state.styleCacheWarning != null -> state.styleCacheWarning
+                    state.httpAutoDisabled -> "HTTP disabled. Your offline maps are ready."
+                    else -> null
+                }
+            message?.let {
                 android.widget.Toast
-                    .makeText(context, warning, android.widget.Toast.LENGTH_LONG)
+                    .makeText(context, it, android.widget.Toast.LENGTH_LONG)
                     .show()
             }
             onDownloadComplete()
@@ -108,19 +115,6 @@ fun OfflineMapDownloadScreen(
         state.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
-        }
-    }
-
-    // Show toast when HTTP was auto-disabled after download
-    LaunchedEffect(state.httpAutoDisabled) {
-        if (state.httpAutoDisabled) {
-            android.widget.Toast
-                .makeText(
-                    context,
-                    "HTTP disabled. Your offline maps are ready.",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-            viewModel.dismissHttpAutoDisabledMessage()
         }
     }
 
@@ -991,6 +985,7 @@ fun DownloadingStep(
                 when {
                     progress.isComplete -> "Complete!"
                     progress.errorMessage != null -> "Error"
+                    progress.statusMessage != null -> progress.statusMessage
                     progress.progress > 0 -> "Downloading..."
                     else -> "Preparing..."
                 }

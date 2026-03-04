@@ -131,6 +131,7 @@ class OfflineMapDownloadViewModelTest {
             mapLibreOfflineManager = mockMapLibreOfflineManager,
             mapTileSourceManager = mockMapTileSourceManager,
             settingsRepository = mockSettingsRepository,
+            ioDispatcher = testDispatcher,
         )
 
     // region Initial State Tests
@@ -676,7 +677,9 @@ class OfflineMapDownloadViewModelTest {
             assertNotNull("onComplete callback should have been captured", capturedOnComplete)
             capturedOnComplete?.invoke(456L, 1500000L)
 
-            // Verify state (state update happens immediately, style caching is async and non-blocking)
+            // With ioDispatcher = testDispatcher, the entire completion flow
+            // (markComplete → style cache → HTTP disable check → state update)
+            // runs synchronously before this assertion.
             assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
             assertTrue(viewModel.state.value.isComplete)
         }

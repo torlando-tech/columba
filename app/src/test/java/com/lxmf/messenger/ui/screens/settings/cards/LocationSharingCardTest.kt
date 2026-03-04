@@ -1,10 +1,15 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
@@ -533,44 +538,49 @@ class LocationSharingCardTest {
             )
 
         composeTestRule.setContent {
-            LocationSharingCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                enabled = true,
-                onEnabledChange = {},
-                activeSessions = sessions,
-                onStopSharing = {},
-                onStopAllSharing = {},
-                defaultDuration = "ONE_HOUR",
-                onDefaultDurationChange = {},
-                locationPrecisionRadius = 0,
-                onLocationPrecisionRadiusChange = {},
-                // Telemetry props
-                telemetryCollectorEnabled = false,
-                telemetryCollectorAddress = null,
-                telemetrySendIntervalSeconds = 300,
-                lastTelemetrySendTime = null,
-                isSendingTelemetry = false,
-                onTelemetryEnabledChange = {},
-                onTelemetryCollectorAddressChange = {},
-                onTelemetrySendIntervalChange = {},
-                onTelemetrySendNow = {},
-                telemetryRequestEnabled = false,
-                telemetryRequestIntervalSeconds = 900,
-                lastTelemetryRequestTime = null,
-                isRequestingTelemetry = false,
-                onTelemetryRequestEnabledChange = {},
-                onTelemetryRequestIntervalChange = {},
-                onRequestTelemetryNow = {},
-                telemetryHostModeEnabled = false,
-                onTelemetryHostModeEnabledChange = {},
-                telemetryAllowedRequesters = emptySet(),
-                contacts = emptyList(),
-                onTelemetryAllowedRequestersChange = {},
-            )
+            val scrollState = rememberScrollState()
+            Column(
+                modifier = Modifier.verticalScroll(scrollState),
+            ) {
+                LocationSharingCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    enabled = true,
+                    onEnabledChange = {},
+                    activeSessions = sessions,
+                    onStopSharing = {},
+                    onStopAllSharing = {},
+                    defaultDuration = "ONE_HOUR",
+                    onDefaultDurationChange = {},
+                    locationPrecisionRadius = 0,
+                    onLocationPrecisionRadiusChange = {},
+                    // Telemetry props
+                    telemetryCollectorEnabled = false,
+                    telemetryCollectorAddress = null,
+                    telemetrySendIntervalSeconds = 300,
+                    lastTelemetrySendTime = null,
+                    isSendingTelemetry = false,
+                    onTelemetryEnabledChange = {},
+                    onTelemetryCollectorAddressChange = {},
+                    onTelemetrySendIntervalChange = {},
+                    onTelemetrySendNow = {},
+                    telemetryRequestEnabled = false,
+                    telemetryRequestIntervalSeconds = 900,
+                    lastTelemetryRequestTime = null,
+                    isRequestingTelemetry = false,
+                    onTelemetryRequestEnabledChange = {},
+                    onTelemetryRequestIntervalChange = {},
+                    onRequestTelemetryNow = {},
+                    telemetryHostModeEnabled = false,
+                    onTelemetryHostModeEnabledChange = {},
+                    telemetryAllowedRequesters = emptySet(),
+                    contacts = emptyList(),
+                    onTelemetryAllowedRequestersChange = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Stop All Sharing").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Stop All Sharing").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -593,44 +603,49 @@ class LocationSharingCardTest {
             )
 
         composeTestRule.setContent {
-            LocationSharingCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                enabled = true,
-                onEnabledChange = {},
-                activeSessions = sessions,
-                onStopSharing = {},
-                onStopAllSharing = { stopAllCalled = true },
-                defaultDuration = "ONE_HOUR",
-                onDefaultDurationChange = {},
-                locationPrecisionRadius = 0,
-                onLocationPrecisionRadiusChange = {},
-                // Telemetry props
-                telemetryCollectorEnabled = false,
-                telemetryCollectorAddress = null,
-                telemetrySendIntervalSeconds = 300,
-                lastTelemetrySendTime = null,
-                isSendingTelemetry = false,
-                onTelemetryEnabledChange = {},
-                onTelemetryCollectorAddressChange = {},
-                onTelemetrySendIntervalChange = {},
-                onTelemetrySendNow = {},
-                telemetryRequestEnabled = false,
-                telemetryRequestIntervalSeconds = 900,
-                lastTelemetryRequestTime = null,
-                isRequestingTelemetry = false,
-                onTelemetryRequestEnabledChange = {},
-                onTelemetryRequestIntervalChange = {},
-                onRequestTelemetryNow = {},
-                telemetryHostModeEnabled = false,
-                onTelemetryHostModeEnabledChange = {},
-                telemetryAllowedRequesters = emptySet(),
-                contacts = emptyList(),
-                onTelemetryAllowedRequestersChange = {},
-            )
+            val scrollState = rememberScrollState()
+            Column(
+                modifier = Modifier.verticalScroll(scrollState),
+            ) {
+                LocationSharingCard(
+                    isExpanded = true,
+                    onExpandedChange = {},
+                    enabled = true,
+                    onEnabledChange = {},
+                    activeSessions = sessions,
+                    onStopSharing = {},
+                    onStopAllSharing = { stopAllCalled = true },
+                    defaultDuration = "ONE_HOUR",
+                    onDefaultDurationChange = {},
+                    locationPrecisionRadius = 0,
+                    onLocationPrecisionRadiusChange = {},
+                    // Telemetry props
+                    telemetryCollectorEnabled = false,
+                    telemetryCollectorAddress = null,
+                    telemetrySendIntervalSeconds = 300,
+                    lastTelemetrySendTime = null,
+                    isSendingTelemetry = false,
+                    onTelemetryEnabledChange = {},
+                    onTelemetryCollectorAddressChange = {},
+                    onTelemetrySendIntervalChange = {},
+                    onTelemetrySendNow = {},
+                    telemetryRequestEnabled = false,
+                    telemetryRequestIntervalSeconds = 900,
+                    lastTelemetryRequestTime = null,
+                    isRequestingTelemetry = false,
+                    onTelemetryRequestEnabledChange = {},
+                    onTelemetryRequestIntervalChange = {},
+                    onRequestTelemetryNow = {},
+                    telemetryHostModeEnabled = false,
+                    onTelemetryHostModeEnabledChange = {},
+                    telemetryAllowedRequesters = emptySet(),
+                    contacts = emptyList(),
+                    onTelemetryAllowedRequestersChange = {},
+                )
+            }
         }
 
-        composeTestRule.onNodeWithText("Stop All Sharing").performClick()
+        composeTestRule.onNodeWithText("Stop All Sharing").performScrollTo().performClick()
 
         assertTrue(stopAllCalled)
     }

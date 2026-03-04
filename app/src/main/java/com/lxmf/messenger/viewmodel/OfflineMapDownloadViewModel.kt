@@ -157,8 +157,10 @@ class OfflineMapDownloadViewModel
         private val mapLibreOfflineManager: MapLibreOfflineManager,
         private val mapTileSourceManager: MapTileSourceManager,
         private val settingsRepository: SettingsRepository,
-        private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
+        /** URL fetcher — overridable for testing. */
+        internal var urlFetcher: (String) -> String = ::defaultFetchUrl
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
 
@@ -752,19 +754,14 @@ class OfflineMapDownloadViewModel
                 repeat(STYLE_CACHE_MAX_RETRIES) { attempt ->
                     try {
                         // Fetch style JSON from the same URL MapLibre uses
-                        val rawStyleJson =
-                            kotlinx.coroutines.withTimeout(STYLE_FETCH_TIMEOUT_MS) {
-                                java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
-                            }
+                        val rawStyleJson = urlFetcher(MapTileSourceManager.DEFAULT_STYLE_URL)
 
                         // Inline TileJSON references so the style is fully self-contained.
                         // Without this, MapLibre needs to resolve TileJSON URLs at render time,
                         // which fails offline after the HTTP cache expires (~24h).
                         val styleJson =
                             OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
-                                kotlinx.coroutines.withTimeout(STYLE_FETCH_TIMEOUT_MS) {
-                                    java.net.URL(url).readText()
-                                }
+                                urlFetcher(url)
                             }
 
                         // Save to local file: filesDir/offline_styles/{regionId}.json
@@ -796,3 +793,21 @@ class OfflineMapDownloadViewModel
             isDownloading = false
         }
     }
+
+/**
+ * Default URL fetcher with OS-level socket timeouts.
+ * Uses [java.net.HttpURLConnection] instead of [java.net.URL.readText] so that
+ * connect/read timeouts are enforced at the OS level, not via cooperative cancellation.
+ */
+private fun defaultFetchUrl(url: String): String {
+    val connection =
+        (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+        }
+    return try {
+        connection.inputStream.bufferedReader().use { it.readText() }
+    } finally {
+        connection.disconnect()
+    }
+}

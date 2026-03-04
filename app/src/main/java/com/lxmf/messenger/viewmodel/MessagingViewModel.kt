@@ -9,7 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
-import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.repository.SettingsRepository
@@ -87,7 +87,7 @@ class MessagingViewModel
         private val locationSharingManager: LocationSharingManager,
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val conversationLinkManager: ConversationLinkManager,
-        private val receivedLocationDao: ReceivedLocationDao,
+        private val receivedLocationRepository: ReceivedLocationRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -346,11 +346,7 @@ class MessagingViewModel
                     if (hash == null) {
                         flowOf(false)
                     } else {
-                        receivedLocationDao.observeLatestLocationForSender(hash.lowercase())
-                            .map { loc ->
-                                val expires = loc?.expiresAt
-                                loc != null && (expires == null || expires > System.currentTimeMillis())
-                            }
+                        receivedLocationRepository.observeHasLocation(hash)
                     }
                 }.stateIn(
                     scope = viewModelScope,

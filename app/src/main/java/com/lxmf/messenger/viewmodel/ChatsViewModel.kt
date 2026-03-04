@@ -192,7 +192,7 @@ class ChatsViewModel
          * Returns a Pair(latitude, longitude) or null if no location is known.
          */
         suspend fun getContactLocation(peerHash: String): Pair<Double, Double>? {
-            val location = receivedLocationDao.getLatestLocationForSender(peerHash)
+            val location = receivedLocationDao.getLatestLocationForSender(peerHash.lowercase())
             val expires = location?.expiresAt
             return location?.takeIf { expires == null || expires > System.currentTimeMillis() }
                 ?.let { Pair(it.latitude, it.longitude) }

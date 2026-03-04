@@ -155,6 +155,7 @@ import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.R
+import androidx.compose.ui.res.stringResource
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.AttachmentPanel
@@ -967,7 +968,7 @@ fun MessagingScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Map,
-                                contentDescription = "Locate on map",
+                                contentDescription = stringResource(R.string.locate_on_map),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }

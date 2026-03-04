@@ -114,6 +114,8 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.util.validation.ValidationResult
+import androidx.compose.ui.res.stringResource
+import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -1338,7 +1340,7 @@ fun ContactContextMenu(
                     )
                 },
                 text = {
-                    Text("Locate on Map")
+                    Text(stringResource(R.string.locate_on_map))
                 },
                 onClick = onLocateOnMap,
             )

@@ -81,6 +81,8 @@ import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
+import androidx.compose.ui.res.stringResource
+import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
@@ -633,7 +635,7 @@ fun ConversationContextMenu(
                     )
                 },
                 text = {
-                    Text("Locate on Map")
+                    Text(stringResource(R.string.locate_on_map))
                 },
                 onClick = onLocateOnMap,
             )

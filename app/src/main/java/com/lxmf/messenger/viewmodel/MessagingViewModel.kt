@@ -346,7 +346,7 @@ class MessagingViewModel
                     if (hash == null) {
                         flowOf(false)
                     } else {
-                        receivedLocationDao.observeLatestLocationForSender(hash)
+                        receivedLocationDao.observeLatestLocationForSender(hash.lowercase())
                             .map { loc ->
                                 val expires = loc?.expiresAt
                                 loc != null && (expires == null || expires > System.currentTimeMillis())

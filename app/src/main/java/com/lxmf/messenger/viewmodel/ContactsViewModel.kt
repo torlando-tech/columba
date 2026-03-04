@@ -535,7 +535,7 @@ class ContactsViewModel
          * Returns a Pair(latitude, longitude) or null if no location is known.
          */
         suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? {
-            val location = receivedLocationDao.getLatestLocationForSender(destinationHash)
+            val location = receivedLocationDao.getLatestLocationForSender(destinationHash.lowercase())
             val expires = location?.expiresAt
             return location?.takeIf { expires == null || expires > System.currentTimeMillis() }
                 ?.let { Pair(it.latitude, it.longitude) }

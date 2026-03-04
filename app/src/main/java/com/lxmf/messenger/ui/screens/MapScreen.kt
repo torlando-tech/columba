@@ -352,6 +352,11 @@ fun MapScreen(
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             viewModel.consumePendingFocus()
+        } ?: run {
+            // Markers loaded but contact not found — stop waiting to avoid stale focus
+            if (state.contactMarkers.isNotEmpty() || !state.isLoading) {
+                viewModel.consumePendingFocus()
+            }
         }
     }
 

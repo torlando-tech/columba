@@ -118,6 +118,9 @@ class MessagingViewModelTest {
         conversationLinkManager = mockk()
         receivedLocationRepository = mockk()
 
+        // Mock receivedLocationRepository to return no location by default
+        every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
+
         // Mock activeConversationManager methods
         every { activeConversationManager.setActive(any()) } just Runs
 

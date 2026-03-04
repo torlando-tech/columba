@@ -131,6 +131,9 @@ class MessagingViewModelImageLoadingTest {
         conversationLinkManager = mockk()
         receivedLocationRepository = mockk()
 
+        // Mock receivedLocationRepository to return no location by default
+        every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
+
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
 

@@ -347,7 +347,10 @@ class MessagingViewModel
                         flowOf(false)
                     } else {
                         receivedLocationDao.observeLatestLocationForSender(hash)
-                            .map { it != null }
+                            .map { loc ->
+                                val expires = loc?.expiresAt
+                                loc != null && (expires == null || expires > System.currentTimeMillis())
+                            }
                     }
                 }.stateIn(
                     scope = viewModelScope,

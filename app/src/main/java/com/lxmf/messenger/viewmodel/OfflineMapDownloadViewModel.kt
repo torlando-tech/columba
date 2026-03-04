@@ -694,6 +694,7 @@ class OfflineMapDownloadViewModel
                                     Log.e(TAG, "Failed to complete region finalization", e)
                                     _state.update {
                                         it.copy(
+                                            downloadProgress = it.downloadProgress?.copy(statusMessage = null),
                                             errorMessage =
                                                 "Error finalizing download: ${e.message}. " +
                                                     "MapLibre region saved but finalization failed.",
@@ -808,6 +809,10 @@ private fun defaultFetchUrl(url: String): String {
             readTimeout = timeoutMs
         }
     return try {
+        val code = connection.responseCode
+        if (code !in 200..299) {
+            throw java.io.IOException("HTTP $code fetching style: ${connection.responseMessage}")
+        }
         connection.inputStream.bufferedReader().use { it.readText() }
     } finally {
         connection.disconnect()

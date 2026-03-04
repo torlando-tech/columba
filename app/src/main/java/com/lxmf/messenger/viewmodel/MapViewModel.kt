@@ -607,11 +607,6 @@ class MapViewModel
         }
 
         /**
-         * Delete a stale marker by removing all stored locations for the given sender.
-         *
-         * @param destinationHash The destination hash of the contact whose marker to remove
-         */
-        /**
          * Request the map to focus on an existing contact marker.
          * Used by "Locate on Map" from the Chats context menu.
          * The MapScreen will look up the marker and animate the camera to it.
@@ -627,6 +622,11 @@ class MapViewModel
             _pendingFocusContact.value = null
         }
 
+        /**
+         * Delete a stale marker by removing all stored locations for the given sender.
+         *
+         * @param destinationHash The destination hash of the contact whose marker to remove
+         */
         fun deleteMarker(destinationHash: String) {
             Log.d(TAG, "Deleting marker for: ${destinationHash.take(16)}")
             viewModelScope.launch {

@@ -164,11 +164,15 @@ class MapTileSourceManager
                         // reference in the style URL expires after ~24h and MapLibre can
                         // no longer discover the tile URL templates, making cached tiles
                         // in mbgl-offline.db unreachable.
-                        val regionWithStyle = offlineMapRegionRepository.getFirstCompletedRegionWithStyle()
-                        val cachedPath = regionWithStyle?.localStylePath
-                        if (cachedPath != null && java.io.File(cachedPath).exists()) {
+                        val (cachedPath, styleExists) =
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val r = offlineMapRegionRepository.getFirstCompletedRegionWithStyle()
+                                val path = r?.localStylePath
+                                Pair(path, path != null && java.io.File(path).exists())
+                            }
+                        if (styleExists) {
                             Log.d(TAG, "Using cached inlined style JSON: $cachedPath")
-                            MapStyleResult.OfflineWithLocalStyle(cachedPath)
+                            MapStyleResult.OfflineWithLocalStyle(cachedPath!!)
                         } else {
                             // Without a cached inlined style, offline tiles are unreachable
                             // after the TileJSON HTTP cache expires (~24h). Don't pretend

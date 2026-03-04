@@ -688,13 +688,15 @@ class OfflineMapDownloadViewModel
                                             styleCacheWarning = styleCacheWarning,
                                         )
                                     }
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to mark region complete in database", e)
+                                    Log.e(TAG, "Failed to complete region finalization", e)
                                     _state.update {
                                         it.copy(
                                             errorMessage =
-                                                "Database error: ${e.message}. " +
-                                                    "MapLibre region saved but database update failed.",
+                                                "Error finalizing download: ${e.message}. " +
+                                                    "MapLibre region saved but finalization failed.",
                                         )
                                     }
                                 }

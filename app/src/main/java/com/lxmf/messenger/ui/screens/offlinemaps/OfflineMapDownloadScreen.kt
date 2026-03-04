@@ -97,6 +97,9 @@ fun OfflineMapDownloadScreen(
         if (state.isComplete) {
             val message =
                 when {
+                    state.styleCacheWarning != null && state.httpAutoDisabled ->
+                        state.styleCacheWarning +
+                            " Note: HTTP was auto-disabled and must be re-enabled before retrying."
                     state.styleCacheWarning != null -> state.styleCacheWarning
                     state.httpAutoDisabled -> "HTTP disabled. Your offline maps are ready."
                     else -> null

@@ -72,7 +72,7 @@ class ReceivedLocationRepositoryTest {
         }
 
     @Test
-    fun `getContactLocation returns null when location has expired`() =
+    fun `getContactLocation returns coordinates when expired but within grace period`() =
         runTest {
             val entity =
                 ReceivedLocationEntity(
@@ -84,6 +84,27 @@ class ReceivedLocationRepositoryTest {
                     timestamp = System.currentTimeMillis() - 60_000,
                     expiresAt = System.currentTimeMillis() - 1_000,
                     receivedAt = System.currentTimeMillis() - 60_000,
+                )
+            coEvery { receivedLocationDao.getLatestLocationForSender("peer1") } returns entity
+
+            val result = repository.getContactLocation("peer1")
+
+            assertEquals(Pair(48.8566, 2.3522), result)
+        }
+
+    @Test
+    fun `getContactLocation returns null when expired beyond grace period`() =
+        runTest {
+            val entity =
+                ReceivedLocationEntity(
+                    id = "loc-3",
+                    senderHash = "peer1",
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                    accuracy = 10f,
+                    timestamp = System.currentTimeMillis() - 7_200_000,
+                    expiresAt = System.currentTimeMillis() - ReceivedLocationRepository.GRACE_PERIOD_MS - 1_000,
+                    receivedAt = System.currentTimeMillis() - 7_200_000,
                 )
             coEvery { receivedLocationDao.getLatestLocationForSender("peer1") } returns entity
 
@@ -138,7 +159,7 @@ class ReceivedLocationRepositoryTest {
         }
 
     @Test
-    fun `observeHasLocation emits false when location has expired`() =
+    fun `observeHasLocation emits true when expired but within grace period`() =
         runTest {
             val entity =
                 ReceivedLocationEntity(
@@ -150,6 +171,28 @@ class ReceivedLocationRepositoryTest {
                     timestamp = System.currentTimeMillis() - 60_000,
                     expiresAt = System.currentTimeMillis() - 1_000,
                     receivedAt = System.currentTimeMillis() - 60_000,
+                )
+            every { receivedLocationDao.observeLatestLocationForSender("peer1") } returns flowOf(entity)
+
+            repository.observeHasLocation("peer1").test {
+                assertTrue(awaitItem())
+                awaitComplete()
+            }
+        }
+
+    @Test
+    fun `observeHasLocation emits false when expired beyond grace period`() =
+        runTest {
+            val entity =
+                ReceivedLocationEntity(
+                    id = "loc-3",
+                    senderHash = "peer1",
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                    accuracy = 10f,
+                    timestamp = System.currentTimeMillis() - 7_200_000,
+                    expiresAt = System.currentTimeMillis() - ReceivedLocationRepository.GRACE_PERIOD_MS - 1_000,
+                    receivedAt = System.currentTimeMillis() - 7_200_000,
                 )
             every { receivedLocationDao.observeLatestLocationForSender("peer1") } returns flowOf(entity)
 

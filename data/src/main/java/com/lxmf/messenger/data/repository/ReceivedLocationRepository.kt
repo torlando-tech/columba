@@ -11,6 +11,10 @@ import javax.inject.Singleton
  *
  * Centralizes hash normalization and expiry filtering so that
  * ViewModels do not duplicate this logic.
+ *
+ * The expiry check includes a grace period that matches MapViewModel's
+ * marker visibility: a location remains available for "Locate on Map"
+ * as long as its marker is still shown on the map.
  */
 @Singleton
 class ReceivedLocationRepository
@@ -18,24 +22,31 @@ class ReceivedLocationRepository
     constructor(
         private val receivedLocationDao: ReceivedLocationDao,
     ) {
+        companion object {
+            /** Grace period matching MapViewModel.GRACE_PERIOD_MS (markers stay visible for 1 h past expiry). */
+            internal const val GRACE_PERIOD_MS = 60 * 60 * 1000L
+        }
+
         /**
-         * Get the latest known, non-expired location for a peer.
-         * Returns a Pair(latitude, longitude) or null if no valid location is known.
+         * Get the latest known location for a peer, including the grace period.
+         * Returns a Pair(latitude, longitude) or null if the location is beyond the grace period.
          */
         suspend fun getContactLocation(destinationHash: String): Pair<Double, Double>? {
             val location = receivedLocationDao.getLatestLocationForSender(destinationHash.lowercase())
             val expires = location?.expiresAt
-            return location?.takeIf { expires == null || expires > System.currentTimeMillis() }
+            val now = System.currentTimeMillis()
+            return location?.takeIf { expires == null || now < expires + GRACE_PERIOD_MS }
                 ?.let { Pair(it.latitude, it.longitude) }
         }
 
         /**
-         * Observe whether a peer has a known, non-expired location (reactive Flow).
+         * Observe whether a peer has a known location within the grace period (reactive Flow).
          */
         fun observeHasLocation(destinationHash: String): Flow<Boolean> =
             receivedLocationDao.observeLatestLocationForSender(destinationHash.lowercase())
                 .map { loc ->
                     val expires = loc?.expiresAt
-                    loc != null && (expires == null || expires > System.currentTimeMillis())
+                    val now = System.currentTimeMillis()
+                    loc != null && (expires == null || now < expires + GRACE_PERIOD_MS)
                 }
     }

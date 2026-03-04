@@ -769,7 +769,9 @@ class OfflineMapDownloadViewModel
 
                         // Save to local file: filesDir/offline_styles/{regionId}.json
                         val styleDir = java.io.File(context.filesDir, "offline_styles")
-                        styleDir.mkdirs()
+                        if (!styleDir.exists() && !styleDir.mkdirs()) {
+                            throw java.io.IOException("Failed to create offline styles directory: ${styleDir.absolutePath}")
+                        }
                         val styleFile = java.io.File(styleDir, "$regionId.json")
                         styleFile.writeText(styleJson)
 

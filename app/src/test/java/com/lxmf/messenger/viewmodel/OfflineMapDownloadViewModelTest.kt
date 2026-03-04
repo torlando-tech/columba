@@ -1311,26 +1311,6 @@ class OfflineMapDownloadViewModelTest {
         }
 
     @Test
-    fun `dismissHttpAutoDisabledMessage clears httpAutoDisabled flag`() =
-        runTest {
-            viewModel = createViewModel()
-
-            viewModel.state.test {
-                val initial = awaitItem()
-                assertFalse(initial.httpAutoDisabled)
-
-                // Manually set httpAutoDisabled to true via internal state update
-                // We simulate this by triggering the dismiss and verifying it stays false
-                viewModel.dismissHttpAutoDisabledMessage()
-
-                // Should remain false (no event emitted if already false)
-                expectNoEvents()
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
     fun `httpEnabled false initially when flow starts with false`() =
         runTest {
             httpEnabledFlow.value = false

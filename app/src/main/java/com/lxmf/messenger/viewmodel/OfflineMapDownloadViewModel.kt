@@ -341,13 +341,6 @@ class OfflineMapDownloadViewModel
             }
         }
 
-        /**
-         * Dismiss the "HTTP auto-disabled" snackbar notification.
-         */
-        fun dismissHttpAutoDisabledMessage() {
-            _state.update { it.copy(httpAutoDisabled = false) }
-        }
-
         private fun formatAddress(address: Address): String {
             // Try to build a readable address string
             val parts = mutableListOf<String>()
@@ -683,7 +676,11 @@ class OfflineMapDownloadViewModel
                                     _state.update {
                                         it.copy(
                                             isComplete = true,
-                                            downloadProgress = it.downloadProgress?.copy(isComplete = true),
+                                            downloadProgress =
+                                                it.downloadProgress?.copy(
+                                                    isComplete = true,
+                                                    statusMessage = null,
+                                                ),
                                             httpAutoDisabled = wasEnabledForDownload,
                                             styleCacheWarning = styleCacheWarning,
                                         )

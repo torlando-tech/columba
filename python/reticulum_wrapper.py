@@ -589,6 +589,7 @@ class ReticulumWrapper:
             "lxmf.propagation": AnnounceHandler("lxmf.propagation", self._announce_handler),
             "nomadnetwork.node": AnnounceHandler("nomadnetwork.node", self._announce_handler),
             "rmsp.maps": AnnounceHandler("rmsp.maps", self._announce_handler),
+            "lxst.telephony": AnnounceHandler("lxst.telephony", self._announce_handler),
         }
 
         # RMSP client for map tile fetching over Reticulum

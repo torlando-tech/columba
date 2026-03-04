@@ -50,13 +50,13 @@ class NodeTypeDetectorTest {
     }
 
     @Test
-    fun `detectNodeType with aspect call_audio returns NODE`() {
+    fun `detectNodeType with aspect lxst_telephony returns PHONE`() {
         val result =
             NodeTypeDetector.detectNodeType(
                 appData = null,
-                aspect = "call.audio",
+                aspect = "lxst.telephony",
             )
-        assertEquals(NodeType.NODE, result)
+        assertEquals(NodeType.PHONE, result)
     }
 
     @Test
@@ -169,15 +169,14 @@ class NodeTypeDetectorTest {
     private fun createMsgpackData(
         formatByte: Byte,
         totalLength: Int,
-    ): ByteArray {
-        return ByteArray(totalLength).apply {
+    ): ByteArray =
+        ByteArray(totalLength).apply {
             this[0] = formatByte
             // Fill rest with non-text bytes to avoid string pattern matches
             for (i in 1 until totalLength) {
                 this[i] = 0x01
             }
         }
-    }
 
     @Test
     fun `detectNodeType with short msgpack fixarray returns PEER due to string check`() {
@@ -409,6 +408,12 @@ class NodeTypeDetectorTest {
     fun `getNodeTypeDescription for PROPAGATION_NODE returns correct description`() {
         val description = NodeTypeDetector.getNodeTypeDescription(NodeType.PROPAGATION_NODE)
         assertEquals("Message relay node", description)
+    }
+
+    @Test
+    fun `getNodeTypeDescription for PHONE returns correct description`() {
+        val description = NodeTypeDetector.getNodeTypeDescription(NodeType.PHONE)
+        assertEquals("LXST telephony destination", description)
     }
 
     // ===========================================

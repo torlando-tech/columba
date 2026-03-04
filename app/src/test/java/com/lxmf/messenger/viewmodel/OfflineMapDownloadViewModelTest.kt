@@ -118,10 +118,13 @@ class OfflineMapDownloadViewModelTest {
 
     @After
     fun tearDown() {
+        // Reset Main dispatcher BEFORE canceling viewModelScope so that IO coroutine
+        // cleanup (e.g., geocoder check on Dispatchers.IO) doesn't route cancellation
+        // exceptions through the test dispatcher, which causes UncaughtExceptionsBeforeTest
+        Dispatchers.resetMain()
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
-        Dispatchers.resetMain()
         clearAllMocks()
     }
 

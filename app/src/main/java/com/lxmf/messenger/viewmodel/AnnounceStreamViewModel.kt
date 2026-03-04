@@ -106,11 +106,10 @@ class AnnounceStreamViewModel
                 val showAudio = params.showAudio
                 val selectedInterfaces = params.selectedInterfaces
                 // Build type list for database query
-                // If showAudio is true but PEER is not selected, still include PEER in DB query
-                // (because audio announces have nodeType=PEER), then filter by aspect in memory
+                // If showAudio is true but PHONE is not selected, include PHONE in DB query
                 val typesForQuery =
-                    if (showAudio && !selectedTypes.contains(NodeType.PEER)) {
-                        selectedTypes + NodeType.PEER
+                    if (showAudio && !selectedTypes.contains(NodeType.PHONE)) {
+                        selectedTypes + NodeType.PHONE
                     } else {
                         selectedTypes
                     }
@@ -132,7 +131,7 @@ class AnnounceStreamViewModel
                                 // (exclude PEER if user didn't select it and we only added it for audio)
                                 val matchesNodeType =
                                     selectedTypes.map { it.name }.contains(announce.nodeType)
-                                val isAudioAnnounce = announce.aspect == "call.audio"
+                                val isAudioAnnounce = announce.nodeType == NodeType.PHONE.name
 
                                 val matchesTypeOrAudio =
                                     (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
@@ -524,6 +523,24 @@ class AnnounceStreamViewModel
                 }
             }
         }
+
+        /**
+         * Get all announces sharing the same identity as [destinationHash], excluding [destinationHash] itself.
+         * Used to surface cross-links between telephony (lxst.telephony) and messaging (lxmf.delivery)
+         * destinations that belong to the same peer identity.
+         */
+        fun getLinkedAnnouncesFlow(destinationHash: String): Flow<List<Announce>> =
+            kotlinx.coroutines.flow.flow {
+                val announce = announceRepository.getAnnounce(destinationHash)
+                if (announce == null) {
+                    emit(emptyList<Announce>())
+                    return@flow
+                }
+                val identityHash =
+                    com.lxmf.messenger.data.util.HashUtils
+                        .computeIdentityHash(announce.publicKey)
+                emit(announceRepository.getLinkedAnnounces(identityHash, destinationHash))
+            }
 
         override fun onCleared() {
             super.onCleared()

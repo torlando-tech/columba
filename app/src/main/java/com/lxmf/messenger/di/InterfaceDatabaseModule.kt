@@ -43,6 +43,13 @@ annotation class ApplicationScope
 annotation class DefaultDispatcher
 
 /**
+ * Qualifier for the IO coroutine dispatcher (testable alternative to hardcoding Dispatchers.IO).
+ */
+@Retention(AnnotationRetention.RUNTIME)
+@Qualifier
+annotation class IoDispatcher
+
+/**
  * Hilt module for providing the Interface database and related DAOs.
  */
 @Module
@@ -62,6 +69,13 @@ object InterfaceDatabaseModule {
     @DefaultDispatcher
     @Provides
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    /**
+     * Provides the IO dispatcher for disk/network-bound work.
+     */
+    @IoDispatcher
+    @Provides
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
     /**
      * Provides the Interface database singleton.

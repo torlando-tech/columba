@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.map.OfflineStyleInliner
+import com.lxmf.messenger.di.IoDispatcher
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -157,7 +158,7 @@ class OfflineMapDownloadViewModel
         private val mapLibreOfflineManager: MapLibreOfflineManager,
         private val mapTileSourceManager: MapTileSourceManager,
         private val settingsRepository: SettingsRepository,
-        private val ioDispatcher: CoroutineDispatcher,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         /** URL fetcher — overridable for testing. */
         internal var urlFetcher: (String) -> String = ::defaultFetchUrl

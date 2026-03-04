@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.2.21"
+kotlin = "2.3.0"
 compose = "1.7.5"
 composeBom = "2025.12.01"
 hilt = "2.57.2"
@@ -15,7 +15,7 @@ zxing = "3.5.3"
 cameraX = "1.5.2"
 ktlint = "12.1.1"
 detekt = "1.23.7"
-serialization = "1.9.0"
+serialization = "1.10.0"
 coil = "2.6.0"
 
 [libraries]

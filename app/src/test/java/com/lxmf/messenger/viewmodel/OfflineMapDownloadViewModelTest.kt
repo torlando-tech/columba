@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -131,7 +132,11 @@ class OfflineMapDownloadViewModelTest {
             mapLibreOfflineManager = mockMapLibreOfflineManager,
             mapTileSourceManager = mockMapTileSourceManager,
             settingsRepository = mockSettingsRepository,
-        )
+            ioDispatcher = testDispatcher,
+        ).also {
+            // Default: return minimal valid style JSON so style caching succeeds
+            it.urlFetcher = { """{"version":8,"name":"test","sources":{},"layers":[]}""" }
+        }
 
     // region Initial State Tests
 
@@ -676,9 +681,81 @@ class OfflineMapDownloadViewModelTest {
             assertNotNull("onComplete callback should have been captured", capturedOnComplete)
             capturedOnComplete?.invoke(456L, 1500000L)
 
-            // Verify state (state update happens immediately, style caching is async and non-blocking)
+            // With ioDispatcher = testDispatcher, the entire completion flow
+            // (markComplete → style cache → HTTP disable check → state update)
+            // runs synchronously before this assertion.
             assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
             assertTrue(viewModel.state.value.isComplete)
+            assertNull("Style caching should succeed", viewModel.state.value.styleCacheWarning)
+        }
+
+    @Test
+    fun `download complete sets styleCacheWarning when style caching fails`() =
+        runTest {
+            viewModel = createViewModel()
+            viewModel.urlFetcher = { throw java.io.IOException("Network error") }
+            viewModel.setLocation(40.7128, -74.0060)
+            viewModel.setName("Test Region")
+
+            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
+            coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+
+            var capturedOnComplete: ((Long, Long) -> Unit)? = null
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(), bounds = any(), minZoom = any(), maxZoom = any(),
+                    styleUrl = any(), onCreated = any(), onProgress = any(),
+                    onComplete = any(), onError = any(),
+                )
+            } answers {
+                capturedOnComplete = arg<(Long, Long) -> Unit>(7)
+            }
+
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
+
+            capturedOnComplete?.invoke(456L, 1500000L)
+            // Advance virtual time to let retry delays complete
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.isComplete)
+            assertNotNull("Style warning should be set on fetch failure", viewModel.state.value.styleCacheWarning)
+        }
+
+    @Test
+    fun `download complete sets both httpAutoDisabled and styleCacheWarning when applicable`() =
+        runTest {
+            httpEnabledForDownloadFlow.value = true
+            viewModel = createViewModel()
+            viewModel.urlFetcher = { throw java.io.IOException("Network error") }
+            viewModel.setLocation(40.7128, -74.0060)
+            viewModel.setName("Test Region")
+
+            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
+            coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+
+            var capturedOnComplete: ((Long, Long) -> Unit)? = null
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(), bounds = any(), minZoom = any(), maxZoom = any(),
+                    styleUrl = any(), onCreated = any(), onProgress = any(),
+                    onComplete = any(), onError = any(),
+                )
+            } answers {
+                capturedOnComplete = arg<(Long, Long) -> Unit>(7)
+            }
+
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
+
+            capturedOnComplete?.invoke(456L, 1500000L)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.isComplete)
+            assertTrue("HTTP should be auto-disabled", viewModel.state.value.httpAutoDisabled)
+            assertNotNull("Style warning should be set", viewModel.state.value.styleCacheWarning)
         }
 
     // endregion
@@ -1302,26 +1379,6 @@ class OfflineMapDownloadViewModelTest {
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.httpAutoDisabled)
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `dismissHttpAutoDisabledMessage clears httpAutoDisabled flag`() =
-        runTest {
-            viewModel = createViewModel()
-
-            viewModel.state.test {
-                val initial = awaitItem()
-                assertFalse(initial.httpAutoDisabled)
-
-                // Manually set httpAutoDisabled to true via internal state update
-                // We simulate this by triggering the dismiss and verifying it stays false
-                viewModel.dismissHttpAutoDisabledMessage()
-
-                // Should remain false (no event emitted if already false)
-                expectNoEvents()
 
                 cancelAndConsumeRemainingEvents()
             }

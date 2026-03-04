@@ -13,9 +13,11 @@ import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.map.OfflineStyleInliner
+import com.lxmf.messenger.di.IoDispatcher
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +73,7 @@ data class DownloadProgress(
     val requiredResources: Long = 0L,
     val isComplete: Boolean = false,
     val errorMessage: String? = null,
+    val statusMessage: String? = null, // Shown during post-download finalization (e.g., style caching)
 )
 
 /**
@@ -110,6 +113,7 @@ data class OfflineMapDownloadState(
     val isGeocoderAvailable: Boolean = true, // Checked on init
     val httpEnabled: Boolean = true, // HTTP map source enabled (needed for downloads)
     val httpAutoDisabled: Boolean = false, // True when HTTP was auto-disabled after download
+    val styleCacheWarning: String? = null, // Non-null when style caching failed but tiles were saved
 ) {
     /**
      * Check if the location is set.
@@ -154,12 +158,21 @@ class OfflineMapDownloadViewModel
         private val mapLibreOfflineManager: MapLibreOfflineManager,
         private val mapTileSourceManager: MapTileSourceManager,
         private val settingsRepository: SettingsRepository,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
+        /** URL fetcher — overridable for testing. */
+        internal var urlFetcher: (String) -> String = ::defaultFetchUrl
+
         companion object {
             private const val TAG = "OfflineMapDownloadVM"
 
             // Rough estimate: ~20KB per tile on average (varies widely by zoom and content)
             private const val ESTIMATED_BYTES_PER_TILE = 20_000L
+
+            // Style caching: retry parameters for fetching and inlining TileJSON
+            internal const val STYLE_CACHE_MAX_RETRIES = 3
+            internal const val STYLE_FETCH_TIMEOUT_MS = 10_000L
+            private const val STYLE_CACHE_RETRY_DELAY_MS = 2_000L
         }
 
         private val _state = MutableStateFlow(OfflineMapDownloadState())
@@ -330,13 +343,6 @@ class OfflineMapDownloadViewModel
                 settingsRepository.setHttpEnabledForDownload(true)
                 mapTileSourceManager.setHttpEnabled(true)
             }
-        }
-
-        /**
-         * Dismiss the "HTTP auto-disabled" snackbar notification.
-         */
-        fun dismissHttpAutoDisabledMessage() {
-            _state.update { it.copy(httpAutoDisabled = false) }
         }
 
         private fun formatAddress(address: Address): String {
@@ -614,7 +620,11 @@ class OfflineMapDownloadViewModel
 
                             viewModelScope.launch {
                                 try {
-                                    // Mark as complete in database with MapLibre region ID
+                                    // 1. Mark COMPLETE immediately so the database
+                                    //    reflects reality (tiles are saved in
+                                    //    mbgl-offline.db). If the app is killed after
+                                    //    this point, the region won't appear stuck in
+                                    //    DOWNLOADING state on next launch.
                                     offlineMapRegionRepository.markCompleteWithMaplibreId(
                                         id = regionId,
                                         tileCount =
@@ -625,40 +635,70 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
-                                    // Check if HTTP was enabled specifically for this download
+                                    // 2. Show "Finalizing..." while style caching runs.
+                                    //    This can take up to ~36s worst-case (3 retries ×
+                                    //    10s timeout + backoff delays).
+                                    _state.update {
+                                        it.copy(
+                                            downloadProgress =
+                                                it.downloadProgress?.copy(
+                                                    statusMessage = "Finalizing offline style…",
+                                                ),
+                                        )
+                                    }
+
+                                    // 3. Cache the inlined style JSON. This must
+                                    //    happen BEFORE HTTP is auto-disabled so that
+                                    //    MapTileSourceManager returns Online (not
+                                    //    Unavailable) if anything queries the map
+                                    //    while style caching is still in progress.
+                                    val styleCached = fetchAndCacheStyleJson(regionId)
+                                    val styleCacheWarning =
+                                        if (!styleCached) {
+                                            Log.w(TAG, "Style caching failed — offline map may not work after 24h")
+                                            "Map tiles saved, but offline style caching failed. " +
+                                                "The map may stop working offline after 24 hours. " +
+                                                "Try re-downloading while connected to the internet."
+                                        } else {
+                                            null
+                                        }
+
+                                    // 4. Now safe to auto-disable HTTP — the cached
+                                    //    style (if successful) is already persisted.
                                     val wasEnabledForDownload =
                                         settingsRepository.httpEnabledForDownloadFlow.first()
                                     if (wasEnabledForDownload) {
-                                        // Auto-disable HTTP and clear the flag
                                         Log.d(TAG, "Auto-disabling HTTP after download (was enabled for download)")
                                         mapTileSourceManager.setHttpEnabled(false)
                                         settingsRepository.setHttpEnabledForDownload(false)
-                                        _state.update {
-                                            it.copy(
-                                                isComplete = true,
-                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                                httpAutoDisabled = true,
-                                            )
-                                        }
-                                    } else {
-                                        _state.update {
-                                            it.copy(
-                                                isComplete = true,
-                                                downloadProgress = it.downloadProgress?.copy(isComplete = true),
-                                            )
-                                        }
                                     }
 
-                                    // Fetch and cache style JSON for offline rendering (async, non-blocking)
-                                    // Launch in separate coroutine so it doesn't block UI state updates
-                                    launch { fetchAndCacheStyleJson(regionId) }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to mark region complete in database", e)
+                                    // 5. Signal completion with any warnings.
+                                    //    Both httpAutoDisabled and styleCacheWarning
+                                    //    are set atomically so the UI can consolidate
+                                    //    them into a single notification.
                                     _state.update {
                                         it.copy(
+                                            isComplete = true,
+                                            downloadProgress =
+                                                it.downloadProgress?.copy(
+                                                    isComplete = true,
+                                                    statusMessage = null,
+                                                ),
+                                            httpAutoDisabled = wasEnabledForDownload,
+                                            styleCacheWarning = styleCacheWarning,
+                                        )
+                                    }
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to complete region finalization", e)
+                                    _state.update {
+                                        it.copy(
+                                            downloadProgress = it.downloadProgress?.copy(statusMessage = null),
                                             errorMessage =
-                                                "Database error: ${e.message}. " +
-                                                    "MapLibre region saved but database update failed.",
+                                                "Error finalizing download: ${e.message}. " +
+                                                    "MapLibre region saved but finalization failed.",
                                         )
                                     }
                                 }
@@ -710,46 +750,74 @@ class OfflineMapDownloadViewModel
          * the tile URL templates after the TileJSON cache expires, making downloaded
          * offline tiles unreachable.
          *
-         * This is non-fatal - if it fails, the download is still considered successful.
+         * Retries up to 3 times on failure. Returns true if style was cached successfully.
          */
-        private suspend fun fetchAndCacheStyleJson(regionId: Long) {
-            withContext(Dispatchers.IO) {
-                try {
-                    // Fetch style JSON from the same URL MapLibre uses
-                    val rawStyleJson =
-                        kotlinx.coroutines.withTimeout(5000) {
-                            java.net.URL(MapTileSourceManager.DEFAULT_STYLE_URL).readText()
-                        }
+        private suspend fun fetchAndCacheStyleJson(regionId: Long): Boolean =
+            withContext(ioDispatcher) {
+                repeat(STYLE_CACHE_MAX_RETRIES) { attempt ->
+                    try {
+                        // Fetch style JSON from the same URL MapLibre uses
+                        val rawStyleJson = urlFetcher(MapTileSourceManager.DEFAULT_STYLE_URL)
 
-                    // Inline TileJSON references so the style is fully self-contained.
-                    // Without this, MapLibre needs to resolve TileJSON URLs at render time,
-                    // which fails offline after the HTTP cache expires (~24h).
-                    val styleJson =
-                        OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
-                            kotlinx.coroutines.withTimeout(5000) {
-                                java.net.URL(url).readText()
+                        // Inline TileJSON references so the style is fully self-contained.
+                        // Without this, MapLibre needs to resolve TileJSON URLs at render time,
+                        // which fails offline after the HTTP cache expires (~24h).
+                        val styleJson =
+                            OfflineStyleInliner.inlineTileJsonSources(rawStyleJson) { url ->
+                                urlFetcher(url)
                             }
+
+                        // Save to local file: filesDir/offline_styles/{regionId}.json
+                        val styleDir = java.io.File(context.filesDir, "offline_styles")
+                        if (!styleDir.exists() && !styleDir.mkdirs()) {
+                            throw java.io.IOException("Failed to create offline styles directory: ${styleDir.absolutePath}")
                         }
+                        val styleFile = java.io.File(styleDir, "$regionId.json")
+                        styleFile.writeText(styleJson)
 
-                    // Save to local file: filesDir/offline_styles/{regionId}.json
-                    val styleDir = java.io.File(context.filesDir, "offline_styles")
-                    styleDir.mkdirs()
-                    val styleFile = java.io.File(styleDir, "$regionId.json")
-                    styleFile.writeText(styleJson)
+                        // Persist path to database
+                        offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
 
-                    // Persist path to database
-                    offlineMapRegionRepository.updateLocalStylePath(regionId, styleFile.absolutePath)
-
-                    Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
-                } catch (e: Exception) {
-                    // Non-fatal: download already succeeded, tiles are saved
-                    Log.w(TAG, "Failed to cache style JSON for region $regionId (non-fatal)", e)
+                        Log.d(TAG, "Cached style JSON (inlined) for region $regionId at ${styleFile.absolutePath}")
+                        return@withContext true
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Style cache attempt ${attempt + 1}/$STYLE_CACHE_MAX_RETRIES failed for region $regionId", e)
+                        if (attempt < STYLE_CACHE_MAX_RETRIES - 1) {
+                            kotlinx.coroutines.delay(STYLE_CACHE_RETRY_DELAY_MS * (attempt + 1))
+                        }
+                    }
                 }
+                Log.e(TAG, "All style cache attempts failed for region $regionId")
+                false
             }
-        }
 
         override fun onCleared() {
             super.onCleared()
             isDownloading = false
         }
     }
+
+/**
+ * Default URL fetcher with OS-level socket timeouts.
+ * Uses [java.net.HttpURLConnection] instead of [java.net.URL.readText] so that
+ * connect/read timeouts are enforced at the OS level, not via cooperative cancellation.
+ */
+private fun defaultFetchUrl(url: String): String {
+    val timeoutMs = OfflineMapDownloadViewModel.STYLE_FETCH_TIMEOUT_MS.toInt()
+    val connection =
+        (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+        }
+    return try {
+        val code = connection.responseCode
+        if (code !in 200..299) {
+            throw java.io.IOException("HTTP $code fetching style: ${connection.responseMessage}")
+        }
+        connection.inputStream.bufferedReader().use { it.readText() }
+    } finally {
+        connection.disconnect()
+    }
+}

@@ -89,10 +89,26 @@ fun OfflineMapDownloadScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCancelDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    // Handle completion
+    // Handle completion — consolidate all post-download notifications
+    // into a single Toast so they don't conflict or get lost on navigation.
     LaunchedEffect(state.isComplete) {
         if (state.isComplete) {
+            val message =
+                when {
+                    state.styleCacheWarning != null && state.httpAutoDisabled ->
+                        state.styleCacheWarning +
+                            " Note: HTTP was auto-disabled and must be re-enabled before retrying."
+                    state.styleCacheWarning != null -> state.styleCacheWarning
+                    state.httpAutoDisabled -> "HTTP disabled. Your offline maps are ready."
+                    else -> null
+                }
+            message?.let {
+                android.widget.Toast
+                    .makeText(context, it, android.widget.Toast.LENGTH_LONG)
+                    .show()
+            }
             onDownloadComplete()
         }
     }
@@ -102,20 +118,6 @@ fun OfflineMapDownloadScreen(
         state.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
-        }
-    }
-
-    // Show toast when HTTP was auto-disabled after download
-    val context = LocalContext.current
-    LaunchedEffect(state.httpAutoDisabled) {
-        if (state.httpAutoDisabled) {
-            android.widget.Toast
-                .makeText(
-                    context,
-                    "HTTP disabled. Your offline maps are ready.",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-            viewModel.dismissHttpAutoDisabledMessage()
         }
     }
 
@@ -986,6 +988,7 @@ fun DownloadingStep(
                 when {
                     progress.isComplete -> "Complete!"
                     progress.errorMessage != null -> "Error"
+                    progress.statusMessage != null -> progress.statusMessage
                     progress.progress > 0 -> "Downloading..."
                     else -> "Preparing..."
                 }

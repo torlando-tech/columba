@@ -438,8 +438,14 @@ class ChatsViewModelTest {
     @Test
     fun `blockUser persists block and notifies protocol`() =
         runTest {
-            coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
-            coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
+            val capturedPeerHash = slot<String>()
+            val capturedDestHash = slot<String>()
+            coEvery {
+                blockedPeerRepository.blockPeer(capture(capturedPeerHash), any(), any(), any())
+            } just Runs
+            coEvery {
+                reticulumProtocol.blockDestination(capture(capturedDestHash))
+            } returns Result.success(Unit)
 
             viewModel.blockUser(
                 peerHash = "peer1",
@@ -450,8 +456,8 @@ class ChatsViewModelTest {
             )
             advanceUntilIdle()
 
-            coVerify { blockedPeerRepository.blockPeer("peer1", "id_hash_1", "Alice", false) }
-            coVerify { reticulumProtocol.blockDestination("peer1") }
+            assertEquals("peer1", capturedPeerHash.captured)
+            assertEquals("peer1", capturedDestHash.captured)
             coVerify(exactly = 0) { reticulumProtocol.blackholeIdentity(any()) }
             coVerify(exactly = 0) { conversationRepository.deleteConversation(any()) }
         }
@@ -459,9 +465,12 @@ class ChatsViewModelTest {
     @Test
     fun `blockUser with blackhole calls blackholeIdentity`() =
         runTest {
+            val capturedIdHash = slot<String>()
             coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
             coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
-            coEvery { reticulumProtocol.blackholeIdentity(any()) } returns Result.success(Unit)
+            coEvery {
+                reticulumProtocol.blackholeIdentity(capture(capturedIdHash))
+            } returns Result.success(Unit)
 
             viewModel.blockUser(
                 peerHash = "peer1",
@@ -472,15 +481,16 @@ class ChatsViewModelTest {
             )
             advanceUntilIdle()
 
-            coVerify { reticulumProtocol.blackholeIdentity("id_hash_1") }
+            assertEquals("id_hash_1", capturedIdHash.captured)
         }
 
     @Test
     fun `blockUser with deleteConversation deletes conversation`() =
         runTest {
+            val capturedDeleteHash = slot<String>()
             coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
             coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
-            coEvery { conversationRepository.deleteConversation(any()) } just Runs
+            coEvery { conversationRepository.deleteConversation(capture(capturedDeleteHash)) } just Runs
 
             viewModel.blockUser(
                 peerHash = "peer1",
@@ -491,13 +501,16 @@ class ChatsViewModelTest {
             )
             advanceUntilIdle()
 
-            coVerify { conversationRepository.deleteConversation("peer1") }
+            assertEquals("peer1", capturedDeleteHash.captured)
         }
 
     @Test
-    fun `blockUser with null identityHash skips blackhole`() =
+    fun `blockUser with null identityHash skips blackhole even when enabled`() =
         runTest {
-            coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
+            val capturedBlackholeEnabled = slot<Boolean>()
+            coEvery {
+                blockedPeerRepository.blockPeer(any(), any(), any(), capture(capturedBlackholeEnabled))
+            } just Runs
             coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
 
             viewModel.blockUser(
@@ -509,6 +522,8 @@ class ChatsViewModelTest {
             )
             advanceUntilIdle()
 
+            // Block is persisted with blackhole=true in DB, but transport-level blackhole is skipped
+            assertTrue(capturedBlackholeEnabled.captured)
             coVerify(exactly = 0) { reticulumProtocol.blackholeIdentity(any()) }
         }
 

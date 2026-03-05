@@ -1052,7 +1052,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error blocking destination", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     override fun unblockDestination(destinationHashHex: String): String =
@@ -1063,7 +1067,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error unblocking destination", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     override fun restoreBlockedDestinations(hashesJson: String): String =
@@ -1084,7 +1092,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error restoring blocked destinations", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     override fun blackholeIdentity(identityHashHex: String): String =
@@ -1095,7 +1107,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error blackholing identity", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     override fun unblackholeIdentity(identityHashHex: String): String =
@@ -1106,7 +1122,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error unblackholing identity", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     override fun isTransportEnabled(): String =
@@ -1117,7 +1137,11 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not initialized"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error checking transport enabled", e)
-            """{"success": false, "error": "${e.message}"}"""
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
         }
 
     // ===========================================

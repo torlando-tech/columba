@@ -30,6 +30,7 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions") // Hilt modules have one @Provides per DAO
 object DatabaseModule {
     /**
      * All database migrations, exposed for use by service process.

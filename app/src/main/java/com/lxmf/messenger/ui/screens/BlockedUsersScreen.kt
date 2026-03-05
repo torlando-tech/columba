@@ -108,6 +108,7 @@ fun BlockedUsersScreen(
                     BlockedPeerCard(
                         peer = peer,
                         onUnblock = { peerToUnblock = peer },
+                        onToggleBlackhole = { viewModel.toggleBlackhole(peer, !peer.isBlackholeEnabled) },
                     )
                 }
             }
@@ -151,6 +152,7 @@ fun BlockedUsersScreen(
 private fun BlockedPeerCard(
     peer: BlockedPeerEntity,
     onUnblock: () -> Unit,
+    onToggleBlackhole: () -> Unit,
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
 
@@ -182,11 +184,21 @@ private fun BlockedPeerCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (peer.isBlackholeEnabled) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Switch(
+                        checked = peer.isBlackholeEnabled,
+                        onCheckedChange = { onToggleBlackhole() },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
                     Text(
-                        text = "Blackholed (announces not relayed)",
+                        text = "Blackhole (don't relay announces)",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        color =
+                            if (peer.isBlackholeEnabled) {
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                 }
             }

@@ -66,11 +66,29 @@ class ServicePersistenceManager(
     }
 
     private val announceDao by lazy { database.announceDao() }
+    private val blockedPeerDao by lazy { database.blockedPeerDao() }
     private val contactDao by lazy { database.contactDao() }
     private val messageDao by lazy { database.messageDao() }
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
+
+    /**
+     * Check if a peer is explicitly blocked.
+     * This is defense-in-depth: catches messages during the window between
+     * Python init and LXMF ignore list restore.
+     * Fails open: if DB check fails, message is allowed through.
+     */
+    private suspend fun isBlockedPeer(
+        sourceHash: String,
+        identityHash: String,
+    ): Boolean =
+        try {
+            blockedPeerDao.isBlocked(sourceHash, identityHash)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking blocked status, allowing message: ${e.message}")
+            false
+        }
 
     /**
      * Persist an announce to the database.
@@ -187,6 +205,12 @@ class ServicePersistenceManager(
             val activeIdentity = localIdentityDao.getActiveIdentitySync()
             if (activeIdentity == null) {
                 Log.w(TAG, "No active identity - cannot persist message")
+                return false
+            }
+
+            // Check if this peer is explicitly blocked (defense-in-depth for LXMF ignore list)
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) {
+                Log.d(TAG, "Blocking message from blocked peer: ${sourceHash.take(16)}")
                 return false
             }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
@@ -37,6 +39,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -102,6 +105,7 @@ fun ChatsScreen(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
     val draftsMap by viewModel.draftsMap.collectAsState()
+    val isTransportEnabled by viewModel.isTransportEnabled.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -115,9 +119,10 @@ fun ChatsScreen(
     val pendingSharedText by sharedTextViewModel.sharedText.collectAsStateWithLifecycle()
     val pendingSharedImages by sharedImageViewModel.sharedImages.collectAsStateWithLifecycle()
 
-    // Delete dialog state (context menu state is now per-card)
+    // Delete/Block dialog state (context menu state is now per-card)
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBlockDialog by remember { mutableStateOf(false) }
 
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
@@ -294,6 +299,11 @@ fun ChatsScreen(
                                     showMenu = false
                                     onViewPeerDetails(conversation.peerHash)
                                 },
+                                onBlockUser = {
+                                    showMenu = false
+                                    selectedConversation = conversation
+                                    showBlockDialog = true
+                                },
                             )
                         }
                     }
@@ -320,6 +330,34 @@ fun ChatsScreen(
                 },
                 onDismiss = {
                     showDeleteDialog = false
+                },
+            )
+        }
+
+        // Block user confirmation dialog
+        val conversationToBlock = selectedConversation
+        if (showBlockDialog && conversationToBlock != null) {
+            BlockUserDialog(
+                peerName = conversationToBlock.displayName,
+                isTransportEnabled = isTransportEnabled,
+                onConfirm = { deleteMessages, blackholeEnabled ->
+                    viewModel.blockUser(
+                        peerHash = conversationToBlock.peerHash,
+                        peerIdentityHash =
+                            conversationToBlock.peerPublicKey?.let {
+                                com.lxmf.messenger.data.util.HashUtils
+                                    .computeIdentityHash(it)
+                            },
+                        displayName = conversationToBlock.displayName,
+                        deleteConversation = deleteMessages,
+                        blackholeEnabled = blackholeEnabled,
+                    )
+                    showBlockDialog = false
+                    selectedConversation = null
+                    Toast.makeText(context, "Blocked ${conversationToBlock.displayName}", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = {
+                    showBlockDialog = false
                 },
             )
         }
@@ -544,6 +582,7 @@ fun ConversationContextMenu(
     onMarkAsUnread: () -> Unit,
     onDeleteConversation: () -> Unit,
     onViewDetails: () -> Unit,
+    onBlockUser: () -> Unit,
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -622,6 +661,24 @@ fun ConversationContextMenu(
             },
             onClick = onDeleteConversation,
         )
+
+        // Block user
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Block,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            text = {
+                Text(
+                    text = "Block User",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            onClick = onBlockUser,
+        )
     }
 }
 
@@ -655,6 +712,89 @@ fun DeleteConversationDialog(
                     ),
             ) {
                 Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+fun BlockUserDialog(
+    peerName: String,
+    isTransportEnabled: Boolean = false,
+    onConfirm: (deleteMessages: Boolean, blackholeEnabled: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var deleteMessages by remember { mutableStateOf(false) }
+    var blackholeEnabled by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Block,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = {
+            Text("Block $peerName?")
+        },
+        text = {
+            Column {
+                Text("They won't be able to send you messages. Their conversation will be hidden from the chat list.")
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Checkbox(
+                        checked = deleteMessages,
+                        onCheckedChange = { deleteMessages = it },
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Also delete conversation and messages",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Checkbox(
+                        checked = blackholeEnabled,
+                        onCheckedChange = { blackholeEnabled = it },
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Also blackhole (don't relay their announces)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (blackholeEnabled && !isTransportEnabled) {
+                    Text(
+                        text = "Transport is currently disabled. This identity will be blackholed whenever transport is later enabled.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 48.dp, top = 4.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(deleteMessages, blackholeEnabled) },
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+            ) {
+                Text("Block")
             }
         },
         dismissButton = {

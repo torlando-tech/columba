@@ -452,6 +452,16 @@ class MockReticulumProtocol : ReticulumProtocol {
     }
 
     // Voice Call Methods (Mock)
+    override suspend fun blockDestination(destinationHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun isTransportEnabled(): Boolean = false
+
     override suspend fun initiateCall(
         destinationHash: String,
         profileCode: Int?,

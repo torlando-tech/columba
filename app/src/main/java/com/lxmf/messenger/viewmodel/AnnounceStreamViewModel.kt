@@ -45,6 +45,7 @@ class AnnounceStreamViewModel
         private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val identityRepository: IdentityRepository,
+        private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
@@ -52,6 +53,10 @@ class AnnounceStreamViewModel
             // Made var for testing
             internal var updateIntervalMs = 30_000L
         }
+
+        // Whether Reticulum transport mode is enabled (for blackhole option)
+        private val _isTransportEnabled = MutableStateFlow(false)
+        val isTransportEnabled: StateFlow<Boolean> = _isTransportEnabled
 
         // Dirty flag: starts true for initial load, set on each announce, cleared by periodic timer
         private val reachableCountDirty =
@@ -168,6 +173,14 @@ class AnnounceStreamViewModel
         val announceError: StateFlow<String?> = _announceError.asStateFlow()
 
         init {
+            viewModelScope.launch {
+                try {
+                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
+
             // Reticulum is now initialized by ColumbaApplication with config from database
             // No need to initialize here
             Log.d(TAG, "AnnounceStreamViewModel initialized - using RNS from ColumbaApplication")
@@ -345,6 +358,35 @@ class AnnounceStreamViewModel
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle contact status for $destinationHash", e)
+                }
+            }
+        }
+
+        /**
+         * Block a peer from the announce detail screen.
+         */
+        fun blockPeer(
+            destinationHash: String,
+            peerName: String,
+            publicKey: ByteArray?,
+            deleteConversation: Boolean,
+            blackholeEnabled: Boolean,
+        ) {
+            viewModelScope.launch {
+                try {
+                    val peerIdentityHash =
+                        publicKey?.let {
+                            com.lxmf.messenger.data.util.HashUtils
+                                .computeIdentityHash(it)
+                        }
+                    blockedPeerRepository.blockPeer(destinationHash, peerIdentityHash, peerName, blackholeEnabled)
+                    reticulumProtocol.blockDestination(destinationHash)
+                    if (blackholeEnabled && peerIdentityHash != null) {
+                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                    }
+                    Log.d(TAG, "Blocked peer ${destinationHash.take(16)} (blackhole=$blackholeEnabled)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error blocking peer", e)
                 }
             }
         }

@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.lxmf.messenger.data.db.ColumbaDatabase
 import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.db.dao.BlockedPeerDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
@@ -76,6 +77,7 @@ object DatabaseModule {
             MIGRATION_37_38,
             MIGRATION_38_39,
             MIGRATION_39_40,
+            MIGRATION_40_41,
         )
     }
 
@@ -1639,6 +1641,30 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 40 to 41: Add blocked_peers table
+    private val MIGRATION_40_41 =
+        object : Migration(40, 41) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS blocked_peers (
+                        peerHash TEXT NOT NULL,
+                        identityHash TEXT NOT NULL,
+                        peerIdentityHash TEXT,
+                        displayName TEXT,
+                        blockedTimestamp INTEGER NOT NULL,
+                        isBlackholeEnabled INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(peerHash, identityHash),
+                        FOREIGN KEY(identityHash) REFERENCES local_identities(identityHash) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_blocked_peers_identityHash ON blocked_peers(identityHash)",
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1689,6 +1715,9 @@ object DatabaseModule {
 
     @Provides
     fun provideDraftDao(database: ColumbaDatabase): DraftDao = database.draftDao()
+
+    @Provides
+    fun provideBlockedPeerDao(database: ColumbaDatabase): BlockedPeerDao = database.blockedPeerDao()
 
     @Provides
     @Singleton

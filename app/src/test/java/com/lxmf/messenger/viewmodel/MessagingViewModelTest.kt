@@ -85,6 +85,7 @@ class MessagingViewModelTest {
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
+    private lateinit var blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -114,6 +115,7 @@ class MessagingViewModelTest {
         locationSharingManager = mockk()
         identityRepository = mockk()
         conversationLinkManager = mockk()
+        blockedPeerRepository = mockk()
 
         // Mock activeConversationManager methods
         every { activeConversationManager.setActive(any()) } just Runs
@@ -213,6 +215,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
             testBody()
@@ -235,6 +238,7 @@ class MessagingViewModelTest {
             locationSharingManager,
             identityRepository,
             conversationLinkManager,
+            blockedPeerRepository,
         )
 
     @Test
@@ -560,6 +564,7 @@ class MessagingViewModelTest {
                     failingLocationSharingManager,
                     identityRepository,
                     failingConversationLinkManager,
+                    blockedPeerRepository,
                 )
 
             // Attempt to send message
@@ -1010,6 +1015,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                blockedPeerRepository,
             )
             advanceUntilIdle()
 
@@ -1079,6 +1085,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                blockedPeerRepository,
             )
             advanceUntilIdle()
 
@@ -1146,6 +1153,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                blockedPeerRepository,
             )
             advanceUntilIdle()
 
@@ -1201,6 +1209,7 @@ class MessagingViewModelTest {
                 locationSharingManager,
                 identityRepository,
                 conversationLinkManager,
+                blockedPeerRepository,
             )
             advanceUntilIdle()
 
@@ -1270,6 +1279,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1332,6 +1342,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1394,6 +1405,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1456,6 +1468,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1518,6 +1531,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1579,6 +1593,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1635,6 +1650,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -1691,6 +1707,7 @@ class MessagingViewModelTest {
                     locationSharingManager,
                     identityRepository,
                     conversationLinkManager,
+                    blockedPeerRepository,
                 )
             advanceUntilIdle()
 
@@ -4798,14 +4815,15 @@ class MessagingViewModelTest {
             // Pre-populate reply preview cache via loadReplyPreviewIfNeeded
             coEvery {
                 conversationRepository.getReplyPreview("test-message-id", any())
-            } returns com.lxmf.messenger.data.repository.ReplyPreview(
-                messageId = "test-message-id",
-                senderName = "Test Peer",
-                contentPreview = "Hello world",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            } returns
+                com.lxmf.messenger.data.repository.ReplyPreview(
+                    messageId = "test-message-id",
+                    senderName = "Test Peer",
+                    contentPreview = "Hello world",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             viewModel.loadReplyPreviewAsync("reply-msg", "test-message-id")
             advanceUntilIdle()
 

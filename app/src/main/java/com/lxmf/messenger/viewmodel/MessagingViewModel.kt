@@ -88,6 +88,7 @@ class MessagingViewModel
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
+        private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -104,6 +105,10 @@ class MessagingViewModel
                     .take(255) // Limit length for filesystem compatibility
                     .ifEmpty { "attachment" } // Fallback if empty after sanitization
         }
+
+        // Whether Reticulum transport mode is enabled (for blackhole option in block dialog)
+        private val _isTransportEnabled = MutableStateFlow(false)
+        val isTransportEnabled: StateFlow<Boolean> = _isTransportEnabled
 
         // Track the currently active conversation - drives reactive message loading
         private val _currentConversation = MutableStateFlow<String?>(null)
@@ -662,6 +667,37 @@ class MessagingViewModel
         }
 
         /**
+         * Block the current conversation peer.
+         */
+        fun blockUser(
+            deleteConversation: Boolean,
+            blackholeEnabled: Boolean,
+        ) {
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                    val peerIdentityHash =
+                        publicKey?.let {
+                            com.lxmf.messenger.data.util.HashUtils
+                                .computeIdentityHash(it)
+                        }
+                    blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, currentPeerName, blackholeEnabled)
+                    reticulumProtocol.blockDestination(peerHash)
+                    if (blackholeEnabled && peerIdentityHash != null) {
+                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                    }
+                    if (deleteConversation) {
+                        conversationRepository.deleteConversation(peerHash)
+                    }
+                    Log.d(TAG, "Blocked user ${peerHash.take(16)} (blackhole=$blackholeEnabled, delete=$deleteConversation)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error blocking user", e)
+                }
+            }
+        }
+
+        /**
          * Start sharing location with a single peer.
          * Used from the conversation screen where the target is already known.
          *
@@ -693,6 +729,14 @@ class MessagingViewModel
         }
 
         init {
+            viewModelScope.launch {
+                try {
+                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
+
             // NOTE: Message collection has been moved to MessageCollector service
             // which runs at application level to ensure messages are collected
             // even when no conversations are open.

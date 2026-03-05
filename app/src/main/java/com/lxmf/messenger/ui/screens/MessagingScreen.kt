@@ -65,6 +65,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Circle
@@ -89,6 +90,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -403,6 +405,8 @@ fun MessagingScreen(
     // Message font scale (text size dialog)
     val messageFontScale by viewModel.messageFontScale.collectAsStateWithLifecycle()
     var showTextSizeDialog by remember { mutableStateOf(false) }
+    var showBlockDialog by remember { mutableStateOf(false) }
+    val isTransportEnabled by viewModel.isTransportEnabled.collectAsStateWithLifecycle()
 
     // File attachment state
     val selectedFileAttachments by viewModel.selectedFileAttachments.collectAsStateWithLifecycle()
@@ -1039,6 +1043,26 @@ fun MessagingScreen(
                                     showTextSizeDialog = true
                                 },
                             )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Block,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        "Block User",
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showBlockDialog = true
+                                },
+                            )
                         }
                     }
                 },
@@ -1609,6 +1633,26 @@ fun MessagingScreen(
             currentScale = messageFontScale,
             onScaleChange = { viewModel.saveMessageFontScale(it) },
             onDismiss = { showTextSizeDialog = false },
+        )
+    }
+
+    // Block user dialog
+    if (showBlockDialog) {
+        BlockUserDialog(
+            peerName = peerName,
+            isTransportEnabled = isTransportEnabled,
+            onConfirm = { deleteMessages, blackholeEnabled ->
+                viewModel.blockUser(
+                    deleteConversation = deleteMessages,
+                    blackholeEnabled = blackholeEnabled,
+                )
+                showBlockDialog = false
+                onBackClick()
+                android.widget.Toast
+                    .makeText(context, "Blocked $peerName", android.widget.Toast.LENGTH_SHORT)
+                    .show()
+            },
+            onDismiss = { showBlockDialog = false },
         )
     }
 }

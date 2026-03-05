@@ -11,6 +11,7 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.reticulum.usb.KotlinUSBBridge
+import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.EventHandler
@@ -126,6 +127,9 @@ class ReticulumServiceBinder(
                             // Start announce polling and drain any pending messages
                             eventHandler.startEventHandling()
                             eventHandler.drainPendingMessages()
+
+                            // Restore LXMF blocked destinations from DB
+                            restoreBlockedDestinations()
 
                             // Announce LXMF destination
                             announceLxmfDestination()
@@ -296,6 +300,35 @@ class ReticulumServiceBinder(
             Log.d(TAG, "Message received callback set before Python initialization")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set message received callback before init: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Restore LXMF blocked destinations from the database after Python init.
+     * Blackhole does NOT need restore — Reticulum persists and reloads its own list.
+     */
+    private fun restoreBlockedDestinations() {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val db = ServiceDatabaseProvider.getDatabase(context)
+                val localIdentityDao = db.localIdentityDao()
+                val blockedPeerDao = db.blockedPeerDao()
+                val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return@launch
+                val blockedHashes = blockedPeerDao.getBlockedPeerHashes(activeIdentity.identityHash)
+                if (blockedHashes.isNotEmpty()) {
+                    wrapperManager.withWrapper { wrapper ->
+                        val pyList =
+                            com.chaquo.python.Python
+                                .getInstance()
+                                .builtins
+                                .callAttr("list", blockedHashes.toTypedArray())
+                        wrapper.callAttr("restore_blocked_destinations", pyList)
+                    }
+                    Log.i(TAG, "Restored ${blockedHashes.size} LXMF block(s) from DB")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error restoring blocked destinations", e)
+            }
         }
     }
 
@@ -1004,6 +1037,86 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not available"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error sending reaction", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    // ===========================================
+    // Peer Blocking & Blackhole
+    // ===========================================
+
+    override fun blockDestination(destinationHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("block_destination", destinationHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error blocking destination", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    override fun unblockDestination(destinationHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("unblock_destination", destinationHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unblocking destination", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    override fun restoreBlockedDestinations(hashesJson: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                val pyList =
+                    com.chaquo.python.Python
+                        .getInstance()
+                        .builtins
+                        .callAttr(
+                            "list",
+                            org.json.JSONArray(hashesJson).let { arr ->
+                                Array(arr.length()) { arr.getString(it) }
+                            },
+                        )
+                wrapper.callAttr("restore_blocked_destinations", pyList)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring blocked destinations", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    override fun blackholeIdentity(identityHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("blackhole_identity", identityHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error blackholing identity", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    override fun unblackholeIdentity(identityHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("unblackhole_identity", identityHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unblackholing identity", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+
+    override fun isTransportEnabled(): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("is_transport_enabled")?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking transport enabled", e)
             """{"success": false, "error": "${e.message}"}"""
         }
 

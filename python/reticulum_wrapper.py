@@ -8213,6 +8213,35 @@ class ReticulumWrapper:
             log_error("ReticulumWrapper", "clear_rmsp_servers", f"Error: {e}")
 
     # ============================================================================
+    # Peer Blocking & Blackhole (delegated to blocking_manager.py)
+    # ============================================================================
+
+    def _get_blocking_manager(self):
+        """Lazy-init the blocking manager."""
+        if not hasattr(self, '_blocking_manager') or self._blocking_manager is None:
+            from blocking_manager import BlockingManager
+            self._blocking_manager = BlockingManager(self.router, self.reticulum)
+        return self._blocking_manager
+
+    def block_destination(self, destination_hash_hex):
+        return self._get_blocking_manager().block_destination(destination_hash_hex)
+
+    def unblock_destination(self, destination_hash_hex):
+        return self._get_blocking_manager().unblock_destination(destination_hash_hex)
+
+    def restore_blocked_destinations(self, hashes_list):
+        return self._get_blocking_manager().restore_blocked_destinations(hashes_list)
+
+    def blackhole_identity(self, identity_hash_hex):
+        return self._get_blocking_manager().blackhole_identity(identity_hash_hex)
+
+    def unblackhole_identity(self, identity_hash_hex):
+        return self._get_blocking_manager().unblackhole_identity(identity_hash_hex)
+
+    def is_transport_enabled(self):
+        return self._get_blocking_manager().is_transport_enabled()
+
+    # ============================================================================
     # Protocol Version Information (for About screen)
     # ============================================================================
 

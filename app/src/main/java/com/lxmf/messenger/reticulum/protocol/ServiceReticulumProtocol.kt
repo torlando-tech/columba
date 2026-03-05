@@ -2859,6 +2859,71 @@ class ServiceReticulumProtocol(
         }
 
     // ===========================================
+    // Peer Blocking & Blackhole
+    // ===========================================
+
+    override suspend fun blockDestination(destinationHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.blockDestination(destinationHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.unblockDestination(destinationHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.blackholeIdentity(identityHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.unblackholeIdentity(identityHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun isTransportEnabled(): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val svc = service ?: return@withContext false
+                val resultJson = svc.isTransportEnabled()
+                val result = JSONObject(resultJson)
+                result.optBoolean("enabled", false)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking transport enabled", e)
+                false
+            }
+        }
+
+    // ===========================================
     // Voice Call Methods (LXST)
     // ===========================================
 

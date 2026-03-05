@@ -79,6 +79,7 @@ import com.lxmf.messenger.util.CrashReport
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.DeviceInfoUtil
 import com.lxmf.messenger.util.LocationPermissionManager
+import com.lxmf.messenger.viewmodel.BlockedUsersViewModel
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
@@ -101,8 +102,11 @@ fun SettingsScreen(
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
     onNavigateToApkSharing: () -> Unit = {},
+    onNavigateToBlockedUsers: () -> Unit = {},
 ) {
+    val blockedUsersViewModel: BlockedUsersViewModel = hiltViewModel()
     val state by viewModel.state.collectAsState()
+    val blockedPeerCount by blockedUsersViewModel.blockedPeerCount.collectAsState()
     val qrCodeData by debugViewModel.qrCodeData.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -277,6 +281,8 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.PRIVACY, it) },
                     blockUnknownSenders = state.blockUnknownSenders,
                     onBlockUnknownSendersChange = { viewModel.setBlockUnknownSenders(it) },
+                    blockedPeerCount = blockedPeerCount,
+                    onNavigateToBlockedUsers = onNavigateToBlockedUsers,
                 )
 
                 NotificationSettingsCard(

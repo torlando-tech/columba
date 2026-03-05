@@ -88,9 +88,10 @@ class BlockingManager:
                 return {"success": False, "error": "Reticulum not initialized"}
             identity_hash = bytes.fromhex(identity_hash_hex)
             result = self.reticulum.blackhole_identity(identity_hash)
+            success = result is not None and result is not False
             log_info("BlockingManager", "blackhole_identity",
                      f"Blackholed identity: {identity_hash_hex[:16]} (result={result})")
-            return {"success": result is not False, "result": str(result)}
+            return {"success": success, "result": str(result)}
         except Exception as e:
             log_error("BlockingManager", "blackhole_identity", f"Error: {e}")
             return {"success": False, "error": str(e)}
@@ -102,9 +103,10 @@ class BlockingManager:
                 return {"success": False, "error": "Reticulum not initialized"}
             identity_hash = bytes.fromhex(identity_hash_hex)
             result = self.reticulum.unblackhole_identity(identity_hash)
+            success = result is not None and result is not False
             log_info("BlockingManager", "unblackhole_identity",
                      f"Unblackholed identity: {identity_hash_hex[:16]} (result={result})")
-            return {"success": result is not False, "result": str(result)}
+            return {"success": success, "result": str(result)}
         except Exception as e:
             log_error("BlockingManager", "unblackhole_identity", f"Error: {e}")
             return {"success": False, "error": str(e)}

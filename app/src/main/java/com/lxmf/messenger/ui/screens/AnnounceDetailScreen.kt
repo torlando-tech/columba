@@ -447,7 +447,6 @@ fun AnnounceDetailScreen(
                         destinationHash = ann.destinationHash,
                         peerName = ann.peerName,
                         publicKey = ann.publicKey,
-                        deleteConversation = deleteMessages,
                         blackholeEnabled = blackholeEnabled,
                     )
                 }

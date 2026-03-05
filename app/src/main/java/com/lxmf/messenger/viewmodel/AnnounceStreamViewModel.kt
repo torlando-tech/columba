@@ -369,7 +369,6 @@ class AnnounceStreamViewModel
             destinationHash: String,
             peerName: String,
             publicKey: ByteArray?,
-            deleteConversation: Boolean,
             blackholeEnabled: Boolean,
         ) {
             viewModelScope.launch {

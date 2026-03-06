@@ -639,8 +639,8 @@ class ColumbaApplication : Application() {
         }
 
         return try {
-            serviceProtocol
-                .restorePeerIdentities(contactIdentities)
+            val result = serviceProtocol.restorePeerIdentities(contactIdentities)
+            result
                 .onSuccess { count ->
                     android.util.Log.d(
                         "ColumbaApplication",
@@ -653,7 +653,7 @@ class ColumbaApplication : Application() {
                         error,
                     )
                 }
-            contactIdentities.map { it.first }.toSet()
+            if (result.isSuccess) contactIdentities.map { it.first }.toSet() else emptySet()
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "Error restoring prioritized contact identities", e)
             emptySet()

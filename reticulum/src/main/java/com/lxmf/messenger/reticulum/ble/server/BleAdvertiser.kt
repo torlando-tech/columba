@@ -14,6 +14,7 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,7 +50,15 @@ class BleAdvertiser(
         private const val TAG = "Columba:BLE:K:Adv"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val RETRY_BACKOFF_MS = 2000L // 2 seconds
-        private const val ADVERTISING_REFRESH_INTERVAL_MS = 60_000L // 1 minute
+    }
+
+    // Power-tunable advertising refresh interval
+    var advertisingRefreshIntervalMs: Long = 60_000L
+        private set
+
+    fun updatePowerSettings(settings: BlePowerSettings) {
+        advertisingRefreshIntervalMs = settings.advertisingRefreshIntervalMs
+        Log.d(TAG, "Power settings updated: refreshInterval=${advertisingRefreshIntervalMs}ms")
     }
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser
@@ -292,6 +301,30 @@ class BleAdvertiser(
     }
 
     /**
+     * Immediately stop advertising without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Safe to call multiple times (idempotent).
+     */
+    fun stopImmediate() {
+        try {
+            stopRefreshJob()
+            if (bluetoothLeAdvertiser != null) {
+                try {
+                    bluetoothLeAdvertiser.stopAdvertising(advertiseCallback)
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Permission denied in stopImmediate", e)
+                }
+            }
+            _isAdvertising.value = false
+            retryAttempts = 0
+            currentDeviceName = null
+            Log.d(TAG, "Advertiser stopped immediately")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in stopImmediate", e)
+        }
+    }
+
+    /**
      * Check if BLUETOOTH_ADVERTISE permission is granted.
      */
     private fun hasAdvertisePermission(): Boolean {
@@ -340,14 +373,14 @@ class BleAdvertiser(
         refreshJob =
             scope.launch {
                 while (isActive) {
-                    delay(ADVERTISING_REFRESH_INTERVAL_MS)
+                    delay(advertisingRefreshIntervalMs)
                     if (_isAdvertising.value && !isRefreshing) {
                         Log.d(TAG, "Proactive advertising refresh")
                         refreshAdvertising()
                     }
                 }
             }
-        Log.d(TAG, "Advertising refresh job started (interval: ${ADVERTISING_REFRESH_INTERVAL_MS}ms)")
+        Log.d(TAG, "Advertising refresh job started (interval: ${advertisingRefreshIntervalMs}ms)")
     }
 
     /**

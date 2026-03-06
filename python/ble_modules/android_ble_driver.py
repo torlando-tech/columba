@@ -121,7 +121,7 @@ class AndroidBLEDriver(BLEDriverInterface):
 
     # --- Lifecycle & Configuration ---
 
-    def start(self, service_uuid: str, rx_char_uuid: str, tx_char_uuid: str, identity_char_uuid: str):
+    def start(self, service_uuid: str, rx_char_uuid: str, tx_char_uuid: str, identity_char_uuid: str, **power_kwargs):
         """Initialize the driver and Android BLE stack."""
         try:
             if self._state != DriverState.IDLE:
@@ -148,6 +148,10 @@ class AndroidBLEDriver(BLEDriverInterface):
 
             # Setup callbacks
             self._setup_kotlin_callbacks()
+
+            # Configure power settings before starting BLE stack
+            if power_kwargs:
+                self.configure_power(**power_kwargs)
 
             # Initialize Kotlin BLE stack
             self.kotlin_bridge.startAsync(
@@ -470,6 +474,33 @@ class AndroidBLEDriver(BLEDriverInterface):
         self._power_mode = mode
         RNS.log(f"{LOG_TAG}: Power mode set to {mode}", RNS.LOG_DEBUG)
         # Note: Could propagate to KotlinBLEBridge if needed
+
+    def configure_power(self, preset="balanced", discovery_interval_ms=5000,
+                        discovery_interval_idle_ms=30000, scan_duration_ms=10000,
+                        advertising_refresh_interval_ms=60000):
+        """Configure BLE power settings on the Kotlin bridge.
+
+        Args:
+            preset: Power preset name ("performance", "balanced", "battery_saver", "custom")
+            discovery_interval_ms: Scan interval when actively discovering
+            discovery_interval_idle_ms: Scan interval when idle
+            scan_duration_ms: Duration of each scan cycle
+            advertising_refresh_interval_ms: Ad refresh interval
+        """
+        try:
+            if self.kotlin_bridge:
+                self.kotlin_bridge.configurePower(
+                    preset,
+                    int(discovery_interval_ms),
+                    int(discovery_interval_idle_ms),
+                    int(scan_duration_ms),
+                    int(advertising_refresh_interval_ms),
+                )
+                RNS.log(f"{LOG_TAG}: Power configured: preset={preset}", RNS.LOG_INFO)
+            else:
+                RNS.log(f"{LOG_TAG}: Cannot configure power - no bridge", RNS.LOG_WARNING)
+        except Exception as e:
+            RNS.log(f"{LOG_TAG}: Error configuring power: {e}", RNS.LOG_ERROR)
 
     def get_peer_mtu(self, address: str) -> Optional[int]:
         """Get the negotiated MTU for a peer."""

@@ -13,6 +13,8 @@ import com.lxmf.messenger.reticulum.ble.client.BleGattClient
 import com.lxmf.messenger.reticulum.ble.client.BleScanner
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
 import com.lxmf.messenger.reticulum.ble.model.BleDevice
+import com.lxmf.messenger.reticulum.ble.model.BlePowerPreset
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import com.lxmf.messenger.reticulum.ble.server.BleAdvertiser
 import com.lxmf.messenger.reticulum.ble.server.BleGattServer
 import com.lxmf.messenger.reticulum.ble.util.BleOperationQueue
@@ -463,6 +465,10 @@ class KotlinBLEBridge(
     // State
     @Volatile
     private var isStarted = false
+
+    // Power settings (configurable from Python via configurePower())
+    var powerSettings: BlePowerSettings = BlePowerSettings()
+        private set
 
     // Periodic refresh job for real-time RSSI updates (only when UI is visible)
     private var connectionRefreshJob: kotlinx.coroutines.Job? = null
@@ -2379,5 +2385,111 @@ class KotlinBLEBridge(
             stop()
         }
         scope.cancel()
+    }
+
+    /**
+     * Immediately stop all BLE operations without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Idempotent - safe if stop() already ran or will run later.
+     */
+    fun stopImmediate() {
+        if (!isStarted) {
+            Log.d(TAG, "stopImmediate: already stopped")
+            return
+        }
+
+        Log.i(TAG, "Stopping BLE bridge immediately (forced shutdown)")
+
+        try {
+            scanner?.stopImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in scanner stopImmediate", e)
+        }
+
+        try {
+            advertiser?.stopImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in advertiser stopImmediate", e)
+        }
+
+        try {
+            gattServer?.closeImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in gattServer closeImmediate", e)
+        }
+
+        // Cancel scope (kills all pending coroutines)
+        try {
+            scope.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling scope", e)
+        }
+
+        // Unregister Bluetooth state receiver
+        if (isReceiverRegistered) {
+            try {
+                context.unregisterReceiver(bluetoothStateReceiver)
+                isReceiverRegistered = false
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering receiver in stopImmediate", e)
+            }
+        }
+
+        // Clear state
+        try {
+            connectedPeers.clear()
+            addressToIdentity.clear()
+            identityToAddress.clear()
+            pendingConnections.clear()
+            processedIdentityCallbacks.clear()
+            pendingCentralConnections.clear()
+            recentlyDeduplicatedIdentities.clear()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing state in stopImmediate", e)
+        }
+
+        isStarted = false
+        Log.i(TAG, "BLE bridge stopped immediately")
+    }
+
+    /**
+     * Configure BLE power settings.
+     * Called from Python via AndroidBLEDriver before startAsync().
+     *
+     * @param preset Power preset name ("performance", "balanced", "battery_saver", "custom")
+     * @param discoveryIntervalMs Scan interval when actively discovering (only used with "custom")
+     * @param discoveryIntervalIdleMs Scan interval when idle (only used with "custom")
+     * @param scanDurationMs Duration of each scan cycle (only used with "custom")
+     * @param advertisingRefreshIntervalMs Ad refresh interval (only used with "custom")
+     */
+    fun configurePower(
+        preset: String,
+        discoveryIntervalMs: Long,
+        discoveryIntervalIdleMs: Long,
+        scanDurationMs: Long,
+        advertisingRefreshIntervalMs: Long,
+    ) {
+        val blePowerPreset = BlePowerPreset.fromString(preset)
+        powerSettings = if (blePowerPreset == BlePowerPreset.CUSTOM) {
+            BlePowerSettings(
+                preset = BlePowerPreset.CUSTOM,
+                discoveryIntervalMs = discoveryIntervalMs,
+                discoveryIntervalIdleMs = discoveryIntervalIdleMs,
+                scanDurationMs = scanDurationMs,
+                advertisingRefreshIntervalMs = advertisingRefreshIntervalMs,
+            )
+        } else {
+            BlePowerPreset.getSettings(blePowerPreset)
+        }
+
+        // Propagate to scanner and advertiser if they exist
+        scanner?.updatePowerSettings(powerSettings)
+        advertiser?.updatePowerSettings(powerSettings)
+
+        Log.i(TAG, "Power settings configured: preset=$preset, " +
+            "discovery=${powerSettings.discoveryIntervalMs}ms, " +
+            "idle=${powerSettings.discoveryIntervalIdleMs}ms, " +
+            "scanDuration=${powerSettings.scanDurationMs}ms, " +
+            "adRefresh=${powerSettings.advertisingRefreshIntervalMs}ms")
     }
 }

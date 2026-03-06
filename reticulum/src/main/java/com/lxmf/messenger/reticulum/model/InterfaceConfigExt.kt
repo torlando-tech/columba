@@ -73,6 +73,11 @@ fun InterfaceConfig.toJsonString(): String =
                     put("device_name", deviceName)
                     put("max_connections", maxConnections)
                     put("mode", mode)
+                    put("ble_power_preset", blePowerPreset)
+                    put("ble_discovery_interval_ms", bleDiscoveryIntervalMs)
+                    put("ble_discovery_interval_idle_ms", bleDiscoveryIntervalIdleMs)
+                    put("ble_scan_duration_ms", bleScanDurationMs)
+                    put("ble_advertising_refresh_interval_ms", bleAdvertisingRefreshIntervalMs)
                 }.toString()
 
         is InterfaceConfig.TCPServer ->

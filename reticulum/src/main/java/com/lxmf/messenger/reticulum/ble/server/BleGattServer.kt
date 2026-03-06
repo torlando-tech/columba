@@ -375,6 +375,33 @@ class BleGattServer(
         }
 
     /**
+     * Immediately close GATT server without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Safe to call multiple times (idempotent).
+     */
+    fun closeImmediate() {
+        try {
+            if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+                Log.w(TAG, "closeImmediate() called off Main thread, skipping")
+                return
+            }
+            // Cancel all keepalive jobs
+            peripheralKeepaliveJobs.values.forEach { it.cancel() }
+            peripheralKeepaliveJobs.clear()
+            // Close server
+            gattServer?.close()
+            gattServer = null
+            txCharacteristic = null
+            _isServerOpen.value = false
+            Log.d(TAG, "GATT server closed immediately")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission denied in closeImmediate", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in closeImmediate", e)
+        }
+    }
+
+    /**
      * Send data to a specific central (or all centrals if address is null).
      *
      * @param data Data to send

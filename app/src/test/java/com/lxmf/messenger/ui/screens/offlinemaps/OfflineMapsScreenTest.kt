@@ -407,7 +407,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysCheckForUpdatesButton() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -423,8 +423,24 @@ class OfflineMapsScreenTest {
     }
 
     @Test
+    fun regionCard_noCheckForUpdatesWithoutTileVersion() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = null)
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = null,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Check for Updates", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
     fun regionCard_displaysCheckingState() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -447,7 +463,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysUpdateAvailableState() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -471,7 +487,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysUpToDateState() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -495,7 +511,7 @@ class OfflineMapsScreenTest {
     @Test
     fun regionCard_checkForUpdatesCallsCallback() {
         var callbackCalled = false
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
 
         composeTestRule.setContent {
             OfflineMapRegionCard(
@@ -514,7 +530,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_showsUpdateDialogOnUpdateNowClick() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, name = "Test Region")
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, name = "Test Region", tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -540,7 +556,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_updateDialogCancelDismisses() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -569,7 +585,7 @@ class OfflineMapsScreenTest {
     @Test
     fun regionCard_updateDialogConfirmCallsCallback() {
         var callbackCalled = false
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -649,7 +665,7 @@ class OfflineMapsScreenTest {
 
     @Test
     fun regionCard_displaysUpdateCheckError() {
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,
@@ -675,7 +691,7 @@ class OfflineMapsScreenTest {
     @Test
     fun regionCard_retryButtonCallsCheckForUpdates() {
         var callbackCalled = false
-        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE, tileVersion = "v1")
         val updateResult =
             com.lxmf.messenger.viewmodel.UpdateCheckResult(
                 regionId = 1L,

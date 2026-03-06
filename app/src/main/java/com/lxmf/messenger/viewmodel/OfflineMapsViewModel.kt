@@ -364,7 +364,11 @@ class OfflineMapsViewModel
                                 )
                         )
                     }
-                } catch (e: Exception) {
+                } catch (
+                    @Suppress("SwallowedException") e: Exception,
+                ) {
+                    // Defensive: fetchCurrentTileVersion() catches its own exceptions and
+                    // returns null, but we guard against future contract changes here.
                     Log.e(TAG, "Failed to check for updates", e)
                     _updateCheckResults.value = _updateCheckResults.value + (
                         region.id to

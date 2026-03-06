@@ -411,100 +411,102 @@ fun OfflineMapRegionCard(
                         )
                     }
 
-                    // Update check button and status
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        when {
-                            updateCheckResult?.isChecking == true -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                                Text(
-                                    text = "Checking...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            updateCheckResult?.hasUpdate == true -> {
-                                Icon(
-                                    imageVector = Icons.Default.Update,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = "Update available",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                TextButton(
-                                    onClick = { showUpdateDialog = true },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp),
-                                ) {
-                                    Text("Update Now", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                            updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                )
-                                Text(
-                                    text = "Up to date",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                )
-                            }
-                            updateCheckResult?.error != null -> {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                                Text(
-                                    text = updateCheckResult.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                TextButton(
-                                    onClick = onCheckForUpdates,
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
+                    // Update check button and status (only for regions with version tracking)
+                    if (region.tileVersion != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            when {
+                                updateCheckResult?.isChecking == true -> {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Retry", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                            else -> {
-                                TextButton(
-                                    onClick = onCheckForUpdates,
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
+                                    Text(
+                                        text = "Checking...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Check for Updates", style = MaterialTheme.typography.labelSmall)
+                                }
+                                updateCheckResult?.hasUpdate == true -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Update,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = "Update available",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    TextButton(
+                                        onClick = { showUpdateDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(28.dp),
+                                    ) {
+                                        Text("Update Now", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                    )
+                                    Text(
+                                        text = "Up to date",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                    )
+                                }
+                                updateCheckResult?.error != null -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                    Text(
+                                        text = updateCheckResult.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                    TextButton(
+                                        onClick = onCheckForUpdates,
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(28.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Retry", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                else -> {
+                                    TextButton(
+                                        onClick = onCheckForUpdates,
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(28.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Check for Updates", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
                         }
-                    }
+                    } // end tileVersion != null check
                 }
             }
 

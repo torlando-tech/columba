@@ -300,7 +300,8 @@ class OfflineMapsScreenTest {
         composeTestRule.onNodeWithContentDescription("Delete").performClick()
 
         composeTestRule.onNodeWithText("Delete Offline Map").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Are you sure you want to delete \"Test Region\"? This will free up 15 MB of storage.")
+        composeTestRule
+            .onNodeWithText("Are you sure you want to delete \"Test Region\"? This will free up 15 MB of storage.")
             .assertIsDisplayed()
     }
 
@@ -354,7 +355,8 @@ class OfflineMapsScreenTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Delete").performClick()
-        composeTestRule.onNodeWithText("Delete", useUnmergedTree = true)
+        composeTestRule
+            .onNodeWithText("Delete", useUnmergedTree = true)
             .performClick()
 
         assert(deleteCalled) { "onDelete should have been called" }
@@ -646,6 +648,59 @@ class OfflineMapsScreenTest {
     }
 
     @Test
+    fun regionCard_displaysUpdateCheckError() {
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = null,
+                latestVersion = null,
+                isChecking = false,
+                error = "Could not reach update server",
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Could not reach update server", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Retry", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun regionCard_retryButtonCallsCheckForUpdates() {
+        var callbackCalled = false
+        val region = createTestRegion(status = OfflineMapRegion.Status.COMPLETE)
+        val updateResult =
+            com.lxmf.messenger.viewmodel.UpdateCheckResult(
+                regionId = 1L,
+                currentVersion = null,
+                latestVersion = null,
+                isChecking = false,
+                error = "Could not reach update server",
+            )
+
+        composeTestRule.setContent {
+            OfflineMapRegionCard(
+                region = region,
+                onDelete = {},
+                isDeleting = false,
+                updateCheckResult = updateResult,
+                onCheckForUpdates = { callbackCalled = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Retry", useUnmergedTree = true).performClick()
+
+        assert(callbackCalled) { "onCheckForUpdates should have been called on retry" }
+    }
+
+    @Test
     fun regionCard_errorStatusNoCheckForUpdates() {
         val region =
             createTestRegion(
@@ -681,8 +736,8 @@ class OfflineMapsScreenTest {
         errorMessage: String? = null,
         completedAt: Long? = System.currentTimeMillis(),
         tileVersion: String? = null,
-    ): OfflineMapRegion {
-        return OfflineMapRegion(
+    ): OfflineMapRegion =
+        OfflineMapRegion(
             id = id,
             name = name,
             centerLatitude = 37.7749,
@@ -701,5 +756,4 @@ class OfflineMapsScreenTest {
             source = OfflineMapRegion.Source.HTTP,
             tileVersion = tileVersion,
         )
-    }
 }

@@ -462,6 +462,32 @@ fun OfflineMapRegionCard(
                                     color = MaterialTheme.colorScheme.tertiary,
                                 )
                             }
+                            updateCheckResult?.error != null -> {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Text(
+                                    text = updateCheckResult.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                TextButton(
+                                    onClick = onCheckForUpdates,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Retry", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                             else -> {
                                 TextButton(
                                     onClick = onCheckForUpdates,
@@ -494,11 +520,12 @@ fun OfflineMapRegionCard(
                         Icon(
                             imageVector = if (region.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = if (region.isDefault) "Remove as default" else "Set as default",
-                            tint = if (region.isDefault) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            tint =
+                                if (region.isDefault) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         )
                     }
                 }

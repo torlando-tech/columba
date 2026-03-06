@@ -2,6 +2,7 @@ package com.lxmf.messenger
 
 import android.app.Application
 import android.os.StrictMode
+import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -39,6 +40,7 @@ class ColumbaApplication : Application() {
     companion object {
         /** Timeout for IPC calls to prevent ANR during initialization */
         internal const val IPC_TIMEOUT_MS = 5000L
+        internal const val PEER_IDENTITY_BULK_RESTORE_DELAY_MS = 5000L
     }
 
     @Inject
@@ -58,6 +60,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var conversationRepository: ConversationRepository
+
+    @Inject
+    lateinit var contactRepository: ContactRepository
 
     @Inject
     lateinit var interfaceRepository: InterfaceRepository
@@ -398,7 +403,6 @@ class ColumbaApplication : Application() {
                                 }
                             }
 
-                            // Restore peer identities from database to enable message sending
                             restorePeerIdentities(reticulumProtocol as ServiceReticulumProtocol)
 
                             // Start the message collector service after Reticulum is ready
@@ -594,7 +598,6 @@ class ColumbaApplication : Application() {
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
-                    // Restore peer identities from database to enable message sending
                     restorePeerIdentities(serviceProtocol)
 
                     // Start the message collector and other services after Reticulum is ready
@@ -619,10 +622,41 @@ class ColumbaApplication : Application() {
     private fun restorePeerIdentities(serviceProtocol: ServiceReticulumProtocol) {
         applicationScope.launch(Dispatchers.IO) {
             try {
-                restorePeerIdentitiesInBatches(serviceProtocol)
+                val restoredContactIdentityHashes = restoreContactIdentities(serviceProtocol)
+                delay(PEER_IDENTITY_BULK_RESTORE_DELAY_MS)
+                restorePeerIdentitiesInBatches(serviceProtocol, restoredContactIdentityHashes)
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error restoring peer identities", e)
             }
+        }
+    }
+
+    private suspend fun restoreContactIdentities(serviceProtocol: ServiceReticulumProtocol): Set<String> {
+        val contactIdentities = contactRepository.getRestorableContactIdentitiesForActiveIdentity()
+        if (contactIdentities.isEmpty()) {
+            android.util.Log.d("ColumbaApplication", "No restorable contact identities found")
+            return emptySet()
+        }
+
+        return try {
+            serviceProtocol
+                .restorePeerIdentities(contactIdentities)
+                .onSuccess { count ->
+                    android.util.Log.d(
+                        "ColumbaApplication",
+                        "✓ Restored $count prioritized contact identities before bulk peer restore",
+                    )
+                }.onFailure { error ->
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Failed to restore prioritized contact identities: ${error.message}",
+                        error,
+                    )
+                }
+            contactIdentities.map { it.first }.toSet()
+        } catch (e: Exception) {
+            android.util.Log.e("ColumbaApplication", "Error restoring prioritized contact identities", e)
+            emptySet()
         }
     }
 
@@ -630,46 +664,56 @@ class ColumbaApplication : Application() {
      * Restore peer identities in batches to prevent OOM on devices with large amounts of identity data.
      * Uses pagination to load peer identities in manageable chunks.
      */
-    private suspend fun restorePeerIdentitiesInBatches(serviceProtocol: ServiceReticulumProtocol) {
+    private suspend fun restorePeerIdentitiesInBatches(
+        serviceProtocol: ServiceReticulumProtocol,
+        alreadyRestoredIdentityHashes: Set<String>,
+    ) {
         val batchSize = 500 // Process 500 peer identities at a time to limit memory usage
         var offset = 0
         var totalRestored = 0
 
         android.util.Log.d("ColumbaApplication", "Starting batched peer identity restoration (batch size: $batchSize)")
 
-        var batch =
-            try {
-                conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
-            } catch (e: Exception) {
-                android.util.Log.e("ColumbaApplication", "Error fetching initial peer identity batch", e)
-                emptyList()
+        while (true) {
+            val rawBatch =
+                try {
+                    conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
+                } catch (e: Exception) {
+                    android.util.Log.e("ColumbaApplication", "Error fetching peer identity batch at offset $offset", e)
+                    emptyList()
+                }
+
+            if (rawBatch.isEmpty()) {
+                break
             }
 
-        while (batch.isNotEmpty()) {
-            android.util.Log.d("ColumbaApplication", "Processing batch ${offset / batchSize + 1}: ${batch.size} peer identities (offset $offset)")
+            val batch = rawBatch.filterNot { alreadyRestoredIdentityHashes.contains(it.first) }
+            android.util.Log.d(
+                "ColumbaApplication",
+                "Processing batch ${offset / batchSize + 1}: ${batch.size}/${rawBatch.size} peer identities (offset $offset)",
+            )
 
-            val batchCount = batch.size
+            val batchCount = rawBatch.size
             try {
-                serviceProtocol
-                    .restorePeerIdentities(batch)
-                    .onSuccess { count ->
-                        totalRestored += count
-                        android.util.Log.d("ColumbaApplication", "✓ Restored $count peer identities from batch (total: $totalRestored)")
-                    }.onFailure { error ->
-                        android.util.Log.w("ColumbaApplication", "Failed to restore peer identity batch at offset $offset: ${error.message}", error)
-                    }
+                if (batch.isNotEmpty()) {
+                    serviceProtocol
+                        .restorePeerIdentities(batch)
+                        .onSuccess { count ->
+                            totalRestored += count
+                            android.util.Log.d("ColumbaApplication", "✓ Restored $count peer identities from batch (total: $totalRestored)")
+                        }.onFailure { error ->
+                            android.util.Log.w("ColumbaApplication", "Failed to restore peer identity batch at offset $offset: ${error.message}", error)
+                        }
+                }
 
                 offset += batchSize
-                batch =
-                    if (batchCount < batchSize) {
-                        emptyList()
-                    } else {
-                        kotlinx.coroutines.yield() // Let GC reclaim previous batch's bridge objects
-                        conversationRepository.getPeerIdentitiesBatch(batchSize, offset)
-                    }
+                if (batchCount < batchSize) {
+                    break
+                }
+                kotlinx.coroutines.yield()
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error processing peer identity batch at offset $offset", e)
-                batch = emptyList()
+                break
             }
         }
 

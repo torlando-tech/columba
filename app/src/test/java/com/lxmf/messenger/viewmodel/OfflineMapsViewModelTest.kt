@@ -1077,27 +1077,34 @@ class OfflineMapsViewModelTest {
     @Test
     fun `clearUpdateCheckResult removes the result for a region`() =
         runTest {
-            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+                viewModel = createViewModel()
 
-                // First trigger a check
-                viewModel.checkForUpdates(testRegion)
-                var state = expectMostRecentItem()
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                // Verify it's there
-                assertTrue(state.updateCheckResults.containsKey(42L))
+                    // First trigger a check
+                    viewModel.checkForUpdates(testRegion)
+                    var state = expectMostRecentItem()
 
-                // Clear it
-                viewModel.clearUpdateCheckResult(42L)
-                state = awaitItem()
+                    // Verify it's there
+                    assertTrue(state.updateCheckResults.containsKey(42L))
 
-                // Verify it's gone
-                assertFalse(state.updateCheckResults.containsKey(42L))
+                    // Clear it
+                    viewModel.clearUpdateCheckResult(42L)
+                    state = awaitItem()
 
-                cancelAndConsumeRemainingEvents()
+                    // Verify it's gone
+                    assertFalse(state.updateCheckResults.containsKey(42L))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 
@@ -1121,27 +1128,34 @@ class OfflineMapsViewModelTest {
     @Test
     fun `clearUpdateCheckResult only removes specified region`() =
         runTest {
-            val region1 = createTestRegion(TestRegionConfig(id = 1L))
-            val region2 = createTestRegion(TestRegionConfig(id = 2L))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val region1 = createTestRegion(TestRegionConfig(id = 1L))
+                val region2 = createTestRegion(TestRegionConfig(id = 2L))
+                viewModel = createViewModel()
 
-                viewModel.checkForUpdates(region1)
-                viewModel.checkForUpdates(region2)
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                var state = expectMostRecentItem()
-                assertEquals(2, state.updateCheckResults.size)
+                    viewModel.checkForUpdates(region1)
+                    viewModel.checkForUpdates(region2)
 
-                viewModel.clearUpdateCheckResult(1L)
+                    var state = expectMostRecentItem()
+                    assertEquals(2, state.updateCheckResults.size)
 
-                state = awaitItem()
-                assertEquals(1, state.updateCheckResults.size)
-                assertFalse(state.updateCheckResults.containsKey(1L))
-                assertTrue(state.updateCheckResults.containsKey(2L))
+                    viewModel.clearUpdateCheckResult(1L)
 
-                cancelAndConsumeRemainingEvents()
+                    state = awaitItem()
+                    assertEquals(1, state.updateCheckResults.size)
+                    assertFalse(state.updateCheckResults.containsKey(1L))
+                    assertTrue(state.updateCheckResults.containsKey(2L))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 

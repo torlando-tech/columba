@@ -1611,7 +1611,7 @@ class OfflineMapDownloadViewModelTest {
         }
 
     @Test
-    fun `initForUpdate falls back to MEDIUM radius for non-standard km`() =
+    fun `initForUpdate snaps to nearest radius for non-standard km`() =
         runTest {
             val existingRegion =
                 OfflineMapRegion(
@@ -1619,7 +1619,7 @@ class OfflineMapDownloadViewModelTest {
                     name = "Custom",
                     centerLatitude = 51.5074,
                     centerLongitude = -0.1278,
-                    radiusKm = 7, // Not a standard RadiusOption
+                    radiusKm = 7, // Not a standard RadiusOption — nearest is SMALL (5km)
                     minZoom = 0,
                     maxZoom = 14,
                     status = OfflineMapRegion.Status.COMPLETE,
@@ -1638,7 +1638,7 @@ class OfflineMapDownloadViewModelTest {
             viewModel = createViewModel()
             viewModel.initForUpdate(42L)
 
-            assertEquals(RadiusOption.MEDIUM, viewModel.state.value.radiusOption)
+            assertEquals(RadiusOption.SMALL, viewModel.state.value.radiusOption)
         }
 
     // endregion

@@ -84,12 +84,20 @@ private const val TAG = "OfflineMapDownload"
 fun OfflineMapDownloadScreen(
     onNavigateBack: () -> Unit = {},
     onDownloadComplete: () -> Unit = {},
+    updateRegionId: Long? = null,
     viewModel: OfflineMapDownloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCancelDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    // Pre-fill wizard when updating an existing region
+    LaunchedEffect(updateRegionId) {
+        if (updateRegionId != null) {
+            viewModel.initForUpdate(updateRegionId)
+        }
+    }
 
     // Handle completion — consolidate all post-download notifications
     // into a single Toast so they don't conflict or get lost on navigation.

@@ -71,6 +71,7 @@ import java.util.Locale
 fun OfflineMapsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToDownload: () -> Unit = {},
+    onNavigateToUpdate: (Long) -> Unit = {},
     viewModel: OfflineMapsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -195,9 +196,7 @@ fun OfflineMapsScreen(
                         updateCheckResult = state.updateCheckResults[region.id],
                         onCheckForUpdates = { viewModel.checkForUpdates(region) },
                         onUpdateNow = {
-                            // Navigate to download screen to re-download the region
-                            // For now, just trigger the update check - full re-download TBD
-                            viewModel.checkForUpdates(region)
+                            onNavigateToUpdate(region.id)
                         },
                         onToggleDefault = {
                             if (region.isDefault) {

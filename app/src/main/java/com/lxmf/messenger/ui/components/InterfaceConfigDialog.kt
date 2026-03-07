@@ -731,12 +731,12 @@ fun AndroidBLEFields(
         enabled = isCustom,
     )
 
-    // Warn when scan duration >= active scan interval (scans may overlap)
+    // Warn when scan duration is close to or exceeds the active scan interval (high duty-cycle)
     val scanDuration = configState.bleScanDurationMs.toLongOrNull() ?: 10000L
     val activeInterval = configState.bleDiscoveryIntervalMs.toLongOrNull() ?: 5000L
     if (isCustom && scanDuration >= activeInterval) {
         Text(
-            "Warning: scan duration ≥ active scan interval — scans may overlap",
+            "Warning: scan duration ≥ active interval — high duty-cycle scanning will increase battery usage",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )

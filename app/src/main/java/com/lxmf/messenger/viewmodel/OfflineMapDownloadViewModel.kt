@@ -14,6 +14,7 @@ import com.lxmf.messenger.di.IoDispatcher
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.map.OfflineStyleInliner
+import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -703,6 +704,21 @@ class OfflineMapDownloadViewModel
                                         sizeBytes = sizeBytes,
                                         maplibreRegionId = maplibreRegionId,
                                     )
+
+                                    // 1b. Record the tile version so "Check for Updates"
+                                    //     can compare against the server later.
+                                    try {
+                                        val tileVersion =
+                                            TileDownloadManager.fetchCurrentTileVersion()
+                                        if (tileVersion != null) {
+                                            offlineMapRegionRepository.updateTileVersion(
+                                                regionId,
+                                                tileVersion,
+                                            )
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to record tile version (non-fatal)", e)
+                                    }
 
                                     // 2. Show "Finalizing..." while style caching runs.
                                     //    This can take up to ~36s worst-case (3 retries ×

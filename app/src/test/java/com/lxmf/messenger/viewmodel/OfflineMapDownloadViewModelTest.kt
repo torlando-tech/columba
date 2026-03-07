@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
+import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.repository.SettingsRepository
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -17,7 +18,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -76,6 +79,8 @@ class OfflineMapDownloadViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        mockkObject(TileDownloadManager)
+        coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
         context = RuntimeEnvironment.getApplication()
         offlineMapRegionRepository = mockk()
@@ -89,6 +94,7 @@ class OfflineMapDownloadViewModelTest {
         coEvery { offlineMapRegionRepository.markError(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.updateLocalStylePath(any(), any()) } just Runs
+        coEvery { offlineMapRegionRepository.updateTileVersion(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
 
         // Setup MapLibreOfflineManager mock behavior
@@ -121,6 +127,7 @@ class OfflineMapDownloadViewModelTest {
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
+        unmockkObject(TileDownloadManager)
         Dispatchers.resetMain()
         clearAllMocks()
     }

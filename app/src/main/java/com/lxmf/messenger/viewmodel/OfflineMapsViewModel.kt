@@ -377,7 +377,7 @@ class OfflineMapsViewModel
                                 currentVersion = region.tileVersion,
                                 latestVersion = null,
                                 isChecking = false,
-                                error = "Check failed: ${e.message}",
+                                error = "Check failed: ${e.message ?: "Unknown error"}",
                             )
                     )
                 }

@@ -26,11 +26,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.coroutines.resume
 import kotlin.math.cos
 
 /**
@@ -516,28 +518,33 @@ class OfflineMapDownloadViewModel
             try {
                 val oldRegion = offlineMapRegionRepository.getRegionById(regionId)
                 if (oldRegion != null) {
-                    // Delete MapLibre offline region
+                    // Delete MapLibre offline region and await the result
                     oldRegion.maplibreRegionId?.let { mlId ->
-                        mapLibreOfflineManager.deleteRegion(mlId) { success ->
-                            if (!success) Log.w(TAG, "Failed to delete old MapLibre region: $mlId")
-                        }
+                        val success =
+                            suspendCancellableCoroutine { cont ->
+                                mapLibreOfflineManager.deleteRegion(mlId) { result ->
+                                    cont.resume(result)
+                                }
+                            }
+                        if (!success) Log.w(TAG, "Failed to delete old MapLibre region: $mlId")
                     }
-                    // Delete legacy MBTiles file
-                    oldRegion.mbtilesPath?.let { path ->
-                        val file = java.io.File(path)
-                        if (file.exists() && !file.delete()) {
-                            Log.w(TAG, "Failed to delete old MBTiles file: $path")
+                    // Delete legacy MBTiles file and cached style JSON
+                    withContext(Dispatchers.IO) {
+                        oldRegion.mbtilesPath?.let { path ->
+                            val file = java.io.File(path)
+                            if (file.exists() && !file.delete()) {
+                                Log.w(TAG, "Failed to delete old MBTiles file: $path")
+                            }
                         }
-                    }
-                    // Delete cached style JSON
-                    oldRegion.localStylePath?.let { path ->
-                        val file = java.io.File(path)
-                        if (file.exists() && !file.delete()) {
-                            Log.w(TAG, "Failed to delete old style file: $path")
+                        oldRegion.localStylePath?.let { path ->
+                            val file = java.io.File(path)
+                            if (file.exists() && !file.delete()) {
+                                Log.w(TAG, "Failed to delete old style file: $path")
+                            }
                         }
                     }
                 }
-                // Delete DB record
+                // Delete DB record only after MapLibre + file cleanup succeed
                 offlineMapRegionRepository.deleteRegion(regionId)
                 Log.d(TAG, "Deleted old region $regionId after successful update")
             } catch (e: Exception) {

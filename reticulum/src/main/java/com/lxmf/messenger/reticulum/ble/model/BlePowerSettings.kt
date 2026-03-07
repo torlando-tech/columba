@@ -12,7 +12,8 @@ enum class BlePowerPreset {
     PERFORMANCE,
     BALANCED,
     BATTERY_SAVER,
-    CUSTOM;
+    CUSTOM,
+    ;
 
     companion object {
         fun getSettings(preset: BlePowerPreset): BlePowerSettings =
@@ -26,8 +27,10 @@ enum class BlePowerPreset {
         fun fromString(name: String): BlePowerPreset =
             try {
                 valueOf(name.uppercase())
-            } catch (e: IllegalArgumentException) {
-                BALANCED
+            } catch (
+                @Suppress("SwallowedException") e: IllegalArgumentException,
+            ) {
+                BALANCED // Unknown preset name — fall back to balanced
             }
     }
 }

@@ -49,6 +49,7 @@ import kotlinx.coroutines.withContext
  * @property scope Coroutine scope for async operations
  */
 @SuppressLint("MissingPermission")
+@Suppress("TooManyFunctions") // Cohesive BLE scanner — splitting would be artificial
 class BleScanner(
     private val context: Context,
     private val bluetoothAdapter: BluetoothAdapter,

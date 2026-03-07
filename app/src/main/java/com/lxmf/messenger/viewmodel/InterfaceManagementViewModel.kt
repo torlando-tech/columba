@@ -870,6 +870,7 @@ class InterfaceManagementViewModel
         /**
          * Convert InterfaceConfigState to InterfaceConfig for saving.
          */
+        @Suppress("CyclomaticComplexMethod") // One branch per interface type — inherent complexity
         private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig =
             when (state.type) {
                 "AutoInterface" ->

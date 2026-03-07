@@ -58,8 +58,13 @@ class BleAdvertiser(
         private set
 
     fun updatePowerSettings(settings: BlePowerSettings) {
+        val oldInterval = advertisingRefreshIntervalMs
         advertisingRefreshIntervalMs = settings.advertisingRefreshIntervalMs
         Log.d(TAG, "Power settings updated: refreshInterval=${advertisingRefreshIntervalMs}ms")
+        // Restart the refresh job so the new interval takes effect immediately
+        if (_isAdvertising.value && oldInterval != advertisingRefreshIntervalMs) {
+            startRefreshJob()
+        }
     }
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser

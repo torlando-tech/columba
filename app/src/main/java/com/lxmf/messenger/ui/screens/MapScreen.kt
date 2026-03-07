@@ -339,7 +339,6 @@ fun MapScreen(
     LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) {
         val map = mapLibreMap ?: return@LaunchedEffect
         if (!state.defaultRegionLoaded) return@LaunchedEffect
-        if (hasInitiallyCentered) return@LaunchedEffect
 
         val savedPos = state.lastCameraPosition
         val defaultCenter = state.defaultRegionCenter
@@ -347,12 +346,18 @@ fun MapScreen(
         val initialLat: Double
         val initialLng: Double
         val initialZoom: Double
+        var usedMeaningfulPosition = true
         when {
+            // Always restore saved viewport — handles config change and tab switch
+            // where ViewModel survives but MapView is recreated at default 0,0.
             savedPos != null -> {
                 initialLat = savedPos.latitude
                 initialLng = savedPos.longitude
                 initialZoom = savedPos.zoom
             }
+            // For remaining sources, skip if already centered via another
+            // LaunchedEffect (focus coordinates or GPS).
+            hasInitiallyCentered -> return@LaunchedEffect
             userLoc != null -> {
                 initialLat = userLoc.latitude
                 initialLng = userLoc.longitude
@@ -364,9 +369,12 @@ fun MapScreen(
                 initialZoom = defaultCenter.zoom
             }
             else -> {
+                // No position source yet — show world view but don't lock out
+                // the GPS LaunchedEffect, which may arrive later.
                 initialLat = 0.0
                 initialLng = 0.0
                 initialZoom = 2.0
+                usedMeaningfulPosition = false
             }
         }
         val initialPosition =
@@ -377,7 +385,9 @@ fun MapScreen(
                 .build()
         map.cameraPosition = initialPosition
         metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
-        hasInitiallyCentered = true
+        if (usedMeaningfulPosition) {
+            hasInitiallyCentered = true
+        }
     }
 
     // Enable location component when permission is granted
@@ -596,7 +606,7 @@ fun MapScreen(
 
                         // Camera position is now set in a LaunchedEffect that
                         // waits for defaultRegionLoaded to avoid the 0,0 race condition.
-                        // See LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) below.
+                        // See LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) above.
 
                         // Add camera move listener to update scale bar
                         // Measure actual distance between two screen points for accuracy

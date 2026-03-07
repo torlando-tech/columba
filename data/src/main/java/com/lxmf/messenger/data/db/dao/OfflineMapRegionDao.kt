@@ -230,7 +230,7 @@ interface OfflineMapRegionDao {
      * Get the first completed region (no style requirement).
      * Used as fallback when no region is explicitly marked as default.
      */
-    @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' LIMIT 1")
+    @Query("SELECT * FROM offline_map_regions WHERE status = 'COMPLETE' ORDER BY createdAt ASC LIMIT 1")
     suspend fun getFirstCompletedRegion(): OfflineMapRegionEntity?
 
     /**

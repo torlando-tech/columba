@@ -960,4 +960,48 @@ class AnnounceStreamViewModelTest {
             assertTrue("Should have called deleteAllAnnounces as fallback", deleteAllCalled)
             coVerify(exactly = 0) { announceRepository.deleteAllAnnouncesExceptContacts(any()) }
         }
+
+    // ========== CancellationException Propagation Tests ==========
+
+    @Test
+    fun `reachable count loop stops when viewModelScope is cancelled`() =
+        runTest {
+            // Enable periodic updates with a short interval for this test.
+            // IMPORTANT: Do NOT use advanceUntilIdle() while the while(true) loop is
+            // active — it drains all pending tasks, but the loop keeps scheduling more,
+            // causing the test to hang. Use advanceTimeBy() + runCurrent() instead.
+            AnnounceStreamViewModel.updateIntervalMs = 100L
+            networkStatusFlow.value = NetworkStatus.READY
+
+            var pathTableCallCount = 0
+            coEvery { reticulumProtocol.getPathTableHashes() } answers {
+                pathTableCallCount++
+                emptyList()
+            }
+
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            // Run the init block tasks (startCollectingAnnouncesWhenReady + first loop iteration)
+            runCurrent()
+
+            // Advance past the first delay + second iteration
+            advanceTimeBy(150)
+            runCurrent()
+            val callsBeforeCancel = pathTableCallCount
+            assertTrue("Loop should have called getPathTableHashes at least once", callsBeforeCancel >= 1)
+
+            // Cancel the viewModelScope (simulates ViewModel clearing)
+            viewModel.viewModelScope.cancel()
+            runCurrent()
+
+            // Advance time well past several more intervals
+            advanceTimeBy(500)
+            runCurrent()
+
+            // No additional calls should have been made after cancellation
+            assertEquals(
+                "Loop should stop after scope cancellation (CancellationException must propagate)",
+                callsBeforeCancel,
+                pathTableCallCount,
+            )
+        }
 }

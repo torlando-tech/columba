@@ -544,8 +544,10 @@ class AnnounceStreamViewModel
             }
         }
 
-        // TODO: viewModelScope is already cancelled here; shutdown is managed
-        // by ColumbaApplication. Consider removing or moving to a separate scope.
+        // TODO: viewModelScope is cancelled shortly after onCleared() returns (as a
+        // registered Closeable), so the coroutine launched below is likely cancelled
+        // before reticulumProtocol.shutdown() executes. Shutdown is managed by
+        // ColumbaApplication. Consider removing or moving to a separate scope.
         override fun onCleared() {
             super.onCleared()
             // Shutdown Reticulum when ViewModel is cleared

@@ -380,11 +380,16 @@ class BleGattServer(
      * Safe to call from any thread and multiple times (idempotent).
      */
     fun closeImmediate() {
+        // Separate try blocks so a CME in keepalive cleanup can't prevent gattServer.close()
         try {
-            // Cancel all keepalive jobs
-            peripheralKeepaliveJobs.values.forEach { it.cancel() }
+            val snapshot = ArrayList(peripheralKeepaliveJobs.values)
             peripheralKeepaliveJobs.clear()
-            // Close server (BluetoothGattServer.close() is an IPC call, thread-safe)
+            snapshot.forEach { it.cancel() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling keepalive jobs in closeImmediate", e)
+        }
+
+        try {
             gattServer?.close()
             gattServer = null
             txCharacteristic = null

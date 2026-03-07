@@ -907,10 +907,10 @@ fun ColumbaNavigation(
             "ble_connection_status",
             "theme_management",
             "offline_maps",
-            "offline_map_download",
         )
     val hideBottomNavPrefixes =
         listOf(
+            "offline_map_download",
             "messaging/",
             "announce_detail/",
             "message_detail/",
@@ -1852,14 +1852,28 @@ fun ColumbaNavigation(
                         OfflineMapsScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onNavigateToDownload = { navController.navigate("offline_map_download") },
+                            onNavigateToUpdate = { regionId ->
+                                navController.navigate("offline_map_download?updateRegionId=$regionId")
+                            },
                         )
                     }
 
-                    // Offline Map download wizard
-                    composable("offline_map_download") {
+                    // Offline Map download wizard (with optional update parameter)
+                    composable(
+                        route = "offline_map_download?updateRegionId={updateRegionId}",
+                        arguments =
+                            listOf(
+                                navArgument("updateRegionId") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val updateRegionId = backStackEntry.arguments?.getLong("updateRegionId") ?: -1L
                         OfflineMapDownloadScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onDownloadComplete = { navController.popBackStack() },
+                            updateRegionId = if (updateRegionId > 0) updateRegionId else null,
                         )
                     }
 

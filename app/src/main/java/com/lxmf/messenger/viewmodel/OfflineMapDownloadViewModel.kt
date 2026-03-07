@@ -548,9 +548,15 @@ class OfflineMapDownloadViewModel
                     Log.e(TAG, "Partial cleanup failure for region $regionId, removing DB record anyway", e)
                 }
             }
-            // Always remove the DB record so the user never sees duplicate entries
-            offlineMapRegionRepository.deleteRegion(regionId)
-            Log.d(TAG, "Deleted old region $regionId after update")
+            // Always remove the DB record so the user never sees duplicate entries.
+            // Wrapped in its own try/catch so a Room exception here doesn't propagate
+            // to the onComplete handler and corrupt the download wizard's completion state.
+            try {
+                offlineMapRegionRepository.deleteRegion(regionId)
+                Log.d(TAG, "Deleted old region $regionId after update")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to remove old region DB record $regionId", e)
+            }
         }
 
         /**
@@ -725,13 +731,24 @@ class OfflineMapDownloadViewModel
 
                                     // 1b. Record the tile version so "Check for Updates"
                                     //     can compare against the server later.
-                                    //     Uses the snapshot taken before download started
-                                    //     so it matches the actual downloaded tiles.
-                                    if (tileVersionSnapshot != null) {
+                                    //     Prefers the pre-download snapshot (matches
+                                    //     actual tiles); falls back to a fresh fetch so
+                                    //     the region doesn't permanently lose update
+                                    //     checking if the snapshot was null.
+                                    val tileVersion =
+                                        tileVersionSnapshot ?: try {
+                                            TileDownloadManager.fetchCurrentTileVersion()
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "Failed to fetch tile version (non-fatal)", e)
+                                            null
+                                        }
+                                    if (tileVersion != null) {
                                         offlineMapRegionRepository.updateTileVersion(
                                             regionId,
-                                            tileVersionSnapshot,
+                                            tileVersion,
                                         )
+                                    } else {
+                                        Log.w(TAG, "Tile version unavailable; update checking disabled for region $regionId")
                                     }
 
                                     // 2. Show "Finalizing..." while style caching runs.

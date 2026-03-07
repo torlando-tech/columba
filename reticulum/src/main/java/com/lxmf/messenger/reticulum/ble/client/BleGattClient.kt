@@ -1220,6 +1220,33 @@ class BleGattClient(
     }
 
     /**
+     * Immediately close all GATT connections without coroutines.
+     * Called during forced shutdown (before System.exit).
+     * Safe to call from any thread and multiple times (idempotent).
+     */
+    @SuppressLint("MissingPermission")
+    fun closeImmediate() {
+        try {
+            val snapshot = connections.toMap()
+            connections.clear()
+            snapshot.values.forEach { connData ->
+                try {
+                    connData.keepaliveJob?.cancel()
+                    connData.gatt.disconnect()
+                    connData.gatt.close()
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Permission denied closing GATT to ${connData.gatt.device?.address}", e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error closing GATT to ${connData.gatt.device?.address}", e)
+                }
+            }
+            Log.d(TAG, "GATT client closed immediately (${snapshot.size} connections)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in closeImmediate", e)
+        }
+    }
+
+    /**
      * Shutdown the client and disconnect all devices.
      */
     suspend fun shutdown() {

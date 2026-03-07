@@ -2416,6 +2416,12 @@ class KotlinBLEBridge(
             Log.e(TAG, "Error in gattServer closeImmediate", e)
         }
 
+        try {
+            gattClient?.closeImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in gattClient closeImmediate", e)
+        }
+
         // Cancel scope (kills all pending coroutines)
         try {
             scope.cancel()

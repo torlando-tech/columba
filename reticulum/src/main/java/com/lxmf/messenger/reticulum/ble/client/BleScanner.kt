@@ -78,6 +78,7 @@ class BleScanner(
         activeScanIntervalMs = settings.discoveryIntervalMs
         idleScanIntervalMs = settings.discoveryIntervalIdleMs
         scanDurationMs = settings.scanDurationMs
+        currentScanInterval = activeScanIntervalMs
         Log.d(TAG, "Power settings updated: active=${activeScanIntervalMs}ms, idle=${idleScanIntervalMs}ms, duration=${scanDurationMs}ms")
     }
 

@@ -94,6 +94,7 @@ class MapViewModelTest {
         every { locationSharingManager.startSharing(any(), any(), any()) } just Runs
         every { locationSharingManager.stopSharing(any()) } just Runs
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
+        every { settingsRepository.mapMarkerDeclutterEnabledFlow } returns flowOf(true)
         coEvery { settingsRepository.markLocationPermissionSheetDismissed() } just Runs
         coEvery { settingsRepository.setHttpEnabledForDownload(any()) } just Runs
         coEvery { mapTileSourceManager.getMapStyle(any(), any()) } returns MapStyleResult.Online(MapTileSourceManager.DEFAULT_STYLE_URL)

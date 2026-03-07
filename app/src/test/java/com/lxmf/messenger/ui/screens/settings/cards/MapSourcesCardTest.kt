@@ -1,10 +1,12 @@
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import android.app.Application
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.lxmf.messenger.test.RegisterComponentActivityRule
@@ -53,7 +55,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Map Sources").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Map").assertIsDisplayed()
     }
 
     @Test
@@ -74,6 +76,23 @@ class MapSourcesCardTest {
         ).assertIsDisplayed()
     }
 
+    @Test
+    fun mapSourcesCard_displaysSectionHeaders() {
+        composeTestRule.setContent {
+            MapSourcesCard(
+                isExpanded = true,
+                onExpandedChange = {},
+                httpEnabled = true,
+                onHttpEnabledChange = {},
+                rmspEnabled = false,
+                onRmspEnabledChange = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Sources").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
+    }
+
     // ========== HTTP Toggle Tests ==========
 
     @Test
@@ -92,8 +111,8 @@ class MapSourcesCardTest {
         // HTTP toggle is shown in the expanded content with title and description
         composeTestRule.onNodeWithText("HTTP (OpenFreeMap)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Fetch tiles from the internet").assertIsDisplayed()
-        // HTTP toggle Switch is in the content
-        composeTestRule.onNode(isToggleable()).assertIsDisplayed()
+        // HTTP toggle switch is the first switch (second is marker declutter)
+        composeTestRule.onAllNodes(isToggleable())[0].assertIsDisplayed()
     }
 
     @Test
@@ -110,7 +129,7 @@ class MapSourcesCardTest {
         }
 
         // HTTP Switch should be on when httpEnabled = true
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+        composeTestRule.onAllNodes(isToggleable())[0].assertIsOn()
     }
 
     @Test
@@ -130,7 +149,7 @@ class MapSourcesCardTest {
         }
 
         // Click on the Switch to toggle
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
 
         assertFalse(httpEnabledResult)
     }
@@ -154,7 +173,7 @@ class MapSourcesCardTest {
         }
 
         // Click to disable - should work now
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
 
         // Callback should be called and HTTP should be disabled
         assertFalse("HTTP should be disabled after toggle", httpEnabledResult)
@@ -176,7 +195,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
 
         assertFalse(httpEnabledResult)
     }
@@ -197,7 +216,7 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
 
         assertTrue(httpEnabledResult)
     }
@@ -218,9 +237,9 @@ class MapSourcesCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText(
+        composeTestRule.onAllNodesWithText(
             "Offline maps available - they will be used when location is covered",
-        ).assertIsDisplayed()
+        ).assertCountEquals(1)
     }
 
     @Test
@@ -296,7 +315,7 @@ class MapSourcesCardTest {
         }
 
         // Should display without crashing with default rmspServerCount = 0
-        composeTestRule.onNodeWithText("Map Sources").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Map").assertIsDisplayed()
     }
 
     @Test
@@ -355,7 +374,7 @@ class MapSourcesCardTest {
         }
 
         // HTTP toggle should work (click the Switch in header)
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
         assertFalse(httpEnabled)
     }
 
@@ -376,7 +395,7 @@ class MapSourcesCardTest {
         }
 
         // Click on the Switch to toggle
-        composeTestRule.onNode(isToggleable()).performClick()
+        composeTestRule.onAllNodes(isToggleable())[0].performClick()
 
         assertEquals(true, toggledValue)
     }

@@ -93,6 +93,9 @@ import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.ShareLocationBottomSheet
 import com.lxmf.messenger.ui.components.SharingStatusChip
 import com.lxmf.messenger.ui.util.MarkerBitmapFactory
+import com.lxmf.messenger.ui.util.ScreenMarker
+import com.lxmf.messenger.ui.util.ScreenToLatLng
+import com.lxmf.messenger.ui.util.calculateDeclutteredPositions
 import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.ContactMarker
@@ -110,12 +113,14 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 /**
@@ -138,6 +143,24 @@ private const val EMPTY_MAP_STYLE = """
     ]
 }
 """
+
+// Declutter display constants (pin and line styling)
+private const val PIN_RADIUS_DP = 4f
+private const val LINE_WIDTH_DP = 1.5f
+
+private fun adaptivePinRadiusDp(context: Context): Float {
+    val densityDpi = context.resources.displayMetrics.densityDpi
+    return when {
+        densityDpi >= 400 -> 2.5f
+        densityDpi >= 320 -> 3f
+        else -> PIN_RADIUS_DP
+    }
+}
+
+internal fun deduplicateMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
+    markers
+        .groupBy { it.destinationHash.lowercase() }
+        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
 
 /**
  * Map screen displaying user location and contact markers.
@@ -206,6 +229,147 @@ fun MapScreen(
     var metersPerPixel by remember { mutableStateOf(1.0) }
     // Track current marker image IDs per contact to remove stale bitmaps on appearance change
     val markerImageIds = remember { mutableMapOf<String, String>() }
+    // Mutable ref for latest contact markers — accessed by onCameraIdleListener for declutter
+    val latestContactMarkers = remember { mutableStateOf(emptyList<ContactMarker>()) }
+    // Mutable ref for latest declutter toggle state — accessed by onCameraIdleListener
+    val latestDeclutterEnabled = remember { mutableStateOf(true) }
+
+    // Helper function to update declutter pin/line sources based on current camera position.
+    // Called from both LaunchedEffect(contactMarkers) and onCameraIdleListener.
+    fun updateDeclutterSources(
+        map: MapLibreMap,
+        style: Style,
+        markers: List<ContactMarker>,
+        declutterEnabled: Boolean,
+    ) {
+        // Keep only the newest marker per destination hash to avoid duplicate declutter
+        // connectors/pins when multiple location rows exist for the same sender.
+        val uniqueMarkers = deduplicateMarkersByDestination(markers)
+
+        val decluttered =
+            if (declutterEnabled) {
+                val screenMarkers =
+                    uniqueMarkers.map { m ->
+                        val screenPoint = map.projection.toScreenLocation(LatLng(m.latitude, m.longitude))
+                        ScreenMarker(m.destinationHash, m.latitude, m.longitude, screenPoint.x, screenPoint.y)
+                    }
+                val screenToLatLng = ScreenToLatLng { x, y ->
+                    val latLng = map.projection.fromScreenLocation(android.graphics.PointF(x, y))
+                    Pair(latLng.latitude, latLng.longitude)
+                }
+                calculateDeclutteredPositions(screenMarkers, screenToLatLng)
+            } else {
+                emptyList()
+            }
+        val declutteredMap = decluttered.associateBy { it.hash }
+        val offsetMarkers = decluttered.filter { it.isOffset }
+        val density = context.resources.displayMetrics.density
+        val pinRadiusDp = adaptivePinRadiusDp(context)
+
+        // --- Update marker source with decluttered display positions ---
+        val markerSourceId = "contact-markers-source"
+        val markerFeatures =
+            uniqueMarkers.map { marker ->
+                val dm = declutteredMap[marker.destinationHash]
+                val displayLat = dm?.displayLat ?: marker.latitude
+                val displayLng = dm?.displayLng ?: marker.longitude
+                val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
+                val imageId = "marker-${marker.destinationHash}-${iconKey.hashCode()}"
+                Feature
+                    .fromGeometry(
+                        Point.fromLngLat(displayLng, displayLat),
+                    ).apply {
+                        addStringProperty("name", marker.displayName)
+                        addStringProperty("hash", marker.destinationHash)
+                        addStringProperty("imageId", imageId)
+                        addStringProperty("state", marker.state.name)
+                        addNumberProperty("approximateRadius", marker.approximateRadius)
+                    }
+            }
+        style.getSourceAs<GeoJsonSource>(markerSourceId)?.setGeoJson(
+            FeatureCollection.fromFeatures(markerFeatures),
+        )
+
+        // --- Update pin source (small dots at true GPS positions, only for offset markers) ---
+        val pinSourceId = "contact-pins-source"
+        val pinFeatures =
+            offsetMarkers.map { dm ->
+                Feature.fromGeometry(
+                    Point.fromLngLat(dm.originalLng, dm.originalLat),
+                )
+            }
+        val pinSource = style.getSourceAs<GeoJsonSource>(pinSourceId)
+        if (pinSource != null) {
+            pinSource.setGeoJson(FeatureCollection.fromFeatures(pinFeatures))
+            style.getLayerAs<CircleLayer>("contact-pins-layer")?.setProperties(
+                PropertyFactory.circleRadius(pinRadiusDp * density),
+            )
+        } else if (offsetMarkers.isNotEmpty()) {
+            style.addSource(GeoJsonSource(pinSourceId, FeatureCollection.fromFeatures(pinFeatures)))
+            val pinLayer =
+                CircleLayer("contact-pins-layer", pinSourceId)
+                    .withProperties(
+                        PropertyFactory.circleRadius(pinRadiusDp * density),
+                        PropertyFactory.circleColor(
+                            Expression.color(android.graphics.Color.parseColor("#616161")),
+                        ),
+                        PropertyFactory.circleStrokeWidth(1f),
+                        PropertyFactory.circleStrokeColor(
+                            Expression.color(android.graphics.Color.WHITE),
+                        ),
+                    )
+            if (style.getLayer("contact-markers-layer") != null) {
+                style.addLayerBelow(pinLayer, "contact-markers-layer")
+            } else {
+                style.addLayer(pinLayer)
+            }
+        }
+
+        // --- Update line source (thin lines connecting GPS pin to offset pastille) ---
+        val lineSourceId = "contact-lines-source"
+        val lineFeatures =
+            offsetMarkers.map { dm ->
+                Feature.fromGeometry(
+                    LineString.fromLngLats(
+                        listOf(
+                            Point.fromLngLat(dm.originalLng, dm.originalLat),
+                            Point.fromLngLat(dm.displayLng, dm.displayLat),
+                        ),
+                    ),
+                )
+            }
+        val lineSource = style.getSourceAs<GeoJsonSource>(lineSourceId)
+        if (lineSource != null) {
+            lineSource.setGeoJson(FeatureCollection.fromFeatures(lineFeatures))
+        } else if (offsetMarkers.isNotEmpty()) {
+            style.addSource(GeoJsonSource(lineSourceId, FeatureCollection.fromFeatures(lineFeatures)))
+            val lineLayer =
+                LineLayer("contact-lines-layer", lineSourceId)
+                    .withProperties(
+                        PropertyFactory.lineWidth(LINE_WIDTH_DP * density),
+                        PropertyFactory.lineColor(
+                            Expression.color(android.graphics.Color.parseColor("#9E9E9E")),
+                        ),
+                        PropertyFactory.lineOpacity(Expression.literal(0.7f)),
+                    )
+            when {
+                style.getLayer("contact-pins-layer") != null -> {
+                    style.addLayerBelow(lineLayer, "contact-pins-layer")
+                }
+                style.getLayer("contact-markers-layer") != null -> {
+                    style.addLayerBelow(lineLayer, "contact-markers-layer")
+                }
+                else -> {
+                    style.addLayer(lineLayer)
+                }
+            }
+        }
+
+        val offsetCount = offsetMarkers.size
+        if (offsetCount > 0) {
+            Log.d("MapScreen", "Declutter: $offsetCount markers offset out of ${markers.size}")
+        }
+    }
 
     // Helper function to set up map style after it loads
     // Extracted to avoid duplication between factory and LaunchedEffect callbacks
@@ -624,6 +788,7 @@ fun MapScreen(
                         // Save viewport when user stops interacting (issue #333)
                         // Uses onCameraIdle instead of onCameraMove to avoid excessive
                         // state updates during pan/zoom gestures.
+                        // Also recalculates declutter positions for overlapping markers.
                         map.addOnCameraIdleListener {
                             val pos = map.cameraPosition
                             val target = pos.target ?: return@addOnCameraIdleListener
@@ -632,6 +797,18 @@ fun MapScreen(
                                 target.longitude,
                                 pos.zoom,
                             )
+                            // Recalculate declutter positions after zoom/pan
+                            val currentMarkers = latestContactMarkers.value
+                            if (currentMarkers.isNotEmpty()) {
+                                map.style?.let { style ->
+                                    updateDeclutterSources(
+                                        map = map,
+                                        style = style,
+                                        markers = currentMarkers,
+                                        declutterEnabled = latestDeclutterEnabled.value,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -640,7 +817,7 @@ fun MapScreen(
         )
 
         // Update contact markers on the map when they change
-        LaunchedEffect(state.contactMarkers, mapStyleLoaded) {
+        LaunchedEffect(state.contactMarkers, state.mapMarkerDeclutterEnabled, mapStyleLoaded) {
             if (!mapStyleLoaded) return@LaunchedEffect
             val map = mapLibreMap ?: return@LaunchedEffect
             val style = map.style ?: return@LaunchedEffect
@@ -694,7 +871,11 @@ fun MapScreen(
                 }
             }
 
-            // Create GeoJSON features from contact markers with state and approximateRadius properties
+            // Store latest markers for onCameraIdleListener declutter recalculation
+            latestContactMarkers.value = state.contactMarkers
+            latestDeclutterEnabled.value = state.mapMarkerDeclutterEnabled
+
+            // Create GeoJSON features from contact markers (original positions for initial source creation)
             val features =
                 state.contactMarkers.map { marker ->
                     val iconKey = "${marker.iconName}-${marker.iconForegroundColor}-${marker.iconBackgroundColor}"
@@ -705,9 +886,9 @@ fun MapScreen(
                         ).apply {
                             addStringProperty("name", marker.displayName)
                             addStringProperty("hash", marker.destinationHash)
-                            addStringProperty("imageId", imageId) // Pre-computed image ID
-                            addStringProperty("state", marker.state.name) // FRESH, STALE, or EXPIRED_GRACE_PERIOD
-                            addNumberProperty("approximateRadius", marker.approximateRadius) // meters, 0 = precise
+                            addStringProperty("imageId", imageId)
+                            addStringProperty("state", marker.state.name)
+                            addNumberProperty("approximateRadius", marker.approximateRadius)
                         }
                 }
             val featureCollection = FeatureCollection.fromFeatures(features)
@@ -716,7 +897,13 @@ fun MapScreen(
             val existingSource = style.getSourceAs<GeoJsonSource>(sourceId)
             if (existingSource != null) {
                 Log.d("MapScreen", "Updating existing source with ${features.size} features")
-                existingSource.setGeoJson(featureCollection)
+                // Use decluttered positions for marker, pin, and line sources
+                updateDeclutterSources(
+                    map = map,
+                    style = style,
+                    markers = state.contactMarkers,
+                    declutterEnabled = state.mapMarkerDeclutterEnabled,
+                )
             } else {
                 Log.d("MapScreen", "Creating new source and layers with ${features.size} features")
                 // Add new source and layers with data-driven styling based on marker state
@@ -774,8 +961,9 @@ fun MapScreen(
                 style.addLayer(
                     SymbolLayer(layerId, sourceId).withProperties(
                         PropertyFactory.iconImage(Expression.get("imageId")),
-                        // Anchor at top (circle center)
-                        PropertyFactory.iconAnchor("top"),
+                        // Anchor at center — bitmap is padded symmetrically so circle center
+                        // aligns with bitmap center (see MarkerBitmapFactory top padding)
+                        PropertyFactory.iconAnchor("center"),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true),
                         PropertyFactory.iconSize(1f),
@@ -794,6 +982,14 @@ fun MapScreen(
                             ),
                         ),
                     ),
+                )
+
+                // Apply declutter on initial load too
+                updateDeclutterSources(
+                    map = map,
+                    style = style,
+                    markers = state.contactMarkers,
+                    declutterEnabled = state.mapMarkerDeclutterEnabled,
                 )
             }
         }

@@ -1,11 +1,13 @@
 package com.lxmf.messenger.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +28,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,13 +39,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.reticulum.ble.model.BlePowerPreset
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.InterfaceConfigState
+import kotlinx.coroutines.launch
 
 /**
  * Dialog for adding or editing a Reticulum network interface configuration.
@@ -59,11 +68,12 @@ fun InterfaceConfigDialog(
             Text(if (isEditing) "Edit Interface" else "Add Interface")
         },
         text = {
+            val scrollState = rememberScrollState()
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Interface Name
@@ -159,7 +169,7 @@ fun InterfaceConfigDialog(
                             "AutoInterface" -> AutoInterfaceFields(configState, onConfigUpdate)
                             "TCPClient" -> TCPClientFields(configState, onConfigUpdate)
                             "TCPServer" -> TCPServerFields(configState, onConfigUpdate)
-                            "AndroidBLE" -> AndroidBLEFields(configState, onConfigUpdate)
+                            "AndroidBLE" -> AndroidBLEFields(configState, onConfigUpdate, scrollState)
                         }
 
                         Divider()
@@ -551,7 +561,9 @@ fun InterfaceModeSelector(
 fun AndroidBLEFields(
     configState: InterfaceConfigState,
     onConfigUpdate: (InterfaceConfigState) -> Unit,
+    scrollState: ScrollState? = null,
 ) {
+    val coroutineScope = rememberCoroutineScope()
     Text(
         "Bluetooth LE Configuration",
         style = MaterialTheme.typography.titleSmall,
@@ -607,6 +619,144 @@ fun AndroidBLEFields(
                 )
             }
         },
+    )
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Text(
+        "Power Profile",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    // Preset selector
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        val presets = listOf("performance", "balanced", "battery_saver", "custom")
+        val labels = listOf("Performance", "Balanced", "Battery Saver", "Custom")
+        presets.forEachIndexed { index, preset ->
+            SegmentedButton(
+                selected = configState.blePowerPreset == preset,
+                onClick = {
+                    val newState =
+                        if (preset != "custom") {
+                            val s = BlePowerPreset.getSettings(BlePowerPreset.fromString(preset))
+                            configState.copy(
+                                blePowerPreset = preset,
+                                bleDiscoveryIntervalMs = s.discoveryIntervalMs.toString(),
+                                bleDiscoveryIntervalIdleMs = s.discoveryIntervalIdleMs.toString(),
+                                bleScanDurationMs = s.scanDurationMs.toString(),
+                                bleAdvertisingRefreshIntervalMs = s.advertisingRefreshIntervalMs.toString(),
+                            )
+                        } else {
+                            configState.copy(blePowerPreset = preset)
+                        }
+                    onConfigUpdate(newState)
+                    if (preset == "custom" && scrollState != null) {
+                        coroutineScope.launch {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                        }
+                    }
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = presets.size),
+                icon = {},
+                label = { Text(labels[index], maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+            )
+        }
+    }
+
+    // Helper text per preset
+    Text(
+        when (configState.blePowerPreset) {
+            "performance" -> "Fastest device discovery, higher battery usage"
+            "balanced" -> "Default discovery speed and battery usage"
+            "battery_saver" -> "Reduced scanning to conserve battery"
+            "custom" -> "Manually configure scan and advertising intervals"
+            else -> ""
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    // Custom sliders (only enabled when preset is "custom")
+    val isCustom = configState.blePowerPreset == "custom"
+
+    Text(
+        "Scan Interval (active): ${configState.bleDiscoveryIntervalMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "5s"}",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        "Delay between scans while discovering new devices",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Slider(
+        value = (configState.bleDiscoveryIntervalMs.toFloatOrNull() ?: 5000f) / 1000f,
+        onValueChange = { onConfigUpdate(configState.copy(bleDiscoveryIntervalMs = (it * 1000).toLong().toString())) },
+        valueRange = 3f..30f,
+        steps = 26,
+        enabled = isCustom,
+    )
+
+    Text(
+        "Scan Interval (idle): ${configState.bleDiscoveryIntervalIdleMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "30s"}",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        "Delay between scans when no new devices are being found",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Slider(
+        value = (configState.bleDiscoveryIntervalIdleMs.toFloatOrNull() ?: 30000f) / 1000f,
+        onValueChange = { onConfigUpdate(configState.copy(bleDiscoveryIntervalIdleMs = (it * 1000).toLong().toString())) },
+        valueRange = 15f..300f,
+        steps = 56,
+        enabled = isCustom,
+    )
+
+    Text(
+        "Scan Duration: ${configState.bleScanDurationMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "10s"}",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        "How long each scan listens for nearby devices",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Slider(
+        value = (configState.bleScanDurationMs.toFloatOrNull() ?: 10000f) / 1000f,
+        onValueChange = { onConfigUpdate(configState.copy(bleScanDurationMs = (it * 1000).toLong().toString())) },
+        valueRange = 3f..15f,
+        steps = 11,
+        enabled = isCustom,
+    )
+
+    // Warn when scan duration is close to or exceeds the active scan interval (high duty-cycle)
+    val scanDuration = configState.bleScanDurationMs.toLongOrNull() ?: 10000L
+    val activeInterval = configState.bleDiscoveryIntervalMs.toLongOrNull() ?: 5000L
+    if (isCustom && scanDuration >= activeInterval) {
+        Text(
+            "Warning: scan duration ≥ active interval — high duty-cycle scanning will increase battery usage",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
+    Text(
+        "Ad Refresh Interval: ${configState.bleAdvertisingRefreshIntervalMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "60s"}",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        "How often to restart advertising in case Android silently stopped it",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Slider(
+        value = (configState.bleAdvertisingRefreshIntervalMs.toFloatOrNull() ?: 60000f) / 1000f,
+        onValueChange = { onConfigUpdate(configState.copy(bleAdvertisingRefreshIntervalMs = (it * 1000).toLong().toString())) },
+        valueRange = 30f..300f,
+        steps = 26,
+        enabled = isCustom,
     )
 }
 

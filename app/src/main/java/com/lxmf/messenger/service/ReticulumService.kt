@@ -182,6 +182,19 @@ class ReticulumService : Service() {
                 stopSelf()
 
                 if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
+
+                // Stop BLE immediately on Main thread before process exit.
+                // The normal Python shutdown path (ReticulumWrapper.shutdown() → BLEInterface.detach()
+                // → AndroidBLEDriver.stop() → KotlinBLEBridge.stop()) won't complete because
+                // System.exit(0) kills the process before async cleanup finishes.
+                if (::managers.isInitialized) {
+                    try {
+                        managers.bleCoordinator.stopImmediate()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error during BLE immediate shutdown", e)
+                    }
+                }
+
                 try {
                     binder.shutdown()
                 } catch (e: Exception) {
@@ -259,6 +272,8 @@ class ReticulumService : Service() {
             managers.eventHandler.stopAll()
             managers.lockManager.releaseAll()
             managers.broadcaster.kill()
+            // Safety net: stop BLE if not already stopped by ACTION_STOP
+            managers.bleCoordinator.stopImmediate()
         }
         serviceScope.cancel()
 
@@ -284,6 +299,15 @@ class ReticulumService : Service() {
 
         // Set kill switch before shutdown to prevent SIGSEGV during teardown
         if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
+
+        // Stop BLE immediately before process exit
+        if (::managers.isInitialized) {
+            try {
+                managers.bleCoordinator.stopImmediate()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during BLE immediate shutdown in restart", e)
+            }
+        }
 
         // Clean up current state
         if (::binder.isInitialized) {

@@ -87,6 +87,11 @@ data class InterfaceConfigState(
     // AndroidBLE fields
     val deviceName: String = "",
     val maxConnections: String = "7",
+    val blePowerPreset: String = "balanced",
+    val bleDiscoveryIntervalMs: String = "5000",
+    val bleDiscoveryIntervalIdleMs: String = "30000",
+    val bleScanDurationMs: String = "10000",
+    val bleAdvertisingRefreshIntervalMs: String = "60000",
     // TCPServer fields
     val listenIp: String = "0.0.0.0",
     val listenPort: String = "4242",
@@ -823,6 +828,11 @@ class InterfaceManagementViewModel
                         enabled = config.enabled,
                         deviceName = config.deviceName,
                         maxConnections = config.maxConnections.toString(),
+                        blePowerPreset = config.blePowerPreset,
+                        bleDiscoveryIntervalMs = config.bleDiscoveryIntervalMs.toString(),
+                        bleDiscoveryIntervalIdleMs = config.bleDiscoveryIntervalIdleMs.toString(),
+                        bleScanDurationMs = config.bleScanDurationMs.toString(),
+                        bleAdvertisingRefreshIntervalMs = config.bleAdvertisingRefreshIntervalMs.toString(),
                         mode = config.mode,
                     )
 
@@ -860,6 +870,7 @@ class InterfaceManagementViewModel
         /**
          * Convert InterfaceConfigState to InterfaceConfig for saving.
          */
+        @Suppress("CyclomaticComplexMethod") // One branch per interface type — inherent complexity
         private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig =
             when (state.type) {
                 "AutoInterface" ->
@@ -896,6 +907,11 @@ class InterfaceManagementViewModel
                         deviceName = state.deviceName.trim(),
                         maxConnections = state.maxConnections.toIntOrNull() ?: 7,
                         mode = state.mode,
+                        blePowerPreset = state.blePowerPreset,
+                        bleDiscoveryIntervalMs = state.bleDiscoveryIntervalMs.toLongOrNull() ?: 5000L,
+                        bleDiscoveryIntervalIdleMs = state.bleDiscoveryIntervalIdleMs.toLongOrNull() ?: 30000L,
+                        bleScanDurationMs = state.bleScanDurationMs.toLongOrNull() ?: 10000L,
+                        bleAdvertisingRefreshIntervalMs = state.bleAdvertisingRefreshIntervalMs.toLongOrNull() ?: 60_000L,
                     )
 
                 "RNode" ->

@@ -1616,7 +1616,7 @@ class ReticulumWrapper:
                 config_lines.append("    type = AndroidBLE")
                 config_lines.append("    enabled = yes")
 
-                device_name = iface.get("device_name", "Reticulum-Android")
+                device_name = iface.get("device_name", "")
                 config_lines.append(f"    device_name = {device_name}")
 
                 max_connections = iface.get("max_connections", 7)
@@ -1625,6 +1625,13 @@ class ReticulumWrapper:
                 mode = iface.get("mode", "full")
                 if mode != "full":
                     config_lines.append(f"    mode = {mode}")
+
+                ble_power_preset = iface.get("ble_power_preset", "balanced")
+                config_lines.append(f"    ble_power_preset = {ble_power_preset}")
+                config_lines.append(f"    ble_discovery_interval_ms = {iface.get('ble_discovery_interval_ms', 5000)}")
+                config_lines.append(f"    ble_discovery_interval_idle_ms = {iface.get('ble_discovery_interval_idle_ms', 30000)}")
+                config_lines.append(f"    ble_scan_duration_ms = {iface.get('ble_scan_duration_ms', 10000)}")
+                config_lines.append(f"    ble_advertising_refresh_interval_ms = {iface.get('ble_advertising_refresh_interval_ms', 60000)}")
 
             else:
                 log_warning("ReticulumWrapper", "_create_config_file", f"WARNING: Unknown interface type: {iface_type}")

@@ -331,6 +331,13 @@ class ReticulumServiceBinder(
             // Release locks
             lockManager.releaseAll()
 
+            // Stop BLE immediately before async Python shutdown
+            try {
+                bleCoordinator.stopImmediate()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during BLE immediate shutdown", e)
+            }
+
             // Update status
             state.networkStatus.set("RESTARTING")
             broadcaster.broadcastStatusChange("RESTARTING")

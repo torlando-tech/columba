@@ -14,6 +14,7 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,7 +50,21 @@ class BleAdvertiser(
         private const val TAG = "Columba:BLE:K:Adv"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val RETRY_BACKOFF_MS = 2000L // 2 seconds
-        private const val ADVERTISING_REFRESH_INTERVAL_MS = 60_000L // 1 minute
+    }
+
+    // Power-tunable advertising refresh interval
+    @Volatile
+    var advertisingRefreshIntervalMs: Long = 60_000L
+        private set
+
+    fun updatePowerSettings(settings: BlePowerSettings) {
+        val oldInterval = advertisingRefreshIntervalMs
+        advertisingRefreshIntervalMs = settings.advertisingRefreshIntervalMs
+        Log.d(TAG, "Power settings updated: refreshInterval=${advertisingRefreshIntervalMs}ms")
+        // Restart the refresh job so the new interval takes effect immediately
+        if (_isAdvertising.value && oldInterval != advertisingRefreshIntervalMs) {
+            startRefreshJob()
+        }
     }
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser
@@ -206,7 +221,8 @@ class BleAdvertiser(
 
                 // Build advertise settings
                 val settings =
-                    AdvertiseSettings.Builder()
+                    AdvertiseSettings
+                        .Builder()
                         .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED) // Balance power and latency
                         .setConnectable(true) // Must be connectable for GATT server
                         .setTimeout(0) // Advertise indefinitely
@@ -217,7 +233,8 @@ class BleAdvertiser(
                 // Move device name to scan response to fit within 31-byte advertising payload limit
                 // With 128-bit service UUID (19 bytes) + flags (3 bytes) = 22 bytes, no room for name
                 val advertiseData =
-                    AdvertiseData.Builder()
+                    AdvertiseData
+                        .Builder()
                         .setIncludeDeviceName(false) // Name moved to scan response due to payload size
                         .setIncludeTxPowerLevel(false)
                         .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID)) // Reticulum service
@@ -226,7 +243,8 @@ class BleAdvertiser(
                 // Build scan response data (sent when central requests more info)
                 // Scan response has separate 31-byte payload, perfect for device name
                 val scanResponseData =
-                    AdvertiseData.Builder()
+                    AdvertiseData
+                        .Builder()
                         .setIncludeDeviceName(true) // Name in scan response (31-byte budget)
                         .build()
 
@@ -292,10 +310,34 @@ class BleAdvertiser(
     }
 
     /**
+     * Immediately stop advertising without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Safe to call multiple times (idempotent).
+     */
+    fun stopImmediate() {
+        try {
+            stopRefreshJob()
+            if (bluetoothLeAdvertiser != null) {
+                try {
+                    bluetoothLeAdvertiser.stopAdvertising(advertiseCallback)
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Permission denied in stopImmediate", e)
+                }
+            }
+            _isAdvertising.value = false
+            retryAttempts = 0
+            currentDeviceName = null
+            Log.d(TAG, "Advertiser stopped immediately")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in stopImmediate", e)
+        }
+    }
+
+    /**
      * Check if BLUETOOTH_ADVERTISE permission is granted.
      */
-    private fun hasAdvertisePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasAdvertisePermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -303,7 +345,6 @@ class BleAdvertiser(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     /**
      * Get human-readable error message for advertise error code.
@@ -340,14 +381,14 @@ class BleAdvertiser(
         refreshJob =
             scope.launch {
                 while (isActive) {
-                    delay(ADVERTISING_REFRESH_INTERVAL_MS)
+                    delay(advertisingRefreshIntervalMs)
                     if (_isAdvertising.value && !isRefreshing) {
                         Log.d(TAG, "Proactive advertising refresh")
                         refreshAdvertising()
                     }
                 }
             }
-        Log.d(TAG, "Advertising refresh job started (interval: ${ADVERTISING_REFRESH_INTERVAL_MS}ms)")
+        Log.d(TAG, "Advertising refresh job started (interval: ${advertisingRefreshIntervalMs}ms)")
     }
 
     /**
@@ -407,7 +448,8 @@ class BleAdvertiser(
         }
 
         val settings =
-            AdvertiseSettings.Builder()
+            AdvertiseSettings
+                .Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
                 .setConnectable(true)
                 .setTimeout(0)
@@ -415,14 +457,16 @@ class BleAdvertiser(
                 .build()
 
         val advertiseData =
-            AdvertiseData.Builder()
+            AdvertiseData
+                .Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
                 .build()
 
         val scanResponseData =
-            AdvertiseData.Builder()
+            AdvertiseData
+                .Builder()
                 .setIncludeDeviceName(true)
                 .build()
 

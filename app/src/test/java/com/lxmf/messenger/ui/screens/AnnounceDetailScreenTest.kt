@@ -44,6 +44,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -72,6 +73,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -96,6 +98,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -120,6 +123,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -143,6 +147,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         composeTestRule.setContent {
             MaterialTheme {

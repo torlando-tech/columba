@@ -560,6 +560,49 @@ interface IReticulumService {
      */
     byte[] fetchRmspTiles(String destinationHashHex, in byte[] publicKey, String geohash, int zoomMin, int zoomMax, long timeoutMs);
 
+    // ==================== PEER BLOCKING & BLACKHOLE ====================
+
+    /**
+     * Block a destination via LXMF router ignore list.
+     * @param destinationHashHex Hex-encoded destination hash
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String blockDestination(String destinationHashHex);
+
+    /**
+     * Unblock a destination from LXMF router ignore list.
+     * @param destinationHashHex Hex-encoded destination hash
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String unblockDestination(String destinationHashHex);
+
+    /**
+     * Restore LXMF blocked destinations from DB at startup.
+     * @param hashesJson JSON array of hex-encoded destination hashes
+     * @return JSON string with result: {"success": true/false, "restored_count": N}
+     */
+    String restoreBlockedDestinations(String hashesJson);
+
+    /**
+     * Blackhole an identity at the Reticulum transport level.
+     * @param identityHashHex Hex-encoded identity hash (16 bytes)
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String blackholeIdentity(String identityHashHex);
+
+    /**
+     * Remove an identity from Reticulum blackhole list.
+     * @param identityHashHex Hex-encoded identity hash (16 bytes)
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String unblackholeIdentity(String identityHashHex);
+
+    /**
+     * Check if Reticulum transport mode is currently enabled.
+     * @return JSON string with result: {"success": true, "enabled": true/false}
+     */
+    String isTransportEnabled();
+
     // ==================== VOICE CALLS (LXST) ====================
 
     /**

@@ -73,14 +73,13 @@ class KotlinBLEBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinBLEBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinBLEBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinBLEBridge(
                     context.applicationContext,
                     context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager,
                 ).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -399,8 +398,8 @@ class KotlinBLEBridge(
      * Build JSON string of current connection details for listeners.
      */
     @Suppress("CyclomaticComplexMethod")
-    private fun buildConnectionDetailsJson(): String {
-        return try {
+    private fun buildConnectionDetailsJson(): String =
+        try {
             val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
             val jsonArray = org.json.JSONArray()
 
@@ -460,13 +459,13 @@ class KotlinBLEBridge(
             Log.e(TAG, "Error building connection details JSON", e)
             "[]"
         }
-    }
 
     // State
     @Volatile
     private var isStarted = false
 
     // Power settings (configurable from Python via configurePower())
+    @Volatile
     var powerSettings: BlePowerSettings = BlePowerSettings()
         private set
 
@@ -832,22 +831,24 @@ class KotlinBLEBridge(
 
                     // Start scanning to discover peer devices
                     Log.d(TAG, "Starting BLE scanning after restart...")
-                    startScanning().onSuccess {
-                        Log.d(TAG, "Scanner started after restart")
-                    }.onFailure { error ->
-                        Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
-                    }
+                    startScanning()
+                        .onSuccess {
+                            Log.d(TAG, "Scanner started after restart")
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
+                        }
 
                     // Start advertising when identity is ready
                     if (savedIdentity != null) {
                         // Identity already available - advertise immediately
                         val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                         Log.d(TAG, "Starting BLE advertising after restart with system name '$systemDeviceName'...")
-                        startAdvertising(systemDeviceName).onSuccess {
-                            Log.d(TAG, "Advertiser started after restart")
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
-                        }
+                        startAdvertising(systemDeviceName)
+                            .onSuccess {
+                                Log.d(TAG, "Advertiser started after restart")
+                            }.onFailure { error ->
+                                Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
+                            }
                     } else {
                         // Wait for identity to be set by Python
                         Log.d(TAG, "Waiting for identity before starting advertising...")
@@ -855,11 +856,12 @@ class KotlinBLEBridge(
                             scope.launch {
                                 val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                                 Log.d(TAG, "Identity ready - starting BLE advertising with system name '$systemDeviceName'...")
-                                startAdvertising(systemDeviceName).onSuccess {
-                                    Log.d(TAG, "Advertiser started after identity set")
-                                }.onFailure { error ->
-                                    Log.e(TAG, "Failed to start advertising: ${error.message}", error)
-                                }
+                                startAdvertising(systemDeviceName)
+                                    .onSuccess {
+                                        Log.d(TAG, "Advertiser started after identity set")
+                                    }.onFailure { error ->
+                                        Log.e(TAG, "Failed to start advertising: ${error.message}", error)
+                                    }
                             }
                         }
 
@@ -913,11 +915,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start scanning - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            scannerInstance.startScanning().onSuccess {
-                Log.d(TAG, "Scanning started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start scanning", it)
-            }
+            scannerInstance
+                .startScanning()
+                .onSuccess {
+                    Log.d(TAG, "Scanning started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start scanning", it)
+                }
         }
 
     fun startScanningAsync() {
@@ -962,11 +966,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start advertising - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            advertiserInstance.startAdvertising(deviceName).onSuccess {
-                Log.d(TAG, "Advertising started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start advertising", it)
-            }
+            advertiserInstance
+                .startAdvertising(deviceName)
+                .onSuccess {
+                    Log.d(TAG, "Advertising started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start advertising", it)
+                }
         }
 
     fun stopAdvertisingAsync() {
@@ -1367,9 +1373,7 @@ class KotlinBLEBridge(
     /**
      * Get list of connected peer addresses.
      */
-    fun getConnectedPeers(): List<String> {
-        return connectedPeers.keys.toList()
-    }
+    fun getConnectedPeers(): List<String> = connectedPeers.keys.toList()
 
     /**
      * Get peer identity by address.
@@ -1377,9 +1381,7 @@ class KotlinBLEBridge(
      * @param address BLE MAC address
      * @return 32-character hex identity string, or null if unknown
      */
-    fun getPeerIdentity(address: String): String? {
-        return addressToIdentity[address]
-    }
+    fun getPeerIdentity(address: String): String? = addressToIdentity[address]
 
     /**
      * Get peer address by identity.
@@ -1387,9 +1389,7 @@ class KotlinBLEBridge(
      * @param identityHash 32-character hex identity string
      * @return BLE MAC address, or null if not connected
      */
-    fun getPeerAddress(identityHash: String): String? {
-        return identityToAddress[identityHash]
-    }
+    fun getPeerAddress(identityHash: String): String? = identityToAddress[identityHash]
 
     /**
      * Get the last known RSSI for a connected peer.
@@ -1595,9 +1595,7 @@ class KotlinBLEBridge(
      *
      * @return Total count of race conditions since bridge started
      */
-    fun getDualConnectionRaceCount(): Long {
-        return dualConnectionRaceCount
-    }
+    fun getDualConnectionRaceCount(): Long = dualConnectionRaceCount
 
     /**
      * Setup callbacks for all BLE components.
@@ -2470,26 +2468,30 @@ class KotlinBLEBridge(
         advertisingRefreshIntervalMs: Long,
     ) {
         val blePowerPreset = BlePowerPreset.fromString(preset)
-        powerSettings = if (blePowerPreset == BlePowerPreset.CUSTOM) {
-            BlePowerSettings(
-                preset = BlePowerPreset.CUSTOM,
-                discoveryIntervalMs = discoveryIntervalMs,
-                discoveryIntervalIdleMs = discoveryIntervalIdleMs,
-                scanDurationMs = scanDurationMs,
-                advertisingRefreshIntervalMs = advertisingRefreshIntervalMs,
-            )
-        } else {
-            BlePowerPreset.getSettings(blePowerPreset)
-        }
+        powerSettings =
+            if (blePowerPreset == BlePowerPreset.CUSTOM) {
+                BlePowerSettings(
+                    preset = BlePowerPreset.CUSTOM,
+                    discoveryIntervalMs = discoveryIntervalMs,
+                    discoveryIntervalIdleMs = discoveryIntervalIdleMs,
+                    scanDurationMs = scanDurationMs,
+                    advertisingRefreshIntervalMs = advertisingRefreshIntervalMs,
+                )
+            } else {
+                BlePowerPreset.getSettings(blePowerPreset)
+            }
 
         // Propagate to scanner and advertiser if they exist
         scanner?.updatePowerSettings(powerSettings)
         advertiser?.updatePowerSettings(powerSettings)
 
-        Log.i(TAG, "Power settings configured: preset=$preset, " +
-            "discovery=${powerSettings.discoveryIntervalMs}ms, " +
-            "idle=${powerSettings.discoveryIntervalIdleMs}ms, " +
-            "scanDuration=${powerSettings.scanDurationMs}ms, " +
-            "adRefresh=${powerSettings.advertisingRefreshIntervalMs}ms")
+        Log.i(
+            TAG,
+            "Power settings configured: preset=$preset, " +
+                "discovery=${powerSettings.discoveryIntervalMs}ms, " +
+                "idle=${powerSettings.discoveryIntervalIdleMs}ms, " +
+                "scanDuration=${powerSettings.scanDurationMs}ms, " +
+                "adRefresh=${powerSettings.advertisingRefreshIntervalMs}ms",
+        )
     }
 }

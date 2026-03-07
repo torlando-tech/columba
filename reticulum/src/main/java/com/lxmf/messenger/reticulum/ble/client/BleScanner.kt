@@ -61,10 +61,15 @@ class BleScanner(
     }
 
     // Power-tunable scan intervals (defaults from BleConstants)
+    @Volatile
     var activeScanIntervalMs: Long = BleConstants.DISCOVERY_INTERVAL_MS
         private set
+
+    @Volatile
     var idleScanIntervalMs: Long = BleConstants.DISCOVERY_INTERVAL_IDLE_MS
         private set
+
+    @Volatile
     var scanDurationMs: Long = BleConstants.SCAN_DURATION_MS
         private set
 

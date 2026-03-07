@@ -53,6 +53,7 @@ class BleAdvertiser(
     }
 
     // Power-tunable advertising refresh interval
+    @Volatile
     var advertisingRefreshIntervalMs: Long = 60_000L
         private set
 
@@ -215,7 +216,8 @@ class BleAdvertiser(
 
                 // Build advertise settings
                 val settings =
-                    AdvertiseSettings.Builder()
+                    AdvertiseSettings
+                        .Builder()
                         .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED) // Balance power and latency
                         .setConnectable(true) // Must be connectable for GATT server
                         .setTimeout(0) // Advertise indefinitely
@@ -226,7 +228,8 @@ class BleAdvertiser(
                 // Move device name to scan response to fit within 31-byte advertising payload limit
                 // With 128-bit service UUID (19 bytes) + flags (3 bytes) = 22 bytes, no room for name
                 val advertiseData =
-                    AdvertiseData.Builder()
+                    AdvertiseData
+                        .Builder()
                         .setIncludeDeviceName(false) // Name moved to scan response due to payload size
                         .setIncludeTxPowerLevel(false)
                         .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID)) // Reticulum service
@@ -235,7 +238,8 @@ class BleAdvertiser(
                 // Build scan response data (sent when central requests more info)
                 // Scan response has separate 31-byte payload, perfect for device name
                 val scanResponseData =
-                    AdvertiseData.Builder()
+                    AdvertiseData
+                        .Builder()
                         .setIncludeDeviceName(true) // Name in scan response (31-byte budget)
                         .build()
 
@@ -327,8 +331,8 @@ class BleAdvertiser(
     /**
      * Check if BLUETOOTH_ADVERTISE permission is granted.
      */
-    private fun hasAdvertisePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasAdvertisePermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -336,7 +340,6 @@ class BleAdvertiser(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     /**
      * Get human-readable error message for advertise error code.
@@ -440,7 +443,8 @@ class BleAdvertiser(
         }
 
         val settings =
-            AdvertiseSettings.Builder()
+            AdvertiseSettings
+                .Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
                 .setConnectable(true)
                 .setTimeout(0)
@@ -448,14 +452,16 @@ class BleAdvertiser(
                 .build()
 
         val advertiseData =
-            AdvertiseData.Builder()
+            AdvertiseData
+                .Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
                 .build()
 
         val scanResponseData =
-            AdvertiseData.Builder()
+            AdvertiseData
+                .Builder()
                 .setIncludeDeviceName(true)
                 .build()
 

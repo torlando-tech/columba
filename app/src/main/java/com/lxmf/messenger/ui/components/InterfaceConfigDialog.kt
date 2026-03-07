@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,12 +42,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.reticulum.ble.model.BlePowerPreset
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.viewmodel.InterfaceConfigState
+import kotlinx.coroutines.launch
 
 /**
  * Dialog for adding or editing a Reticulum network interface configuration.
@@ -636,35 +637,19 @@ fun AndroidBLEFields(
             SegmentedButton(
                 selected = configState.blePowerPreset == preset,
                 onClick = {
-                    val newState = if (preset != "custom") {
-                        // Apply preset defaults
-                        val defaults = when (preset) {
-                            "performance" -> configState.copy(
+                    val newState =
+                        if (preset != "custom") {
+                            val s = BlePowerPreset.getSettings(BlePowerPreset.fromString(preset))
+                            configState.copy(
                                 blePowerPreset = preset,
-                                bleDiscoveryIntervalMs = "3000",
-                                bleDiscoveryIntervalIdleMs = "15000",
-                                bleScanDurationMs = "5000",
-                                bleAdvertisingRefreshIntervalMs = "30000",
+                                bleDiscoveryIntervalMs = s.discoveryIntervalMs.toString(),
+                                bleDiscoveryIntervalIdleMs = s.discoveryIntervalIdleMs.toString(),
+                                bleScanDurationMs = s.scanDurationMs.toString(),
+                                bleAdvertisingRefreshIntervalMs = s.advertisingRefreshIntervalMs.toString(),
                             )
-                            "battery_saver" -> configState.copy(
-                                blePowerPreset = preset,
-                                bleDiscoveryIntervalMs = "15000",
-                                bleDiscoveryIntervalIdleMs = "120000",
-                                bleScanDurationMs = "5000",
-                                bleAdvertisingRefreshIntervalMs = "180000",
-                            )
-                            else -> configState.copy(
-                                blePowerPreset = preset,
-                                bleDiscoveryIntervalMs = "5000",
-                                bleDiscoveryIntervalIdleMs = "30000",
-                                bleScanDurationMs = "10000",
-                                bleAdvertisingRefreshIntervalMs = "60000",
-                            )
+                        } else {
+                            configState.copy(blePowerPreset = preset)
                         }
-                        defaults
-                    } else {
-                        configState.copy(blePowerPreset = preset)
-                    }
                     onConfigUpdate(newState)
                     if (preset == "custom" && scrollState != null) {
                         coroutineScope.launch {
@@ -745,6 +730,17 @@ fun AndroidBLEFields(
         steps = 11,
         enabled = isCustom,
     )
+
+    // Warn when scan duration >= active scan interval (scans may overlap)
+    val scanDuration = configState.bleScanDurationMs.toLongOrNull() ?: 10000L
+    val activeInterval = configState.bleDiscoveryIntervalMs.toLongOrNull() ?: 5000L
+    if (isCustom && scanDuration >= activeInterval) {
+        Text(
+            "Warning: scan duration ≥ active scan interval — scans may overlap",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
 
     Text(
         "Ad Refresh Interval: ${configState.bleAdvertisingRefreshIntervalMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "60s"}",

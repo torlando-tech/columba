@@ -382,7 +382,7 @@ class BleGattServer(
     fun closeImmediate() {
         try {
             if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
-                Log.w(TAG, "closeImmediate() called off Main thread, skipping")
+                Log.e(TAG, "closeImmediate() called off Main thread, skipping GATT cleanup")
                 return
             }
             // Cancel all keepalive jobs

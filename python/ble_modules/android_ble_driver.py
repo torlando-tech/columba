@@ -121,7 +121,7 @@ class AndroidBLEDriver(BLEDriverInterface):
 
     # --- Lifecycle & Configuration ---
 
-    def start(self, service_uuid: str, rx_char_uuid: str, tx_char_uuid: str, identity_char_uuid: str, **power_kwargs):
+    def start(self, service_uuid: str, rx_char_uuid: str, tx_char_uuid: str, identity_char_uuid: str):
         """Initialize the driver and Android BLE stack."""
         try:
             if self._state != DriverState.IDLE:
@@ -148,10 +148,6 @@ class AndroidBLEDriver(BLEDriverInterface):
 
             # Setup callbacks
             self._setup_kotlin_callbacks()
-
-            # Configure power settings before starting BLE stack
-            if power_kwargs:
-                self.configure_power(**power_kwargs)
 
             # Initialize Kotlin BLE stack
             self.kotlin_bridge.startAsync(

@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.data.model.EnrichedContact
@@ -117,6 +118,10 @@ fun LocationSharingCard(
     localIconName: String? = null,
     localIconForegroundColor: String? = null,
     localIconBackgroundColor: String? = null,
+    // Background location permission status
+    hasForegroundLocationPermission: Boolean = false,
+    hasBackgroundLocationPermission: Boolean = false,
+    onBackgroundPermissionClick: () -> Unit = {},
 ) {
     var showDurationPicker by remember { mutableStateOf(false) }
     var showPrecisionPicker by remember { mutableStateOf(false) }
@@ -141,6 +146,66 @@ fun LocationSharingCard(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // Background location permission status indicator
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        onClick = onBackgroundPermissionClick,
+                        role = Role.Button,
+                    )
+                    .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                tint =
+                    if (hasBackgroundLocationPermission) {
+                        MaterialTheme.colorScheme.primary
+                    } else if (hasForegroundLocationPermission) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                modifier = Modifier.size(18.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text =
+                        if (hasBackgroundLocationPermission) {
+                            "Background location: Always"
+                        } else if (hasForegroundLocationPermission) {
+                            "Background location: While using"
+                        } else {
+                            "Background location: Not granted"
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text =
+                        if (hasBackgroundLocationPermission) {
+                            "Tap to change (Permissions > Location)"
+                        } else if (hasForegroundLocationPermission) {
+                            "Tap to enable background location"
+                        } else {
+                            "Tap to grant location permission"
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Change",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
 
         // Active sessions section (only shown when enabled and there are sessions)
         if (enabled && activeSessions.isNotEmpty()) {

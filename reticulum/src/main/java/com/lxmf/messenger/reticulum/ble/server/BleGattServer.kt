@@ -376,19 +376,15 @@ class BleGattServer(
 
     /**
      * Immediately close GATT server without coroutines.
-     * Called from Main thread during forced shutdown (before System.exit).
-     * Safe to call multiple times (idempotent).
+     * Called during forced shutdown (before System.exit).
+     * Safe to call from any thread and multiple times (idempotent).
      */
     fun closeImmediate() {
         try {
-            if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
-                Log.e(TAG, "closeImmediate() called off Main thread, skipping GATT cleanup")
-                return
-            }
             // Cancel all keepalive jobs
             peripheralKeepaliveJobs.values.forEach { it.cancel() }
             peripheralKeepaliveJobs.clear()
-            // Close server
+            // Close server (BluetoothGattServer.close() is an IPC call, thread-safe)
             gattServer?.close()
             gattServer = null
             txCharacteristic = null

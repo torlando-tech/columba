@@ -18,6 +18,7 @@ enum class BlePowerPreset {
     companion object {
         fun getSettings(preset: BlePowerPreset): BlePowerSettings =
             when (preset) {
+                // scanDuration(5s) > interval(3s) is intentional — high duty-cycle sequential scanning
                 PERFORMANCE -> BlePowerSettings(PERFORMANCE, 3000L, 15000L, 5000L, 30_000L)
                 BALANCED -> BlePowerSettings(BALANCED, 5000L, 30000L, 10000L, 60_000L)
                 BATTERY_SAVER -> BlePowerSettings(BATTERY_SAVER, 15000L, 120000L, 5000L, 180_000L)

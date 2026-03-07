@@ -907,10 +907,10 @@ fun ColumbaNavigation(
             "ble_connection_status",
             "theme_management",
             "offline_maps",
-            "offline_map_download",
         )
     val hideBottomNavPrefixes =
         listOf(
+            "offline_map_download",
             "messaging/",
             "announce_detail/",
             "message_detail/",

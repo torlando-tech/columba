@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -175,11 +177,16 @@ fun OfflineMapDownloadScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
+        // The parent Scaffold in MainActivity consumes navigation bar insets
+        // but discards its paddingValues, so child Scaffolds see them as consumed.
+        // Use the raw (unconsumed) WindowInsets to get the actual nav bar height.
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
+                    .padding(paddingValues)
+                    .padding(bottom = navBarBottom),
         ) {
             when (state.step) {
                 DownloadWizardStep.LOCATION ->
@@ -340,7 +347,6 @@ fun LocationSelectionStep(
             modifier
                 .fillMaxSize()
                 .imePadding()
-                .navigationBarsPadding()
                 .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -651,7 +657,6 @@ fun RadiusSelectionStep(
         modifier =
             modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {
@@ -805,7 +810,6 @@ fun ConfirmDownloadStep(
         modifier =
             modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {

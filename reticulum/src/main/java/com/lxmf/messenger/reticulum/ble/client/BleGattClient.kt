@@ -1226,24 +1226,29 @@ class BleGattClient(
      */
     @SuppressLint("MissingPermission")
     fun closeImmediate() {
-        try {
-            val snapshot = connections.toMap()
-            connections.clear()
-            snapshot.values.forEach { connData ->
-                try {
-                    connData.keepaliveJob?.cancel()
-                    connData.gatt.disconnect()
-                    connData.gatt.close()
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "Permission denied closing GATT to ${connData.gatt.device?.address}", e)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error closing GATT to ${connData.gatt.device?.address}", e)
-                }
+        // Snapshot in its own block so a CME can't prevent individual GATT close calls
+        val snapshot: Map<String, ConnectionData> =
+            try {
+                val copy = connections.toMap()
+                connections.clear()
+                copy
+            } catch (e: Exception) {
+                Log.e(TAG, "Error snapshotting connections in closeImmediate", e)
+                emptyMap()
             }
-            Log.d(TAG, "GATT client closed immediately (${snapshot.size} connections)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in closeImmediate", e)
+
+        snapshot.values.forEach { connData ->
+            try {
+                connData.keepaliveJob?.cancel()
+                connData.gatt.disconnect()
+                connData.gatt.close()
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Permission denied closing GATT to ${connData.gatt.device?.address}", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error closing GATT to ${connData.gatt.device?.address}", e)
+            }
         }
+        Log.d(TAG, "GATT client closed immediately (${snapshot.size} connections)")
     }
 
     /**

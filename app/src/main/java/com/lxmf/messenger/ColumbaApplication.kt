@@ -638,26 +638,36 @@ class ColumbaApplication : Application() {
             return emptySet()
         }
 
-        return try {
-            val result = serviceProtocol.restorePeerIdentities(contactIdentities)
-            result
-                .onSuccess { count ->
-                    android.util.Log.d(
-                        "ColumbaApplication",
-                        "✓ Restored $count prioritized contact identities before bulk peer restore",
-                    )
-                }.onFailure { error ->
-                    android.util.Log.w(
-                        "ColumbaApplication",
-                        "Failed to restore prioritized contact identities: ${error.message}",
-                        error,
-                    )
-                }
-            if (result.isSuccess) contactIdentities.map { it.first }.toSet() else emptySet()
-        } catch (e: Exception) {
-            android.util.Log.e("ColumbaApplication", "Error restoring prioritized contact identities", e)
-            emptySet()
+        val batchSize = 500
+        val restoredIdentityHashes = mutableSetOf<String>()
+
+        contactIdentities.chunked(batchSize).forEachIndexed { index, chunk ->
+            try {
+                val result = serviceProtocol.restorePeerIdentities(chunk)
+                result
+                    .onSuccess { count ->
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "✓ Restored $count prioritized contact identities from chunk ${index + 1}",
+                        )
+                        restoredIdentityHashes.addAll(chunk.map { it.first })
+                    }.onFailure { error ->
+                        android.util.Log.w(
+                            "ColumbaApplication",
+                            "Failed to restore prioritized contact identities chunk ${index + 1}: ${error.message}",
+                            error,
+                        )
+                    }
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "ColumbaApplication",
+                    "Error restoring prioritized contact identities chunk ${index + 1}",
+                    e,
+                )
+            }
         }
+
+        return restoredIdentityHashes
     }
 
     /**
@@ -690,10 +700,17 @@ class ColumbaApplication : Application() {
             }
 
             val batch = rawBatch.filterNot { alreadyRestoredIdentityHashes.contains(it.first) }
+            val skippedCount = rawBatch.size - batch.size
             android.util.Log.d(
                 "ColumbaApplication",
                 "Processing batch ${offset / batchSize + 1}: ${batch.size}/${rawBatch.size} peer identities (offset $offset)",
             )
+            if (skippedCount > 0) {
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "Skipped $skippedCount already-restored peer identities in batch ${offset / batchSize + 1}",
+                )
+            }
 
             val batchCount = rawBatch.size
             try {

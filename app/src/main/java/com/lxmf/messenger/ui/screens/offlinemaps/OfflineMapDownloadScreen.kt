@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -339,6 +340,7 @@ fun LocationSelectionStep(
             modifier
                 .fillMaxSize()
                 .imePadding()
+                .navigationBarsPadding()
                 .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -649,6 +651,7 @@ fun RadiusSelectionStep(
         modifier =
             modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {
@@ -802,6 +805,7 @@ fun ConfirmDownloadStep(
         modifier =
             modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {

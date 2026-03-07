@@ -334,6 +334,62 @@ fun MapScreen(
         }
     }
 
+    // Set initial camera position once both map and default region state are resolved.
+    // Deferred from onMapReady to avoid the 0,0 race condition (issue #607).
+    LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        if (!state.defaultRegionLoaded) return@LaunchedEffect
+
+        val savedPos = state.lastCameraPosition
+        val defaultCenter = state.defaultRegionCenter
+        val userLoc = state.userLocation
+        val initialLat: Double
+        val initialLng: Double
+        val initialZoom: Double
+        var usedMeaningfulPosition = true
+        when {
+            // Always restore saved viewport — handles config change and tab switch
+            // where ViewModel survives but MapView is recreated at default 0,0.
+            savedPos != null -> {
+                initialLat = savedPos.latitude
+                initialLng = savedPos.longitude
+                initialZoom = savedPos.zoom
+            }
+            // For remaining sources, skip if already centered via another
+            // LaunchedEffect (focus coordinates or GPS).
+            hasInitiallyCentered -> return@LaunchedEffect
+            userLoc != null -> {
+                initialLat = userLoc.latitude
+                initialLng = userLoc.longitude
+                initialZoom = 15.0
+            }
+            defaultCenter != null -> {
+                initialLat = defaultCenter.latitude
+                initialLng = defaultCenter.longitude
+                initialZoom = defaultCenter.zoom
+            }
+            else -> {
+                // No position source yet — show world view but don't lock out
+                // the GPS LaunchedEffect, which may arrive later.
+                initialLat = 0.0
+                initialLng = 0.0
+                initialZoom = 2.0
+                usedMeaningfulPosition = false
+            }
+        }
+        val initialPosition =
+            CameraPosition
+                .Builder()
+                .target(LatLng(initialLat, initialLng))
+                .zoom(initialZoom)
+                .build()
+        map.cameraPosition = initialPosition
+        metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
+        if (usedMeaningfulPosition) {
+            hasInitiallyCentered = true
+        }
+    }
+
     // Enable location component when permission is granted
     @SuppressLint("MissingPermission")
     LaunchedEffect(state.hasLocationPermission, mapLibreMap) {
@@ -548,47 +604,9 @@ fun MapScreen(
                             true
                         }
 
-                        // Set initial camera position priority:
-                        // 1. Saved camera position (restored from tab switch)
-                        // 2. User's GPS location
-                        // 3. Default offline map region center
-                        // 4. Fallback to 0,0 (world view)
-                        val savedPos = state.lastCameraPosition
-                        val defaultCenter = state.defaultRegionCenter
-                        val userLoc = state.userLocation
-                        val initialLat: Double
-                        val initialLng: Double
-                        val initialZoom: Double
-                        when {
-                            savedPos != null -> {
-                                initialLat = savedPos.latitude
-                                initialLng = savedPos.longitude
-                                initialZoom = savedPos.zoom
-                            }
-                            userLoc != null -> {
-                                initialLat = userLoc.latitude
-                                initialLng = userLoc.longitude
-                                initialZoom = 15.0
-                            }
-                            defaultCenter != null -> {
-                                initialLat = defaultCenter.latitude
-                                initialLng = defaultCenter.longitude
-                                initialZoom = defaultCenter.zoom
-                            }
-                            else -> {
-                                initialLat = 0.0
-                                initialLng = 0.0
-                                initialZoom = 2.0
-                            }
-                        }
-                        val initialPosition =
-                            CameraPosition
-                                .Builder()
-                                .target(LatLng(initialLat, initialLng))
-                                .zoom(initialZoom)
-                                .build()
-                        map.cameraPosition = initialPosition
-                        metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
+                        // Camera position is now set in a LaunchedEffect that
+                        // waits for defaultRegionLoaded to avoid the 0,0 race condition.
+                        // See LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) above.
 
                         // Add camera move listener to update scale bar
                         // Measure actual distance between two screen points for accuracy

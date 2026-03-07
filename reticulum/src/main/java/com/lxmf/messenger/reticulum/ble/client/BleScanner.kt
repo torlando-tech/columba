@@ -98,6 +98,8 @@ class BleScanner(
     private var scanJob: Job? = null
     private var newDevicesInLastScan = 0
     private var scansWithoutNewDevices = 0
+
+    @Volatile
     private var currentScanInterval = activeScanIntervalMs
 
     // Callbacks

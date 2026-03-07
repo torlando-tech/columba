@@ -231,6 +231,7 @@ class OfflineMapDownloadViewModel
                     }
                 val radiusOption =
                     RadiusOption.entries.find { it.km == region.radiusKm }
+                        ?: RadiusOption.entries.minByOrNull { kotlin.math.abs(it.km - region.radiusKm) }
                         ?: RadiusOption.MEDIUM
                 _state.update {
                     it.copy(
@@ -515,9 +516,9 @@ class OfflineMapDownloadViewModel
          * Removes the MapLibre region, MBTiles file, cached style, and DB record.
          */
         private suspend fun deleteOldRegion(regionId: Long) {
-            try {
-                val oldRegion = offlineMapRegionRepository.getRegionById(regionId)
-                if (oldRegion != null) {
+            val oldRegion = offlineMapRegionRepository.getRegionById(regionId)
+            if (oldRegion != null) {
+                try {
                     // Delete MapLibre offline region and await the result
                     oldRegion.maplibreRegionId?.let { mlId ->
                         val success =
@@ -543,13 +544,13 @@ class OfflineMapDownloadViewModel
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Partial cleanup failure for region $regionId, removing DB record anyway", e)
                 }
-                // Delete DB record only after MapLibre + file cleanup succeed
-                offlineMapRegionRepository.deleteRegion(regionId)
-                Log.d(TAG, "Deleted old region $regionId after successful update")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to clean up old region $regionId (non-fatal)", e)
             }
+            // Always remove the DB record so the user never sees duplicate entries
+            offlineMapRegionRepository.deleteRegion(regionId)
+            Log.d(TAG, "Deleted old region $regionId after update")
         }
 
         /**
@@ -657,6 +658,16 @@ class OfflineMapDownloadViewModel
 
                     _state.update { it.copy(createdRegionId = regionId) }
 
+                    // Snapshot the current tile version before downloading so
+                    // the recorded version matches the tiles we actually fetch.
+                    val tileVersionSnapshot =
+                        try {
+                            TileDownloadManager.fetchCurrentTileVersion()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not snapshot tile version before download", e)
+                            null
+                        }
+
                     // Calculate bounds for the region
                     val bounds = calculateBounds(lat, lon, currentState.radiusOption.km)
 
@@ -714,17 +725,13 @@ class OfflineMapDownloadViewModel
 
                                     // 1b. Record the tile version so "Check for Updates"
                                     //     can compare against the server later.
-                                    try {
-                                        val tileVersion =
-                                            TileDownloadManager.fetchCurrentTileVersion()
-                                        if (tileVersion != null) {
-                                            offlineMapRegionRepository.updateTileVersion(
-                                                regionId,
-                                                tileVersion,
-                                            )
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to record tile version (non-fatal)", e)
+                                    //     Uses the snapshot taken before download started
+                                    //     so it matches the actual downloaded tiles.
+                                    if (tileVersionSnapshot != null) {
+                                        offlineMapRegionRepository.updateTileVersion(
+                                            regionId,
+                                            tileVersionSnapshot,
+                                        )
                                     }
 
                                     // 2. Show "Finalizing..." while style caching runs.

@@ -449,19 +449,6 @@ fun OfflineMapRegionCard(
                                         Text("Update Now", style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
-                                updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                    )
-                                    Text(
-                                        text = "Up to date",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                    )
-                                }
                                 updateCheckResult?.error != null -> {
                                     Icon(
                                         imageVector = Icons.Default.Warning,
@@ -487,6 +474,19 @@ fun OfflineMapRegionCard(
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("Retry", style = MaterialTheme.typography.labelSmall)
                                     }
+                                }
+                                updateCheckResult?.latestVersion != null && !updateCheckResult.hasUpdate -> {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                    )
+                                    Text(
+                                        text = "Up to date",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                    )
                                 }
                                 else -> {
                                     TextButton(

@@ -815,6 +815,7 @@ class ServiceReticulumProtocol(
                 service?.unregisterCallback(serviceCallback)
                 context.unbindService(serviceConnection)
                 isBound = false
+                _networkStatus.value = NetworkStatus.SHUTDOWN
                 // Reset ready flag to ensure fresh bind waits for new service callback
                 // Without this, a subsequent bindService() may see the stale flag and
                 // resume immediately with a dead binder reference (DeadObjectException)

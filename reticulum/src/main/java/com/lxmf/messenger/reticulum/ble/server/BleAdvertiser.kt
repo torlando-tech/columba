@@ -388,7 +388,7 @@ class BleAdvertiser(
      * This ensures advertising is actually active even if Android silently stopped it.
      */
     private suspend fun refreshAdvertising() {
-        val name = currentDeviceName ?: return
+        if (currentDeviceName == null) return
         if (bluetoothAdapter.isEnabled != true) {
             Log.w(TAG, "Cannot refresh advertising - Bluetooth disabled")
             return
@@ -409,7 +409,7 @@ class BleAdvertiser(
 
             // Restart advertising
             withContext(Dispatchers.Main) {
-                startAdvertisingInternal(name)
+                startAdvertisingInternal()
             }
             Log.d(TAG, "Advertising refreshed successfully")
         } catch (e: Exception) {
@@ -424,7 +424,7 @@ class BleAdvertiser(
      * Used by refresh to restart advertising.
      */
     @SuppressLint("MissingPermission")
-    private fun startAdvertisingInternal(deviceName: String) {
+    private fun startAdvertisingInternal() {
         if (bluetoothLeAdvertiser == null) {
             Log.e(TAG, "Cannot start advertising - advertiser not available")
             return

@@ -203,6 +203,10 @@ fun MapScreen(
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapStyleLoaded by remember { mutableStateOf(false) }
+    // Guards onCameraIdle from saving stale viewport before initial positioning completes.
+    // Without this, a fresh MapView's default viewport (zoom ~0, full world) can overwrite
+    // the saved position during the race between MapView init and the positioning LaunchedEffect.
+    var isInitialPositionSet by remember { mutableStateOf(false) }
     var metersPerPixel by remember { mutableStateOf(1.0) }
     // Track current marker image IDs per contact to remove stale bitmaps on appearance change
     val markerImageIds = remember { mutableMapOf<String, String>() }
@@ -287,6 +291,14 @@ fun MapScreen(
     // If viewport was restored from a saved camera position, skip re-centering
     var hasInitiallyCentered by remember { mutableStateOf(state.lastCameraPosition != null) }
 
+    // Reset the save guard when the MapView is recreated so the positioning LaunchedEffect
+    // gets a chance to run before onCameraIdle starts persisting viewport state.
+    LaunchedEffect(mapLibreMap) {
+        if (mapLibreMap != null) {
+            isInitialPositionSet = false
+        }
+    }
+
     // If focus coordinates are provided, center on them instead of user location
     LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
         val map = mapLibreMap ?: return@LaunchedEffect
@@ -300,6 +312,7 @@ fun MapScreen(
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             hasInitiallyCentered = true
+            isInitialPositionSet = true
         }
     }
 
@@ -316,6 +329,7 @@ fun MapScreen(
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             hasInitiallyCentered = true
+            isInitialPositionSet = true
         }
     }
 
@@ -385,6 +399,13 @@ fun MapScreen(
                 .build()
         map.cameraPosition = initialPosition
         metersPerPixel = map.projection.getMetersPerPixelAtLatitude(initialLat)
+        // Allow onCameraIdle to start saving viewport now that we've positioned the camera.
+        // For the (0,0) fallback, also clear the saved position so a stale (0,0) doesn't
+        // persist across tab switches and prevent future GPS/default-region centering.
+        isInitialPositionSet = usedMeaningfulPosition
+        if (!usedMeaningfulPosition) {
+            viewModel.clearCameraPosition()
+        }
         if (usedMeaningfulPosition) {
             hasInitiallyCentered = true
         }
@@ -624,7 +645,12 @@ fun MapScreen(
                         // Save viewport when user stops interacting (issue #333)
                         // Uses onCameraIdle instead of onCameraMove to avoid excessive
                         // state updates during pan/zoom gestures.
+                        // Gated by isInitialPositionSet to prevent saving the MapView's
+                        // default viewport before our positioning LaunchedEffect runs —
+                        // otherwise, a fresh MapView's default (zoom ~0, full world) can
+                        // overwrite the saved position during the race window.
                         map.addOnCameraIdleListener {
+                            if (!isInitialPositionSet) return@addOnCameraIdleListener
                             val pos = map.cameraPosition
                             val target = pos.target ?: return@addOnCameraIdleListener
                             viewModel.saveCameraPosition(

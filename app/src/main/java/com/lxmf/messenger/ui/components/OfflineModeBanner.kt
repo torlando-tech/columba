@@ -20,7 +20,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 
 /**
@@ -47,6 +51,7 @@ fun OfflineModeBanner(
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
+            val reconnectingDescription = stringResource(R.string.offline_banner_reconnecting_description)
             Row(
                 modifier =
                     Modifier
@@ -64,9 +69,9 @@ fun OfflineModeBanner(
                 Text(
                     text =
                         when {
-                            isRestarting -> "Reconnecting\u2026"
-                            networkStatus is NetworkStatus.ERROR -> "Connection error"
-                            else -> "Columba is offline"
+                            isRestarting -> stringResource(R.string.offline_banner_reconnecting)
+                            networkStatus is NetworkStatus.ERROR -> stringResource(R.string.offline_banner_error)
+                            else -> stringResource(R.string.offline_banner_shutdown)
                         },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -74,13 +79,16 @@ fun OfflineModeBanner(
                 )
                 if (isRestarting) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier =
+                            Modifier
+                                .size(16.dp)
+                                .semantics { contentDescription = reconnectingDescription },
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     TextButton(onClick = onReconnect) {
-                        Text("Reconnect")
+                        Text(stringResource(R.string.offline_banner_reconnect))
                     }
                 }
             }

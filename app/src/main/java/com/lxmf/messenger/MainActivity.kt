@@ -629,6 +629,19 @@ fun ColumbaNavigation(
     // State for pending contact add from deep link
     var pendingContactAdd by remember { mutableStateOf<String?>(null) }
 
+    val exitCallFlow: () -> Unit = {
+        val previousRoute = navController.previousBackStackEntry?.destination?.route
+        val popped = navController.popBackStack()
+
+        if ((!popped || previousRoute == Screen.Welcome.route) && onboardingState.hasCompletedOnboarding) {
+            Log.d("ColumbaNavigation", "Call flow finished without valid return destination, navigating to Chats")
+            navController.navigate(Screen.Chats.route) {
+                popUpTo(Screen.Welcome.route) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
     // Handle pending navigation from intents
     LaunchedEffect(pendingNavigation.value) {
         pendingNavigation.value?.let { navigation ->
@@ -1900,7 +1913,7 @@ fun ColumbaNavigation(
 
                         VoiceCallScreen(
                             destinationHash = destinationHash,
-                            onEndCall = { navController.popBackStack() },
+                            onEndCall = exitCallFlow,
                             autoAnswer = autoAnswer,
                             profileCode = profileCode,
                         )
@@ -1925,7 +1938,7 @@ fun ColumbaNavigation(
                                     popUpTo("incoming_call/$identityHash") { inclusive = true }
                                 }
                             },
-                            onCallDeclined = { navController.popBackStack() },
+                            onCallDeclined = exitCallFlow,
                         )
                     }
                 }

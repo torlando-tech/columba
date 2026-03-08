@@ -265,7 +265,7 @@ class BleScanner(
                         .Builder()
                         .setScanMode(determineScanMode())
                         .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-                        .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
+                        .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                         .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                         .setReportDelay(0) // Report immediately
                         .build()
@@ -391,14 +391,13 @@ class BleScanner(
      * Determine scan mode based on current state.
      *
      * - LOW_LATENCY: When actively discovering (high power but fast)
-     * - BALANCED: Normal mode
-     * - LOW_POWER: When idle (saves battery)
+     * - BALANCED: Normal and idle mode (idle interval already saves battery;
+     *   LOW_POWER's ~10% duty cycle leaves too few radio windows for discovery)
      */
     private fun determineScanMode(): Int =
         when {
             newDevicesInLastScan > NEW_DEVICE_THRESHOLD -> ScanSettings.SCAN_MODE_LOW_LATENCY
-            scansWithoutNewDevices < IDLE_SCANS_THRESHOLD -> ScanSettings.SCAN_MODE_BALANCED
-            else -> ScanSettings.SCAN_MODE_LOW_POWER
+            else -> ScanSettings.SCAN_MODE_BALANCED
         }
 
     /**

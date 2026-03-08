@@ -547,6 +547,14 @@ class MapViewModel
         }
 
         /**
+         * Clear the saved camera position so the (0,0) fallback doesn't persist
+         * across tab switches and block future GPS/default-region centering.
+         */
+        fun clearCameraPosition() {
+            _state.update { it.copy(lastCameraPosition = null) }
+        }
+
+        /**
          * Start sharing location with selected contacts.
          *
          * @param selectedContacts Contacts to share location with

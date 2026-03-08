@@ -313,13 +313,27 @@ class MainActivity : ComponentActivity() {
         // and only Service.startForeground() can restore it. Sending ACTION_START
         // triggers onStartCommand which calls startForeground(this).
         try {
-            val intent =
+            val serviceIntent =
                 Intent(this, ReticulumService::class.java).apply {
                     action = ReticulumService.ACTION_START
                 }
-            ContextCompat.startForegroundService(this, intent)
+            ContextCompat.startForegroundService(this, serviceIntent)
         } catch (e: Exception) {
             Log.w(TAG, "Could not reinforce foreground notification", e)
+        }
+
+        // Fallback: reprocess the current intent if it still has a notification action
+        // and pendingNavigation hasn't been set. This catches edge cases where the
+        // activity was recreated after process death and onNewIntent was not called.
+        if (pendingNavigation.value == null) {
+            val currentIntent = intent
+            val action = currentIntent?.action
+            if (action == NotificationHelper.ACTION_OPEN_CONVERSATION ||
+                action == NotificationHelper.ACTION_OPEN_ANNOUNCE
+            ) {
+                Log.w(TAG, "onResume fallback: reprocessing notification intent (action=$action)")
+                processIntent(currentIntent)
+            }
         }
     }
 
@@ -361,7 +375,16 @@ class MainActivity : ComponentActivity() {
         Log.w(TAG, "📞 processIntent() - action=${intent.action}, extras=${intent.extras?.keySet()}")
         Log.d(TAG, "🔌 USB action check: action='${intent.action}' vs expected='${UsbManager.ACTION_USB_DEVICE_ATTACHED}'")
 
+        val action = intent.action
         intentHandler.handle(intent)
+
+        // Clear notification actions after processing to prevent re-processing
+        // in the onResume fallback on subsequent resumes.
+        if (action == NotificationHelper.ACTION_OPEN_CONVERSATION ||
+            action == NotificationHelper.ACTION_OPEN_ANNOUNCE
+        ) {
+            intent.action = null
+        }
     }
 
     /**
@@ -632,6 +655,7 @@ fun ColumbaNavigation(
     // Handle pending navigation from intents
     LaunchedEffect(pendingNavigation.value) {
         pendingNavigation.value?.let { navigation ->
+            try {
             when (navigation) {
                 is PendingNavigation.AnnounceDetail -> {
                     val encodedHash = Uri.encode(navigation.destinationHash)
@@ -769,6 +793,9 @@ fun ColumbaNavigation(
                     navController.navigate(route)
                     Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                 }
+            }
+            } catch (e: Exception) {
+                Log.e("ColumbaNavigation", "Failed to navigate from pending intent: $navigation", e)
             }
             // Clear the pending navigation after handling
             pendingNavigation.value = null

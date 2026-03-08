@@ -76,8 +76,12 @@ interface RNodeOnlineStatusListener {
      * Called when RNode online status changes.
      *
      * @param isOnline True if RNode is now online, false if offline
+     * @param interfaceName Name of the RNode interface (e.g. "RNodeInterface[BLE]")
      */
-    fun onRNodeOnlineStatusChanged(isOnline: Boolean)
+    fun onRNodeOnlineStatusChanged(
+        isOnline: Boolean,
+        interfaceName: String,
+    )
 }
 
 /**
@@ -159,11 +163,10 @@ class KotlinRNodeBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinRNodeBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinRNodeBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinRNodeBridge(context.applicationContext).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -347,15 +350,19 @@ class KotlinRNodeBridge(
      * This enables event-driven UI updates for network interfaces display.
      *
      * @param isOnline True if RNode is now online, false if offline
+     * @param interfaceName Name of the RNode interface (e.g. "RNodeInterface[BLE]")
      */
-    fun notifyOnlineStatusChanged(isOnline: Boolean) {
-        Log.d(TAG, "████ RNODE ONLINE STATUS ████ online=$isOnline")
+    fun notifyOnlineStatusChanged(
+        isOnline: Boolean,
+        interfaceName: String,
+    ) {
+        Log.d(TAG, "████ RNODE ONLINE STATUS ████ [$interfaceName] online=$isOnline")
 
         // Notify Kotlin listeners
         synchronized(onlineStatusListeners) {
             onlineStatusListeners.forEach { listener ->
                 try {
-                    listener.onRNodeOnlineStatusChanged(isOnline)
+                    listener.onRNodeOnlineStatusChanged(isOnline, interfaceName)
                 } catch (e: Exception) {
                     Log.e(TAG, "Online status listener threw exception", e)
                 }
@@ -386,8 +393,7 @@ class KotlinRNodeBridge(
                 .filter { device ->
                     val name = device.name.orEmpty()
                     name.startsWith("RNode ")
-                }
-                .mapNotNull { it.name }
+                }.mapNotNull { it.name }
                 .also { devices ->
                     Log.d(TAG, "Found ${devices.size} paired RNode devices: $devices")
                 }
@@ -404,9 +410,7 @@ class KotlinRNodeBridge(
      * @param deviceName Device name (e.g., "RNode 5A3F")
      * @return true if connection successful, false otherwise
      */
-    fun connect(deviceName: String): Boolean {
-        return connect(deviceName, "classic")
-    }
+    fun connect(deviceName: String): Boolean = connect(deviceName, "classic")
 
     /**
      * Connect to an RNode device by name with specified mode.
@@ -658,12 +662,14 @@ class KotlinRNodeBridge(
 
         // Start scan with filter for Nordic UART Service
         val filter =
-            ScanFilter.Builder()
+            ScanFilter
+                .Builder()
                 .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
                 .build()
 
         val settings =
-            ScanSettings.Builder()
+            ScanSettings
+                .Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build()
 
@@ -893,48 +899,43 @@ class KotlinRNodeBridge(
      *
      * @return true if connected, false otherwise
      */
-    fun isConnected(): Boolean {
-        return when (connectionMode) {
+    fun isConnected(): Boolean =
+        when (connectionMode) {
             RNodeConnectionMode.CLASSIC -> isConnected.get() && bluetoothSocket?.isConnected == true
             RNodeConnectionMode.BLE -> isConnected.get() && bleConnected
             null -> false
         }
-    }
 
     /**
      * Get the current connection mode.
      *
      * @return "classic", "ble", or null if not connected
      */
-    fun getConnectionMode(): String? {
-        return when (connectionMode) {
+    fun getConnectionMode(): String? =
+        when (connectionMode) {
             RNodeConnectionMode.CLASSIC -> "classic"
             RNodeConnectionMode.BLE -> "ble"
             null -> null
         }
-    }
 
     /**
      * Get the name of the currently connected device.
      *
      * @return Device name or null if not connected
      */
-    fun getConnectedDeviceName(): String? {
-        return if (isConnected.get()) connectedDeviceName else null
-    }
+    fun getConnectedDeviceName(): String? = if (isConnected.get()) connectedDeviceName else null
 
     /**
      * Get the current RSSI (signal strength) of the BLE connection.
      *
      * @return RSSI in dBm, or -100 if not connected or not available
      */
-    fun getRssi(): Int {
-        return if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
+    fun getRssi(): Int =
+        if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
             bleRssi
         } else {
             -100
         }
-    }
 
     /**
      * Request an RSSI reading from the BLE connection.
@@ -982,8 +983,8 @@ class KotlinRNodeBridge(
     /**
      * Write data via Bluetooth Classic.
      */
-    private suspend fun writeClassic(data: ByteArray): Int {
-        return try {
+    private suspend fun writeClassic(data: ByteArray): Int =
+        try {
             withContext(Dispatchers.IO) {
                 outputStream?.let { stream ->
                     stream.write(data)
@@ -1000,7 +1001,6 @@ class KotlinRNodeBridge(
             handleDisconnect()
             -1
         }
-    }
 
     /**
      * Write data via BLE.
@@ -1077,8 +1077,8 @@ class KotlinRNodeBridge(
     /**
      * Synchronous write via Bluetooth Classic.
      */
-    private fun writeSyncClassic(data: ByteArray): Int {
-        return synchronized(this) {
+    private fun writeSyncClassic(data: ByteArray): Int =
+        synchronized(this) {
             try {
                 outputStream?.let { stream ->
                     stream.write(data)
@@ -1095,7 +1095,6 @@ class KotlinRNodeBridge(
                 -1
             }
         }
-    }
 
     /**
      * Synchronous write via BLE.
@@ -1202,9 +1201,7 @@ class KotlinRNodeBridge(
      *
      * @return Number of buffered bytes
      */
-    fun available(): Int {
-        return readBuffer.size
-    }
+    fun available(): Int = readBuffer.size
 
     /**
      * Blocking read with timeout.

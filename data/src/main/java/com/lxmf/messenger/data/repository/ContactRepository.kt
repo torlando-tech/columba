@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.util.HashUtils.computeIdentityHash
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -324,6 +325,16 @@ class ContactRepository
         suspend fun getContactCount(): Int {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return 0
             return contactDao.getContactCount(activeIdentity.identityHash)
+        }
+
+        suspend fun getRestorableContactIdentitiesForActiveIdentity(): List<Pair<String, ByteArray>> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return contactDao
+                .getRestorableContactsForIdentity(activeIdentity.identityHash, ContactStatus.ACTIVE.name)
+                .mapNotNull { contact ->
+                    val publicKey = contact.publicKey ?: return@mapNotNull null
+                    computeIdentityHash(publicKey) to publicKey
+                }
         }
 
         /**

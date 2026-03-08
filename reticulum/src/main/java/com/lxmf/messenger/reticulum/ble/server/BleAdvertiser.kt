@@ -152,11 +152,12 @@ class BleAdvertiser(
     }
 
     /**
-     * Start BLE advertising with Protocol v2.2 identity-based naming.
-     * If transport identity is set, advertises as "RNS-{32-hex-identity}".
-     * Otherwise falls back to provided device name.
+     * Start BLE advertising with the Reticulum service UUID.
+     * The device name is used only for internal logging; it is NOT
+     * included in the scan response and the phone's Bluetooth name
+     * is never changed.
      *
-     * @param deviceName Fallback device name (used if identity not set)
+     * @param deviceName Label used for logging (not advertised)
      * @return Result indicating success or failure
      */
     suspend fun startAdvertising(deviceName: String = BleConstants.DEFAULT_DEVICE_NAME_PREFIX): Result<Unit> =
@@ -202,9 +203,8 @@ class BleAdvertiser(
                     )
                 }
 
-                // Determine actual device name to use
-                // Protocol v2.2: Use "RNS-{truncated-identity}" if identity is set
-                // Truncate to first N bytes to fit BLE advertising payload constraints (31-byte limit)
+                // Determine device name for logging / internal tracking only
+                // (not included in BLE advertisement payload)
                 val actualDeviceName =
                     transportIdentityHash?.let { identity ->
                         "RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"
@@ -235,7 +235,7 @@ class BleAdvertiser(
                 val advertiseData =
                     AdvertiseData
                         .Builder()
-                        .setIncludeDeviceName(false) // Name moved to scan response due to payload size
+                        .setIncludeDeviceName(false)
                         .setIncludeTxPowerLevel(false)
                         .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID)) // Reticulum service
                         .build()

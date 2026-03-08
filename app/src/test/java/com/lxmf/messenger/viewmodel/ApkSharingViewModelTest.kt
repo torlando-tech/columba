@@ -57,6 +57,11 @@ class ApkSharingViewModelTest {
         assertNull(defaultState.localIp)
         assertNull(defaultState.errorMessage)
         assertEquals(0L, defaultState.apkSizeBytes)
+        assertNull(defaultState.sharingMode)
+        assertNull(defaultState.hotspotSsid)
+        assertNull(defaultState.hotspotPassword)
+        assertFalse(defaultState.needsHotspotPermission)
+        assertFalse(defaultState.isHotspotStarting)
     }
 
     @Test
@@ -123,6 +128,7 @@ class ApkSharingViewModelTest {
                 downloadUrl = "http://10.0.0.1:8080",
                 localIp = "10.0.0.1",
                 apkSizeBytes = 5_000_000,
+                sharingMode = SharingMode.WIFI,
             )
 
         assertTrue(modified.isServerRunning)
@@ -130,6 +136,9 @@ class ApkSharingViewModelTest {
         assertEquals("10.0.0.1", modified.localIp)
         assertNull(modified.errorMessage)
         assertEquals(5_000_000L, modified.apkSizeBytes)
+        assertEquals(SharingMode.WIFI, modified.sharingMode)
+        assertNull(modified.hotspotSsid)
+        assertNull(modified.hotspotPassword)
     }
 
     @Test
@@ -142,6 +151,27 @@ class ApkSharingViewModelTest {
         assertFalse(state.isServerRunning)
         assertNull(state.downloadUrl)
         assertEquals("No WiFi connection", state.errorMessage)
+    }
+
+    @Test
+    fun `ApkSharingState hotspot mode has all fields`() {
+        val state = ApkSharingState(
+            isServerRunning = true,
+            downloadUrl = "http://192.168.43.1:9090",
+            localIp = "192.168.43.1",
+            sharingMode = SharingMode.HOTSPOT,
+            hotspotSsid = "DIRECT-ab-MyPhone",
+            hotspotPassword = "s3cur3P4ss",
+            apkSizeBytes = 12_000_000,
+        )
+
+        assertTrue(state.isServerRunning)
+        assertEquals(SharingMode.HOTSPOT, state.sharingMode)
+        assertEquals("DIRECT-ab-MyPhone", state.hotspotSsid)
+        assertEquals("s3cur3P4ss", state.hotspotPassword)
+        assertEquals("http://192.168.43.1:9090", state.downloadUrl)
+        assertFalse(state.needsHotspotPermission)
+        assertFalse(state.isHotspotStarting)
     }
 
     @Test
@@ -165,4 +195,23 @@ class ApkSharingViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun `getRequiredHotspotPermissions returns non-empty on API 33`() =
+        runTest {
+            val viewModel = ApkSharingViewModel(application)
+            val permissions = viewModel.getRequiredHotspotPermissions()
+            // On API 34 (our test config), should require NEARBY_WIFI_DEVICES
+            assertTrue(
+                "Should require permissions on API 34",
+                permissions.isNotEmpty(),
+            )
+        }
+
+    @Test
+    fun `SharingMode enum has expected values`() {
+        assertEquals(2, SharingMode.entries.size)
+        assertNotNull(SharingMode.WIFI)
+        assertNotNull(SharingMode.HOTSPOT)
+    }
 }

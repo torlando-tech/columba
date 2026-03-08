@@ -631,12 +631,17 @@ fun ColumbaNavigation(
 
     val exitCallFlow: () -> Unit = {
         val previousRoute = navController.previousBackStackEntry?.destination?.route
+        val currentRoute = navController.currentDestination?.route
         val popped = navController.popBackStack()
 
         if ((!popped || previousRoute == Screen.Welcome.route) && onboardingState.hasCompletedOnboarding) {
             Log.d("ColumbaNavigation", "Call flow finished without valid return destination, navigating to Chats")
             navController.navigate(Screen.Chats.route) {
-                popUpTo(Screen.Welcome.route) { inclusive = true }
+                if (!popped && currentRoute != null) {
+                    popUpTo(currentRoute) { inclusive = true }
+                } else {
+                    popUpTo(Screen.Welcome.route) { inclusive = true }
+                }
                 launchSingleTop = true
             }
         }

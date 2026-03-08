@@ -397,7 +397,6 @@ class BleScanner(
     private fun determineScanMode(): Int =
         when {
             newDevicesInLastScan > NEW_DEVICE_THRESHOLD -> ScanSettings.SCAN_MODE_LOW_LATENCY
-            scansWithoutNewDevices < IDLE_SCANS_THRESHOLD -> ScanSettings.SCAN_MODE_BALANCED
             else -> ScanSettings.SCAN_MODE_BALANCED
         }
 

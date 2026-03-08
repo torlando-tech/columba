@@ -241,20 +241,13 @@ class BleAdvertiser(
                         .build()
 
                 // Build scan response data (sent when central requests more info)
-                // Scan response has separate 31-byte payload, perfect for device name
+                // Do not include device name to avoid changing the phone's Bluetooth name.
+                // Devices discover us via the service UUID in the advertise data.
                 val scanResponseData =
                     AdvertiseData
                         .Builder()
-                        .setIncludeDeviceName(true) // Name in scan response (31-byte budget)
+                        .setIncludeDeviceName(false)
                         .build()
-
-                // Temporarily set Bluetooth name
-                val originalName = bluetoothAdapter.name
-                try {
-                    bluetoothAdapter.name = actualDeviceName
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Cannot set Bluetooth name (permission denied), using default")
-                }
 
                 // Start advertising
                 bluetoothLeAdvertiser.startAdvertising(
@@ -265,16 +258,6 @@ class BleAdvertiser(
                 )
 
                 Log.d(TAG, "Starting advertising as '$actualDeviceName'...")
-
-                // Restore original name after a delay (advertisement already started)
-                scope.launch {
-                    delay(1000)
-                    try {
-                        bluetoothAdapter.name = originalName
-                    } catch (e: SecurityException) {
-                        // Ignore
-                    }
-                }
 
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -467,16 +450,8 @@ class BleAdvertiser(
         val scanResponseData =
             AdvertiseData
                 .Builder()
-                .setIncludeDeviceName(true)
+                .setIncludeDeviceName(false)
                 .build()
-
-        // Temporarily set Bluetooth name
-        val originalName = bluetoothAdapter.name
-        try {
-            bluetoothAdapter.name = deviceName
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Cannot set Bluetooth name during refresh")
-        }
 
         bluetoothLeAdvertiser.startAdvertising(
             settings,
@@ -484,16 +459,6 @@ class BleAdvertiser(
             scanResponseData,
             advertiseCallback,
         )
-
-        // Restore original name after a delay
-        scope.launch {
-            delay(1000)
-            try {
-                bluetoothAdapter.name = originalName
-            } catch (e: SecurityException) {
-                // Ignore
-            }
-        }
     }
 
     /**

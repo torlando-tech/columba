@@ -69,10 +69,6 @@ class BleAdvertiser(
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser
 
-    // Local transport identity (16 bytes, set by Python bridge)
-    @Volatile
-    private var transportIdentityHash: ByteArray? = null
-
     // State
     private val _isAdvertising = MutableStateFlow(false)
     val isAdvertising: StateFlow<Boolean> = _isAdvertising.asStateFlow()
@@ -137,21 +133,6 @@ class BleAdvertiser(
         }
 
     /**
-     * Set the local transport identity hash for Protocol v2.2 device naming.
-     * The device will advertise as "RNS-{32-hex-identity}" when identity is set.
-     *
-     * @param identityHash 16-byte Reticulum Transport identity hash
-     * @throws IllegalArgumentException if identityHash is not exactly 16 bytes
-     */
-    fun setTransportIdentity(identityHash: ByteArray) {
-        require(identityHash.size == 16) {
-            "Transport identity hash must be exactly 16 bytes, got ${identityHash.size}"
-        }
-        transportIdentityHash = identityHash
-        Log.d(TAG, "Transport identity set: ${identityHash.joinToString("") { "%02x".format(it) }}")
-    }
-
-    /**
      * Start BLE advertising with the Reticulum service UUID.
      * The device name is used only for internal logging; it is NOT
      * included in the scan response and the phone's Bluetooth name
@@ -203,21 +184,9 @@ class BleAdvertiser(
                     )
                 }
 
-                // Determine device name for logging / internal tracking only
-                // (not included in BLE advertisement payload)
-                val actualDeviceName =
-                    transportIdentityHash?.let { identity ->
-                        "RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"
-                    } ?: deviceName
+                currentDeviceName = deviceName
 
-                currentDeviceName = actualDeviceName
-
-                Log.d(TAG, "Advertising with device name: $actualDeviceName")
-                if (transportIdentityHash != null) {
-                    Log.d(TAG, "  (Protocol v2.2 identity-based naming)")
-                } else {
-                    Log.w(TAG, "  (Protocol v1 fallback - identity not set)")
-                }
+                Log.d(TAG, "Advertising with device name: $deviceName")
 
                 // Build advertise settings
                 val settings =
@@ -257,7 +226,7 @@ class BleAdvertiser(
                     advertiseCallback,
                 )
 
-                Log.d(TAG, "Starting advertising as '$actualDeviceName'...")
+                Log.d(TAG, "Starting advertising as '$deviceName'...")
 
                 Result.success(Unit)
             } catch (e: Exception) {

@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
  * - Periodic logging at synchronized 5-minute intervals
  * - Sentry breadcrumbs for crash correlation
  *
- * Enabled in all builds via BuildConfig.ENABLE_MEMORY_PROFILING.
- * Memory stats are recorded as Sentry breadcrumbs for OOM investigation.
+ * Native heap monitoring (Sentry breadcrumbs) runs in all builds — it's lightweight.
+ * Python tracemalloc profiling is gated by BuildConfig.ENABLE_MEMORY_PROFILING (debug only).
  *
  * Usage:
  *   val profiler = MemoryProfilerManager(wrapperManager, scope)
@@ -42,27 +42,31 @@ class MemoryProfilerManager(
     /**
      * Start memory profiling with periodic snapshots.
      *
-     * Debug builds only - early returns if ENABLE_MEMORY_PROFILING is false.
+     * Native heap monitoring (Sentry breadcrumbs) always runs — it's cheap and
+     * provides OOM crash correlation data in release builds.
+     *
+     * Python tracemalloc only runs when ENABLE_MEMORY_PROFILING is true (debug builds).
+     * tracemalloc instruments every Python allocation and is too expensive for production.
      *
      * @param intervalSeconds Snapshot interval (default 300 = 5 minutes)
      */
     fun startProfiling(intervalSeconds: Int = 300) {
+        // Always start lightweight native heap monitoring for Sentry breadcrumbs
+        startNativeHeapMonitoring(intervalSeconds)
+
         if (!BuildConfig.ENABLE_MEMORY_PROFILING) {
-            Log.d(TAG, "Memory profiling disabled in this build")
+            Log.d(TAG, "Python memory profiling disabled in this build")
             return
         }
 
         try {
-            // Start Python tracemalloc profiling
+            // Start Python tracemalloc profiling (debug builds only)
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("enable_memory_profiling", intervalSeconds)
-                Log.i(TAG, "Memory profiling started with ${intervalSeconds}s interval")
+                Log.i(TAG, "Python memory profiling started with ${intervalSeconds}s interval")
             }
-
-            // Start native heap monitoring (synchronized with Python snapshots)
-            startNativeHeapMonitoring(intervalSeconds)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start profiling", e)
+            Log.e(TAG, "Failed to start Python profiling", e)
         }
     }
 
@@ -72,22 +76,22 @@ class MemoryProfilerManager(
      * Safe to call even if profiling was not enabled.
      */
     fun stopProfiling() {
+        // Always stop native heap monitoring
+        nativeHeapMonitorJob?.cancel()
+        nativeHeapMonitorJob = null
+
         if (!BuildConfig.ENABLE_MEMORY_PROFILING) {
             return
         }
 
         try {
-            // Stop native heap monitoring
-            nativeHeapMonitorJob?.cancel()
-            nativeHeapMonitorJob = null
-
-            // Stop Python profiling
+            // Stop Python profiling (debug builds only)
             wrapperManager.withWrapper { wrapper ->
                 wrapper.callAttr("disable_memory_profiling")
-                Log.i(TAG, "Memory profiling stopped")
+                Log.i(TAG, "Python memory profiling stopped")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop profiling", e)
+            Log.e(TAG, "Failed to stop Python profiling", e)
         }
     }
 
@@ -133,6 +137,7 @@ class MemoryProfilerManager(
 
         nativeHeapMonitorJob =
             scope.launch {
+                logNativeHeapInfo() // Baseline before first interval
                 while (isActive) {
                     delay(intervalSeconds * 1000L)
                     logNativeHeapInfo()

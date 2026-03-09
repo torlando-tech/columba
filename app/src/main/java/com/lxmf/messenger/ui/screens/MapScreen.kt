@@ -436,45 +436,6 @@ fun MapScreen(
         }
     }
 
-    // Set initial camera position once both map and default region state are resolved.
-    // Deferred from onMapReady to avoid the 0,0 race condition (issue #607).
-    LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) {
-        val map = mapLibreMap ?: return@LaunchedEffect
-        if (!state.defaultRegionLoaded) return@LaunchedEffect
-
-        val savedPos = state.lastCameraPosition
-        val defaultCenter = state.defaultRegionCenter
-        val userLoc = state.userLocation
-        val initialLat: Double
-        val initialLng: Double
-        val initialZoom: Double
-        var usedMeaningfulPosition = true
-        when {
-            // Always restore saved viewport — handles config change and tab switch
-            // where ViewModel survives but MapView is recreated at default 0,0.
-            savedPos != null -> {
-                initialLat = savedPos.latitude
-                initialLng = savedPos.longitude
-                initialZoom = savedPos.zoom
-            }
-            // For remaining sources, skip if already centered via another
-            // LaunchedEffect (focus coordinates or GPS).
-            hasInitiallyCentered -> return@LaunchedEffect
-            userLoc != null -> {
-                initialLat = userLoc.latitude
-                initialLng = userLoc.longitude
-                initialZoom = 15.0
-            }
-            defaultCenter != null -> {
-                initialLat = defaultCenter.latitude
-                initialLng = defaultCenter.longitude
-                initialZoom = defaultCenter.zoom
-            }
-            else -> {
-                // No position source yet — show world view but don't lock out
-                // the GPS LaunchedEffect, which may arrive later.
-                initialLat = 0
-
     // Enable location component when permission is granted
     @SuppressLint("MissingPermission")
     LaunchedEffect(state.hasLocationPermission, mapLibreMap) {

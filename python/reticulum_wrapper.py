@@ -8719,10 +8719,16 @@ class ReticulumWrapper:
             # The receiver will parse this and process the command
             content = f"__GUARDIAN_CMD__:{command_json}"
 
-            result = self.send_lxmf_message(
+            # Guardian commands must be direct-only (no propagation):
+            # 1. Commands have a 5-minute timestamp window — they'd expire on a prop node
+            # 2. Direct delivery gives us delivery proof for free
+            # 3. Control commands shouldn't sit on third-party relay nodes
+            result = self.send_lxmf_message_with_method(
                 dest_hash=dest_hash_bytes,
                 content=content,
                 source_identity_private_key=prv_bytes,
+                delivery_method="direct",
+                try_propagation_on_fail=False,
             )
 
             if result.get("success"):

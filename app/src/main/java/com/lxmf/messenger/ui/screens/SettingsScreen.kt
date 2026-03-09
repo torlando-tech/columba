@@ -277,6 +277,8 @@ fun SettingsScreen(
                 )
 
                 GuardianCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.GUARDIAN.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.GUARDIAN, it) },
                     hasGuardian = state.hasGuardian,
                     isLocked = state.isGuardianLocked,
                     guardianName = state.guardianName,

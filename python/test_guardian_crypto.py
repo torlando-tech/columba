@@ -716,11 +716,15 @@ class TestGuardianSendCommand(unittest.TestCase):
         mock_dest = MagicMock()
         mock_dest.identity = FullMockIdentity()
         self.wrapper.local_lxmf_destination = mock_dest
-        self.wrapper.send_lxmf_message = Mock(return_value={"success": True})
+        self.wrapper.send_lxmf_message_with_method = Mock(return_value={"success": True})
 
         result = self.wrapper.guardian_send_command("ab" * 16, "LOCK", "{}")
         self.assertTrue(result.get("success"))
-        self.wrapper.send_lxmf_message.assert_called_once()
+        self.wrapper.send_lxmf_message_with_method.assert_called_once()
+        # Verify guardian commands enforce direct-only delivery (no propagation fallback)
+        call_kwargs = self.wrapper.send_lxmf_message_with_method.call_args.kwargs
+        self.assertEqual(call_kwargs["delivery_method"], "direct")
+        self.assertFalse(call_kwargs["try_propagation_on_fail"])
 
 
 if __name__ == "__main__":

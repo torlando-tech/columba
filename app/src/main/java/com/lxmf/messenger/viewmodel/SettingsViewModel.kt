@@ -60,6 +60,7 @@ enum class SettingsCardId {
     SHARE_COLUMBA,
     ABOUT,
     SHARED_INSTANCE_BANNER,
+    GUARDIAN,
 }
 
 @androidx.compose.runtime.Immutable

@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.util.RssiThrottler
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -65,11 +66,19 @@ class GuardianCommandProcessor
         }
 
         /**
-         * Holds the pairing token from the most recently generated QR code.
-         * Set when the parent generates a QR, consumed when a matching PAIR_ACK arrives.
+         * Holds a pairing token + its creation time from the most recently generated QR code.
+         * The token expires after COMMAND_WINDOW_MS (5 min) to match child-side QR validation.
          * Null means no active pairing session — any PAIR_ACK will be rejected.
          */
-        private val pendingPairingToken = AtomicReference<String?>(null)
+        private data class PendingPairing(
+            val token: String,
+            val createdAtMs: Long,
+        )
+
+        private val pendingPairing = AtomicReference<PendingPairing?>(null)
+
+        /** Rate-limits PAIR_ACK processing per sender to prevent brute-force token guessing. */
+        private val pairAckThrottle = RssiThrottler(intervalMs = 10_000L)
 
         /**
          * Store the pairing token from a freshly generated QR code.
@@ -78,7 +87,7 @@ class GuardianCommandProcessor
          * @param token The hex-encoded pairing token, or null to clear
          */
         fun setPendingPairingToken(token: String?) {
-            pendingPairingToken.set(token)
+            pendingPairing.set(token?.let { PendingPairing(it, System.currentTimeMillis()) })
         }
 
         /**
@@ -425,69 +434,130 @@ class GuardianCommandProcessor
 
         /**
          * Process a PAIR_ACK message from a child device.
-         * Verifies the pairing token matches the one from the active QR code,
-         * then adds the sender to our list of paired children.
+         *
+         * Security checks (in order):
+         * 1. Rate limiting — prevent brute-force token guessing (10s per sender)
+         * 2. QR expiry — reject if the parent's QR is older than COMMAND_WINDOW_MS (5 min)
+         * 3. Token match — verify the pairing token from the QR code
+         * 4. Signature verification — verify Ed25519 signature using sender's LXMF public key
          *
          * @param message The received LXMF message containing PAIR_ACK
          * @return True if the child was successfully registered
          */
-        @Suppress("NestedBlockDepth", "SwallowedException", "ReturnCount")
+        @Suppress("NestedBlockDepth", "SwallowedException", "ReturnCount", "CyclomaticComplexMethod")
         suspend fun processPairAck(message: ReceivedMessage): Boolean {
             try {
-                // sourceHash is now correctly 16 bytes (32 hex chars) after fixing the base64/hex encoding mismatch
                 val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
+
+                // --- Fix 2: Rate-limit per sender to prevent brute-force token guessing ---
+                if (!pairAckThrottle.shouldUpdate(senderHash)) {
+                    Log.w(TAG, "PAIR_ACK rate-limited from $senderHash")
+                    return false
+                }
+
                 Log.i(TAG, "Processing PAIR_ACK from: $senderHash (${message.sourceHash.size} bytes)")
 
-                // Extract payload (display_name + pairing_token) from the message
-                var displayName: String? = null
-                var receivedToken: String? = null
+                // Extract command JSON string early — needed for both payload parsing and signature verification
+                val commandDataStr: String
                 try {
-                    // First try content-based format
-                    if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
-                        val commandJson = message.content.removePrefix(GUARDIAN_CMD_PREFIX)
-                        val commandData = JSONObject(commandJson)
-                        val payload = commandData.optJSONObject("payload")
-                        displayName = payload?.optString("display_name")?.ifEmpty { null }
-                        receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
-                    } else {
-                        // Fall back to LXMF field 0x80 (legacy format)
-                        val fieldsJson = message.fieldsJson
-                        if (fieldsJson != null) {
-                            val fields = JSONObject(fieldsJson)
-                            val commandDataStr =
+                    commandDataStr =
+                        if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                            message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+                        } else {
+                            val fieldsJson = message.fieldsJson
+                            if (fieldsJson != null) {
+                                val fields = JSONObject(fieldsJson)
                                 fields
                                     .optString(FIELD_PARENTAL_CONTROL.toString())
                                     .ifEmpty { fields.optString("128") }
-                            if (commandDataStr.isNotEmpty()) {
-                                val commandData = JSONObject(commandDataStr)
-                                val payload = commandData.optJSONObject("payload")
-                                displayName = payload?.optString("display_name")?.ifEmpty { null }
-                                receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
+                            } else {
+                                ""
                             }
                         }
-                    }
                 } catch (e: Exception) {
-                    // Non-fatal for display name, but token extraction failure will be caught below
-                    Log.d(TAG, "Could not extract payload from PAIR_ACK")
+                    Log.e(TAG, "Failed to extract command data from PAIR_ACK", e)
+                    return false
                 }
 
-                // Verify pairing token matches the one from our QR code
-                val expectedToken = pendingPairingToken.get()
-                if (expectedToken == null) {
+                if (commandDataStr.isEmpty()) {
+                    Log.e(TAG, "PAIR_ACK rejected: no command data found")
+                    return false
+                }
+
+                // Parse payload fields from command JSON
+                val commandData = JSONObject(commandDataStr)
+                val payload = commandData.optJSONObject("payload")
+                val displayName = payload?.optString("display_name")?.ifEmpty { null }
+                val receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
+
+                // --- Fix 3: Verify QR hasn't expired on parent side ---
+                val pending = pendingPairing.get()
+                if (pending == null) {
                     Log.w(TAG, "PAIR_ACK rejected: no active pairing QR (no pending token)")
                     return false
                 }
+                if (System.currentTimeMillis() - pending.createdAtMs > COMMAND_WINDOW_MS) {
+                    pendingPairing.set(null) // clean up expired token
+                    Log.w(TAG, "PAIR_ACK rejected: pairing QR expired (older than ${COMMAND_WINDOW_MS / 1000}s)")
+                    return false
+                }
+
+                // Verify pairing token matches the one from our QR code
                 if (receivedToken == null) {
                     Log.w(TAG, "PAIR_ACK rejected: message contains no pairing token")
                     return false
                 }
-                if (receivedToken != expectedToken) {
+                if (receivedToken != pending.token) {
                     Log.w(TAG, "PAIR_ACK rejected: token mismatch (unauthorized pairing attempt)")
                     return false
                 }
 
-                // Token verified — consume it so it can't be reused
-                pendingPairingToken.set(null)
+                // --- Fix 1: Verify Ed25519 signature using sender's LXMF public key ---
+                // The child doesn't have a pre-established public key on the parent, so we
+                // verify against the sender's identity key from the LXMF message. Combined with
+                // the pairing token, this proves the sender both scanned the QR AND signed the message.
+                val senderPublicKey = message.publicKey
+                if (senderPublicKey != null) {
+                    // Validate timestamp window (same as processCommand)
+                    val timestamp = commandData.optLong("timestamp", 0L)
+                    if (timestamp > 0L) {
+                        val now = System.currentTimeMillis()
+                        if (kotlin.math.abs(now - timestamp) > COMMAND_WINDOW_MS) {
+                            Log.w(TAG, "PAIR_ACK rejected: command timestamp outside window")
+                            return false
+                        }
+                    }
+
+                    val signatureBytes =
+                        try {
+                            val sigHex = commandData.getString("signature")
+                            ByteArray(sigHex.length / 2) { i ->
+                                sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "PAIR_ACK rejected: missing or malformed signature", e)
+                            return false
+                        }
+
+                    val signatureValid =
+                        reticulumProtocol.verifyGuardianCommand(
+                            commandDataStr,
+                            signatureBytes,
+                            senderPublicKey,
+                        )
+                    if (!signatureValid) {
+                        Log.w(TAG, "PAIR_ACK rejected: signature verification FAILED")
+                        return false
+                    }
+                    Log.d(TAG, "PAIR_ACK signature verified against sender's LXMF identity key")
+                } else {
+                    // Some LXMF transports may not provide the sender's public key.
+                    // The pairing token already provides primary authentication.
+                    Log.w(TAG, "PAIR_ACK: sender public key not available, skipping signature verification")
+                }
+
+                // All checks passed — consume the pairing token so it can't be reused
+                pendingPairing.set(null)
 
                 // Add the child to our paired children list
                 guardianRepository.addPairedChild(senderHash, displayName)

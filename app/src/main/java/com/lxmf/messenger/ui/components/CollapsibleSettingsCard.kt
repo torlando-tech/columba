@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
  * @param isExpanded Whether the card is currently expanded
  * @param onExpandedChange Callback when expansion state should change
  * @param modifier Optional modifier for the card
+ * @param containerColor Background color for the card. Defaults to surfaceVariant.
+ * @param iconTint Tint for the header icon. Defaults to onSurfaceVariant.
  * @param headerAction Optional composable for header actions (e.g., Switch or other controls).
  *                     This is placed to the left of the chevron icon.
  * @param content The card content shown when expanded
@@ -53,6 +55,8 @@ fun CollapsibleSettingsCard(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant,
+    iconTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
     headerAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -63,7 +67,7 @@ fun CollapsibleSettingsCard(
         shape = RoundedCornerShape(12.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = containerColor,
             ),
     ) {
         Column(
@@ -91,7 +95,7 @@ fun CollapsibleSettingsCard(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = iconTint,
                     )
                     Text(
                         text = title,

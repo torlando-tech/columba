@@ -317,12 +317,12 @@ class BleConnectionManager(
         Log.i(TAG, "Setting transport identity on all BLE components")
         Log.i(TAG, "  Identity: ${identityHash.joinToString("") { "%02x".format(it) }}")
 
-        // Set on all components for Protocol v2.2 compliance
+        // Set on GATT components for Protocol v2.2 compliance
+        // (Advertiser no longer needs identity — device name is not advertised)
         gattClient.setTransportIdentity(identityHash)
         gattServer.setTransportIdentity(identityHash)
-        advertiser.setTransportIdentity(identityHash)
 
-        Log.d(TAG, "Transport identity set on client, server, and advertiser")
+        Log.d(TAG, "Transport identity set on client and server")
     }
 
     /**
@@ -485,9 +485,7 @@ class BleConnectionManager(
     /**
      * Get discovered devices sorted by priority.
      */
-    suspend fun getDiscoveredDevices(): List<BleDevice> {
-        return scanner.getDevicesSortedByPriority()
-    }
+    suspend fun getDiscoveredDevices(): List<BleDevice> = scanner.getDevicesSortedByPriority()
 
     /**
      * Get detailed information about all connected peers.
@@ -834,16 +832,12 @@ class BleConnectionManager(
      * Get the tracking key for a peer (identity if known, otherwise MAC).
      * Used for keying blacklists and connection tracking.
      */
-    private fun getPeerKey(address: String): String {
-        return macToIdentity[address] ?: address
-    }
+    private fun getPeerKey(address: String): String = macToIdentity[address] ?: address
 
     /**
      * Get the current MAC address for an identity (if known).
      */
-    private fun getIdentityMac(identityHash: String): String? {
-        return peers[identityHash]?.currentMac
-    }
+    private fun getIdentityMac(identityHash: String): String? = peers[identityHash]?.currentMac
 
     /**
      * Check if an address or identity is blacklisted.

@@ -167,21 +167,6 @@ object BleConstants {
      */
     const val DEFAULT_DEVICE_NAME_PREFIX = "Reticulum-"
 
-    /**
-     * Number of identity hash bytes to include in advertised device name.
-     *
-     * BLE advertising has a 31-byte payload limit. With flags (3 bytes) and
-     * a 128-bit service UUID (19 bytes), only ~9 bytes remain for the device name.
-     *
-     * Full identity is 16 bytes (32 hex chars), but we truncate to 3 bytes (6 hex chars)
-     * to fit within BLE advertising constraints. This results in device names like
-     * "RNS-1b9d2b" (10 characters total).
-     *
-     * The full identity is still exchanged via the GATT Identity characteristic
-     * during connection handshake (Protocol v2.2).
-     */
-    const val IDENTITY_BYTES_IN_ADVERTISED_NAME = 3
-
     // Error Codes
     /**
      * GATT error code 133.

@@ -180,14 +180,6 @@ class KotlinBLEBridge(
     // This set prevents treating such connections as "stale" during deduplication.
     private val pendingCentralConnections = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
-    // Track identities that were recently deduplicated (central closed, peripheral kept)
-    // Maps identity hash -> timestamp when deduplicated
-    // Prevents scanner from reconnecting as central to a peer we just deduplicated
-    private val recentlyDeduplicatedIdentities = ConcurrentHashMap<String, Long>()
-
-    // How long to prevent reconnection after deduplication (60 seconds)
-    private val deduplicationCooldownMs = 60_000L
-
     // Track addresses that are currently in deduplication (one connection closing)
     // Maps address -> DeduplicationTracker with timestamp and which connection is closing
     // During the grace period, we don't clean up the peer for unexpected disconnects
@@ -759,7 +751,6 @@ class KotlinBLEBridge(
             pendingConnections.clear()
             processedIdentityCallbacks.clear()
             pendingCentralConnections.clear()
-            recentlyDeduplicatedIdentities.clear()
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing state during cleanup", e)
         }
@@ -896,8 +887,6 @@ class KotlinBLEBridge(
         // Update all BLE components (if available)
         gattClient?.setTransportIdentity(identityBytes)
         gattServer?.setTransportIdentity(identityBytes)
-        advertiser?.setTransportIdentity(identityBytes)
-
         Log.i(TAG, "Transport identity set: ${identityBytes.joinToString("") { "%02x".format(it) }}")
 
         // Trigger any pending identity callback (e.g., from restart waiting for identity)
@@ -1012,44 +1001,6 @@ class KotlinBLEBridge(
             return false // Was not advertising, now restarting
         }
         return true // Already advertising (or no identity set)
-    }
-
-    /**
-     * Check if a discovered device should be skipped due to recent deduplication.
-     *
-     * Protocol v2.2 includes 3 bytes (6 hex chars) of identity in the advertised name.
-     * If the name matches an identity that was recently deduplicated (we're already
-     * connected as peripheral), skip the central connection attempt.
-     *
-     * @param deviceName Advertised device name (e.g., "RNS-272b4c" or "Reticulum-272b4c")
-     * @return true if the device should be skipped, false otherwise
-     */
-    @Suppress("ReturnCount")
-    private fun shouldSkipDiscoveredDevice(deviceName: String?): Boolean {
-        if (deviceName == null) return false
-
-        // Clean up old entries first
-        val now = System.currentTimeMillis()
-        recentlyDeduplicatedIdentities.entries.removeIf { now - it.value > deduplicationCooldownMs }
-
-        if (recentlyDeduplicatedIdentities.isEmpty()) return false
-
-        // Extract identity prefix from device name
-        // Protocol v2.2 format: "RNS-XXXXXX" or "Reticulum-XXXXXX" where X is hex
-        val identityPrefix =
-            when {
-                deviceName.startsWith("RNS-") -> deviceName.removePrefix("RNS-").lowercase()
-                deviceName.startsWith("Reticulum-") -> deviceName.removePrefix("Reticulum-").lowercase()
-                else -> return false
-            }
-
-        // Check if any recently deduplicated identity starts with this prefix
-        // (device name has 6 hex chars = 3 bytes, full identity is 32 hex chars)
-        val matchingIdentity = recentlyDeduplicatedIdentities.keys.find { it.startsWith(identityPrefix) }
-        if (matchingIdentity != null) {
-            Log.i(TAG, "Skipping discovered device with name '$deviceName' - matches recently deduplicated identity $matchingIdentity")
-        }
-        return matchingIdentity != null
     }
 
     /**
@@ -1604,14 +1555,10 @@ class KotlinBLEBridge(
     private fun setupCallbacks() {
         // Scanner callbacks (if available)
         scanner?.onDeviceDiscovered = { device: BleDevice ->
-            // Skip devices that match recently deduplicated identities
-            // (prevents reconnecting as central to a peer we're already connected to as peripheral)
-            if (!shouldSkipDiscoveredDevice(device.name)) {
-                Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
-                // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
-                val serviceUuidsArray = device.serviceUuids?.toTypedArray()
-                onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
-            }
+            Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
+            // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
+            val serviceUuidsArray = device.serviceUuids?.toTypedArray()
+            onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
         }
 
         // GATT Client callbacks (central mode, if available)
@@ -1778,10 +1725,6 @@ class KotlinBLEBridge(
                             dedupeAction = DedupeAction.CLOSE_CENTRAL
                         }
                     }
-                    // Add deduplication cooldown to prevent immediate reconnection as central
-                    // This prevents reconnection storms when one side keeps trying to reconnect
-                    recentlyDeduplicatedIdentities[peerIdentity] = System.currentTimeMillis()
-                    Log.d(TAG, "Added $peerIdentity to deduplication cooldown (${deduplicationCooldownMs / 1000}s)")
                 } else {
                     Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
                 }
@@ -1952,8 +1895,6 @@ class KotlinBLEBridge(
                     if (otherAddresses.isEmpty()) {
                         // Identity fully disconnected - clean up reverse mapping
                         identityToAddress.remove(identityHash)
-                        // Allow reconnection as central again
-                        recentlyDeduplicatedIdentities.remove(identityHash)
                         // Clean up any stale entries for this identity
                         staleAddressToIdentity.entries.removeIf { it.value == identityHash }
                         Log.d(TAG, "Cleaned up all mappings for identity $identityHash")
@@ -2333,7 +2274,6 @@ class KotlinBLEBridge(
                 pendingConnections.clear()
                 processedIdentityCallbacks.clear()
                 pendingCentralConnections.clear()
-                recentlyDeduplicatedIdentities.clear()
 
                 // Stop BLE operations (but keep isStarted=true for auto-restart)
                 stopScanning()
@@ -2447,7 +2387,6 @@ class KotlinBLEBridge(
             pendingConnections.clear()
             processedIdentityCallbacks.clear()
             pendingCentralConnections.clear()
-            recentlyDeduplicatedIdentities.clear()
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing state in stopImmediate", e)
         }

@@ -795,11 +795,11 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                 }
+                // Only clear on success so a failed navigation can be retried
+                pendingNavigation.value = null
             } catch (e: Exception) {
                 Log.e("ColumbaNavigation", "Failed to navigate from pending intent: $navigation", e)
             }
-            // Clear the pending navigation after handling
-            pendingNavigation.value = null
         }
     }
 

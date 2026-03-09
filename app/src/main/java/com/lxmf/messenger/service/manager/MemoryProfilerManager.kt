@@ -137,6 +137,7 @@ class MemoryProfilerManager(
 
         nativeHeapMonitorJob =
             scope.launch {
+                logNativeHeapInfo() // Baseline before first interval
                 while (isActive) {
                     delay(intervalSeconds * 1000L)
                     logNativeHeapInfo()

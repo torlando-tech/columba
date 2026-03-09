@@ -209,7 +209,18 @@ class ApkSharingViewModel
                 errorMessage = null,
             )
 
-            hotspotManager.start { result ->
+            hotspotManager.start(
+                onSystemStopped = {
+                    Log.w(TAG, "Hotspot was stopped by the system")
+                    server.stop()
+                    serverJob?.cancel()
+                    serverJob = null
+                    _state.value = ApkSharingState(
+                        errorMessage = "WiFi hotspot was stopped by the system. " +
+                            "Please start sharing again.",
+                    )
+                },
+            ) { result ->
                 result.onSuccess { info ->
                     Log.i(TAG, "Hotspot started: SSID=${info.ssid}")
                     // Give the hotspot interface a moment to come up,
@@ -297,11 +308,21 @@ class ApkSharingViewModel
                     return false
                 }
             }
-            // On API 28-32 location permission is required for startLocalOnlyHotspot
+            // On API 28-32 fine location is required for startLocalOnlyHotspot
             if (Build.VERSION.SDK_INT in Build.VERSION_CODES.P..Build.VERSION_CODES.S_V2) {
                 if (ContextCompat.checkSelfPermission(
                         application,
                         Manifest.permission.ACCESS_FINE_LOCATION,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return false
+                }
+            }
+            // On API 26-27 coarse location is required for startLocalOnlyHotspot
+            if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.O_MR1) {
+                if (ContextCompat.checkSelfPermission(
+                        application,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
                     return false
@@ -319,6 +340,8 @@ class ApkSharingViewModel
                 permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
             return permissions.toTypedArray()
         }

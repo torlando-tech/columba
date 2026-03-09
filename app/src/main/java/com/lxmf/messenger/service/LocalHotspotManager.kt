@@ -35,11 +35,20 @@ class LocalHotspotManager(private val context: Context) {
     )
 
     private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
+    private var onSystemStoppedListener: (() -> Unit)? = null
     val isActive: Boolean get() = reservation != null
 
     /**
      * Start a local-only hotspot. The [callback] receives the hotspot
      * credentials on success, or an exception on failure.
+     *
+     * If the hotspot is already active, the callback is invoked immediately
+     * with the existing credentials.
+     *
+     * [onSystemStopped] is invoked if Android tears down the hotspot
+     * externally (e.g. another app requests a hotspot, user toggles it
+     * off in Settings, or the system reclaims the channel). Callers
+     * should use this to update UI state.
      *
      * Must be called from the main thread (or supply a Looper-backed Handler).
      * The callback is delivered on the main thread.
@@ -49,7 +58,10 @@ class LocalHotspotManager(private val context: Context) {
      * - [ERROR_INCOMPATIBLE_MODE] — WiFi is in a state that conflicts
      * - [ERROR_NO_CHANNEL] — no suitable WiFi channel available
      */
-    fun start(callback: (Result<HotspotInfo>) -> Unit) {
+    fun start(
+        onSystemStopped: () -> Unit = {},
+        callback: (Result<HotspotInfo>) -> Unit,
+    ) {
         if (!isSupported()) {
             callback(Result.failure(UnsupportedOperationException(
                 "Local-only hotspot requires Android 8.0 or higher"
@@ -58,9 +70,14 @@ class LocalHotspotManager(private val context: Context) {
         }
 
         if (reservation != null) {
-            Log.w(TAG, "Hotspot already active, ignoring start request")
+            Log.w(TAG, "Hotspot already active, re-delivering existing credentials")
+            onSystemStoppedListener = onSystemStopped
+            val info = extractHotspotInfo(reservation!!)
+            callback(Result.success(info))
             return
         }
+
+        onSystemStoppedListener = onSystemStopped
 
         val wifiManager = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -78,6 +95,7 @@ class LocalHotspotManager(private val context: Context) {
                     override fun onStopped() {
                         Log.i(TAG, "Local hotspot stopped by system")
                         reservation = null
+                        onSystemStoppedListener?.invoke()
                     }
 
                     override fun onFailed(reason: Int) {
@@ -120,6 +138,7 @@ class LocalHotspotManager(private val context: Context) {
             Log.e(TAG, "Error closing hotspot reservation", e)
         }
         reservation = null
+        onSystemStoppedListener = null
         Log.i(TAG, "Local hotspot stopped")
     }
 

@@ -6,8 +6,8 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.reticulum.protocol.ReceivedMessage
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +65,23 @@ class GuardianCommandProcessor
         }
 
         /**
+         * Holds the pairing token from the most recently generated QR code.
+         * Set when the parent generates a QR, consumed when a matching PAIR_ACK arrives.
+         * Null means no active pairing session — any PAIR_ACK will be rejected.
+         */
+        private val pendingPairingToken = AtomicReference<String?>(null)
+
+        /**
+         * Store the pairing token from a freshly generated QR code.
+         * Called by GuardianViewModel after generating a pairing QR.
+         *
+         * @param token The hex-encoded pairing token, or null to clear
+         */
+        fun setPendingPairingToken(token: String?) {
+            pendingPairingToken.set(token)
+        }
+
+        /**
          * Check if a received message is a guardian command.
          *
          * A message is a guardian command if:
@@ -76,7 +93,10 @@ class GuardianCommandProcessor
          * @return True if this is a guardian command message
          */
         @Suppress("ReturnCount")
-        fun isGuardianCommand(message: ReceivedMessage, guardianConfig: GuardianConfigEntity?): Boolean {
+        fun isGuardianCommand(
+            message: ReceivedMessage,
+            guardianConfig: GuardianConfigEntity?,
+        ): Boolean {
             if (guardianConfig == null || !guardianConfig.hasGuardian()) {
                 return false
             }
@@ -98,8 +118,9 @@ class GuardianCommandProcessor
             val fieldsJson = message.fieldsJson ?: return false
             return try {
                 val fields = JSONObject(fieldsJson)
-                val hasField = fields.has(FIELD_PARENTAL_CONTROL.toString()) ||
-                    fields.has("128") // Decimal representation of 0x80
+                val hasField =
+                    fields.has(FIELD_PARENTAL_CONTROL.toString()) ||
+                        fields.has("128") // Decimal representation of 0x80
                 if (hasField) {
                     Log.d(TAG, "Found guardian command in LXMF field 0x80 from ${senderHash.take(16)}")
                 }
@@ -124,20 +145,22 @@ class GuardianCommandProcessor
         ): Boolean {
             try {
                 // Extract command data from content (new format) or LXMF field 0x80 (legacy)
-                val commandDataStr: String = if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
-                    // New format: command JSON in message content
-                    message.content.removePrefix(GUARDIAN_CMD_PREFIX)
-                } else {
-                    // Legacy format: command in LXMF field 0x80
-                    val fieldsJson = message.fieldsJson
-                    if (fieldsJson == null) {
-                        Log.e(TAG, "No fields JSON and no command in content")
-                        return false
+                val commandDataStr: String =
+                    if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                        // New format: command JSON in message content
+                        message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+                    } else {
+                        // Legacy format: command in LXMF field 0x80
+                        val fieldsJson = message.fieldsJson
+                        if (fieldsJson == null) {
+                            Log.e(TAG, "No fields JSON and no command in content")
+                            return false
+                        }
+                        val fields = JSONObject(fieldsJson)
+                        fields
+                            .optString(FIELD_PARENTAL_CONTROL.toString())
+                            .ifEmpty { fields.optString("128") }
                     }
-                    val fields = JSONObject(fieldsJson)
-                    fields.optString(FIELD_PARENTAL_CONTROL.toString())
-                        .ifEmpty { fields.optString("128") }
-                }
 
                 if (commandDataStr.isEmpty()) {
                     Log.e(TAG, "No command data found in message")
@@ -174,36 +197,39 @@ class GuardianCommandProcessor
                     Log.e(TAG, "Guardian has no public key stored, cannot verify command signature")
                     return false
                 }
-                val signatureBytes = try {
-                    val sigHex = commandData.getString("signature")
-                    ByteArray(sigHex.length / 2) { i -> sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to decode command signature", e)
-                    return false
-                }
-                val signatureValid = reticulumProtocol.verifyGuardianCommand(
-                    commandDataStr,
-                    signatureBytes,
-                    guardianPublicKey,
-                )
+                val signatureBytes =
+                    try {
+                        val sigHex = commandData.getString("signature")
+                        ByteArray(sigHex.length / 2) { i -> sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to decode command signature", e)
+                        return false
+                    }
+                val signatureValid =
+                    reticulumProtocol.verifyGuardianCommand(
+                        commandDataStr,
+                        signatureBytes,
+                        guardianPublicKey,
+                    )
                 if (!signatureValid) {
                     Log.w(TAG, "Command signature verification FAILED - rejecting command")
                     return false
                 }
 
                 // Execute command
-                val success = when (cmd) {
-                    CMD_LOCK -> executeLock()
-                    CMD_UNLOCK -> executeUnlock()
-                    CMD_ALLOW_ADD -> executeAllowAdd(payload)
-                    CMD_ALLOW_REMOVE -> executeAllowRemove(payload)
-                    CMD_ALLOW_SET -> executeAllowSet(payload)
-                    CMD_STATUS_REQUEST -> executeStatusRequest()
-                    else -> {
-                        Log.w(TAG, "Unknown command type: $cmd")
-                        false
+                val success =
+                    when (cmd) {
+                        CMD_LOCK -> executeLock()
+                        CMD_UNLOCK -> executeUnlock()
+                        CMD_ALLOW_ADD -> executeAllowAdd(payload)
+                        CMD_ALLOW_REMOVE -> executeAllowRemove(payload)
+                        CMD_ALLOW_SET -> executeAllowSet(payload)
+                        CMD_STATUS_REQUEST -> executeStatusRequest()
+                        else -> {
+                            Log.w(TAG, "Unknown command type: $cmd")
+                            false
+                        }
                     }
-                }
 
                 if (success) {
                     // Record command as processed (anti-replay)
@@ -334,15 +360,19 @@ class GuardianCommandProcessor
                 val guardianHash = guardianRepository.getGuardianDestinationHash()
                 val allowedHashes = guardianRepository.getAllowedContactHashesSync()
 
-                val success = reticulumProtocol.updateGuardianConfig(
-                    isLocked = isLocked,
-                    guardianHash = guardianHash,
-                    allowedHashes = allowedHashes,
-                )
+                val success =
+                    reticulumProtocol.updateGuardianConfig(
+                        isLocked = isLocked,
+                        guardianHash = guardianHash,
+                        allowedHashes = allowedHashes,
+                    )
 
                 if (success) {
-                    Log.d(TAG, "Synced guardian config to Python: locked=$isLocked, " +
-                        "guardian=$guardianHash, allowed=${allowedHashes.size} contacts")
+                    Log.d(
+                        TAG,
+                        "Synced guardian config to Python: locked=$isLocked, " +
+                            "guardian=$guardianHash, allowed=${allowedHashes.size} contacts",
+                    )
                 } else {
                     Log.w(TAG, "Failed to sync guardian config to Python")
                 }
@@ -379,8 +409,10 @@ class GuardianCommandProcessor
             val fieldsJson = message.fieldsJson ?: return false
             return try {
                 val fields = JSONObject(fieldsJson)
-                val commandDataStr = fields.optString(FIELD_PARENTAL_CONTROL.toString())
-                    .ifEmpty { fields.optString("128") }
+                val commandDataStr =
+                    fields
+                        .optString(FIELD_PARENTAL_CONTROL.toString())
+                        .ifEmpty { fields.optString("128") }
 
                 if (commandDataStr.isEmpty()) return false
 
@@ -393,20 +425,22 @@ class GuardianCommandProcessor
 
         /**
          * Process a PAIR_ACK message from a child device.
-         * Adds the sender to our list of paired children.
+         * Verifies the pairing token matches the one from the active QR code,
+         * then adds the sender to our list of paired children.
          *
          * @param message The received LXMF message containing PAIR_ACK
          * @return True if the child was successfully registered
          */
-        @Suppress("NestedBlockDepth", "SwallowedException") // Display name extraction is best-effort; outer catch handles real errors
+        @Suppress("NestedBlockDepth", "SwallowedException", "ReturnCount")
         suspend fun processPairAck(message: ReceivedMessage): Boolean {
             try {
                 // sourceHash is now correctly 16 bytes (32 hex chars) after fixing the base64/hex encoding mismatch
                 val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
                 Log.i(TAG, "Processing PAIR_ACK from: $senderHash (${message.sourceHash.size} bytes)")
 
-                // Extract any display name from the message payload
+                // Extract payload (display_name + pairing_token) from the message
                 var displayName: String? = null
+                var receivedToken: String? = null
                 try {
                     // First try content-based format
                     if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
@@ -414,24 +448,46 @@ class GuardianCommandProcessor
                         val commandData = JSONObject(commandJson)
                         val payload = commandData.optJSONObject("payload")
                         displayName = payload?.optString("display_name")?.ifEmpty { null }
+                        receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
                     } else {
                         // Fall back to LXMF field 0x80 (legacy format)
                         val fieldsJson = message.fieldsJson
                         if (fieldsJson != null) {
                             val fields = JSONObject(fieldsJson)
-                            val commandDataStr = fields.optString(FIELD_PARENTAL_CONTROL.toString())
-                                .ifEmpty { fields.optString("128") }
+                            val commandDataStr =
+                                fields
+                                    .optString(FIELD_PARENTAL_CONTROL.toString())
+                                    .ifEmpty { fields.optString("128") }
                             if (commandDataStr.isNotEmpty()) {
                                 val commandData = JSONObject(commandDataStr)
                                 val payload = commandData.optJSONObject("payload")
                                 displayName = payload?.optString("display_name")?.ifEmpty { null }
+                                receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    // Non-fatal - just won't have display name
-                    Log.d(TAG, "Could not extract display name from PAIR_ACK")
+                    // Non-fatal for display name, but token extraction failure will be caught below
+                    Log.d(TAG, "Could not extract payload from PAIR_ACK")
                 }
+
+                // Verify pairing token matches the one from our QR code
+                val expectedToken = pendingPairingToken.get()
+                if (expectedToken == null) {
+                    Log.w(TAG, "PAIR_ACK rejected: no active pairing QR (no pending token)")
+                    return false
+                }
+                if (receivedToken == null) {
+                    Log.w(TAG, "PAIR_ACK rejected: message contains no pairing token")
+                    return false
+                }
+                if (receivedToken != expectedToken) {
+                    Log.w(TAG, "PAIR_ACK rejected: token mismatch (unauthorized pairing attempt)")
+                    return false
+                }
+
+                // Token verified — consume it so it can't be reused
+                pendingPairingToken.set(null)
 
                 // Add the child to our paired children list
                 guardianRepository.addPairedChild(senderHash, displayName)

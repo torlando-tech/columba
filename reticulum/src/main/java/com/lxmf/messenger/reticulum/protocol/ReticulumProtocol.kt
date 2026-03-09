@@ -466,22 +466,22 @@ interface ReticulumProtocol {
 
     /**
      * Generate a QR code data string for guardian pairing.
-     * This creates a signed payload containing the current identity's destination hash
-     * and public key, which a child device can scan to establish parental control.
+     * This creates a signed payload containing the current identity's destination hash,
+     * public key, and a random pairing token, which a child device can scan to establish
+     * parental control.
      *
-     * @return QR code data string in format "lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>"
-     *         or null if generation fails
+     * @return GuardianQrResult containing the QR string and pairing token, or null if generation fails
      */
-    suspend fun generateGuardianPairingQr(): String?
+    suspend fun generateGuardianPairingQr(): GuardianQrResult?
 
     /**
      * Parse and validate a guardian pairing QR code.
      * Validates the signature and timestamp to ensure the QR is authentic and not expired.
      *
      * @param qrData The scanned QR code data
-     * @return Pair of (guardianDestHash, guardianPublicKey) or null if invalid
+     * @return GuardianQrParsed with guardian info and pairing token, or null if invalid
      */
-    suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>?
+    suspend fun parseGuardianPairingQr(qrData: String): GuardianQrParsed?
 
     /**
      * Verify a guardian command signature.
@@ -540,6 +540,27 @@ interface ReticulumProtocol {
         allowedHashes: List<String>,
     ): Boolean
 }
+
+/**
+ * Result of generating a guardian pairing QR code.
+ * Contains both the QR string (for display) and the pairing token
+ * (stored by the parent to verify the child's PAIR_ACK).
+ */
+data class GuardianQrResult(
+    val qrString: String,
+    val pairingToken: String,
+)
+
+/**
+ * Parsed and validated guardian pairing QR code data.
+ * Contains the guardian's identity info and the pairing token
+ * that the child must echo back in the PAIR_ACK message.
+ */
+data class GuardianQrParsed(
+    val guardianDestHash: String,
+    val guardianPublicKey: ByteArray,
+    val pairingToken: String,
+)
 
 /**
  * Voice call state from LXST

@@ -72,10 +72,16 @@ class TestGuardianCryptoQR(unittest.TestCase):
         self.assertIn("public_key", result)
         self.assertIn("timestamp", result)
         self.assertIn("signature", result)
+        self.assertIn("pairing_token", result)
         self.assertIn("qr_string", result)
 
-        # Check QR string format
+        # Check QR string format (now 5 parts)
         self.assertTrue(result["qr_string"].startswith("lxmf-guardian://"))
+        parts = result["qr_string"].split("lxmf-guardian://")[1].split(":")
+        self.assertEqual(len(parts), 5, f"Expected 5 QR parts, got {len(parts)}")
+
+        # Check pairing token is 16 bytes
+        self.assertEqual(len(result["pairing_token"]), 16)
 
         # Check data matches
         self.assertEqual(result["destination_hash"], dest_hash)
@@ -96,6 +102,7 @@ class TestGuardianCryptoQR(unittest.TestCase):
         self.assertEqual(parsed["public_key"], identity.get_public_key())
         self.assertEqual(parsed["timestamp"], gen_result["timestamp"])
         self.assertEqual(parsed["signature"], gen_result["signature"])
+        self.assertEqual(parsed["pairing_token"], gen_result["pairing_token"])
 
     def test_parse_invalid_qr_prefix(self):
         """Test parsing QR with wrong prefix"""
@@ -103,8 +110,11 @@ class TestGuardianCryptoQR(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_parse_invalid_qr_parts(self):
-        """Test parsing QR with wrong number of parts"""
+        """Test parsing QR with wrong number of parts (expects 5)"""
         result = guardian_crypto.parse_pairing_qr_data("lxmf-guardian://abc:def:123")
+        self.assertIsNone(result)
+        # Also reject old 4-part format
+        result = guardian_crypto.parse_pairing_qr_data("lxmf-guardian://abc:def:123:456")
         self.assertIsNone(result)
 
     def test_validate_pairing_qr_fresh(self):
@@ -250,7 +260,10 @@ class TestReticulumWrapperGuardian(unittest.TestCase):
 
         self.assertTrue(result.get("success", False), f"Expected success, got: {result}")
         self.assertIn("qr_string", result)
+        self.assertIn("pairing_token", result)
         self.assertTrue(result["qr_string"].startswith("lxmf-guardian://"))
+        # Token should be a 32-char hex string (16 bytes)
+        self.assertEqual(len(result["pairing_token"]), 32)
 
     def test_guardian_parse_pairing_qr_valid(self):
         """Test parsing a valid QR code"""
@@ -267,6 +280,8 @@ class TestReticulumWrapperGuardian(unittest.TestCase):
 
         self.assertTrue(result.get("success", False))
         self.assertEqual(result["destination_hash"], dest_hash.hex())
+        self.assertIn("pairing_token", result)
+        self.assertEqual(len(result["pairing_token"]), 32)  # 16 bytes as hex
 
     def test_guardian_parse_pairing_qr_invalid(self):
         """Test parsing an invalid QR code"""
@@ -420,6 +435,7 @@ class TestValidatePairingQrErrors(unittest.TestCase):
             "public_key": b'\x00' * 64,
             "timestamp": int(time.time() * 1000) + (10 * 60 * 1000),  # 10 min in future
             "signature": b'\x00' * 64,
+            "pairing_token": os.urandom(16),
         }
         is_valid, error = guardian_crypto.validate_pairing_qr(qr_data)
         self.assertFalse(is_valid)
@@ -432,9 +448,31 @@ class TestValidatePairingQrErrors(unittest.TestCase):
             "public_key": b'\x00' * 64,
             "timestamp": int(time.time() * 1000),  # Fresh
             "signature": b'\x00' * 64,
+            "pairing_token": os.urandom(16),
         }
         with patch('guardian_crypto.verify_signature', return_value=False):
             is_valid, error = guardian_crypto.validate_pairing_qr(qr_data)
+            self.assertFalse(is_valid)
+            self.assertIn("signature", error.lower())
+
+
+class TestTamperedPairingToken(unittest.TestCase):
+    """Test that a QR with tampered pairing token fails validation."""
+
+    def test_tampered_token_fails_signature(self):
+        """Changing the pairing_token after signing should fail signature verification."""
+        identity = MockIdentity()
+        dest_hash = os.urandom(16)
+
+        gen_result = guardian_crypto.generate_pairing_qr_data(identity, dest_hash)
+        parsed = guardian_crypto.parse_pairing_qr_data(gen_result["qr_string"])
+        self.assertIsNotNone(parsed)
+
+        # Tamper with the token
+        parsed["pairing_token"] = os.urandom(16)
+
+        with patch('guardian_crypto.verify_signature', return_value=False):
+            is_valid, error = guardian_crypto.validate_pairing_qr(parsed)
             self.assertFalse(is_valid)
             self.assertIn("signature", error.lower())
 

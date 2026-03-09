@@ -191,7 +191,10 @@ class DebugViewModel
                 }
 
                 // Get failed interfaces
-                val failedInterfaces = reticulumProtocol.getFailedInterfaces()
+                val failedInterfaces =
+                    withContext(Dispatchers.IO) {
+                        reticulumProtocol.getFailedInterfaces()
+                    }
                 val failedInterfaceInfos =
                     failedInterfaces.map { failed ->
                         InterfaceInfo(
@@ -584,6 +587,14 @@ class DebugViewModel
                     _isRestarting.value = false
                 }
             }
+        }
+
+        /**
+         * Dismiss the restart dialog without stopping the background coroutine.
+         * The restart will either complete or hit the 60s timeout on its own.
+         */
+        fun cancelRestart() {
+            _isRestarting.value = false
         }
 
         /**

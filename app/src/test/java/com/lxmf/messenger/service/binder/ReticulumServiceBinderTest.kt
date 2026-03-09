@@ -428,6 +428,27 @@ class ReticulumServiceBinderTest {
         assert(result == """[{"device": "test"}]""")
     }
 
+    // ========== RestartAutoInterface Tests ==========
+
+    @Test
+    fun `restartAutoInterface delegates to wrapperManager`() {
+        every { wrapperManager.withWrapper<String?>(any()) } returns """{"success": true, "count": 1}"""
+
+        val result = runCatching { binder.restartAutoInterface() }
+
+        assertTrue("restartAutoInterface should complete successfully", result.isSuccess)
+        verify(exactly = 1) { wrapperManager.withWrapper<String?>(any()) }
+    }
+
+    @Test
+    fun `restartAutoInterface handles exception gracefully`() {
+        every { wrapperManager.withWrapper<String?>(any()) } throws RuntimeException("Python error")
+
+        val result = runCatching { binder.restartAutoInterface() }
+
+        assertTrue("restartAutoInterface should not crash on error", result.isSuccess)
+    }
+
     // ========== IsSharedInstanceAvailable Tests ==========
 
     @Test

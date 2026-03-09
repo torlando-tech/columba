@@ -289,7 +289,7 @@ class OfflineMapRegionRepository
             if (explicit != null) return explicit.toOfflineMapRegion()
 
             // Fall back to first completed region (implicit default when only one exists)
-            return null
+            return offlineMapRegionDao.getFirstCompletedRegion()?.toOfflineMapRegion()
         }
 
         /**

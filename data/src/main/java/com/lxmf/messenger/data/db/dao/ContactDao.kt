@@ -36,7 +36,7 @@ interface ContactDao {
      */
     @Query(
         """
-        SELECT
+        SELECT DISTINCT
             c.destinationHash,
             c.publicKey,
             c.customNickname,
@@ -260,6 +260,20 @@ interface ContactDao {
      */
     @Query("SELECT * FROM contacts WHERE identityHash = :identityHash")
     suspend fun getAllContactsSync(identityHash: String): List<ContactEntity>
+
+    @Query(
+        """
+        SELECT * FROM contacts
+        WHERE identityHash = :identityHash
+        AND status = :activeStatus
+        AND publicKey IS NOT NULL
+        ORDER BY isMyRelay DESC, isPinned DESC, lastInteractionTimestamp DESC, addedTimestamp DESC
+        """,
+    )
+    suspend fun getRestorableContactsForIdentity(
+        identityHash: String,
+        activeStatus: String,
+    ): List<ContactEntity>
 
     /**
      * Bulk insert contacts (for import).

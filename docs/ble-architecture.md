@@ -588,7 +588,7 @@ Advertising Data (31 bytes max):
 └── Service UUID (19 bytes for 128-bit UUID)
 
 Scan Response (31 bytes separate budget):
-└── Device Name: "RNS-{truncated_identity_hex}"
+└── (empty — device name not advertised)
 ```
 
 ---
@@ -619,7 +619,6 @@ Scan Response (31 bytes separate budget):
 | `connectedPeers` | MAC address | PeerConnection | Active connections |
 | `pendingConnections` | MAC address | PendingConnection | Awaiting identity |
 | `pendingCentralConnections` | Set<MAC> | - | In-progress central connects |
-| `recentlyDeduplicatedIdentities` | 32-char hex | timestamp | Dedup cooldown (60s) |
 | `processedIdentityCallbacks` | Set<key> | - | Prevent duplicate notifications |
 
 ---
@@ -710,7 +709,7 @@ def _get_fragmenter_key(self, peer_identity, address):
 | `ADVERTISING_REFRESH_INTERVAL_MS` | 60,000 ms | BleAdvertiser |
 | `_identity_cache_ttl` | 60 s | BLEInterface |
 | `_pending_detach_grace_period` | 2.0 s | BLEInterface |
-| `deduplicationCooldownMs` | 60,000 ms | KotlinBLEBridge |
+
 
 ### MTU Constants
 

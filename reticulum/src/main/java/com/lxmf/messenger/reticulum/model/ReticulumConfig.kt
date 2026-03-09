@@ -203,6 +203,11 @@ sealed class InterfaceConfig {
         val deviceName: String = "",
         val maxConnections: Int = 7,
         val mode: String = "roaming",
+        val blePowerPreset: String = "balanced",
+        val bleDiscoveryIntervalMs: Long = 5000L,
+        val bleDiscoveryIntervalIdleMs: Long = 30000L,
+        val bleScanDurationMs: Long = 10000L,
+        val bleAdvertisingRefreshIntervalMs: Long = 60_000L,
     ) : InterfaceConfig()
 
     /**

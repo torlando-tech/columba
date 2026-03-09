@@ -16,7 +16,9 @@ import java.io.File
  * Example:
  *   files/attachments/abc123def/6  (image field)
  */
-class AttachmentStorageManager(private val context: Context) {
+class AttachmentStorageManager(
+    private val context: Context,
+) {
     companion object {
         private const val TAG = "AttachmentStorage"
         private const val ATTACHMENTS_DIR = "attachments"
@@ -33,7 +35,7 @@ class AttachmentStorageManager(private val context: Context) {
         const val FILE_REF_KEY = "_file_ref"
     }
 
-    private val attachmentsDir: File by lazy {
+    val attachmentsDir: File by lazy {
         File(context.filesDir, ATTACHMENTS_DIR).also { it.mkdirs() }
     }
 
@@ -49,8 +51,8 @@ class AttachmentStorageManager(private val context: Context) {
         messageHash: String,
         fieldKey: String,
         data: String,
-    ): String? {
-        return try {
+    ): String? =
+        try {
             val messageDir = File(attachmentsDir, messageHash).also { it.mkdirs() }
             val file = File(messageDir, fieldKey)
             file.writeText(data)
@@ -60,7 +62,6 @@ class AttachmentStorageManager(private val context: Context) {
             Log.e(TAG, "Failed to save attachment for $messageHash/$fieldKey", e)
             null
         }
-    }
 
     /**
      * Load attachment data from disk.
@@ -68,8 +69,8 @@ class AttachmentStorageManager(private val context: Context) {
      * @param filePath Absolute path to attachment file
      * @return Attachment data (hex-encoded string), or null if not found
      */
-    fun loadAttachment(filePath: String): String? {
-        return try {
+    fun loadAttachment(filePath: String): String? =
+        try {
             val file = File(filePath)
             if (file.exists()) {
                 file.readText().also {
@@ -83,7 +84,6 @@ class AttachmentStorageManager(private val context: Context) {
             Log.e(TAG, "Failed to load attachment $filePath", e)
             null
         }
-    }
 
     /**
      * Delete all attachments for a message.

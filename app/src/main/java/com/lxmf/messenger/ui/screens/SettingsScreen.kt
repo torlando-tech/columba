@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -75,6 +76,7 @@ import com.lxmf.messenger.util.LocationPermissionManager
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,17 +113,36 @@ fun SettingsScreen(
     // Track what action to take after permission is granted
     var pendingTelemetryAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    // Permission launcher for telemetry collector
+    // Background permission launcher must be declared first (referenced by foreground launcher)
+    val telemetryBackgroundPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                pendingTelemetryAction?.invoke()
+            }
+            pendingTelemetryAction = null
+        }
+
+    // Permission launcher for telemetry collector (foreground location)
     val telemetryPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions(),
         ) { permissions ->
             val granted = permissions.values.any { it }
             if (granted) {
-                // Execute pending action (enable toggle or send now)
-                pendingTelemetryAction?.invoke()
+                // Foreground granted; check if background is also needed
+                if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
+                    pendingTelemetryAction?.invoke()
+                    pendingTelemetryAction = null
+                } else {
+                    // Now request background before enabling telemetry
+                    telemetryBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    // pendingTelemetryAction is preserved for the background launcher
+                }
+            } else {
+                pendingTelemetryAction = null
             }
-            pendingTelemetryAction = null
         }
 
     // Check for pending crash report on launch
@@ -276,9 +297,12 @@ fun SettingsScreen(
                     isSendingTelemetry = state.isSendingTelemetry,
                     onTelemetryEnabledChange = { enabled ->
                         if (enabled) {
-                            // Check permission before enabling
-                            if (LocationPermissionManager.hasPermission(context)) {
+                            if (LocationPermissionManager.hasTelemetryBackgroundPermission(context)) {
                                 viewModel.setTelemetryCollectorEnabled(true)
+                            } else if (LocationPermissionManager.hasPermission(context)) {
+                                // Foreground location is granted, now request background access.
+                                pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
+                                telemetryBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                             } else {
                                 // Show permission sheet, then enable after permission granted
                                 pendingTelemetryAction = { viewModel.setTelemetryCollectorEnabled(true) }
@@ -433,6 +457,10 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.ABOUT.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.ABOUT, it) },
                     systemInfo = systemInfo,
+                    updateCheckResult = state.updateCheckResult,
+                    includePrereleaseUpdates = state.includePrereleaseUpdates,
+                    onCheckForUpdates = { viewModel.checkForUpdates() },
+                    onSetIncludePrereleaseUpdates = { viewModel.setIncludePrereleaseUpdates(it) },
                     onCopySystemInfo = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText("System Info", DeviceInfoUtil.formatForClipboard(systemInfo))
@@ -500,7 +528,9 @@ fun SettingsScreen(
 
         // Service Restart Dialog
         if (state.isRestarting) {
-            ServiceRestartDialog()
+            ServiceRestartDialog(
+                onCancel = { viewModel.cancelRestart() },
+            )
         }
 
         // Crash Report Dialog
@@ -576,9 +606,16 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ServiceRestartDialog() {
+private fun ServiceRestartDialog(onCancel: () -> Unit) {
+    var showCancel by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(15_000)
+        showCancel = true
+    }
+
     AlertDialog(
-        onDismissRequest = { /* Cannot dismiss - blocking */ },
+        onDismissRequest = { if (showCancel) onCancel() },
         icon = {
             CircularProgressIndicator(
                 modifier = Modifier.size(48.dp),
@@ -602,6 +639,12 @@ private fun ServiceRestartDialog() {
                 )
             }
         },
-        confirmButton = { /* No button - auto dismisses when done */ },
+        confirmButton = {
+            if (showCancel) {
+                androidx.compose.material3.TextButton(onClick = onCancel) {
+                    Text("Cancel")
+                }
+            }
+        },
     )
 }

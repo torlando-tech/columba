@@ -109,6 +109,7 @@ import com.lxmf.messenger.viewmodel.SettingsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
@@ -228,7 +229,8 @@ class MainActivity : ComponentActivity() {
         // Splash screen will be displayed until theme is loaded, preventing flash
         val splashScreen = installSplashScreen()
         var isThemeReady = false
-        splashScreen.setKeepOnScreenCondition { !isThemeReady }
+        var isOnboardingReady = false
+        splashScreen.setKeepOnScreenCondition { !isThemeReady || !isOnboardingReady }
 
         super.onCreate(savedInstanceState)
 
@@ -272,6 +274,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Wait for onboarding status to resolve before dismissing splash.
+            // startDestination is memoised via remember{}, so it captures the first
+            // composed value. The LaunchedEffect in ColumbaNavigation redirects
+            // upgraders to Chats once onboardingState resolves; the extended splash
+            // screen hides that redirect, preventing the wizard from flashing.
+            val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+            LaunchedEffect(Unit) {
+                val resolved = onboardingViewModel.state.first { !it.isLoading }
+                isOnboardingReady = true
+                Log.d(TAG, "Onboarding status resolved: completed=${resolved.hasCompletedOnboarding}")
+            }
+
             ColumbaNavigation(
                 pendingNavigation = pendingNavigation,
                 interfaceRepository = interfaceRepository,
@@ -299,11 +313,11 @@ class MainActivity : ComponentActivity() {
         // and only Service.startForeground() can restore it. Sending ACTION_START
         // triggers onStartCommand which calls startForeground(this).
         try {
-            val intent =
+            val serviceIntent =
                 Intent(this, ReticulumService::class.java).apply {
                     action = ReticulumService.ACTION_START
                 }
-            ContextCompat.startForegroundService(this, intent)
+            ContextCompat.startForegroundService(this, serviceIntent)
         } catch (e: Exception) {
             Log.w(TAG, "Could not reinforce foreground notification", e)
         }
@@ -615,149 +629,171 @@ fun ColumbaNavigation(
     // State for pending contact add from deep link
     var pendingContactAdd by remember { mutableStateOf<String?>(null) }
 
+    val exitCallFlow: () -> Unit = {
+        val previousRoute = navController.previousBackStackEntry?.destination?.route
+        val currentRoute = navController.currentDestination?.route
+        val popped = navController.popBackStack()
+
+        if ((!popped || previousRoute == Screen.Welcome.route) && onboardingState.hasCompletedOnboarding) {
+            Log.d("ColumbaNavigation", "Call flow finished without valid return destination, navigating to Chats")
+            navController.navigate(Screen.Chats.route) {
+                if (!popped && currentRoute != null) {
+                    popUpTo(currentRoute) { inclusive = true }
+                } else {
+                    popUpTo(Screen.Welcome.route) { inclusive = true }
+                }
+                launchSingleTop = true
+            }
+        }
+    }
+
     // Handle pending navigation from intents
     LaunchedEffect(pendingNavigation.value) {
         pendingNavigation.value?.let { navigation ->
-            when (navigation) {
-                is PendingNavigation.AnnounceDetail -> {
-                    val encodedHash = Uri.encode(navigation.destinationHash)
-                    navController.navigate("announce_detail/$encodedHash")
-                    Log.d("ColumbaNavigation", "Navigated to announce detail: ${navigation.destinationHash}")
-                }
-                is PendingNavigation.Conversation -> {
-                    val encodedHash = Uri.encode(navigation.destinationHash)
-                    val encodedName = Uri.encode(navigation.peerName)
-                    navController.navigate("messaging/$encodedHash/$encodedName")
-                    Log.d("ColumbaNavigation", "Navigated to conversation: ${navigation.peerName}")
-                }
-                is PendingNavigation.AddContact -> {
-                    // Navigate to contacts tab and trigger add contact dialog
-                    selectedTab = 1 // Contacts tab
-                    navController.navigate(Screen.Contacts.route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
+            try {
+                when (navigation) {
+                    is PendingNavigation.AnnounceDetail -> {
+                        val encodedHash = Uri.encode(navigation.destinationHash)
+                        navController.navigate("announce_detail/$encodedHash")
+                        Log.d("ColumbaNavigation", "Navigated to announce detail: ${navigation.destinationHash}")
                     }
-                    pendingContactAdd = navigation.lxmaUrl
-                    Log.d("ColumbaNavigation", "Navigated to contacts for deep link: ${navigation.lxmaUrl}")
-                }
-                is PendingNavigation.ImportIdentityFromText -> {
-                    // Navigate to Identity Manager with pre-filled Base32 key
-                    val encodedKey = Uri.encode(navigation.base32Text)
-                    navController.navigate("identity_manager?base32Key=$encodedKey")
-                    Log.d("ColumbaNavigation", "Navigated to identity import from shared text")
-                }
-                is PendingNavigation.SharedText -> {
-                    sharedTextViewModel.setText(navigation.text)
-
-                    selectedTab = 0
-                    val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
-                    if (!poppedToChats) {
-                        navController.navigate(Screen.Chats.route) {
+                    is PendingNavigation.Conversation -> {
+                        val encodedHash = Uri.encode(navigation.destinationHash)
+                        val encodedName = Uri.encode(navigation.peerName)
+                        navController.navigate("messaging/$encodedHash/$encodedName")
+                        Log.d("ColumbaNavigation", "Navigated to conversation: ${navigation.peerName}")
+                    }
+                    is PendingNavigation.AddContact -> {
+                        // Navigate to contacts tab and trigger add contact dialog
+                        selectedTab = 1 // Contacts tab
+                        navController.navigate(Screen.Contacts.route) {
                             popUpTo(navController.graph.startDestinationId) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
                         }
+                        pendingContactAdd = navigation.lxmaUrl
+                        Log.d("ColumbaNavigation", "Navigated to contacts for deep link: ${navigation.lxmaUrl}")
                     }
-                    Log.d("ColumbaNavigation", "Handled shared text intent")
-                }
-                is PendingNavigation.SharedImage -> {
-                    sharedImageViewModel.setImages(navigation.uris)
+                    is PendingNavigation.ImportIdentityFromText -> {
+                        // Navigate to Identity Manager with pre-filled Base32 key
+                        val encodedKey = Uri.encode(navigation.base32Text)
+                        navController.navigate("identity_manager?base32Key=$encodedKey")
+                        Log.d("ColumbaNavigation", "Navigated to identity import from shared text")
+                    }
+                    is PendingNavigation.SharedText -> {
+                        sharedTextViewModel.setText(navigation.text)
 
-                    selectedTab = 0
-                    val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
-                    if (!poppedToChats) {
-                        navController.navigate(Screen.Chats.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
+                        selectedTab = 0
+                        val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
+                        if (!poppedToChats) {
+                            navController.navigate(Screen.Chats.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
+                        }
+                        Log.d("ColumbaNavigation", "Handled shared text intent")
+                    }
+                    is PendingNavigation.SharedImage -> {
+                        sharedImageViewModel.setImages(navigation.uris)
+
+                        selectedTab = 0
+                        val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
+                        if (!poppedToChats) {
+                            navController.navigate(Screen.Chats.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                        Log.d("ColumbaNavigation", "Handled shared image intent (${navigation.uris.size} images)")
+                    }
+                    is PendingNavigation.IncomingCall -> {
+                        // Navigate to incoming call screen
+                        val encodedHash = Uri.encode(navigation.identityHash)
+                        navController.navigate("incoming_call/$encodedHash")
+                        Log.d("ColumbaNavigation", "Navigated to incoming call: ${navigation.identityHash.take(16)}...")
+                    }
+                    is PendingNavigation.AnswerCall -> {
+                        // Set flag to prevent callState observer from overriding navigation
+                        isAnsweringCall = true
+                        // Navigate to voice call screen with auto-answer flag
+                        val encodedHash = Uri.encode(navigation.identityHash)
+                        val route = "voice_call/$encodedHash?autoAnswer=true"
+                        Log.w("ColumbaNavigation", "📞 AnswerCall handler - navigating to $route")
+                        Log.w("ColumbaNavigation", "📞 Current backstack: ${navController.currentBackStackEntry?.destination?.route}")
+                        navController.navigate(route) {
                             launchSingleTop = true
-                            restoreState = true
+                        }
+                        Log.w("ColumbaNavigation", "📞 After navigation, current: ${navController.currentBackStackEntry?.destination?.route}")
+                    }
+                    is PendingNavigation.InterfaceStats -> {
+                        // Navigate to interface stats screen
+                        val targetRoute = "interface_stats/${navigation.interfaceId}"
+                        val currentRoute = navController.currentBackStackEntry?.destination?.route
+                        val currentArgs = navController.currentBackStackEntry?.arguments
+                        val currentInterfaceId = currentArgs?.getLong("interfaceId")
+
+                        if (currentRoute == "interface_stats/{interfaceId}" && currentInterfaceId == navigation.interfaceId) {
+                            // Already on the SAME interface's stats screen - just signal reconnect
+                            Log.d("ColumbaNavigation", "Already on stats screen for interface ${navigation.interfaceId}, skipping navigation")
+                        } else {
+                            // Navigate to the (different) interface's stats screen
+                            navController.navigate(targetRoute) {
+                                // Pop the current stats screen if we're switching between interfaces
+                                if (currentRoute == "interface_stats/{interfaceId}") {
+                                    popUpTo("interface_stats/{interfaceId}") { inclusive = true }
+                                }
+                                launchSingleTop = true
+                            }
+                            Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
                         }
                     }
-                    Log.d("ColumbaNavigation", "Handled shared image intent (${navigation.uris.size} images)")
-                }
-                is PendingNavigation.IncomingCall -> {
-                    // Navigate to incoming call screen
-                    val encodedHash = Uri.encode(navigation.identityHash)
-                    navController.navigate("incoming_call/$encodedHash")
-                    Log.d("ColumbaNavigation", "Navigated to incoming call: ${navigation.identityHash.take(16)}...")
-                }
-                is PendingNavigation.AnswerCall -> {
-                    // Set flag to prevent callState observer from overriding navigation
-                    isAnsweringCall = true
-                    // Navigate to voice call screen with auto-answer flag
-                    val encodedHash = Uri.encode(navigation.identityHash)
-                    val route = "voice_call/$encodedHash?autoAnswer=true"
-                    Log.w("ColumbaNavigation", "📞 AnswerCall handler - navigating to $route")
-                    Log.w("ColumbaNavigation", "📞 Current backstack: ${navController.currentBackStackEntry?.destination?.route}")
-                    navController.navigate(route) {
-                        launchSingleTop = true
+                    is PendingNavigation.UsbDeviceAction -> {
+                        // Navigate to USB device action screen
+                        val route =
+                            "usb_device_action" +
+                                "?usbDeviceId=${navigation.usbDeviceId}" +
+                                "&usbVendorId=${navigation.vendorId}" +
+                                "&usbProductId=${navigation.productId}" +
+                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                        navController.navigate(route)
+                        Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
                     }
-                    Log.w("ColumbaNavigation", "📞 After navigation, current: ${navController.currentBackStackEntry?.destination?.route}")
-                }
-                is PendingNavigation.InterfaceStats -> {
-                    // Navigate to interface stats screen
-                    val targetRoute = "interface_stats/${navigation.interfaceId}"
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    val currentArgs = navController.currentBackStackEntry?.arguments
-                    val currentInterfaceId = currentArgs?.getLong("interfaceId")
-
-                    if (currentRoute == "interface_stats/{interfaceId}" && currentInterfaceId == navigation.interfaceId) {
-                        // Already on the SAME interface's stats screen - just signal reconnect
-                        Log.d("ColumbaNavigation", "Already on stats screen for interface ${navigation.interfaceId}, skipping navigation")
-                    } else {
-                        // Navigate to the (different) interface's stats screen
-                        navController.navigate(targetRoute) {
-                            // Pop the current stats screen if we're switching between interfaces
-                            if (currentRoute == "interface_stats/{interfaceId}") {
-                                popUpTo("interface_stats/{interfaceId}") { inclusive = true }
-                            }
-                            launchSingleTop = true
-                        }
-                        Log.d("ColumbaNavigation", "Navigated to interface stats: ${navigation.interfaceId}")
+                    is PendingNavigation.RNodeWizardWithUsb -> {
+                        // Navigate to RNode wizard with USB pre-selected
+                        val route =
+                            "rnode_wizard?connectionType=usb" +
+                                "&usbDeviceId=${navigation.usbDeviceId}" +
+                                "&usbVendorId=${navigation.vendorId}" +
+                                "&usbProductId=${navigation.productId}" +
+                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                        navController.navigate(route)
+                        Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
+                    }
+                    is PendingNavigation.DirectFlash -> {
+                        // Navigate directly to flasher with skip-detection mode
+                        val route =
+                            "rnode_flasher?skipDetection=true" +
+                                "&usbDeviceId=${navigation.usbDeviceId}" +
+                                "&usbVendorId=${navigation.vendorId}" +
+                                "&usbProductId=${navigation.productId}" +
+                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                        navController.navigate(route)
+                        Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                 }
-                is PendingNavigation.UsbDeviceAction -> {
-                    // Navigate to USB device action screen
-                    val route =
-                        "usb_device_action" +
-                            "?usbDeviceId=${navigation.usbDeviceId}" +
-                            "&usbVendorId=${navigation.vendorId}" +
-                            "&usbProductId=${navigation.productId}" +
-                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                    navController.navigate(route)
-                    Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
-                }
-                is PendingNavigation.RNodeWizardWithUsb -> {
-                    // Navigate to RNode wizard with USB pre-selected
-                    val route =
-                        "rnode_wizard?connectionType=usb" +
-                            "&usbDeviceId=${navigation.usbDeviceId}" +
-                            "&usbVendorId=${navigation.vendorId}" +
-                            "&usbProductId=${navigation.productId}" +
-                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                    navController.navigate(route)
-                    Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
-                }
-                is PendingNavigation.DirectFlash -> {
-                    // Navigate directly to flasher with skip-detection mode
-                    val route =
-                        "rnode_flasher?skipDetection=true" +
-                            "&usbDeviceId=${navigation.usbDeviceId}" +
-                            "&usbVendorId=${navigation.vendorId}" +
-                            "&usbProductId=${navigation.productId}" +
-                            "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                    navController.navigate(route)
-                    Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
-                }
+                // Only clear on success so a failed navigation can be retried
+                pendingNavigation.value = null
+            } catch (e: Exception) {
+                Log.e("ColumbaNavigation", "Failed to navigate from pending intent: $navigation", e)
             }
-            // Clear the pending navigation after handling
-            pendingNavigation.value = null
         }
     }
 
@@ -893,10 +929,10 @@ fun ColumbaNavigation(
             "ble_connection_status",
             "theme_management",
             "offline_maps",
-            "offline_map_download",
         )
     val hideBottomNavPrefixes =
         listOf(
+            "offline_map_download",
             "messaging/",
             "announce_detail/",
             "message_detail/",
@@ -1838,14 +1874,28 @@ fun ColumbaNavigation(
                         OfflineMapsScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onNavigateToDownload = { navController.navigate("offline_map_download") },
+                            onNavigateToUpdate = { regionId ->
+                                navController.navigate("offline_map_download?updateRegionId=$regionId")
+                            },
                         )
                     }
 
-                    // Offline Map download wizard
-                    composable("offline_map_download") {
+                    // Offline Map download wizard (with optional update parameter)
+                    composable(
+                        route = "offline_map_download?updateRegionId={updateRegionId}",
+                        arguments =
+                            listOf(
+                                navArgument("updateRegionId") {
+                                    type = NavType.LongType
+                                    defaultValue = -1L
+                                },
+                            ),
+                    ) { backStackEntry ->
+                        val updateRegionId = backStackEntry.arguments?.getLong("updateRegionId") ?: -1L
                         OfflineMapDownloadScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onDownloadComplete = { navController.popBackStack() },
+                            updateRegionId = if (updateRegionId > 0) updateRegionId else null,
                         )
                     }
 
@@ -1872,7 +1922,7 @@ fun ColumbaNavigation(
 
                         VoiceCallScreen(
                             destinationHash = destinationHash,
-                            onEndCall = { navController.popBackStack() },
+                            onEndCall = exitCallFlow,
                             autoAnswer = autoAnswer,
                             profileCode = profileCode,
                         )
@@ -1897,7 +1947,7 @@ fun ColumbaNavigation(
                                     popUpTo("incoming_call/$identityHash") { inclusive = true }
                                 }
                             },
-                            onCallDeclined = { navController.popBackStack() },
+                            onCallDeclined = exitCallFlow,
                         )
                     }
                 }

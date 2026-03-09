@@ -33,6 +33,7 @@
     <!-- Android 12+ requires both FINE and COARSE if requesting FINE -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Declare BLE hardware feature (optional but recommended) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />

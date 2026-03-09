@@ -18,8 +18,10 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,6 +58,7 @@ class InterfaceConfigManager
     ) {
         companion object {
             private const val TAG = "InterfaceConfigManager"
+            private const val APPLY_CHANGES_TIMEOUT_MS = 60_000L
         }
 
         /**
@@ -69,256 +72,258 @@ class InterfaceConfigManager
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
         suspend fun applyInterfaceChanges(): Result<Unit> =
             runCatching {
-                Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
+                withTimeout(APPLY_CHANGES_TIMEOUT_MS) {
+                    Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
 
-                // Step 1: Stop message collector
-                Log.d(TAG, "Step 1: Stopping message collector...")
-                messageCollector.stopCollecting()
-                Log.d(TAG, "✓ Message collector stopped")
+                    // Step 1: Stop message collector
+                    Log.d(TAG, "Step 1: Stopping message collector...")
+                    messageCollector.stopCollecting()
+                    Log.d(TAG, "✓ Message collector stopped")
 
-                // Step 1b: Stop managers to prepare for restart
-                Log.d(TAG, "Step 1b: Stopping managers...")
-                autoAnnounceManager.stop()
-                identityResolutionManager.stop()
-                propagationNodeManager.stop()
-                Log.d(TAG, "✓ Managers stopped")
+                    // Step 1b: Stop managers to prepare for restart
+                    Log.d(TAG, "Step 1b: Stopping managers...")
+                    autoAnnounceManager.stop()
+                    identityResolutionManager.stop()
+                    propagationNodeManager.stop()
+                    Log.d(TAG, "✓ Managers stopped")
 
-                // Step 2: Load interfaces BEFORE stopping service
-                Log.d(TAG, "Step 2: Loading interfaces from database...")
-                val enabledInterfaces = interfaceRepository.enabledInterfaces.first()
-                Log.d(TAG, "✓ Loaded ${enabledInterfaces.size} enabled interface(s)")
+                    // Step 2: Load interfaces BEFORE stopping service
+                    Log.d(TAG, "Step 2: Loading interfaces from database...")
+                    val enabledInterfaces = interfaceRepository.enabledInterfaces.first()
+                    Log.d(TAG, "✓ Loaded ${enabledInterfaces.size} enabled interface(s)")
 
-                // Step 3: Set flag to prevent ColumbaApplication from auto-initializing on service restart
-                // CRITICAL: Use commit() not apply() to ensure flag is written to disk BEFORE service starts
-                // Service runs in separate process and needs to read this from disk
-                Log.d(TAG, "Step 3: Setting config apply flag (synchronous write)...")
-                context
-                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("is_applying_config", true)
-                    .commit() // Synchronous write - blocks until written to disk
-                Log.d(TAG, "✓ Flag written to disk - service process will skip auto-init")
+                    // Step 3: Set flag to prevent ColumbaApplication from auto-initializing on service restart
+                    // CRITICAL: Use commit() not apply() to ensure flag is written to disk BEFORE service starts
+                    // Service runs in separate process and needs to read this from disk
+                    Log.d(TAG, "Step 3: Setting config apply flag (synchronous write)...")
+                    context
+                        .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("is_applying_config", true)
+                        .commit() // Synchronous write - blocks until written to disk
+                    Log.d(TAG, "✓ Flag written to disk - service process will skip auto-init")
 
-                // Step 4: Force service process to exit
-                // We use forceExit() via IPC instead of stopService() because:
-                // - stopService() doesn't work on bound services (Android ignores it)
-                // - forceExit() triggers System.exit(0) inside the service process
-                // - This guarantees the process dies and ports are released
-                Log.d(TAG, "Step 4: Forcing ReticulumService process to exit...")
-                if (reticulumProtocol is ServiceReticulumProtocol) {
-                    try {
-                        // Call forceExit() via IPC - this will kill the service process
-                        val serviceConnection = (reticulumProtocol as ServiceReticulumProtocol)
-                        // We need to access the service directly
-                        // For now, let's trigger via unbind which will at least disconnect us
-                        reticulumProtocol.shutdown().getOrNull() // Try to shutdown (has internal polling)
-                        reticulumProtocol.unbindService() // Unbind our connection
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error during service shutdown: ${e.message}")
-                    }
-                }
-
-                // Now send ACTION_STOP to let the service shut down gracefully.
-                // This triggers System.exit(0) inside the service process, which
-                // allows JVM shutdown hooks (including Chaquopy's Python VM teardown)
-                // to run — preventing SIGSEGV in PyGILState_Ensure.
-                val reticulumProcessName = "${context.packageName}:reticulum"
-                var reticulumProcessFound = false
-                try {
-                    val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                    val runningProcesses = activityManager.runningAppProcesses.orEmpty()
-                    val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
-
-                    if (reticulumProcess != null) {
-                        reticulumProcessFound = true
-                        Log.d(TAG, "Found reticulum process PID ${reticulumProcess.pid}, sending ACTION_STOP intent...")
-                        val stopIntent =
-                            Intent(context, ReticulumService::class.java).apply {
-                                action = ReticulumService.ACTION_STOP
-                            }
-                        ContextCompat.startForegroundService(context, stopIntent)
-                    } else {
-                        Log.d(TAG, "Service process not found (may have already stopped)")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not send ACTION_STOP to service: ${e.message}")
-                }
-
-                // Step 5: Verify process is dead (poll up to 5 seconds)
-                // This is CRITICAL - if process survives, old identity keeps running
-                if (reticulumProcessFound) {
-                    Log.d(TAG, "Step 5: Verifying service process terminated...")
-                    val maxVerifyAttempts = 10
-                    var processDied = false
-                    for (attempt in 1..maxVerifyAttempts) {
-                        delay(500)
-                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                        val stillRunning =
-                            activityManager.runningAppProcesses
-                                .orEmpty()
-                                .any { it.processName == reticulumProcessName }
-                        if (!stillRunning) {
-                            Log.d(TAG, "✓ Service process confirmed dead after ${attempt * 500}ms")
-                            processDied = true
-                            break
-                        }
-                    }
-                    if (!processDied) {
-                        Log.w(TAG, "Service process didn't exit gracefully after ${maxVerifyAttempts * 500}ms, sending SIGKILL...")
+                    // Step 4: Shutdown + unbind + send ACTION_STOP in quick succession
+                    // We just need Python to start teardown (2s), then immediately unbind and
+                    // send ACTION_STOP to trigger System.exit(0) for clean JVM shutdown hooks.
+                    Log.d(TAG, "Step 4: Shutting down ReticulumService process...")
+                    val reticulumProcessName = "${context.packageName}:reticulum"
+                    if (reticulumProtocol is ServiceReticulumProtocol) {
                         try {
-                            val am = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
-                            val proc = am.runningAppProcesses.orEmpty().find { it.processName == reticulumProcessName }
-                            if (proc != null) {
-                                Process.killProcess(proc.pid)
+                            try {
+                                withTimeout(2000L) {
+                                    reticulumProtocol.shutdown().getOrNull()
+                                }
+                            } catch (e: TimeoutCancellationException) {
+                                Log.w(TAG, "Shutdown timed out after 2s, proceeding with unbind", e)
                             }
+                            reticulumProtocol.unbindService()
                         } catch (e: Exception) {
-                            Log.w(TAG, "SIGKILL fallback failed: ${e.message}")
+                            Log.w(TAG, "Error during service shutdown", e)
                         }
                     }
-                }
 
-                // Step 6: Wait for ports to be fully released by OS
-                // Even after process dies, ports remain in TIME_WAIT state briefly
-                Log.d(TAG, "Step 6: Waiting for ports to release (3000ms)...")
-                delay(3000)
-                Log.d(TAG, "✓ Ports should be released")
+                    // Send ACTION_STOP to let the service shut down gracefully.
+                    // This triggers System.exit(0) inside the service process, which
+                    // allows JVM shutdown hooks (including Chaquopy's Python VM teardown)
+                    // to run — preventing SIGSEGV in PyGILState_Ensure.
+                    var reticulumProcessFound = false
+                    try {
+                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                        val runningProcesses = activityManager.runningAppProcesses.orEmpty()
+                        val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
-                // Step 7: Start service again (fresh process, no port conflicts)
-                // Clear user shutdown flag so the service starts normally
-                context
-                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("is_user_shutdown", false)
-                    .commit()
-                Log.d(TAG, "Step 7: Starting ReticulumService in fresh process...")
-                val startIntent =
-                    Intent(context, ReticulumService::class.java).apply {
-                        action = ReticulumService.ACTION_START
+                        if (reticulumProcess != null) {
+                            reticulumProcessFound = true
+                            Log.d(TAG, "Found reticulum process PID ${reticulumProcess.pid}, sending ACTION_STOP intent...")
+                            val stopIntent =
+                                Intent(context, ReticulumService::class.java).apply {
+                                    action = ReticulumService.ACTION_STOP
+                                }
+                            ContextCompat.startForegroundService(context, stopIntent)
+                        } else {
+                            Log.d(TAG, "Service process not found (may have already stopped)")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not send ACTION_STOP to service: ${e.message}")
                     }
-                ContextCompat.startForegroundService(context, startIntent)
-                Log.d(TAG, "✓ Service start initiated")
 
-                // Step 8: Bind to the new service
-                Log.d(TAG, "Step 8: Binding to new service instance...")
-                if (reticulumProtocol is ServiceReticulumProtocol) {
-                    reticulumProtocol.bindService()
-                    // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
-                    // No more arbitrary delay needed - service notifies when ready for IPC calls
-                }
-                Log.d(TAG, "✓ Bound to new service and ready for IPC")
-
-                // Step 9: Initialize Reticulum with new config
-                Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
-
-                // Load active identity and ensure its file exists (recover from keyData if needed)
-                val activeIdentity = identityRepository.getActiveIdentitySync()
-                val identityPath =
-                    if (activeIdentity != null) {
-                        identityRepository
-                            .ensureIdentityFileExists(activeIdentity)
-                            .onFailure { error ->
-                                Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                            }.getOrNull()
-                    } else {
-                        null
+                    // Step 5: Verify process is dead (poll up to 2 seconds)
+                    // This is CRITICAL - if process survives, old identity keeps running
+                    if (reticulumProcessFound) {
+                        Log.d(TAG, "Step 5: Verifying service process terminated...")
+                        val maxVerifyAttempts = 8
+                        var processDied = false
+                        for (attempt in 1..maxVerifyAttempts) {
+                            delay(250)
+                            val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                            val stillRunning =
+                                activityManager.runningAppProcesses
+                                    .orEmpty()
+                                    .any { it.processName == reticulumProcessName }
+                            if (!stillRunning) {
+                                Log.d(TAG, "✓ Service process confirmed dead after ${attempt * 250}ms")
+                                processDied = true
+                                break
+                            }
+                        }
+                        if (!processDied) {
+                            Log.w(TAG, "Service process didn't exit gracefully after ${maxVerifyAttempts * 250}ms, sending SIGKILL...")
+                            try {
+                                val am = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                                val proc = am.runningAppProcesses.orEmpty().find { it.processName == reticulumProcessName }
+                                if (proc != null) {
+                                    Process.killProcess(proc.pid)
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "SIGKILL fallback failed: ${e.message}")
+                            }
+                        }
                     }
-                val displayName = activeIdentity?.displayName
-                Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set" else "none"}, verified path: $identityPath")
 
-                // Load shared instance preferences
-                val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
-                Log.d(TAG, "Prefer own instance: $preferOwnInstance")
+                    // Step 6: Wait for ports to be fully released by OS
+                    // TCP ports in TIME_WAIT on Android release within ~100ms after process death
+                    Log.d(TAG, "Step 6: Waiting for ports to release (1000ms)...")
+                    delay(1000)
+                    Log.d(TAG, "✓ Ports should be released")
 
-                // Load RPC key for shared instance authentication
-                val rpcKey = settingsRepository.rpcKeyFlow.first()
-                if (rpcKey != null) {
-                    Log.d(TAG, "RPC key configured for shared instance auth")
-                }
+                    // Step 7: Start service again (fresh process, no port conflicts)
+                    // Clear user shutdown flag so the service starts normally
+                    context
+                        .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("is_user_shutdown", false)
+                        .commit()
+                    Log.d(TAG, "Step 7: Starting ReticulumService in fresh process...")
+                    val startIntent =
+                        Intent(context, ReticulumService::class.java).apply {
+                            action = ReticulumService.ACTION_START
+                        }
+                    ContextCompat.startForegroundService(context, startIntent)
+                    Log.d(TAG, "✓ Service start initiated")
 
-                // Load transport node setting
-                val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
-                Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
+                    // Step 8: Bind to the new service
+                    Log.d(TAG, "Step 8: Binding to new service instance...")
+                    if (reticulumProtocol is ServiceReticulumProtocol) {
+                        reticulumProtocol.bindService()
+                        // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
+                        // No more arbitrary delay needed - service notifies when ready for IPC calls
+                    }
+                    Log.d(TAG, "✓ Bound to new service and ready for IPC")
 
-                // Load discovery settings
-                val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
-                val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
-                // Coerce -1 (never configured sentinel) to 0 for Python layer
-                val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
-                Log.d(
-                    TAG,
-                    "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount (saved=$savedAutoconnect)",
-                )
+                    // Step 9: Initialize Reticulum with new config
+                    Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
 
-                val config =
-                    ReticulumConfig(
-                        storagePath = context.filesDir.absolutePath + "/reticulum",
-                        enabledInterfaces = enabledInterfaces,
-                        identityFilePath = identityPath,
-                        displayName = displayName,
-                        logLevel = LogLevel.DEBUG,
-                        allowAnonymous = false,
-                        preferOwnInstance = preferOwnInstance,
-                        rpcKey = rpcKey,
-                        enableTransport = transportNodeEnabled,
-                        discoverInterfaces = discoverInterfaces,
-                        autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
+                    // Load active identity and ensure its file exists (recover from keyData if needed)
+                    val activeIdentity = identityRepository.getActiveIdentitySync()
+                    val identityPath =
+                        if (activeIdentity != null) {
+                            identityRepository
+                                .ensureIdentityFileExists(activeIdentity)
+                                .onFailure { error ->
+                                    Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
+                                }.getOrNull()
+                        } else {
+                            null
+                        }
+                    val displayName = activeIdentity?.displayName
+                    Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set" else "none"}, verified path: $identityPath")
+
+                    // Load shared instance preferences
+                    val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
+                    Log.d(TAG, "Prefer own instance: $preferOwnInstance")
+
+                    // Load RPC key for shared instance authentication
+                    val rpcKey = settingsRepository.rpcKeyFlow.first()
+                    if (rpcKey != null) {
+                        Log.d(TAG, "RPC key configured for shared instance auth")
+                    }
+
+                    // Load transport node setting
+                    val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
+                    Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
+
+                    // Load discovery settings
+                    val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
+                    val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
+                    // Coerce -1 (never configured sentinel) to 0 for Python layer
+                    val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
+                    Log.d(
+                        TAG,
+                        "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount (saved=$savedAutoconnect)",
                     )
 
-                reticulumProtocol
-                    .initialize(config)
-                    .onSuccess {
-                        Log.d(TAG, "✓ Reticulum initialized successfully")
+                    val config =
+                        ReticulumConfig(
+                            storagePath = context.filesDir.absolutePath + "/reticulum",
+                            enabledInterfaces = enabledInterfaces,
+                            identityFilePath = identityPath,
+                            displayName = displayName,
+                            logLevel = LogLevel.DEBUG,
+                            allowAnonymous = false,
+                            preferOwnInstance = preferOwnInstance,
+                            rpcKey = rpcKey,
+                            enableTransport = transportNodeEnabled,
+                            discoverInterfaces = discoverInterfaces,
+                            autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
+                        )
 
-                        // Clear the flag now that initialization is complete
-                        context
-                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                            .edit()
-                            .putBoolean("is_applying_config", false)
-                            .commit() // Synchronous to ensure flag is cleared for next restart
-                        Log.d(TAG, "✓ Config apply flag cleared")
-                    }.onFailure { error ->
-                        // Clear flag even on failure
-                        context
-                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                            .edit()
-                            .putBoolean("is_applying_config", false)
-                            .commit() // Synchronous to ensure flag is cleared
+                    reticulumProtocol
+                        .initialize(config)
+                        .onSuccess {
+                            Log.d(TAG, "✓ Reticulum initialized successfully")
 
-                        Log.e(TAG, "Failed to initialize Reticulum", error)
-                        throw Exception("Failed to initialize Reticulum: ${error.message}", error)
+                            // Clear the flag now that initialization is complete
+                            context
+                                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("is_applying_config", false)
+                                .commit() // Synchronous to ensure flag is cleared for next restart
+                            Log.d(TAG, "✓ Config apply flag cleared")
+                        }.onFailure { error ->
+                            // Clear flag even on failure
+                            context
+                                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putBoolean("is_applying_config", false)
+                                .commit() // Synchronous to ensure flag is cleared
+
+                            Log.e(TAG, "Failed to initialize Reticulum", error)
+                            throw Exception("Failed to initialize Reticulum: ${error.message}", error)
+                        }
+
+                    // Step 10: Restore peer identities (uses batched loading to prevent OOM)
+                    Log.d(TAG, "Step 10: Batch restoring peer identities...")
+                    try {
+                        restorePeerIdentitiesInBatches()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error batch restoring peer identities", e)
+                        // Not fatal - continue
                     }
 
-                // Step 10: Restore peer identities (uses batched loading to prevent OOM)
-                Log.d(TAG, "Step 10: Batch restoring peer identities...")
-                try {
-                    restorePeerIdentitiesInBatches()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error batch restoring peer identities", e)
-                    // Not fatal - continue
-                }
+                    // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
+                    Log.d(TAG, "Step 10b: Batch restoring announce identities...")
+                    try {
+                        restoreAnnounceIdentitiesInBatches()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error batch restoring announce identities", e)
+                        // Not fatal - continue
+                    }
 
-                // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
-                Log.d(TAG, "Step 10b: Batch restoring announce identities...")
-                try {
-                    restoreAnnounceIdentitiesInBatches()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error batch restoring announce identities", e)
-                    // Not fatal - continue
-                }
+                    // Step 11: Restart message collector
+                    Log.d(TAG, "Step 11: Starting message collector...")
+                    messageCollector.startCollecting()
+                    Log.d(TAG, "✓ Message collector started")
 
-                // Step 11: Restart message collector
-                Log.d(TAG, "Step 11: Starting message collector...")
-                messageCollector.startCollecting()
-                Log.d(TAG, "✓ Message collector started")
+                    // Step 12: Restart managers (same as ColumbaApplication.onCreate)
+                    Log.d(TAG, "Step 12: Restarting managers...")
+                    autoAnnounceManager.start()
+                    identityResolutionManager.start(applicationScope)
+                    propagationNodeManager.start()
+                    Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
 
-                // Step 12: Restart managers (same as ColumbaApplication.onCreate)
-                Log.d(TAG, "Step 12: Restarting managers...")
-                autoAnnounceManager.start()
-                identityResolutionManager.start(applicationScope)
-                propagationNodeManager.start()
-                Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
-
-                Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
+                    Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
+                } // withTimeout
             }
 
         /**

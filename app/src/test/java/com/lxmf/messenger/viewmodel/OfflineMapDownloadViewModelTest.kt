@@ -3,11 +3,13 @@ package com.lxmf.messenger.viewmodel
 import android.content.Context
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
+import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.repository.SettingsRepository
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -16,14 +18,16 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -75,6 +79,8 @@ class OfflineMapDownloadViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        mockkObject(TileDownloadManager)
+        coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
         context = RuntimeEnvironment.getApplication()
         offlineMapRegionRepository = mockk()
@@ -88,6 +94,7 @@ class OfflineMapDownloadViewModelTest {
         coEvery { offlineMapRegionRepository.markError(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.updateLocalStylePath(any(), any()) } just Runs
+        coEvery { offlineMapRegionRepository.updateTileVersion(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
 
         // Setup MapLibreOfflineManager mock behavior
@@ -120,6 +127,7 @@ class OfflineMapDownloadViewModelTest {
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
+        unmockkObject(TileDownloadManager)
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -131,7 +139,11 @@ class OfflineMapDownloadViewModelTest {
             mapLibreOfflineManager = mockMapLibreOfflineManager,
             mapTileSourceManager = mockMapTileSourceManager,
             settingsRepository = mockSettingsRepository,
-        )
+            ioDispatcher = testDispatcher,
+        ).also {
+            // Default: return minimal valid style JSON so style caching succeeds
+            it.urlFetcher = { """{"version":8,"name":"test","sources":{},"layers":[]}""" }
+        }
 
     // region Initial State Tests
 
@@ -676,9 +688,93 @@ class OfflineMapDownloadViewModelTest {
             assertNotNull("onComplete callback should have been captured", capturedOnComplete)
             capturedOnComplete?.invoke(456L, 1500000L)
 
-            // Verify state (state update happens immediately, style caching is async and non-blocking)
+            // With ioDispatcher = testDispatcher, the entire completion flow
+            // (markComplete → style cache → HTTP disable check → state update)
+            // runs synchronously before this assertion.
             assertEquals(DownloadWizardStep.DOWNLOADING, viewModel.state.value.step)
             assertTrue(viewModel.state.value.isComplete)
+            assertNull("Style caching should succeed", viewModel.state.value.styleCacheWarning)
+        }
+
+    @Test
+    fun `download complete sets styleCacheWarning when style caching fails`() =
+        runTest {
+            viewModel = createViewModel()
+            viewModel.urlFetcher = { throw java.io.IOException("Network error") }
+            viewModel.setLocation(40.7128, -74.0060)
+            viewModel.setName("Test Region")
+
+            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
+            coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+
+            var capturedOnComplete: ((Long, Long) -> Unit)? = null
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onCreated = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = any(),
+                )
+            } answers {
+                capturedOnComplete = arg<(Long, Long) -> Unit>(7)
+            }
+
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
+
+            capturedOnComplete?.invoke(456L, 1500000L)
+            // Advance virtual time to let retry delays complete
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.isComplete)
+            assertNotNull("Style warning should be set on fetch failure", viewModel.state.value.styleCacheWarning)
+        }
+
+    @Test
+    fun `download complete sets both httpAutoDisabled and styleCacheWarning when applicable`() =
+        runTest {
+            httpEnabledForDownloadFlow.value = true
+            viewModel = createViewModel()
+            viewModel.urlFetcher = { throw java.io.IOException("Network error") }
+            viewModel.setLocation(40.7128, -74.0060)
+            viewModel.setName("Test Region")
+
+            coEvery { offlineMapRegionRepository.createRegion(any(), any(), any(), any(), any(), any()) } returns 123L
+            coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } returns Unit
+
+            var capturedOnComplete: ((Long, Long) -> Unit)? = null
+            every {
+                mockMapLibreOfflineManager.downloadRegion(
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onCreated = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = any(),
+                )
+            } answers {
+                capturedOnComplete = arg<(Long, Long) -> Unit>(7)
+            }
+
+            viewModel.nextStep()
+            viewModel.nextStep()
+            viewModel.nextStep()
+
+            capturedOnComplete?.invoke(456L, 1500000L)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.isComplete)
+            assertTrue("HTTP should be auto-disabled", viewModel.state.value.httpAutoDisabled)
+            assertNotNull("Style warning should be set", viewModel.state.value.styleCacheWarning)
         }
 
     // endregion
@@ -1308,26 +1404,6 @@ class OfflineMapDownloadViewModelTest {
         }
 
     @Test
-    fun `dismissHttpAutoDisabledMessage clears httpAutoDisabled flag`() =
-        runTest {
-            viewModel = createViewModel()
-
-            viewModel.state.test {
-                val initial = awaitItem()
-                assertFalse(initial.httpAutoDisabled)
-
-                // Manually set httpAutoDisabled to true via internal state update
-                // We simulate this by triggering the dismiss and verifying it stays false
-                viewModel.dismissHttpAutoDisabledMessage()
-
-                // Should remain false (no event emitted if already false)
-                expectNoEvents()
-
-                cancelAndConsumeRemainingEvents()
-            }
-        }
-
-    @Test
     fun `httpEnabled false initially when flow starts with false`() =
         runTest {
             httpEnabledFlow.value = false
@@ -1357,6 +1433,212 @@ class OfflineMapDownloadViewModelTest {
 
             // Verify both calls completed successfully without exception
             assertTrue(true)
+        }
+
+    // endregion
+
+    // region Coordinate Validation & Bounds Clamping Tests (Issue #574)
+
+    @Test
+    fun `setLocation clamps latitude exceeding 90 to 90`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(123.0, -74.0)
+                val state = awaitItem()
+
+                assertEquals(90.0, state.centerLatitude)
+                assertEquals(-74.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps latitude below negative 90 to negative 90`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(-120.0, 50.0)
+                val state = awaitItem()
+
+                assertEquals(-90.0, state.centerLatitude)
+                assertEquals(50.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps longitude exceeding 180 to 180`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(40.0, 200.0)
+                val state = awaitItem()
+
+                assertEquals(40.0, state.centerLatitude)
+                assertEquals(180.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation clamps longitude below negative 180 to negative 180`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                awaitItem() // Initial state
+
+                viewModel.setLocation(40.0, -200.0)
+                val state = awaitItem()
+
+                assertEquals(40.0, state.centerLatitude)
+                assertEquals(-180.0, state.centerLongitude)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setLocation at max latitude does not crash with updateEstimate`() =
+        runTest {
+            viewModel = createViewModel()
+
+            // This is the core crash scenario from issue #574:
+            // latitude = 90.0, radius adds latDelta, LatLng(90+delta) would crash
+            // without the coerceIn fix in calculateBounds
+            viewModel.setLocation(90.0, 0.0)
+
+            val state = viewModel.state.value
+            assertEquals(90.0, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
+        }
+
+    @Test
+    fun `setLocation at min latitude does not crash with updateEstimate`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocation(-90.0, 0.0)
+
+            val state = viewModel.state.value
+            assertEquals(-90.0, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
+        }
+
+    @Test
+    fun `setLocation near pole with large radius does not crash`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.setLocation(89.5, 170.0)
+            // Use largest radius — latDelta = 100/111 ≈ 0.9, so 89.5+0.9 = 90.4 > 90
+            viewModel.setRadiusOption(RadiusOption.HUGE)
+
+            val state = viewModel.state.value
+            assertEquals(89.5, state.centerLatitude)
+            assertTrue(state.estimatedTileCount > 0)
+        }
+
+    // endregion
+
+    // region initForUpdate Tests
+
+    @Test
+    fun `initForUpdate pre-fills state from existing region`() =
+        runTest {
+            val existingRegion =
+                OfflineMapRegion(
+                    id = 42L,
+                    name = "Home Area",
+                    centerLatitude = 40.7128,
+                    centerLongitude = -74.0060,
+                    radiusKm = 25,
+                    minZoom = 2,
+                    maxZoom = 12,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 500,
+                    sizeBytes = 10_000_000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = "20260107_001001_pt",
+                    maplibreRegionId = 99L,
+                )
+            coEvery { offlineMapRegionRepository.getRegionById(42L) } returns existingRegion
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(42L)
+
+            val state = viewModel.state.value
+            assertEquals("Home Area", state.name)
+            assertEquals(40.7128, state.centerLatitude)
+            assertEquals(-74.0060, state.centerLongitude)
+            assertEquals(RadiusOption.LARGE, state.radiusOption) // 25 km
+            assertEquals(2, state.minZoom)
+            assertEquals(12, state.maxZoom)
+            assertEquals(DownloadWizardStep.CONFIRM, state.step)
+            assertEquals(42L, state.updateRegionId)
+        }
+
+    @Test
+    fun `initForUpdate does nothing for non-existent region`() =
+        runTest {
+            coEvery { offlineMapRegionRepository.getRegionById(999L) } returns null
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(999L)
+
+            val state = viewModel.state.value
+            // State should remain at defaults
+            assertEquals(DownloadWizardStep.LOCATION, state.step)
+            assertNull(state.updateRegionId)
+        }
+
+    @Test
+    fun `initForUpdate snaps to nearest radius for non-standard km`() =
+        runTest {
+            val existingRegion =
+                OfflineMapRegion(
+                    id = 42L,
+                    name = "Custom",
+                    centerLatitude = 51.5074,
+                    centerLongitude = -0.1278,
+                    radiusKm = 7, // Not a standard RadiusOption — nearest is SMALL (5km)
+                    minZoom = 0,
+                    maxZoom = 14,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 100,
+                    sizeBytes = 5_000_000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = null,
+                )
+            coEvery { offlineMapRegionRepository.getRegionById(42L) } returns existingRegion
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(42L)
+
+            assertEquals(RadiusOption.SMALL, viewModel.state.value.radiusOption)
         }
 
     // endregion

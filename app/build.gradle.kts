@@ -143,12 +143,6 @@ android {
         }
     }
 
-    lint {
-        // Workaround for lint crash with Kotlin 2.x
-        // https://issuetracker.google.com/issues/344341744
-        disable += "NullSafeMutableLiveData"
-    }
-
     // Track whether release signing is configured
     val releaseSigningConfigured =
         run {
@@ -406,7 +400,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.preview)
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("com.composables:icons-lucide-android:1.1.0")
+    implementation("com.composables:icons-lucide-android:2.2.1")
     debugImplementation(libs.compose.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
@@ -460,7 +454,7 @@ dependencies {
     implementation("org.msgpack:msgpack-core:0.9.8")
 
     // MapLibre - for offline-capable maps
-    implementation("org.maplibre.gl:android-sdk:11.13.5")
+    implementation("org.maplibre.gl:android-sdk:12.3.1")
 
     // Google Play Services Location - for FusedLocationProviderClient
     implementation("com.google.android.gms:play-services-location:21.2.0")

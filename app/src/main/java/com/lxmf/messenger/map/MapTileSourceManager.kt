@@ -159,9 +159,25 @@ class MapTileSourceManager
                             MapStyleResult.OfflineWithLocalStyle(combinedStyleFile.absolutePath)
                         }
                     } else {
-                        // Fallback to HTTP style URL (works if HTTP cache hasn't expired)
-                        Log.w(TAG, "No MBTiles files found, falling back to HTTP style URL")
-                        MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                        // No MBTiles files — check for cached inlined style JSON from
+                        // MapLibre OfflineManager downloads. Without this, the TileJSON
+                        // reference in the style URL expires after ~24h and MapLibre can
+                        // no longer discover the tile URL templates, making cached tiles
+                        // in mbgl-offline.db unreachable.
+                        val (cachedPath, styleExists) =
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val r = offlineMapRegionRepository.getFirstCompletedRegionWithStyle()
+                                val path = r?.localStylePath
+                                Pair(path, path != null && java.io.File(path).exists())
+                            }
+                        if (styleExists) {
+                            Log.d(TAG, "Using cached inlined style JSON: $cachedPath")
+                            MapStyleResult.OfflineWithLocalStyle(cachedPath!!)
+                        } else {
+                            Log.w(TAG, "Offline regions exist but no cached style found — falling back to HTTP style URL")
+                            // Tiles work until TileJSON cache expires (~24h); prompt re-download but don't block immediately
+                            MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                        }
                     }
                 }
                 rmspEnabled -> {

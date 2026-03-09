@@ -53,6 +53,17 @@ class OnboardingViewModel
             viewModelScope.launch {
                 try {
                     val hasCompleted = settingsRepository.hasCompletedOnboardingFlow.first()
+                    if (!hasCompleted) {
+                        // Check if this is an upgrade from a pre-onboarding version:
+                        // existing identity means user already set up the app
+                        val existingIdentity = identityRepository.getActiveIdentitySync()
+                        if (existingIdentity != null) {
+                            Log.d(TAG, "Existing identity found - marking onboarding complete (upgrade detected)")
+                            settingsRepository.markOnboardingCompleted()
+                            _state.value = _state.value.copy(isLoading = false, hasCompletedOnboarding = true)
+                            return@launch
+                        }
+                    }
                     _state.value =
                         _state.value.copy(
                             isLoading = false,

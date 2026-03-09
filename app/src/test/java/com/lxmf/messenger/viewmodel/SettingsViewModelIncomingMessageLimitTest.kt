@@ -66,6 +66,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: com.lxmf.messenger.data.repository.ContactRepository
+    private lateinit var updateChecker: com.lxmf.messenger.service.UpdateChecker
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -104,6 +105,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
+        updateChecker = mockk()
         context =
             mockk {
                 val mockEditor =
@@ -182,6 +184,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.lastTelemetryRequestTimeFlow } returns MutableStateFlow<Long?>(null)
         every { settingsRepository.telemetryHostModeEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.telemetryAllowedRequestersFlow } returns MutableStateFlow(emptySet())
+        every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
+        coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Mock PropagationNodeManager flows (StateFlows)
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
@@ -224,6 +228,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             mapTileSourceManager = mapTileSourceManager,
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
+            updateChecker = updateChecker,
         )
 
     // ========== Initial State Tests ==========

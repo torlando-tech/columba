@@ -156,11 +156,15 @@ private fun hasImageField(fieldsJson: String?): Boolean {
         val fields = JSONObject(fieldsJson)
         val field6 = fields.opt("6")
         when {
-            field6 is JSONObject && field6.has(FILE_REF_KEY) -> true
+            field6 is JSONObject && (field6.has(FILE_REF_KEY) || field6.has(BINARY_REF_KEY)) -> true
             field6 is String && field6.isNotEmpty() -> true
-            // Handle array format from Python: ["format", "hex_data"]
-            field6 is JSONArray && field6.length() >= 2 &&
-                (field6.opt(1) as? String)?.isNotEmpty() == true -> true
+            // Handle array format from Python: ["format", "hex_data"] or ["format", null, "staging_path"]
+            field6 is JSONArray &&
+                field6.length() >= 2 &&
+                (
+                    (field6.opt(1) as? String)?.isNotEmpty() == true ||
+                        (field6.length() >= 3 && (field6.opt(2) as? String)?.isNotEmpty() == true)
+                ) -> true
             else -> false
         }
     } catch (e: Exception) {
@@ -307,13 +311,25 @@ fun decodeImageWithAnimation(
  * @param fieldsJson The message's fields JSON containing the image data
  * @return Raw image bytes, or null if not found
  */
-@Suppress("ReturnCount")
+@Suppress("ReturnCount", "CyclomaticComplexMethod")
 private fun extractImageBytes(fieldsJson: String?): ByteArray? {
     if (fieldsJson == null) return null
 
     return try {
         val fields = JSONObject(fieldsJson)
         val field6 = fields.opt("6") ?: return null
+
+        // Binary ref: raw binary file from Python staging (large images)
+        if (field6 is JSONObject && field6.has(BINARY_REF_KEY)) {
+            val filePath = field6.getString(BINARY_REF_KEY)
+            return loadBinaryFromDisk(filePath)
+        }
+
+        // Array format: ["format", "hex_data"] or ["format", null, "staging_path"]
+        if (field6 is JSONArray && field6.length() >= 3 && field6.isNull(1)) {
+            val stagingPath = field6.optString(2, "")
+            if (stagingPath.isNotEmpty()) return loadBinaryFromDisk(stagingPath)
+        }
 
         val hexImageData: String =
             when {
@@ -348,6 +364,7 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
  *
  * Returns null if no image field exists or decoding fails.
  */
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
 private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
     if (fieldsJson == null) return null
 
@@ -356,6 +373,22 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
 
         // Get field 6 (IMAGE) - could be string, object with file reference, or array
         val field6 = fields.opt("6") ?: return null
+
+        // Binary ref: raw binary file from Python staging (large images)
+        if (field6 is JSONObject && field6.has(BINARY_REF_KEY)) {
+            val filePath = field6.getString(BINARY_REF_KEY)
+            val imageBytes = loadBinaryFromDisk(filePath) ?: return null
+            return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
+        }
+
+        // Array format: ["format", null, "staging_path"] (unresolved staging)
+        if (field6 is JSONArray && field6.length() >= 3 && field6.isNull(1)) {
+            val stagingPath = field6.optString(2, "")
+            if (stagingPath.isNotEmpty()) {
+                val imageBytes = loadBinaryFromDisk(stagingPath) ?: return null
+                return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
+            }
+        }
 
         val hexImageData: String =
             when {
@@ -375,7 +408,8 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
 
         // Convert hex string to bytes
         val imageBytes =
-            hexImageData.chunked(2)
+            hexImageData
+                .chunked(2)
                 .map { it.toInt(16).toByte() }
                 .toByteArray()
 
@@ -395,22 +429,48 @@ private fun decodeImageFromFields(fieldsJson: String?): ImageBitmap? {
  * @param filePath Absolute path to attachment file
  * @return Attachment data (hex-encoded string), or null if not found
  */
-private fun loadAttachmentFromDisk(filePath: String): String? {
-    return try {
+private const val MAX_ATTACHMENT_BYTES = 50L * 1024 * 1024 // 50 MB safety cap
+
+private fun loadAttachmentFromDisk(filePath: String): String? =
+    try {
         val file = File(filePath)
-        if (file.exists()) {
+        if (!file.exists()) {
+            Log.w(TAG, "Attachment file not found: $filePath")
+            null
+        } else if (file.length() > MAX_ATTACHMENT_BYTES) {
+            Log.e(TAG, "Attachment file too large (${file.length()} bytes): $filePath")
+            null
+        } else {
             file.readText().also {
                 Log.d(TAG, "Loaded attachment from disk: $filePath (${it.length} chars)")
             }
-        } else {
-            Log.w(TAG, "Attachment file not found: $filePath")
-            null
         }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to load attachment from disk: $filePath", e)
         null
     }
-}
+
+/**
+ * Load raw binary data from disk (from Python staging files).
+ */
+private fun loadBinaryFromDisk(filePath: String): ByteArray? =
+    try {
+        val file = File(filePath)
+        if (!file.exists()) {
+            Log.w(TAG, "Binary file not found: $filePath")
+            null
+        } else if (file.length() > MAX_ATTACHMENT_BYTES) {
+            Log.e(TAG, "Binary file too large (${file.length()} bytes): $filePath")
+            null
+        } else {
+            file.readBytes().also {
+                Log.d(TAG, "Loaded binary from disk: $filePath (${it.size} bytes)")
+            }
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load binary from disk: $filePath", e)
+        null
+    }
 
 /**
  * Check if the message has a file attachments field (type 5) in its JSON.
@@ -505,9 +565,14 @@ private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAtt
 }
 
 /**
- * Marker key for per-file data reference (optimized format).
+ * Marker key for per-file data reference (optimized format, hex-encoded text).
  */
 private const val DATA_REF_KEY = "_data_ref"
+
+/**
+ * Marker key for binary data reference (raw binary file from Python staging).
+ */
+private const val BINARY_REF_KEY = "_binary_ref"
 
 /**
  * Load file attachment data by index.
@@ -541,7 +606,15 @@ fun loadFileAttachmentData(
 
         val attachment = attachmentsArray.getJSONObject(index)
 
-        // Optimized format: data stored per-file on disk
+        // Binary format: raw binary data on disk (large attachments from Python staging)
+        if (attachment.has(BINARY_REF_KEY)) {
+            val filePath = attachment.getString(BINARY_REF_KEY)
+            return loadBinaryFromDisk(filePath)?.also {
+                Log.d(TAG, "Loaded file attachment at index $index from binary ref (${it.size} bytes)")
+            }
+        }
+
+        // Optimized format: hex data stored per-file on disk
         if (attachment.has(DATA_REF_KEY)) {
             val filePath = attachment.getString(DATA_REF_KEY)
             val hexData = loadAttachmentFromDisk(filePath) ?: return null
@@ -623,9 +696,7 @@ fun loadFileAttachmentMetadata(
  * @param fieldsJson The message's fields JSON containing image data (field 6)
  * @return Raw image bytes, or null if not found or loading fails
  */
-fun loadImageData(fieldsJson: String?): ByteArray? {
-    return extractImageBytes(fieldsJson)
-}
+fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJson)
 
 /**
  * Get image metadata for save operations.
@@ -661,17 +732,23 @@ private fun detectImageFormat(bytes: ByteArray): Pair<String, String> =
 private fun isJpeg(bytes: ByteArray): Boolean = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
 
 private fun isPng(bytes: ByteArray): Boolean =
-    bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
-        bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+    bytes[0] == 0x89.toByte() &&
+        bytes[1] == 0x50.toByte() &&
+        bytes[2] == 0x4E.toByte() &&
+        bytes[3] == 0x47.toByte()
 
 private fun isGif(bytes: ByteArray): Boolean = bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()
 
 private fun isWebP(bytes: ByteArray): Boolean =
     bytes.size >= 12 &&
-        bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
-        bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
-        bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
-        bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
+        bytes[0] == 0x52.toByte() &&
+        bytes[1] == 0x49.toByte() &&
+        bytes[2] == 0x46.toByte() &&
+        bytes[3] == 0x46.toByte() &&
+        bytes[8] == 0x57.toByte() &&
+        bytes[9] == 0x45.toByte() &&
+        bytes[10] == 0x42.toByte() &&
+        bytes[11] == 0x50.toByte()
 
 /**
  * Efficiently convert a hex string to byte array.

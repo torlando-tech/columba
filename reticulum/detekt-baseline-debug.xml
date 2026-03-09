@@ -20,7 +20,7 @@
     <ID>LongMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LoopWithTooManyJumpStatements:KotlinRNodeBridge.kt$KotlinRNodeBridge$while</ID>
     <ID>MaxLineLength:AppDataParser.kt$AppDataParser$val printableRatio = str.count { it.isLetterOrDigit() || it.isWhitespace() || it in ".-_@#'\"()[]{},:;!?" } / str.length.toFloat()</ID>
-    <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$"RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"</ID>
+
     <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser$.</ID>
     <ID>MaxLineLength:BleAdvertiser.kt$BleAdvertiser.&lt;no name provided&gt;$Log.d(TAG, "Retrying advertising in ${backoffMs}ms (attempt $retryAttempts/$MAX_RETRY_ATTEMPTS)")</ID>
     <ID>MaxLineLength:BleGattClient.kt$BleGattClient$BleConstants.ERROR_GATT_WRITE_REQUEST_BUSY -&gt; "ERROR_GATT_WRITE_REQUEST_BUSY - BLE stack busy (should have been retried)"</ID>

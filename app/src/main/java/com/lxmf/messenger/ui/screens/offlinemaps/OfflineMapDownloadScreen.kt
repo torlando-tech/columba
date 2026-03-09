@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -84,15 +87,39 @@ private const val TAG = "OfflineMapDownload"
 fun OfflineMapDownloadScreen(
     onNavigateBack: () -> Unit = {},
     onDownloadComplete: () -> Unit = {},
+    updateRegionId: Long? = null,
     viewModel: OfflineMapDownloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCancelDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    // Handle completion
+    // Pre-fill wizard when updating an existing region
+    LaunchedEffect(updateRegionId) {
+        if (updateRegionId != null) {
+            viewModel.initForUpdate(updateRegionId)
+        }
+    }
+
+    // Handle completion — consolidate all post-download notifications
+    // into a single Toast so they don't conflict or get lost on navigation.
     LaunchedEffect(state.isComplete) {
         if (state.isComplete) {
+            val message =
+                when {
+                    state.styleCacheWarning != null && state.httpAutoDisabled ->
+                        state.styleCacheWarning +
+                            " Note: HTTP was auto-disabled and must be re-enabled before retrying."
+                    state.styleCacheWarning != null -> state.styleCacheWarning
+                    state.httpAutoDisabled -> "HTTP disabled. Your offline maps are ready."
+                    else -> null
+                }
+            message?.let {
+                android.widget.Toast
+                    .makeText(context, it, android.widget.Toast.LENGTH_LONG)
+                    .show()
+            }
             onDownloadComplete()
         }
     }
@@ -102,20 +129,6 @@ fun OfflineMapDownloadScreen(
         state.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
-        }
-    }
-
-    // Show toast when HTTP was auto-disabled after download
-    val context = LocalContext.current
-    LaunchedEffect(state.httpAutoDisabled) {
-        if (state.httpAutoDisabled) {
-            android.widget.Toast
-                .makeText(
-                    context,
-                    "HTTP disabled. Your offline maps are ready.",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-            viewModel.dismissHttpAutoDisabledMessage()
         }
     }
 
@@ -164,11 +177,16 @@ fun OfflineMapDownloadScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
+        // The parent Scaffold in MainActivity consumes navigation bar insets
+        // but discards its paddingValues, so child Scaffolds see them as consumed.
+        // Use the raw (unconsumed) WindowInsets to get the actual nav bar height.
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
+                    .padding(paddingValues)
+                    .padding(bottom = navBarBottom),
         ) {
             when (state.step) {
                 DownloadWizardStep.LOCATION ->
@@ -398,20 +416,41 @@ fun LocationSelectionStep(
             // Manual coordinate entry
             var latText by remember(latitude) { mutableStateOf(latitude?.toString() ?: "") }
             var lonText by remember(longitude) { mutableStateOf(longitude?.toString() ?: "") }
+            var latError by remember(latitude) { mutableStateOf<String?>(null) }
+            var lonError by remember(longitude) { mutableStateOf<String?>(null) }
+
+            fun validateAndSetLocation(
+                lat: Double?,
+                lon: Double?,
+            ) {
+                if (lat == null || lon == null) return
+                if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return
+                if (latError != null || lonError != null) return
+                onLocationSet(lat, lon)
+            }
 
             OutlinedTextField(
                 value = latText,
                 onValueChange = {
                     latText = it
                     val lat = it.toDoubleOrNull()
-                    val lon = lonText.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        onLocationSet(lat, lon)
-                    }
+                    latError =
+                        when {
+                            it.isEmpty() || it == "-" -> null
+                            lat == null -> "Invalid number"
+                            lat !in -90.0..90.0 -> "Must be between -90 and 90"
+                            else -> null
+                        }
+                    validateAndSetLocation(lat, lonText.toDoubleOrNull())
                 },
                 label = { Text("Latitude") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = latError != null,
+                supportingText =
+                    latError?.let {
+                        { Text(it) }
+                    },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -420,15 +459,24 @@ fun LocationSelectionStep(
                 value = lonText,
                 onValueChange = {
                     lonText = it
-                    val lat = latText.toDoubleOrNull()
                     val lon = it.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        onLocationSet(lat, lon)
-                    }
+                    lonError =
+                        when {
+                            it.isEmpty() || it == "-" -> null
+                            lon == null -> "Invalid number"
+                            lon !in -180.0..180.0 -> "Must be between -180 and 180"
+                            else -> null
+                        }
+                    validateAndSetLocation(latText.toDoubleOrNull(), lon)
                 },
                 label = { Text("Longitude") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = lonError != null,
+                supportingText =
+                    lonError?.let {
+                        { Text(it) }
+                    },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -956,6 +1004,7 @@ fun DownloadingStep(
                 when {
                     progress.isComplete -> "Complete!"
                     progress.errorMessage != null -> "Error"
+                    progress.statusMessage != null -> progress.statusMessage
                     progress.progress > 0 -> "Downloading..."
                     else -> "Preparing..."
                 }

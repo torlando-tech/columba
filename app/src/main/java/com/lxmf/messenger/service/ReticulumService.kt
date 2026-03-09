@@ -64,18 +64,23 @@ class ReticulumService : Service() {
                     triggerServiceRestart()
                 },
                 onNetworkChanged = {
-                    // Trigger LXMF announce when network changes so peers can discover us
+                    // Trigger AutoInterface hot-add + LXMF announce when network changes.
                     // CRITICAL: Run in coroutine scope to avoid blocking the ConnectivityManager
                     // callback thread. Blocking that thread can cause Android's watchdog to kill
                     // the service, leading to "Service not bound" errors.
-                    Log.d(TAG, "Network changed - triggering LXMF announce")
+                    Log.d(TAG, "Network changed - restarting AutoInterface and triggering LXMF announce")
                     // Guard: binder property must be initialized AND Reticulum must be ready
                     // This prevents announces during service initialization, which can cause
                     // DataStore race conditions and service crashes
                     if (::binder.isInitialized && binder.isInitialized()) {
                         serviceScope.launch {
                             try {
-                                withTimeout(5000L) {
+                                withTimeout(10_000L) {
+                                    // Hot-add any new network interfaces to AutoInterface FIRST,
+                                    // so the subsequent announce goes out on the new interface.
+                                    // This fixes the bug where starting without WiFi and later
+                                    // connecting never discovers AutoInterface peers.
+                                    binder.restartAutoInterface()
                                     binder.announceLxmfDestination()
                                 }
                                 // Signal main app's AutoAnnounceManager to reset its timer
@@ -177,6 +182,19 @@ class ReticulumService : Service() {
                 stopSelf()
 
                 if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
+
+                // Stop BLE immediately on Main thread before process exit.
+                // The normal Python shutdown path (ReticulumWrapper.shutdown() → BLEInterface.detach()
+                // → AndroidBLEDriver.stop() → KotlinBLEBridge.stop()) won't complete because
+                // System.exit(0) kills the process before async cleanup finishes.
+                if (::managers.isInitialized) {
+                    try {
+                        managers.bleCoordinator.stopImmediate()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error during BLE immediate shutdown", e)
+                    }
+                }
+
                 try {
                     binder.shutdown()
                 } catch (e: Exception) {
@@ -254,6 +272,8 @@ class ReticulumService : Service() {
             managers.eventHandler.stopAll()
             managers.lockManager.releaseAll()
             managers.broadcaster.kill()
+            // Safety net: stop BLE if not already stopped by ACTION_STOP
+            managers.bleCoordinator.stopImmediate()
         }
         serviceScope.cancel()
 
@@ -279,6 +299,15 @@ class ReticulumService : Service() {
 
         // Set kill switch before shutdown to prevent SIGSEGV during teardown
         if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
+
+        // Stop BLE immediately before process exit
+        if (::managers.isInitialized) {
+            try {
+                managers.bleCoordinator.stopImmediate()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during BLE immediate shutdown in restart", e)
+            }
+        }
 
         // Clean up current state
         if (::binder.isInitialized) {

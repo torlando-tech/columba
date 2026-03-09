@@ -70,9 +70,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.composables.icons.lucide.Antenna
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.TreePine
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -982,7 +981,7 @@ internal fun DiscoveredInterfaceCard(
                             ),
                     ) {
                         Icon(
-                            imageVector = Lucide.Antenna,
+                            imageVector = ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
@@ -1152,7 +1151,7 @@ internal fun InterfaceTypeIcon(
             if (isYggdrasilAddress(host)) {
                 // Use TreePine for Yggdrasil network addresses
                 Icon(
-                    imageVector = Lucide.TreePine,
+                    imageVector = ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_tree_pine),
                     contentDescription = "Yggdrasil network",
                     modifier = modifier.size(size),
                     tint = tint,
@@ -1189,7 +1188,7 @@ internal fun InterfaceTypeIcon(
         "RNodeInterface", "WeaveInterface", "KISSInterface" -> {
             // Use Lucide Antenna for radio interfaces (matches PeerCard)
             Icon(
-                imageVector = Lucide.Antenna,
+                imageVector = ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
                 contentDescription = "Radio interface",
                 modifier = modifier.size(size),
                 tint = tint,

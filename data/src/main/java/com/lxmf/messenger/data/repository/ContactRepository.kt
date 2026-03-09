@@ -6,6 +6,7 @@ import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
+import com.lxmf.messenger.data.util.HashUtils.computeIdentityHash
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -114,6 +115,7 @@ class ContactRepository
             destinationHash: String,
             publicKey: ByteArray,
         ): Result<Unit> {
+            val normalizedHash = destinationHash.lowercase()
             return try {
                 // Get active identity hash
                 val activeIdentity =
@@ -122,7 +124,7 @@ class ContactRepository
 
                 val contact =
                     ContactEntity(
-                        destinationHash = destinationHash,
+                        destinationHash = normalizedHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
                         customNickname = null, // Let displayName fall through to announce name
@@ -152,6 +154,7 @@ class ContactRepository
             publicKey: ByteArray,
             nickname: String? = null,
         ): Result<Unit> {
+            val normalizedHash = destinationHash.lowercase()
             return try {
                 // Get active identity hash
                 val activeIdentity =
@@ -160,7 +163,7 @@ class ContactRepository
 
                 val contact =
                     ContactEntity(
-                        destinationHash = destinationHash,
+                        destinationHash = normalizedHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
                         customNickname = nickname,
@@ -190,6 +193,7 @@ class ContactRepository
             publicKey: ByteArray,
             nickname: String? = null,
         ): Result<Unit> {
+            val normalizedHash = destinationHash.lowercase()
             return try {
                 // Get active identity hash
                 val activeIdentity =
@@ -198,7 +202,7 @@ class ContactRepository
 
                 val contact =
                     ContactEntity(
-                        destinationHash = destinationHash,
+                        destinationHash = normalizedHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
                         customNickname = nickname,
@@ -227,6 +231,7 @@ class ContactRepository
             destinationHash: String,
             publicKey: ByteArray,
         ): Result<Unit> {
+            val normalizedHash = destinationHash.lowercase()
             return try {
                 // Get active identity hash
                 val activeIdentity =
@@ -235,7 +240,7 @@ class ContactRepository
 
                 val contact =
                     ContactEntity(
-                        destinationHash = destinationHash,
+                        destinationHash = normalizedHash,
                         identityHash = activeIdentity.identityHash,
                         publicKey = publicKey,
                         customNickname = null, // Let displayName fall through to announce/conversation name
@@ -322,6 +327,16 @@ class ContactRepository
             return contactDao.getContactCount(activeIdentity.identityHash)
         }
 
+        suspend fun getRestorableContactIdentitiesForActiveIdentity(): List<Pair<String, ByteArray>> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return contactDao
+                .getRestorableContactsForIdentity(activeIdentity.identityHash, ContactStatus.ACTIVE.name)
+                .mapNotNull { contact ->
+                    val publicKey = contact.publicKey ?: return@mapNotNull null
+                    computeIdentityHash(publicKey) to publicKey
+                }
+        }
+
         /**
          * Get contact count as Flow for the active identity.
          * Automatically switches when identity changes.
@@ -399,6 +414,7 @@ class ContactRepository
             destinationHash: String,
             nickname: String? = null,
         ): Result<AddPendingResult> {
+            val normalizedHash = destinationHash.lowercase()
             return try {
                 val activeIdentity =
                     localIdentityDao.getActiveIdentitySync()
@@ -406,13 +422,13 @@ class ContactRepository
 
                 // Check if we already have an announce for this destination hash
                 // If so, we can resolve the contact immediately!
-                val existingAnnounce = announceDao.getAnnounce(destinationHash)
+                val existingAnnounce = announceDao.getAnnounce(normalizedHash)
 
                 if (existingAnnounce != null && existingAnnounce.publicKey.isNotEmpty()) {
                     // Great! We have the public key from a previous announce
                     val contact =
                         ContactEntity(
-                            destinationHash = destinationHash,
+                            destinationHash = normalizedHash,
                             identityHash = activeIdentity.identityHash,
                             publicKey = existingAnnounce.publicKey,
                             customNickname = nickname,
@@ -430,7 +446,7 @@ class ContactRepository
                     // No existing announce - add as pending
                     val contact =
                         ContactEntity(
-                            destinationHash = destinationHash,
+                            destinationHash = normalizedHash,
                             identityHash = activeIdentity.identityHash,
                             publicKey = null, // Will be filled when identity is resolved
                             customNickname = nickname,

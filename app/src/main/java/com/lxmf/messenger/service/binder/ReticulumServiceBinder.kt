@@ -331,6 +331,13 @@ class ReticulumServiceBinder(
             // Release locks
             lockManager.releaseAll()
 
+            // Stop BLE immediately before async Python shutdown
+            try {
+                bleCoordinator.stopImmediate()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during BLE immediate shutdown", e)
+            }
+
             // Update status
             state.networkStatus.set("RESTARTING")
             broadcaster.broadcastStatusChange("RESTARTING")
@@ -1426,6 +1433,25 @@ class ReticulumServiceBinder(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error announcing LXMF destination", e)
+        }
+    }
+
+    /**
+     * Hot-add new network interfaces to the AutoInterface.
+     *
+     * Called when network connectivity changes (e.g., WiFi connects after the app
+     * started without it). Scans for network interfaces not yet adopted by the
+     * AutoInterface and adds them with full multicast discovery + data server setup.
+     */
+    internal fun restartAutoInterface() {
+        try {
+            val resultStr =
+                wrapperManager.withWrapper { wrapper ->
+                    wrapper.callAttr("restart_auto_interface")?.toString()
+                }
+            Log.d(TAG, "restartAutoInterface result: $resultStr")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restarting AutoInterface", e)
         }
     }
 

@@ -124,9 +124,9 @@ class MapTileSourceManagerTest {
         }
 
     @Test
-    fun `getMapStyle returns Offline when HTTP disabled but offline maps exist`() =
+    fun `getMapStyle returns Offline fallback when HTTP disabled and offline maps have no cached style`() =
         runTest {
-            // Setup: HTTP disabled, offline maps available
+            // Setup: HTTP disabled, offline region exists but has no cached style JSON
             coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
             coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
 
@@ -154,9 +154,55 @@ class MapTileSourceManagerTest {
 
             val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
 
-            // Should return Offline with the default style URL (not Unavailable)
+            // Falls back to HTTP style URL — tiles work until TileJSON cache expires (~24h)
             assertTrue("Expected Offline but got ${result::class.simpleName}", result is MapStyleResult.Offline)
             assertEquals(MapTileSourceManager.DEFAULT_STYLE_URL, (result as MapStyleResult.Offline).styleUrl)
+        }
+
+    @Test
+    fun `getMapStyle returns OfflineWithLocalStyle when cached inlined style exists`() =
+        runTest {
+            // Setup: HTTP disabled, offline region with cached style JSON (no MBTiles)
+            coEvery { settingsRepository.getMapSourceHttpEnabled() } returns false
+            coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
+
+            val region =
+                OfflineMapRegion(
+                    id = 1,
+                    name = "Test Region",
+                    centerLatitude = 37.7749,
+                    centerLongitude = -122.4194,
+                    radiusKm = 10,
+                    minZoom = 0,
+                    maxZoom = 14,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 1000,
+                    sizeBytes = 5000000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = null,
+                )
+            every { offlineMapRegionRepository.getCompletedRegions() } returns flowOf(listOf(region))
+
+            // Create a temp file to simulate cached style JSON
+            val tempFile = java.io.File.createTempFile("offline_style", ".json")
+            tempFile.writeText("""{"version":8,"name":"test","sources":{},"layers":[]}""")
+            tempFile.deleteOnExit()
+
+            val regionWithStyle = region.copy(localStylePath = tempFile.absolutePath)
+            coEvery { offlineMapRegionRepository.getFirstCompletedRegionWithStyle() } returns regionWithStyle
+
+            val result = mapTileSourceManager.getMapStyle(37.7749, -122.4194)
+
+            assertTrue(
+                "Expected OfflineWithLocalStyle but got ${result::class.simpleName}",
+                result is MapStyleResult.OfflineWithLocalStyle,
+            )
+            assertEquals(tempFile.absolutePath, (result as MapStyleResult.OfflineWithLocalStyle).localStylePath)
         }
 
     // ========== getMapStyle() Tests - Offline Source ==========

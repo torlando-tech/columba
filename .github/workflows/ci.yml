@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: lint-reports
           path: |
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: threading-audit-report
           path: dispatcher-audit-report.txt
@@ -208,7 +208,7 @@ jobs:
 
       - name: Upload R8 mapping file
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: r8-mapping
           path: app/build/outputs/mapping/sentryRelease/mapping.txt
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload release APK
         if: success()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: columba-apk
           path: app/build/outputs/apk/sentry/release/*.apk
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload Python coverage report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: python-coverage-report
           path: python/coverage-python.xml
@@ -341,7 +341,7 @@ jobs:
 
       - name: Upload unit test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: kotlin-test-results-shard-${{ matrix.shard }}
           path: |
@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload unit test reports
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: kotlin-test-reports-shard-${{ matrix.shard }}
           path: |
@@ -369,7 +369,7 @@ jobs:
 
       - name: Upload Kotlin coverage reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: kotlin-coverage-reports-shard-${{ matrix.shard }}
           path: |
@@ -473,7 +473,7 @@ jobs:
 
       - name: Upload instrumented test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: instrumented-test-results
           path: |
@@ -483,7 +483,7 @@ jobs:
 
       - name: Upload instrumented test reports
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: instrumented-test-reports
           path: |
@@ -498,7 +498,7 @@ jobs:
 
       - name: Upload logcat output
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: logcat
           path: artifacts/logcat.log

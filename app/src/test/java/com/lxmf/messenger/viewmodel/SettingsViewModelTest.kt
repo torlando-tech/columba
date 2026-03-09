@@ -66,6 +66,7 @@ class SettingsViewModelTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: ContactRepository
+    private lateinit var updateChecker: com.lxmf.messenger.service.UpdateChecker
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -105,6 +106,7 @@ class SettingsViewModelTest {
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
+        updateChecker = mockk()
         context =
             mockk {
                 val mockEditor =
@@ -173,6 +175,8 @@ class SettingsViewModelTest {
         every { settingsRepository.lastTelemetryRequestTimeFlow } returns flowOf(null)
         every { settingsRepository.telemetryHostModeEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
+        every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
+        coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Stub settings save methods
         coEvery { settingsRepository.savePreferOwnInstance(any()) } just Runs
@@ -251,6 +255,7 @@ class SettingsViewModelTest {
             mapTileSourceManager = mapTileSourceManager,
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
+            updateChecker = updateChecker,
         )
 
     // region parseRpcKey Tests
@@ -1577,6 +1582,7 @@ class SettingsViewModelTest {
                     mapTileSourceManager = mapTileSourceManager,
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
+                    updateChecker = updateChecker,
                 )
 
             viewModel.state.test {
@@ -1624,6 +1630,7 @@ class SettingsViewModelTest {
                     mapTileSourceManager = mapTileSourceManager,
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
+                    updateChecker = updateChecker,
                 )
 
             viewModel.state.test {
@@ -2245,6 +2252,7 @@ class SettingsViewModelTest {
                     mapTileSourceManager = mapTileSourceManager,
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
+                    updateChecker = updateChecker,
                 )
 
             // Wait for any potential async operations to settle
@@ -2289,6 +2297,7 @@ class SettingsViewModelTest {
                     mapTileSourceManager = mapTileSourceManager,
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
+                    updateChecker = updateChecker,
                 )
 
             // The ViewModel should be created successfully with ServiceReticulumProtocol

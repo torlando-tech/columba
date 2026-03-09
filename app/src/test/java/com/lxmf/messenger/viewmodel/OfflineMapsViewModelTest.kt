@@ -7,6 +7,7 @@ import app.cash.turbine.test
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
+import com.lxmf.messenger.map.TileDownloadManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -14,6 +15,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -111,6 +114,7 @@ class OfflineMapsViewModelTest {
         val downloadProgress: Float = 1.0f,
         val errorMessage: String? = null,
         val source: OfflineMapRegion.Source = OfflineMapRegion.Source.HTTP,
+        val tileVersion: String? = null,
     )
 
     private fun createTestRegion(config: TestRegionConfig = TestRegionConfig()): OfflineMapRegion {
@@ -132,7 +136,7 @@ class OfflineMapsViewModelTest {
             createdAt = now,
             completedAt = if (config.status == OfflineMapRegion.Status.COMPLETE) now else null,
             source = config.source,
-            tileVersion = null,
+            tileVersion = config.tileVersion,
         )
     }
 
@@ -885,90 +889,222 @@ class OfflineMapsViewModelTest {
     // region Check For Updates Tests
 
     @Test
-    fun `checkForUpdates sets isChecking to true initially`() =
+    fun `checkForUpdates fetches version and detects update available`() =
         runTest {
-            val testRegion = createTestRegion(TestRegionConfig(id = 42L, name = "Test Region"))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                // Initial state
-                awaitItem()
+                val testRegion =
+                    createTestRegion(
+                        TestRegionConfig(id = 42L, tileVersion = "20260107_001001_pt"),
+                    )
+                viewModel = createViewModel()
 
-                viewModel.checkForUpdates(testRegion)
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                // After calling checkForUpdates, we should see the update check result
-                val state = expectMostRecentItem()
-                assertTrue(state.updateCheckResults.containsKey(42L))
+                    viewModel.checkForUpdates(testRegion)
 
-                cancelAndConsumeRemainingEvents()
+                    val state = expectMostRecentItem()
+                    val result = state.updateCheckResults[42L]
+                    assertNotNull(result)
+                    assertFalse(result!!.isChecking)
+                    assertEquals("20260107_001001_pt", result.currentVersion)
+                    assertEquals("20260305_001001_pt", result.latestVersion)
+                    assertTrue(result.hasUpdate)
+                    assertNull(result.error)
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 
     @Test
-    fun `checkForUpdates stores current version from region`() =
+    fun `checkForUpdates fetches version and detects up to date`() =
         runTest {
-            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val testRegion =
+                    createTestRegion(
+                        TestRegionConfig(id = 42L, tileVersion = "20260305_001001_pt"),
+                    )
+                viewModel = createViewModel()
 
-                viewModel.checkForUpdates(testRegion)
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                val state = expectMostRecentItem()
-                val result = state.updateCheckResults[42L]
-                assertNotNull(result)
-                assertEquals(42L, result!!.regionId)
+                    viewModel.checkForUpdates(testRegion)
 
-                cancelAndConsumeRemainingEvents()
+                    val state = expectMostRecentItem()
+                    val result = state.updateCheckResults[42L]
+                    assertNotNull(result)
+                    assertFalse(result!!.isChecking)
+                    assertEquals("20260305_001001_pt", result.latestVersion)
+                    assertFalse(result.hasUpdate)
+                    assertNull(result.error)
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
+            }
+        }
+
+    @Test
+    fun `checkForUpdates shows error when server unreachable`() =
+        runTest {
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns null
+
+                val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+                viewModel = createViewModel()
+
+                viewModel.state.test {
+                    awaitItem() // Initial state
+
+                    viewModel.checkForUpdates(testRegion)
+
+                    val state = expectMostRecentItem()
+                    val result = state.updateCheckResults[42L]
+                    assertNotNull(result)
+                    assertFalse(result!!.isChecking)
+                    assertNull(result.latestVersion)
+                    assertNotNull(result.error)
+                    assertTrue(result.error!!.contains("Could not reach"))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
+            }
+        }
+
+    @Test
+    fun `checkForUpdates shows error on exception`() =
+        runTest {
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } throws RuntimeException("Network timeout")
+
+                val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+                viewModel = createViewModel()
+
+                viewModel.state.test {
+                    awaitItem() // Initial state
+
+                    viewModel.checkForUpdates(testRegion)
+
+                    val state = expectMostRecentItem()
+                    val result = state.updateCheckResults[42L]
+                    assertNotNull(result)
+                    assertFalse(result!!.isChecking)
+                    assertNotNull(result.error)
+                    assertTrue(result.error!!.contains("Network timeout"))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
+            }
+        }
+
+    @Test
+    fun `checkForUpdates for region without tileVersion shows up to date`() =
+        runTest {
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
+
+                // Region has no stored tileVersion (e.g., imported MBTiles)
+                val testRegion = createTestRegion(TestRegionConfig(id = 42L, tileVersion = null))
+                viewModel = createViewModel()
+
+                viewModel.state.test {
+                    awaitItem() // Initial state
+
+                    viewModel.checkForUpdates(testRegion)
+
+                    val state = expectMostRecentItem()
+                    val result = state.updateCheckResults[42L]
+                    assertNotNull(result)
+                    // latestVersion is set, currentVersion is null → hasUpdate = false
+                    assertNull(result!!.currentVersion)
+                    assertEquals("20260305_001001_pt", result.latestVersion)
+                    assertFalse(result.hasUpdate)
+                    assertNull(result.error)
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 
     @Test
     fun `checkForUpdates can be called for multiple regions`() =
         runTest {
-            val region1 = createTestRegion(TestRegionConfig(id = 1L, name = "Region 1"))
-            val region2 = createTestRegion(TestRegionConfig(id = 2L, name = "Region 2"))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val region1 = createTestRegion(TestRegionConfig(id = 1L, name = "Region 1"))
+                val region2 = createTestRegion(TestRegionConfig(id = 2L, name = "Region 2"))
+                viewModel = createViewModel()
 
-                viewModel.checkForUpdates(region1)
-                viewModel.checkForUpdates(region2)
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                val state = expectMostRecentItem()
-                assertTrue(state.updateCheckResults.containsKey(1L))
-                assertTrue(state.updateCheckResults.containsKey(2L))
+                    viewModel.checkForUpdates(region1)
+                    viewModel.checkForUpdates(region2)
 
-                cancelAndConsumeRemainingEvents()
+                    val state = expectMostRecentItem()
+                    assertTrue(state.updateCheckResults.containsKey(1L))
+                    assertTrue(state.updateCheckResults.containsKey(2L))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 
     @Test
     fun `clearUpdateCheckResult removes the result for a region`() =
         runTest {
-            val testRegion = createTestRegion(TestRegionConfig(id = 42L))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val testRegion = createTestRegion(TestRegionConfig(id = 42L))
+                viewModel = createViewModel()
 
-                // First trigger a check
-                viewModel.checkForUpdates(testRegion)
-                var state = expectMostRecentItem()
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                // Verify it's there
-                assertTrue(state.updateCheckResults.containsKey(42L))
+                    // First trigger a check
+                    viewModel.checkForUpdates(testRegion)
+                    var state = expectMostRecentItem()
 
-                // Clear it
-                viewModel.clearUpdateCheckResult(42L)
-                state = awaitItem()
+                    // Verify it's there
+                    assertTrue(state.updateCheckResults.containsKey(42L))
 
-                // Verify it's gone
-                assertFalse(state.updateCheckResults.containsKey(42L))
+                    // Clear it
+                    viewModel.clearUpdateCheckResult(42L)
+                    state = awaitItem()
 
-                cancelAndConsumeRemainingEvents()
+                    // Verify it's gone
+                    assertFalse(state.updateCheckResults.containsKey(42L))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 
@@ -992,27 +1128,34 @@ class OfflineMapsViewModelTest {
     @Test
     fun `clearUpdateCheckResult only removes specified region`() =
         runTest {
-            val region1 = createTestRegion(TestRegionConfig(id = 1L))
-            val region2 = createTestRegion(TestRegionConfig(id = 2L))
-            viewModel = createViewModel()
+            mockkObject(TileDownloadManager)
+            try {
+                coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
-            viewModel.state.test {
-                awaitItem() // Initial state
+                val region1 = createTestRegion(TestRegionConfig(id = 1L))
+                val region2 = createTestRegion(TestRegionConfig(id = 2L))
+                viewModel = createViewModel()
 
-                viewModel.checkForUpdates(region1)
-                viewModel.checkForUpdates(region2)
+                viewModel.state.test {
+                    awaitItem() // Initial state
 
-                var state = expectMostRecentItem()
-                assertEquals(2, state.updateCheckResults.size)
+                    viewModel.checkForUpdates(region1)
+                    viewModel.checkForUpdates(region2)
 
-                viewModel.clearUpdateCheckResult(1L)
+                    var state = expectMostRecentItem()
+                    assertEquals(2, state.updateCheckResults.size)
 
-                state = awaitItem()
-                assertEquals(1, state.updateCheckResults.size)
-                assertFalse(state.updateCheckResults.containsKey(1L))
-                assertTrue(state.updateCheckResults.containsKey(2L))
+                    viewModel.clearUpdateCheckResult(1L)
 
-                cancelAndConsumeRemainingEvents()
+                    state = awaitItem()
+                    assertEquals(1, state.updateCheckResults.size)
+                    assertFalse(state.updateCheckResults.containsKey(1L))
+                    assertTrue(state.updateCheckResults.containsKey(2L))
+
+                    cancelAndConsumeRemainingEvents()
+                }
+            } finally {
+                unmockkObject(TileDownloadManager)
             }
         }
 

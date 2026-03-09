@@ -670,11 +670,12 @@ private fun TelemetryCollectorSection(
                         when {
                             isSelfSelected -> "$localDisplayName (myself)"
                             selectedContact != null -> selectedContact.displayName
+                            collectorAddress != null -> collectorAddress
                             else -> "Select from contacts..."
                         },
                     style = MaterialTheme.typography.bodyMedium,
                     color =
-                        if (isSelfSelected || selectedContact != null) {
+                        if (isSelfSelected || selectedContact != null || collectorAddress != null) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant

@@ -394,6 +394,11 @@ class InterfaceRepository
                             deviceName = deviceName,
                             maxConnections = json.optInt("max_connections", 7),
                             mode = json.optString("mode", "full"),
+                            blePowerPreset = json.optString("ble_power_preset", "balanced"),
+                            bleDiscoveryIntervalMs = json.optLong("ble_discovery_interval_ms", 5000L),
+                            bleDiscoveryIntervalIdleMs = json.optLong("ble_discovery_interval_idle_ms", 30000L),
+                            bleScanDurationMs = json.optLong("ble_scan_duration_ms", 10000L),
+                            bleAdvertisingRefreshIntervalMs = json.optLong("ble_advertising_refresh_interval_ms", 60_000L),
                         )
                     }
 

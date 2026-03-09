@@ -14,6 +14,7 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,14 +50,24 @@ class BleAdvertiser(
         private const val TAG = "Columba:BLE:K:Adv"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val RETRY_BACKOFF_MS = 2000L // 2 seconds
-        private const val ADVERTISING_REFRESH_INTERVAL_MS = 60_000L // 1 minute
+    }
+
+    // Power-tunable advertising refresh interval
+    @Volatile
+    var advertisingRefreshIntervalMs: Long = 60_000L
+        private set
+
+    fun updatePowerSettings(settings: BlePowerSettings) {
+        val oldInterval = advertisingRefreshIntervalMs
+        advertisingRefreshIntervalMs = settings.advertisingRefreshIntervalMs
+        Log.d(TAG, "Power settings updated: refreshInterval=${advertisingRefreshIntervalMs}ms")
+        // Restart the refresh job so the new interval takes effect immediately
+        if (_isAdvertising.value && oldInterval != advertisingRefreshIntervalMs) {
+            startRefreshJob()
+        }
     }
 
     private val bluetoothLeAdvertiser: BluetoothLeAdvertiser? = bluetoothAdapter.bluetoothLeAdvertiser
-
-    // Local transport identity (16 bytes, set by Python bridge)
-    @Volatile
-    private var transportIdentityHash: ByteArray? = null
 
     // State
     private val _isAdvertising = MutableStateFlow(false)
@@ -122,26 +133,12 @@ class BleAdvertiser(
         }
 
     /**
-     * Set the local transport identity hash for Protocol v2.2 device naming.
-     * The device will advertise as "RNS-{32-hex-identity}" when identity is set.
+     * Start BLE advertising with the Reticulum service UUID.
+     * The device name is used only for internal logging; it is NOT
+     * included in the scan response and the phone's Bluetooth name
+     * is never changed.
      *
-     * @param identityHash 16-byte Reticulum Transport identity hash
-     * @throws IllegalArgumentException if identityHash is not exactly 16 bytes
-     */
-    fun setTransportIdentity(identityHash: ByteArray) {
-        require(identityHash.size == 16) {
-            "Transport identity hash must be exactly 16 bytes, got ${identityHash.size}"
-        }
-        transportIdentityHash = identityHash
-        Log.d(TAG, "Transport identity set: ${identityHash.joinToString("") { "%02x".format(it) }}")
-    }
-
-    /**
-     * Start BLE advertising with Protocol v2.2 identity-based naming.
-     * If transport identity is set, advertises as "RNS-{32-hex-identity}".
-     * Otherwise falls back to provided device name.
-     *
-     * @param deviceName Fallback device name (used if identity not set)
+     * @param deviceName Label used for logging (not advertised)
      * @return Result indicating success or failure
      */
     suspend fun startAdvertising(deviceName: String = BleConstants.DEFAULT_DEVICE_NAME_PREFIX): Result<Unit> =
@@ -187,26 +184,14 @@ class BleAdvertiser(
                     )
                 }
 
-                // Determine actual device name to use
-                // Protocol v2.2: Use "RNS-{truncated-identity}" if identity is set
-                // Truncate to first N bytes to fit BLE advertising payload constraints (31-byte limit)
-                val actualDeviceName =
-                    transportIdentityHash?.let { identity ->
-                        "RNS-${identity.take(BleConstants.IDENTITY_BYTES_IN_ADVERTISED_NAME).joinToString("") { "%02x".format(it) }}"
-                    } ?: deviceName
+                currentDeviceName = deviceName
 
-                currentDeviceName = actualDeviceName
-
-                Log.d(TAG, "Advertising with device name: $actualDeviceName")
-                if (transportIdentityHash != null) {
-                    Log.d(TAG, "  (Protocol v2.2 identity-based naming)")
-                } else {
-                    Log.w(TAG, "  (Protocol v1 fallback - identity not set)")
-                }
+                Log.d(TAG, "Advertising with device name: $deviceName")
 
                 // Build advertise settings
                 val settings =
-                    AdvertiseSettings.Builder()
+                    AdvertiseSettings
+                        .Builder()
                         .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED) // Balance power and latency
                         .setConnectable(true) // Must be connectable for GATT server
                         .setTimeout(0) // Advertise indefinitely
@@ -217,26 +202,21 @@ class BleAdvertiser(
                 // Move device name to scan response to fit within 31-byte advertising payload limit
                 // With 128-bit service UUID (19 bytes) + flags (3 bytes) = 22 bytes, no room for name
                 val advertiseData =
-                    AdvertiseData.Builder()
-                        .setIncludeDeviceName(false) // Name moved to scan response due to payload size
+                    AdvertiseData
+                        .Builder()
+                        .setIncludeDeviceName(false)
                         .setIncludeTxPowerLevel(false)
                         .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID)) // Reticulum service
                         .build()
 
                 // Build scan response data (sent when central requests more info)
-                // Scan response has separate 31-byte payload, perfect for device name
+                // Do not include device name to avoid changing the phone's Bluetooth name.
+                // Devices discover us via the service UUID in the advertise data.
                 val scanResponseData =
-                    AdvertiseData.Builder()
-                        .setIncludeDeviceName(true) // Name in scan response (31-byte budget)
+                    AdvertiseData
+                        .Builder()
+                        .setIncludeDeviceName(false)
                         .build()
-
-                // Temporarily set Bluetooth name
-                val originalName = bluetoothAdapter.name
-                try {
-                    bluetoothAdapter.name = actualDeviceName
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Cannot set Bluetooth name (permission denied), using default")
-                }
 
                 // Start advertising
                 bluetoothLeAdvertiser.startAdvertising(
@@ -246,17 +226,7 @@ class BleAdvertiser(
                     advertiseCallback,
                 )
 
-                Log.d(TAG, "Starting advertising as '$actualDeviceName'...")
-
-                // Restore original name after a delay (advertisement already started)
-                scope.launch {
-                    delay(1000)
-                    try {
-                        bluetoothAdapter.name = originalName
-                    } catch (e: SecurityException) {
-                        // Ignore
-                    }
-                }
+                Log.d(TAG, "Starting advertising as '$deviceName'...")
 
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -292,10 +262,34 @@ class BleAdvertiser(
     }
 
     /**
+     * Immediately stop advertising without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Safe to call multiple times (idempotent).
+     */
+    fun stopImmediate() {
+        try {
+            stopRefreshJob()
+            if (bluetoothLeAdvertiser != null) {
+                try {
+                    bluetoothLeAdvertiser.stopAdvertising(advertiseCallback)
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Permission denied in stopImmediate", e)
+                }
+            }
+            _isAdvertising.value = false
+            retryAttempts = 0
+            currentDeviceName = null
+            Log.d(TAG, "Advertiser stopped immediately")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in stopImmediate", e)
+        }
+    }
+
+    /**
      * Check if BLUETOOTH_ADVERTISE permission is granted.
      */
-    private fun hasAdvertisePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasAdvertisePermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -303,7 +297,6 @@ class BleAdvertiser(
         } else {
             true // No runtime permission needed on Android 11 and below
         }
-    }
 
     /**
      * Get human-readable error message for advertise error code.
@@ -340,14 +333,14 @@ class BleAdvertiser(
         refreshJob =
             scope.launch {
                 while (isActive) {
-                    delay(ADVERTISING_REFRESH_INTERVAL_MS)
+                    delay(advertisingRefreshIntervalMs)
                     if (_isAdvertising.value && !isRefreshing) {
                         Log.d(TAG, "Proactive advertising refresh")
                         refreshAdvertising()
                     }
                 }
             }
-        Log.d(TAG, "Advertising refresh job started (interval: ${ADVERTISING_REFRESH_INTERVAL_MS}ms)")
+        Log.d(TAG, "Advertising refresh job started (interval: ${advertisingRefreshIntervalMs}ms)")
     }
 
     /**
@@ -364,7 +357,7 @@ class BleAdvertiser(
      * This ensures advertising is actually active even if Android silently stopped it.
      */
     private suspend fun refreshAdvertising() {
-        val name = currentDeviceName ?: return
+        if (currentDeviceName == null) return
         if (bluetoothAdapter.isEnabled != true) {
             Log.w(TAG, "Cannot refresh advertising - Bluetooth disabled")
             return
@@ -385,7 +378,7 @@ class BleAdvertiser(
 
             // Restart advertising
             withContext(Dispatchers.Main) {
-                startAdvertisingInternal(name)
+                startAdvertisingInternal()
             }
             Log.d(TAG, "Advertising refreshed successfully")
         } catch (e: Exception) {
@@ -400,14 +393,15 @@ class BleAdvertiser(
      * Used by refresh to restart advertising.
      */
     @SuppressLint("MissingPermission")
-    private fun startAdvertisingInternal(deviceName: String) {
+    private fun startAdvertisingInternal() {
         if (bluetoothLeAdvertiser == null) {
             Log.e(TAG, "Cannot start advertising - advertiser not available")
             return
         }
 
         val settings =
-            AdvertiseSettings.Builder()
+            AdvertiseSettings
+                .Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
                 .setConnectable(true)
                 .setTimeout(0)
@@ -415,24 +409,18 @@ class BleAdvertiser(
                 .build()
 
         val advertiseData =
-            AdvertiseData.Builder()
+            AdvertiseData
+                .Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
                 .build()
 
         val scanResponseData =
-            AdvertiseData.Builder()
-                .setIncludeDeviceName(true)
+            AdvertiseData
+                .Builder()
+                .setIncludeDeviceName(false)
                 .build()
-
-        // Temporarily set Bluetooth name
-        val originalName = bluetoothAdapter.name
-        try {
-            bluetoothAdapter.name = deviceName
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Cannot set Bluetooth name during refresh")
-        }
 
         bluetoothLeAdvertiser.startAdvertising(
             settings,
@@ -440,16 +428,6 @@ class BleAdvertiser(
             scanResponseData,
             advertiseCallback,
         )
-
-        // Restore original name after a delay
-        scope.launch {
-            delay(1000)
-            try {
-                bluetoothAdapter.name = originalName
-            } catch (e: SecurityException) {
-                // Ignore
-            }
-        }
     }
 
     /**

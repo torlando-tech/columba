@@ -99,6 +99,7 @@ def generate_pairing_qr_data(identity: RNS.Identity, destination_hash: bytes) ->
     - Guardian's public key (for signature verification)
     - Timestamp (for freshness/anti-replay)
     - Signature (to prove ownership of the identity)
+    - Pairing token (random nonce the child must echo back in PAIR_ACK)
 
     Args:
         identity: RNS Identity of the guardian (parent)
@@ -111,6 +112,7 @@ def generate_pairing_qr_data(identity: RNS.Identity, destination_hash: bytes) ->
             "public_key": bytes,
             "timestamp": int,
             "signature": bytes,
+            "pairing_token": bytes,
             "qr_string": str  # Formatted for QR code
         }
     """
@@ -121,23 +123,25 @@ def generate_pairing_qr_data(identity: RNS.Identity, destination_hash: bytes) ->
 
         timestamp = int(time.time() * 1000)  # milliseconds
         public_key = identity.get_public_key()
+        pairing_token = os.urandom(16)
 
-        # Sign: destination_hash + timestamp_bytes
+        # Sign: destination_hash + timestamp_bytes + pairing_token
         timestamp_bytes = timestamp.to_bytes(8, byteorder="big")
-        data_to_sign = destination_hash + timestamp_bytes
+        data_to_sign = destination_hash + timestamp_bytes + pairing_token
         signature = sign_data(identity, data_to_sign)
 
         if signature is None:
             log_error(CLASS_NAME, "generate_pairing_qr_data", "Failed to sign pairing data")
             return None
 
-        # Format for QR code: lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>
+        # Format for QR code: lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>:<pairing_token>
         qr_string = (
             f"lxmf-guardian://"
             f"{destination_hash.hex()}:"
             f"{public_key.hex()}:"
             f"{timestamp_bytes.hex()}:"
-            f"{signature.hex()}"
+            f"{signature.hex()}:"
+            f"{pairing_token.hex()}"
         )
 
         result = {
@@ -145,6 +149,7 @@ def generate_pairing_qr_data(identity: RNS.Identity, destination_hash: bytes) ->
             "public_key": public_key,
             "timestamp": timestamp,
             "signature": signature,
+            "pairing_token": pairing_token,
             "qr_string": qr_string,
         }
 
@@ -166,7 +171,7 @@ def parse_pairing_qr_data(qr_string: str) -> Optional[Dict]:
 
     Args:
         qr_string: QR code content in format:
-                   lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>
+                   lxmf-guardian://<dest_hash>:<pubkey>:<timestamp>:<signature>:<pairing_token>
 
     Returns:
         Dictionary with parsed fields, or None on error:
@@ -175,6 +180,7 @@ def parse_pairing_qr_data(qr_string: str) -> Optional[Dict]:
             "public_key": bytes,
             "timestamp": int,
             "signature": bytes,
+            "pairing_token": bytes,
         }
     """
     try:
@@ -186,17 +192,18 @@ def parse_pairing_qr_data(qr_string: str) -> Optional[Dict]:
         data_part = qr_string[len("lxmf-guardian://") :]
         parts = data_part.split(":")
 
-        if len(parts) != 4:
-            log_error(CLASS_NAME, "parse_pairing_qr_data", f"Expected 4 parts, got {len(parts)}")
+        if len(parts) != 5:
+            log_error(CLASS_NAME, "parse_pairing_qr_data", f"Expected 5 parts, got {len(parts)}")
             return None
 
-        dest_hash_hex, pubkey_hex, timestamp_hex, signature_hex = parts
+        dest_hash_hex, pubkey_hex, timestamp_hex, signature_hex, pairing_token_hex = parts
 
         result = {
             "destination_hash": bytes.fromhex(dest_hash_hex),
             "public_key": bytes.fromhex(pubkey_hex),
             "timestamp": int.from_bytes(bytes.fromhex(timestamp_hex), byteorder="big"),
             "signature": bytes.fromhex(signature_hex),
+            "pairing_token": bytes.fromhex(pairing_token_hex),
         }
 
         log_debug(
@@ -236,9 +243,9 @@ def validate_pairing_qr(qr_data: Dict, max_age_ms: int = 5 * 60 * 1000) -> Tuple
         if age_ms > max_age_ms:
             return False, f"QR code expired ({age_ms // 1000}s old, max {max_age_ms // 1000}s)"
 
-        # Verify signature
+        # Verify signature (includes pairing token in signed data)
         timestamp_bytes = qr_data["timestamp"].to_bytes(8, byteorder="big")
-        data_to_verify = qr_data["destination_hash"] + timestamp_bytes
+        data_to_verify = qr_data["destination_hash"] + timestamp_bytes + qr_data["pairing_token"]
 
         is_valid = verify_signature(
             qr_data["public_key"],

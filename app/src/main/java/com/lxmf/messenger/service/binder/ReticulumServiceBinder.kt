@@ -1675,8 +1675,8 @@ class ReticulumServiceBinder(
     // Guardian/Parental Control Methods
     // ===========================================
 
-    override fun guardianGeneratePairingQr(): String {
-        return try {
+    override fun guardianGeneratePairingQr(): String =
+        try {
             // Generate QR using the wrapper's current active identity
             val result =
                 wrapperManager.withWrapper { wrapper ->
@@ -1687,34 +1687,39 @@ class ReticulumServiceBinder(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
                 if (success) {
                     val qrData = result.getDictValue("qr_string")?.toString()
-                    JSONObject().apply {
-                        put("success", true)
-                        put("qr_data", qrData)
-                    }.toString()
+                    val pairingToken = result.getDictValue("pairing_token")?.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", true)
+                            put("qr_data", qrData)
+                            put("pairing_token", pairingToken)
+                        }.toString()
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
-                    JSONObject().apply {
-                        put("success", false)
-                        put("error", error)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", false)
+                            put("error", error)
+                        }.toString()
                 }
             } else {
-                JSONObject().apply {
-                    put("success", false)
-                    put("error", "No wrapper response")
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("success", false)
+                        put("error", "No wrapper response")
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating guardian QR", e)
-            JSONObject().apply {
-                put("success", false)
-                put("error", e.message ?: "Unknown error")
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("success", false)
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
         }
-    }
 
-    override fun guardianParsePairingQr(qrData: String): String {
-        return try {
+    override fun guardianParsePairingQr(qrData: String): String =
+        try {
             val result =
                 wrapperManager.withWrapper { wrapper ->
                     wrapper.callAttr("guardian_parse_pairing_qr", qrData)
@@ -1726,46 +1731,52 @@ class ReticulumServiceBinder(
                 if (success) {
                     val destHash = result.getDictValue("destination_hash")?.toString()
                     val pubKeyHex = result.getDictValue("public_key")?.toString()
+                    val pairingToken = result.getDictValue("pairing_token")?.toString()
 
                     // Convert hex string to bytes then to base64 for transport
-                    val pubKeyBase64 = pubKeyHex?.let { hex ->
-                        val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    }
+                    val pubKeyBase64 =
+                        pubKeyHex?.let { hex ->
+                            val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        }
 
-                    JSONObject().apply {
-                        put("valid", true)
-                        put("guardian_dest_hash", destHash)
-                        put("guardian_public_key", pubKeyBase64)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("valid", true)
+                            put("guardian_dest_hash", destHash)
+                            put("guardian_public_key", pubKeyBase64)
+                            put("pairing_token", pairingToken)
+                        }.toString()
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Invalid QR code"
-                    JSONObject().apply {
-                        put("valid", false)
-                        put("error", error)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("valid", false)
+                            put("error", error)
+                        }.toString()
                 }
             } else {
-                JSONObject().apply {
-                    put("valid", false)
-                    put("error", "No wrapper response")
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("valid", false)
+                        put("error", "No wrapper response")
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing guardian QR", e)
-            JSONObject().apply {
-                put("valid", false)
-                put("error", e.message ?: "Unknown error")
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("valid", false)
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
         }
-    }
 
     override fun guardianVerifyCommand(
         commandJson: String,
         signatureBase64: String,
         publicKeyBase64: String,
-    ): String {
-        return try {
+    ): String =
+        try {
             val signature = android.util.Base64.decode(signatureBase64, android.util.Base64.NO_WRAP)
             val publicKey = android.util.Base64.decode(publicKeyBase64, android.util.Base64.NO_WRAP)
 
@@ -1775,19 +1786,20 @@ class ReticulumServiceBinder(
                 }
 
             val valid = result?.getDictValue("valid")?.toBoolean() ?: false
-            JSONObject().apply {
-                put("valid", valid)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("valid", valid)
+                }.toString()
         } catch (e: Exception) {
             Log.e(TAG, "Error verifying guardian command", e)
-            JSONObject().apply {
-                put("valid", false)
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("valid", false)
+                }.toString()
         }
-    }
 
-    override fun guardianSignCommand(commandJson: String): String {
-        return try {
+    override fun guardianSignCommand(commandJson: String): String =
+        try {
             val result =
                 wrapperManager.withWrapper { wrapper ->
                     wrapper.callAttr("guardian_sign_command", commandJson)
@@ -1797,42 +1809,46 @@ class ReticulumServiceBinder(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
                 if (success) {
                     val signatureBytes = result.getDictValue("signature")?.toJava(ByteArray::class.java) as? ByteArray
-                    val signatureBase64 = signatureBytes?.let {
-                        android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)
-                    }
+                    val signatureBase64 =
+                        signatureBytes?.let {
+                            android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)
+                        }
 
-                    JSONObject().apply {
-                        put("success", true)
-                        put("signature", signatureBase64)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", true)
+                            put("signature", signatureBase64)
+                        }.toString()
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
-                    JSONObject().apply {
-                        put("success", false)
-                        put("error", error)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", false)
+                            put("error", error)
+                        }.toString()
                 }
             } else {
-                JSONObject().apply {
-                    put("success", false)
-                    put("error", "No wrapper response")
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("success", false)
+                        put("error", "No wrapper response")
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error signing guardian command", e)
-            JSONObject().apply {
-                put("success", false)
-                put("error", e.message ?: "Unknown error")
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("success", false)
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
         }
-    }
 
     override fun guardianSendCommand(
         destinationHash: String,
         command: String,
         payloadJson: String,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "guardianSendCommand: $command to $destinationHash")
 
             val result =
@@ -1849,38 +1865,41 @@ class ReticulumServiceBinder(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
                 if (success) {
                     Log.i(TAG, "Guardian command $command sent successfully")
-                    JSONObject().apply {
-                        put("success", true)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", true)
+                        }.toString()
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
                     Log.e(TAG, "Failed to send guardian command: $error")
-                    JSONObject().apply {
-                        put("success", false)
-                        put("error", error)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", false)
+                            put("error", error)
+                        }.toString()
                 }
             } else {
-                JSONObject().apply {
-                    put("success", false)
-                    put("error", "No wrapper response")
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("success", false)
+                        put("error", "No wrapper response")
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending guardian command", e)
-            JSONObject().apply {
-                put("success", false)
-                put("error", e.message ?: "Unknown error")
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("success", false)
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
         }
-    }
 
     override fun updateGuardianConfig(
         isLocked: Boolean,
         guardianHash: String?,
         allowedHashes: List<String>?,
-    ): String {
-        return try {
+    ): String =
+        try {
             Log.d(TAG, "updateGuardianConfig: locked=$isLocked, guardian=${guardianHash?.take(16)}, allowed=${allowedHashes?.size ?: 0}")
 
             val result =
@@ -1897,29 +1916,32 @@ class ReticulumServiceBinder(
                 val success = result.getDictValue("success")?.toBoolean() ?: false
                 if (success) {
                     Log.i(TAG, "Guardian config updated in Python")
-                    JSONObject().apply {
-                        put("success", true)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", true)
+                        }.toString()
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
                     Log.e(TAG, "Failed to update guardian config: $error")
-                    JSONObject().apply {
-                        put("success", false)
-                        put("error", error)
-                    }.toString()
+                    JSONObject()
+                        .apply {
+                            put("success", false)
+                            put("error", error)
+                        }.toString()
                 }
             } else {
-                JSONObject().apply {
-                    put("success", false)
-                    put("error", "No wrapper response")
-                }.toString()
+                JSONObject()
+                    .apply {
+                        put("success", false)
+                        put("error", "No wrapper response")
+                    }.toString()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating guardian config", e)
-            JSONObject().apply {
-                put("success", false)
-                put("error", e.message ?: "Unknown error")
-            }.toString()
+            JSONObject()
+                .apply {
+                    put("success", false)
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
         }
-    }
 }

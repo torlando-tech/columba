@@ -2794,8 +2794,8 @@ class ServiceReticulumProtocol(
 
     // ==================== Guardian/Parental Control ====================
 
-    override suspend fun generateGuardianPairingQr(): String? {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    override suspend fun generateGuardianPairingQr(): GuardianQrResult? =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2805,7 +2805,14 @@ class ServiceReticulumProtocol(
                 val result = JSONObject(resultJson)
 
                 if (result.optBoolean("success", false)) {
-                    result.optString("qr_data", null)
+                    val qrString = result.optString("qr_data", null)
+                    val pairingToken = result.optString("pairing_token", null)
+                    if (qrString != null && pairingToken != null) {
+                        GuardianQrResult(qrString = qrString, pairingToken = pairingToken)
+                    } else {
+                        Log.e(TAG, "Missing QR data or pairing token in response")
+                        null
+                    }
                 } else {
                     Log.e(TAG, "Failed to generate guardian QR: ${result.optString("error")}")
                     null
@@ -2815,10 +2822,9 @@ class ServiceReticulumProtocol(
                 null
             }
         }
-    }
 
-    override suspend fun parseGuardianPairingQr(qrData: String): Pair<String, ByteArray>? {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    override suspend fun parseGuardianPairingQr(qrData: String): GuardianQrParsed? =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2830,11 +2836,16 @@ class ServiceReticulumProtocol(
                 if (result.optBoolean("valid", false)) {
                     val destHash = result.optString("guardian_dest_hash", null)
                     val pubKeyBase64 = result.optString("guardian_public_key", null)
+                    val pairingToken = result.optString("pairing_token", null)
 
-                    if (destHash != null && pubKeyBase64 != null) {
+                    if (destHash != null && pubKeyBase64 != null && pairingToken != null) {
                         val pubKey = pubKeyBase64.toByteArrayFromBase64()
                         if (pubKey != null) {
-                            Pair(destHash, pubKey)
+                            GuardianQrParsed(
+                                guardianDestHash = destHash,
+                                guardianPublicKey = pubKey,
+                                pairingToken = pairingToken,
+                            )
                         } else {
                             Log.e(TAG, "Failed to decode guardian public key")
                             null
@@ -2852,7 +2863,6 @@ class ServiceReticulumProtocol(
                 null
             }
         }
-    }
 
     override suspend fun verifyGuardianCommand(
         commandJson: String,
@@ -2879,8 +2889,8 @@ class ServiceReticulumProtocol(
         }
     }
 
-    override suspend fun signGuardianCommand(commandJson: String): ByteArray? {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    override suspend fun signGuardianCommand(commandJson: String): ByteArray? =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2901,14 +2911,13 @@ class ServiceReticulumProtocol(
                 null
             }
         }
-    }
 
     override suspend fun sendGuardianCommand(
         destinationHash: String,
         command: String,
         payload: Map<String, Any>,
-    ): Boolean {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    ): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2932,14 +2941,13 @@ class ServiceReticulumProtocol(
                 false
             }
         }
-    }
 
     override suspend fun updateGuardianConfig(
         isLocked: Boolean,
         guardianHash: String?,
         allowedHashes: List<String>,
-    ): Boolean {
-        return kotlinx.coroutines.withContext(Dispatchers.IO) {
+    ): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 val service =
                     this@ServiceReticulumProtocol.service
@@ -2949,8 +2957,11 @@ class ServiceReticulumProtocol(
                 val result = JSONObject(resultJson)
 
                 if (result.optBoolean("success", false)) {
-                    Log.d(TAG, "Guardian config updated: locked=$isLocked, guardian=$guardianHash, " +
-                        "allowed=${allowedHashes.size} contacts")
+                    Log.d(
+                        TAG,
+                        "Guardian config updated: locked=$isLocked, guardian=$guardianHash, " +
+                            "allowed=${allowedHashes.size} contacts",
+                    )
                     true
                 } else {
                     Log.e(TAG, "Failed to update guardian config: ${result.optString("error")}")
@@ -2961,7 +2972,6 @@ class ServiceReticulumProtocol(
                 false
             }
         }
-    }
 
     // Helper extension functions
 

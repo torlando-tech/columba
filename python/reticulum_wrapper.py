@@ -8498,6 +8498,7 @@ class ReticulumWrapper:
                 "destination_hash": result["destination_hash"].hex(),
                 "public_key": result["public_key"].hex(),
                 "timestamp": result["timestamp"],
+                "pairing_token": result["pairing_token"].hex(),
             }
 
         except Exception as e:
@@ -8542,6 +8543,7 @@ class ReticulumWrapper:
                 "destination_hash": parsed["destination_hash"].hex(),
                 "public_key": parsed["public_key"].hex(),
                 "timestamp": parsed["timestamp"],
+                "pairing_token": parsed["pairing_token"].hex(),
             }
 
         except Exception as e:

@@ -12,6 +12,7 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.GuardianCommandProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,6 +53,7 @@ class GuardianViewModel
         private val identityRepository: IdentityRepository,
         private val reticulumProtocol: ReticulumProtocol,
         private val contactRepository: ContactRepository,
+        private val guardianCommandProcessor: GuardianCommandProcessor,
     ) : ViewModel() {
         private val _state = MutableStateFlow(GuardianState())
         val state: StateFlow<GuardianState> = _state.asStateFlow()
@@ -147,11 +149,11 @@ class GuardianViewModel
                         return@launch
                     }
 
-                    // Call Python to generate the signed QR data
+                    // Call Python to generate the signed QR data (includes pairing token)
                     Log.d(TAG, "generatePairingQr: Calling reticulumProtocol.generateGuardianPairingQr()")
-                    val qrData = reticulumProtocol.generateGuardianPairingQr()
-                    Log.d(TAG, "generatePairingQr: qrData=${qrData?.take(50)}")
-                    if (qrData == null) {
+                    val qrResult = reticulumProtocol.generateGuardianPairingQr()
+                    Log.d(TAG, "generatePairingQr: qrString=${qrResult?.qrString?.take(50)}")
+                    if (qrResult == null) {
                         _state.update {
                             it.copy(
                                 isGeneratingQr = false,
@@ -161,8 +163,11 @@ class GuardianViewModel
                         return@launch
                     }
 
+                    // Store the pairing token so we can verify the child's PAIR_ACK
+                    guardianCommandProcessor.setPendingPairingToken(qrResult.pairingToken)
+
                     // Generate QR code bitmap
-                    val bitmap = generateQrCodeBitmap(qrData)
+                    val bitmap = generateQrCodeBitmap(qrResult.qrString)
 
                     _state.update {
                         it.copy(
@@ -193,32 +198,31 @@ class GuardianViewModel
             return try {
                 // Parse and validate the QR data using Python
                 Log.d(TAG, "Calling parseGuardianPairingQr...")
-                val result = reticulumProtocol.parseGuardianPairingQr(qrData)
-                Log.d(TAG, "parseGuardianPairingQr result: $result")
-                if (result == null) {
+                val parsed = reticulumProtocol.parseGuardianPairingQr(qrData)
+                Log.d(TAG, "parseGuardianPairingQr result: destHash=${parsed?.guardianDestHash}")
+                if (parsed == null) {
                     Log.e(TAG, "Invalid guardian QR code - parseGuardianPairingQr returned null")
                     _state.update { it.copy(error = "Invalid QR code format") }
                     return false
                 }
 
-                val (guardianDestHash, guardianPubKey) = result
-
                 // Save the guardian info
                 guardianRepository.setGuardian(
-                    guardianDestinationHash = guardianDestHash,
-                    guardianPublicKey = guardianPubKey,
+                    guardianDestinationHash = parsed.guardianDestHash,
+                    guardianPublicKey = parsed.guardianPublicKey,
                     guardianName = null, // Can be updated later
                 )
 
-                Log.i(TAG, "Paired with guardian: $guardianDestHash")
+                Log.i(TAG, "Paired with guardian: ${parsed.guardianDestHash}")
 
-                // Send PAIR_ACK to guardian so they know we paired
+                // Send PAIR_ACK to guardian with the pairing token (proves we scanned the QR)
                 try {
-                    val sent = reticulumProtocol.sendGuardianCommand(
-                        destinationHash = guardianDestHash,
-                        command = "PAIR_ACK",
-                        payload = emptyMap(),
-                    )
+                    val sent =
+                        reticulumProtocol.sendGuardianCommand(
+                            destinationHash = parsed.guardianDestHash,
+                            command = "PAIR_ACK",
+                            payload = mapOf("pairing_token" to parsed.pairingToken),
+                        )
                     if (sent) {
                         Log.i(TAG, "Sent PAIR_ACK to guardian")
                     } else {
@@ -297,11 +301,12 @@ class GuardianViewModel
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
-                    val sent = reticulumProtocol.sendGuardianCommand(
-                        destinationHash = childDestHash,
-                        command = "LOCK",
-                        payload = emptyMap(),
-                    )
+                    val sent =
+                        reticulumProtocol.sendGuardianCommand(
+                            destinationHash = childDestHash,
+                            command = "LOCK",
+                            payload = emptyMap(),
+                        )
                     if (sent) {
                         guardianRepository.updateChildLockState(childDestHash, true)
                         Log.i(TAG, "Sent LOCK command to $childDestHash")
@@ -325,11 +330,12 @@ class GuardianViewModel
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
-                    val sent = reticulumProtocol.sendGuardianCommand(
-                        destinationHash = childDestHash,
-                        command = "UNLOCK",
-                        payload = emptyMap(),
-                    )
+                    val sent =
+                        reticulumProtocol.sendGuardianCommand(
+                            destinationHash = childDestHash,
+                            command = "UNLOCK",
+                            payload = emptyMap(),
+                        )
                     if (sent) {
                         guardianRepository.updateChildLockState(childDestHash, false)
                         Log.i(TAG, "Sent UNLOCK command to $childDestHash")
@@ -349,7 +355,11 @@ class GuardianViewModel
         /**
          * Add a contact to a child's allow list.
          */
-        fun addChildAllowedContact(childDestHash: String, contactHash: String, displayName: String?) {
+        fun addChildAllowedContact(
+            childDestHash: String,
+            contactHash: String,
+            displayName: String?,
+        ) {
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
@@ -361,11 +371,12 @@ class GuardianViewModel
                     // { "contacts": [{"hash": "...", "name": "..."}] }
                     val payload = mapOf("contacts" to listOf(contact))
 
-                    val sent = reticulumProtocol.sendGuardianCommand(
-                        destinationHash = childDestHash,
-                        command = "ALLOW_ADD",
-                        payload = payload,
-                    )
+                    val sent =
+                        reticulumProtocol.sendGuardianCommand(
+                            destinationHash = childDestHash,
+                            command = "ALLOW_ADD",
+                            payload = payload,
+                        )
                     if (sent) {
                         Log.i(TAG, "Sent ALLOW_ADD command to $childDestHash for $contactHash")
                     } else {
@@ -383,7 +394,10 @@ class GuardianViewModel
         /**
          * Remove a contact from a child's allow list.
          */
-        fun removeChildAllowedContact(childDestHash: String, contactHash: String) {
+        fun removeChildAllowedContact(
+            childDestHash: String,
+            contactHash: String,
+        ) {
             viewModelScope.launch {
                 _state.update { it.copy(isSendingCommand = true, error = null) }
                 try {
@@ -391,11 +405,12 @@ class GuardianViewModel
                     // { "contacts": ["hash1", "hash2"] }
                     val payload = mapOf("contacts" to listOf(contactHash))
 
-                    val sent = reticulumProtocol.sendGuardianCommand(
-                        destinationHash = childDestHash,
-                        command = "ALLOW_REMOVE",
-                        payload = payload,
-                    )
+                    val sent =
+                        reticulumProtocol.sendGuardianCommand(
+                            destinationHash = childDestHash,
+                            command = "ALLOW_REMOVE",
+                            payload = payload,
+                        )
                     if (sent) {
                         Log.i(TAG, "Sent ALLOW_REMOVE command to $childDestHash for $contactHash")
                     } else {

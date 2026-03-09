@@ -13,6 +13,8 @@ import com.lxmf.messenger.reticulum.ble.client.BleGattClient
 import com.lxmf.messenger.reticulum.ble.client.BleScanner
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
 import com.lxmf.messenger.reticulum.ble.model.BleDevice
+import com.lxmf.messenger.reticulum.ble.model.BlePowerPreset
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import com.lxmf.messenger.reticulum.ble.server.BleAdvertiser
 import com.lxmf.messenger.reticulum.ble.server.BleGattServer
 import com.lxmf.messenger.reticulum.ble.util.BleOperationQueue
@@ -71,14 +73,13 @@ class KotlinBLEBridge(
         /**
          * Get or create singleton instance.
          */
-        fun getInstance(context: Context): KotlinBLEBridge {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): KotlinBLEBridge =
+            instance ?: synchronized(this) {
                 instance ?: KotlinBLEBridge(
                     context.applicationContext,
                     context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager,
                 ).also { instance = it }
             }
-        }
     }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -178,14 +179,6 @@ class KotlinBLEBridge(
     // When identity arrives via central handshake, the peer isn't in connectedPeers yet.
     // This set prevents treating such connections as "stale" during deduplication.
     private val pendingCentralConnections = java.util.Collections.synchronizedSet(mutableSetOf<String>())
-
-    // Track identities that were recently deduplicated (central closed, peripheral kept)
-    // Maps identity hash -> timestamp when deduplicated
-    // Prevents scanner from reconnecting as central to a peer we just deduplicated
-    private val recentlyDeduplicatedIdentities = ConcurrentHashMap<String, Long>()
-
-    // How long to prevent reconnection after deduplication (60 seconds)
-    private val deduplicationCooldownMs = 60_000L
 
     // Track addresses that are currently in deduplication (one connection closing)
     // Maps address -> DeduplicationTracker with timestamp and which connection is closing
@@ -397,8 +390,8 @@ class KotlinBLEBridge(
      * Build JSON string of current connection details for listeners.
      */
     @Suppress("CyclomaticComplexMethod")
-    private fun buildConnectionDetailsJson(): String {
-        return try {
+    private fun buildConnectionDetailsJson(): String =
+        try {
             val deviceMap = scanner?.getDevicesSnapshot() ?: emptyMap()
             val jsonArray = org.json.JSONArray()
 
@@ -458,11 +451,15 @@ class KotlinBLEBridge(
             Log.e(TAG, "Error building connection details JSON", e)
             "[]"
         }
-    }
 
     // State
     @Volatile
     private var isStarted = false
+
+    // Power settings (configurable from Python via configurePower())
+    @Volatile
+    var powerSettings: BlePowerSettings = BlePowerSettings()
+        private set
 
     // Periodic refresh job for real-time RSSI updates (only when UI is visible)
     private var connectionRefreshJob: kotlinx.coroutines.Job? = null
@@ -754,7 +751,6 @@ class KotlinBLEBridge(
             pendingConnections.clear()
             processedIdentityCallbacks.clear()
             pendingCentralConnections.clear()
-            recentlyDeduplicatedIdentities.clear()
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing state during cleanup", e)
         }
@@ -826,22 +822,24 @@ class KotlinBLEBridge(
 
                     // Start scanning to discover peer devices
                     Log.d(TAG, "Starting BLE scanning after restart...")
-                    startScanning().onSuccess {
-                        Log.d(TAG, "Scanner started after restart")
-                    }.onFailure { error ->
-                        Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
-                    }
+                    startScanning()
+                        .onSuccess {
+                            Log.d(TAG, "Scanner started after restart")
+                        }.onFailure { error ->
+                            Log.e(TAG, "Failed to start scanner after restart: ${error.message}", error)
+                        }
 
                     // Start advertising when identity is ready
                     if (savedIdentity != null) {
                         // Identity already available - advertise immediately
                         val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                         Log.d(TAG, "Starting BLE advertising after restart with system name '$systemDeviceName'...")
-                        startAdvertising(systemDeviceName).onSuccess {
-                            Log.d(TAG, "Advertiser started after restart")
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
-                        }
+                        startAdvertising(systemDeviceName)
+                            .onSuccess {
+                                Log.d(TAG, "Advertiser started after restart")
+                            }.onFailure { error ->
+                                Log.e(TAG, "Failed to start advertising after restart: ${error.message}", error)
+                            }
                     } else {
                         // Wait for identity to be set by Python
                         Log.d(TAG, "Waiting for identity before starting advertising...")
@@ -849,11 +847,12 @@ class KotlinBLEBridge(
                             scope.launch {
                                 val systemDeviceName = bluetoothAdapter?.name ?: "Reticulum"
                                 Log.d(TAG, "Identity ready - starting BLE advertising with system name '$systemDeviceName'...")
-                                startAdvertising(systemDeviceName).onSuccess {
-                                    Log.d(TAG, "Advertiser started after identity set")
-                                }.onFailure { error ->
-                                    Log.e(TAG, "Failed to start advertising: ${error.message}", error)
-                                }
+                                startAdvertising(systemDeviceName)
+                                    .onSuccess {
+                                        Log.d(TAG, "Advertiser started after identity set")
+                                    }.onFailure { error ->
+                                        Log.e(TAG, "Failed to start advertising: ${error.message}", error)
+                                    }
                             }
                         }
 
@@ -888,8 +887,6 @@ class KotlinBLEBridge(
         // Update all BLE components (if available)
         gattClient?.setTransportIdentity(identityBytes)
         gattServer?.setTransportIdentity(identityBytes)
-        advertiser?.setTransportIdentity(identityBytes)
-
         Log.i(TAG, "Transport identity set: ${identityBytes.joinToString("") { "%02x".format(it) }}")
 
         // Trigger any pending identity callback (e.g., from restart waiting for identity)
@@ -907,11 +904,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start scanning - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            scannerInstance.startScanning().onSuccess {
-                Log.d(TAG, "Scanning started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start scanning", it)
-            }
+            scannerInstance
+                .startScanning()
+                .onSuccess {
+                    Log.d(TAG, "Scanning started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start scanning", it)
+                }
         }
 
     fun startScanningAsync() {
@@ -956,11 +955,13 @@ class KotlinBLEBridge(
                 Log.e(TAG, "Cannot start advertising - Bluetooth not available")
                 return@withContext Result.failure(Exception("Bluetooth not available"))
             }
-            advertiserInstance.startAdvertising(deviceName).onSuccess {
-                Log.d(TAG, "Advertising started")
-            }.onFailure {
-                Log.e(TAG, "Failed to start advertising", it)
-            }
+            advertiserInstance
+                .startAdvertising(deviceName)
+                .onSuccess {
+                    Log.d(TAG, "Advertising started")
+                }.onFailure {
+                    Log.e(TAG, "Failed to start advertising", it)
+                }
         }
 
     fun stopAdvertisingAsync() {
@@ -1000,44 +1001,6 @@ class KotlinBLEBridge(
             return false // Was not advertising, now restarting
         }
         return true // Already advertising (or no identity set)
-    }
-
-    /**
-     * Check if a discovered device should be skipped due to recent deduplication.
-     *
-     * Protocol v2.2 includes 3 bytes (6 hex chars) of identity in the advertised name.
-     * If the name matches an identity that was recently deduplicated (we're already
-     * connected as peripheral), skip the central connection attempt.
-     *
-     * @param deviceName Advertised device name (e.g., "RNS-272b4c" or "Reticulum-272b4c")
-     * @return true if the device should be skipped, false otherwise
-     */
-    @Suppress("ReturnCount")
-    private fun shouldSkipDiscoveredDevice(deviceName: String?): Boolean {
-        if (deviceName == null) return false
-
-        // Clean up old entries first
-        val now = System.currentTimeMillis()
-        recentlyDeduplicatedIdentities.entries.removeIf { now - it.value > deduplicationCooldownMs }
-
-        if (recentlyDeduplicatedIdentities.isEmpty()) return false
-
-        // Extract identity prefix from device name
-        // Protocol v2.2 format: "RNS-XXXXXX" or "Reticulum-XXXXXX" where X is hex
-        val identityPrefix =
-            when {
-                deviceName.startsWith("RNS-") -> deviceName.removePrefix("RNS-").lowercase()
-                deviceName.startsWith("Reticulum-") -> deviceName.removePrefix("Reticulum-").lowercase()
-                else -> return false
-            }
-
-        // Check if any recently deduplicated identity starts with this prefix
-        // (device name has 6 hex chars = 3 bytes, full identity is 32 hex chars)
-        val matchingIdentity = recentlyDeduplicatedIdentities.keys.find { it.startsWith(identityPrefix) }
-        if (matchingIdentity != null) {
-            Log.i(TAG, "Skipping discovered device with name '$deviceName' - matches recently deduplicated identity $matchingIdentity")
-        }
-        return matchingIdentity != null
     }
 
     /**
@@ -1361,9 +1324,7 @@ class KotlinBLEBridge(
     /**
      * Get list of connected peer addresses.
      */
-    fun getConnectedPeers(): List<String> {
-        return connectedPeers.keys.toList()
-    }
+    fun getConnectedPeers(): List<String> = connectedPeers.keys.toList()
 
     /**
      * Get peer identity by address.
@@ -1371,9 +1332,7 @@ class KotlinBLEBridge(
      * @param address BLE MAC address
      * @return 32-character hex identity string, or null if unknown
      */
-    fun getPeerIdentity(address: String): String? {
-        return addressToIdentity[address]
-    }
+    fun getPeerIdentity(address: String): String? = addressToIdentity[address]
 
     /**
      * Get peer address by identity.
@@ -1381,9 +1340,7 @@ class KotlinBLEBridge(
      * @param identityHash 32-character hex identity string
      * @return BLE MAC address, or null if not connected
      */
-    fun getPeerAddress(identityHash: String): String? {
-        return identityToAddress[identityHash]
-    }
+    fun getPeerAddress(identityHash: String): String? = identityToAddress[identityHash]
 
     /**
      * Get the last known RSSI for a connected peer.
@@ -1589,9 +1546,7 @@ class KotlinBLEBridge(
      *
      * @return Total count of race conditions since bridge started
      */
-    fun getDualConnectionRaceCount(): Long {
-        return dualConnectionRaceCount
-    }
+    fun getDualConnectionRaceCount(): Long = dualConnectionRaceCount
 
     /**
      * Setup callbacks for all BLE components.
@@ -1600,14 +1555,10 @@ class KotlinBLEBridge(
     private fun setupCallbacks() {
         // Scanner callbacks (if available)
         scanner?.onDeviceDiscovered = { device: BleDevice ->
-            // Skip devices that match recently deduplicated identities
-            // (prevents reconnecting as central to a peer we're already connected to as peripheral)
-            if (!shouldSkipDiscoveredDevice(device.name)) {
-                Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
-                // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
-                val serviceUuidsArray = device.serviceUuids?.toTypedArray()
-                onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
-            }
+            Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
+            // Convert List to Array for Python compatibility (Chaquopy converts arrays to Python lists)
+            val serviceUuidsArray = device.serviceUuids?.toTypedArray()
+            onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
         }
 
         // GATT Client callbacks (central mode, if available)
@@ -1774,10 +1725,6 @@ class KotlinBLEBridge(
                             dedupeAction = DedupeAction.CLOSE_CENTRAL
                         }
                     }
-                    // Add deduplication cooldown to prevent immediate reconnection as central
-                    // This prevents reconnection storms when one side keeps trying to reconnect
-                    recentlyDeduplicatedIdentities[peerIdentity] = System.currentTimeMillis()
-                    Log.d(TAG, "Added $peerIdentity to deduplication cooldown (${deduplicationCooldownMs / 1000}s)")
                 } else {
                     Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
                 }
@@ -1948,8 +1895,6 @@ class KotlinBLEBridge(
                     if (otherAddresses.isEmpty()) {
                         // Identity fully disconnected - clean up reverse mapping
                         identityToAddress.remove(identityHash)
-                        // Allow reconnection as central again
-                        recentlyDeduplicatedIdentities.remove(identityHash)
                         // Clean up any stale entries for this identity
                         staleAddressToIdentity.entries.removeIf { it.value == identityHash }
                         Log.d(TAG, "Cleaned up all mappings for identity $identityHash")
@@ -2329,7 +2274,6 @@ class KotlinBLEBridge(
                 pendingConnections.clear()
                 processedIdentityCallbacks.clear()
                 pendingCentralConnections.clear()
-                recentlyDeduplicatedIdentities.clear()
 
                 // Stop BLE operations (but keep isStarted=true for auto-restart)
                 stopScanning()
@@ -2379,5 +2323,120 @@ class KotlinBLEBridge(
             stop()
         }
         scope.cancel()
+    }
+
+    /**
+     * Immediately stop all BLE operations without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Idempotent - safe if stop() already ran or will run later.
+     */
+    fun stopImmediate() {
+        if (!isStarted) {
+            Log.d(TAG, "stopImmediate: already stopped")
+            return
+        }
+
+        Log.i(TAG, "Stopping BLE bridge immediately (forced shutdown)")
+
+        try {
+            scanner?.stopImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in scanner stopImmediate", e)
+        }
+
+        try {
+            advertiser?.stopImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in advertiser stopImmediate", e)
+        }
+
+        try {
+            gattServer?.closeImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in gattServer closeImmediate", e)
+        }
+
+        try {
+            gattClient?.closeImmediate()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in gattClient closeImmediate", e)
+        }
+
+        // Cancel scope (kills all pending coroutines)
+        try {
+            scope.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling scope", e)
+        }
+
+        // Unregister Bluetooth state receiver
+        if (isReceiverRegistered) {
+            try {
+                context.unregisterReceiver(bluetoothStateReceiver)
+                isReceiverRegistered = false
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering receiver in stopImmediate", e)
+            }
+        }
+
+        // Clear state
+        try {
+            connectedPeers.clear()
+            addressToIdentity.clear()
+            identityToAddress.clear()
+            pendingConnections.clear()
+            processedIdentityCallbacks.clear()
+            pendingCentralConnections.clear()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing state in stopImmediate", e)
+        }
+
+        isStarted = false
+        Log.i(TAG, "BLE bridge stopped immediately")
+    }
+
+    /**
+     * Configure BLE power settings.
+     * Called from Python via AndroidBLEDriver before startAsync().
+     *
+     * @param preset Power preset name ("performance", "balanced", "battery_saver", "custom")
+     * @param discoveryIntervalMs Scan interval when actively discovering (only used with "custom")
+     * @param discoveryIntervalIdleMs Scan interval when idle (only used with "custom")
+     * @param scanDurationMs Duration of each scan cycle (only used with "custom")
+     * @param advertisingRefreshIntervalMs Ad refresh interval (only used with "custom")
+     */
+    fun configurePower(
+        preset: String,
+        discoveryIntervalMs: Long,
+        discoveryIntervalIdleMs: Long,
+        scanDurationMs: Long,
+        advertisingRefreshIntervalMs: Long,
+    ) {
+        val blePowerPreset = BlePowerPreset.fromString(preset)
+        powerSettings =
+            if (blePowerPreset == BlePowerPreset.CUSTOM) {
+                BlePowerSettings(
+                    preset = BlePowerPreset.CUSTOM,
+                    discoveryIntervalMs = discoveryIntervalMs,
+                    discoveryIntervalIdleMs = discoveryIntervalIdleMs,
+                    scanDurationMs = scanDurationMs,
+                    advertisingRefreshIntervalMs = advertisingRefreshIntervalMs,
+                )
+            } else {
+                BlePowerPreset.getSettings(blePowerPreset)
+            }
+
+        // Propagate to scanner and advertiser if they exist
+        scanner?.updatePowerSettings(powerSettings)
+        advertiser?.updatePowerSettings(powerSettings)
+
+        Log.i(
+            TAG,
+            "Power settings configured: preset=$preset, " +
+                "discovery=${powerSettings.discoveryIntervalMs}ms, " +
+                "idle=${powerSettings.discoveryIntervalIdleMs}ms, " +
+                "scanDuration=${powerSettings.scanDurationMs}ms, " +
+                "adRefresh=${powerSettings.advertisingRefreshIntervalMs}ms",
+        )
     }
 }

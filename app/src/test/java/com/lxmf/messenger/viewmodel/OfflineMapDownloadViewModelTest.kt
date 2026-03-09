@@ -9,6 +9,7 @@ import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
+import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.repository.SettingsRepository
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -17,7 +18,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -76,6 +79,8 @@ class OfflineMapDownloadViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        mockkObject(TileDownloadManager)
+        coEvery { TileDownloadManager.fetchCurrentTileVersion() } returns "20260305_001001_pt"
 
         context = RuntimeEnvironment.getApplication()
         offlineMapRegionRepository = mockk()
@@ -89,6 +94,7 @@ class OfflineMapDownloadViewModelTest {
         coEvery { offlineMapRegionRepository.markError(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.markCompleteWithMaplibreId(any(), any(), any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.updateLocalStylePath(any(), any()) } just Runs
+        coEvery { offlineMapRegionRepository.updateTileVersion(any(), any()) } just Runs
         coEvery { offlineMapRegionRepository.deleteRegion(any()) } just Runs
 
         // Setup MapLibreOfflineManager mock behavior
@@ -121,6 +127,7 @@ class OfflineMapDownloadViewModelTest {
         if (::viewModel.isInitialized) {
             viewModel.viewModelScope.cancel()
         }
+        unmockkObject(TileDownloadManager)
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -703,9 +710,15 @@ class OfflineMapDownloadViewModelTest {
             var capturedOnComplete: ((Long, Long) -> Unit)? = null
             every {
                 mockMapLibreOfflineManager.downloadRegion(
-                    name = any(), bounds = any(), minZoom = any(), maxZoom = any(),
-                    styleUrl = any(), onCreated = any(), onProgress = any(),
-                    onComplete = any(), onError = any(),
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onCreated = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = any(),
                 )
             } answers {
                 capturedOnComplete = arg<(Long, Long) -> Unit>(7)
@@ -738,9 +751,15 @@ class OfflineMapDownloadViewModelTest {
             var capturedOnComplete: ((Long, Long) -> Unit)? = null
             every {
                 mockMapLibreOfflineManager.downloadRegion(
-                    name = any(), bounds = any(), minZoom = any(), maxZoom = any(),
-                    styleUrl = any(), onCreated = any(), onProgress = any(),
-                    onComplete = any(), onError = any(),
+                    name = any(),
+                    bounds = any(),
+                    minZoom = any(),
+                    maxZoom = any(),
+                    styleUrl = any(),
+                    onCreated = any(),
+                    onProgress = any(),
+                    onComplete = any(),
+                    onError = any(),
                 )
             } answers {
                 capturedOnComplete = arg<(Long, Long) -> Unit>(7)
@@ -1531,6 +1550,95 @@ class OfflineMapDownloadViewModelTest {
             val state = viewModel.state.value
             assertEquals(89.5, state.centerLatitude)
             assertTrue(state.estimatedTileCount > 0)
+        }
+
+    // endregion
+
+    // region initForUpdate Tests
+
+    @Test
+    fun `initForUpdate pre-fills state from existing region`() =
+        runTest {
+            val existingRegion =
+                OfflineMapRegion(
+                    id = 42L,
+                    name = "Home Area",
+                    centerLatitude = 40.7128,
+                    centerLongitude = -74.0060,
+                    radiusKm = 25,
+                    minZoom = 2,
+                    maxZoom = 12,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 500,
+                    sizeBytes = 10_000_000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = "20260107_001001_pt",
+                    maplibreRegionId = 99L,
+                )
+            coEvery { offlineMapRegionRepository.getRegionById(42L) } returns existingRegion
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(42L)
+
+            val state = viewModel.state.value
+            assertEquals("Home Area", state.name)
+            assertEquals(40.7128, state.centerLatitude)
+            assertEquals(-74.0060, state.centerLongitude)
+            assertEquals(RadiusOption.LARGE, state.radiusOption) // 25 km
+            assertEquals(2, state.minZoom)
+            assertEquals(12, state.maxZoom)
+            assertEquals(DownloadWizardStep.CONFIRM, state.step)
+            assertEquals(42L, state.updateRegionId)
+        }
+
+    @Test
+    fun `initForUpdate does nothing for non-existent region`() =
+        runTest {
+            coEvery { offlineMapRegionRepository.getRegionById(999L) } returns null
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(999L)
+
+            val state = viewModel.state.value
+            // State should remain at defaults
+            assertEquals(DownloadWizardStep.LOCATION, state.step)
+            assertNull(state.updateRegionId)
+        }
+
+    @Test
+    fun `initForUpdate snaps to nearest radius for non-standard km`() =
+        runTest {
+            val existingRegion =
+                OfflineMapRegion(
+                    id = 42L,
+                    name = "Custom",
+                    centerLatitude = 51.5074,
+                    centerLongitude = -0.1278,
+                    radiusKm = 7, // Not a standard RadiusOption — nearest is SMALL (5km)
+                    minZoom = 0,
+                    maxZoom = 14,
+                    status = OfflineMapRegion.Status.COMPLETE,
+                    mbtilesPath = null,
+                    tileCount = 100,
+                    sizeBytes = 5_000_000L,
+                    downloadProgress = 1.0f,
+                    errorMessage = null,
+                    createdAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    source = OfflineMapRegion.Source.HTTP,
+                    tileVersion = null,
+                )
+            coEvery { offlineMapRegionRepository.getRegionById(42L) } returns existingRegion
+
+            viewModel = createViewModel()
+            viewModel.initForUpdate(42L)
+
+            assertEquals(RadiusOption.SMALL, viewModel.state.value.radiusOption)
         }
 
     // endregion

@@ -375,6 +375,34 @@ class BleGattServer(
         }
 
     /**
+     * Immediately close GATT server without coroutines.
+     * Called during forced shutdown (before System.exit).
+     * Safe to call from any thread and multiple times (idempotent).
+     */
+    fun closeImmediate() {
+        // Separate try blocks so a CME in keepalive cleanup can't prevent gattServer.close()
+        try {
+            val snapshot = ArrayList(peripheralKeepaliveJobs.values)
+            peripheralKeepaliveJobs.clear()
+            snapshot.forEach { it.cancel() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling keepalive jobs in closeImmediate", e)
+        }
+
+        try {
+            gattServer?.close()
+            gattServer = null
+            txCharacteristic = null
+            _isServerOpen.value = false
+            Log.d(TAG, "GATT server closed immediately")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission denied in closeImmediate", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in closeImmediate", e)
+        }
+    }
+
+    /**
      * Send data to a specific central (or all centrals if address is null).
      *
      * @param data Data to send

@@ -10,10 +10,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
+import com.lxmf.messenger.di.IoDispatcher
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.map.OfflineStyleInliner
-import com.lxmf.messenger.di.IoDispatcher
+import com.lxmf.messenger.map.TileDownloadManager
 import com.lxmf.messenger.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,11 +26,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.coroutines.resume
 import kotlin.math.cos
 
 /**
@@ -114,6 +117,7 @@ data class OfflineMapDownloadState(
     val httpEnabled: Boolean = true, // HTTP map source enabled (needed for downloads)
     val httpAutoDisabled: Boolean = false, // True when HTTP was auto-disabled after download
     val styleCacheWarning: String? = null, // Non-null when style caching failed but tiles were saved
+    val updateRegionId: Long? = null, // Non-null when updating an existing region (delete old on complete)
 ) {
     /**
      * Check if the location is set.
@@ -210,6 +214,38 @@ class OfflineMapDownloadViewModel
             } catch (e: Exception) {
                 Log.w(TAG, "Geocoder not available: ${e.javaClass.simpleName}")
                 false
+            }
+        }
+
+        /**
+         * Initialize the wizard pre-filled for updating an existing region.
+         * Loads the region's parameters, skips to CONFIRM step, and records the
+         * old region ID so it can be deleted after download completes.
+         */
+        fun initForUpdate(regionId: Long) {
+            viewModelScope.launch {
+                val region =
+                    offlineMapRegionRepository.getRegionById(regionId) ?: run {
+                        Log.e(TAG, "Cannot update: region $regionId not found")
+                        return@launch
+                    }
+                val radiusOption =
+                    RadiusOption.entries.find { it.km == region.radiusKm }
+                        ?: RadiusOption.entries.minByOrNull { kotlin.math.abs(it.km - region.radiusKm) }
+                        ?: RadiusOption.MEDIUM
+                _state.update {
+                    it.copy(
+                        centerLatitude = region.centerLatitude,
+                        centerLongitude = region.centerLongitude,
+                        radiusOption = radiusOption,
+                        minZoom = region.minZoom,
+                        maxZoom = region.maxZoom,
+                        name = region.name,
+                        step = DownloadWizardStep.CONFIRM,
+                        updateRegionId = regionId,
+                    )
+                }
+                updateEstimate()
             }
         }
 
@@ -476,6 +512,54 @@ class OfflineMapDownloadViewModel
         }
 
         /**
+         * Delete the old region being replaced during an update.
+         * Removes the MapLibre region, MBTiles file, cached style, and DB record.
+         */
+        private suspend fun deleteOldRegion(regionId: Long) {
+            val oldRegion = offlineMapRegionRepository.getRegionById(regionId)
+            if (oldRegion != null) {
+                try {
+                    // Delete MapLibre offline region and await the result
+                    oldRegion.maplibreRegionId?.let { mlId ->
+                        val success =
+                            suspendCancellableCoroutine { cont ->
+                                mapLibreOfflineManager.deleteRegion(mlId) { result ->
+                                    cont.resume(result)
+                                }
+                            }
+                        if (!success) Log.w(TAG, "Failed to delete old MapLibre region: $mlId")
+                    }
+                    // Delete legacy MBTiles file and cached style JSON
+                    withContext(Dispatchers.IO) {
+                        oldRegion.mbtilesPath?.let { path ->
+                            val file = java.io.File(path)
+                            if (file.exists() && !file.delete()) {
+                                Log.w(TAG, "Failed to delete old MBTiles file: $path")
+                            }
+                        }
+                        oldRegion.localStylePath?.let { path ->
+                            val file = java.io.File(path)
+                            if (file.exists() && !file.delete()) {
+                                Log.w(TAG, "Failed to delete old style file: $path")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Partial cleanup failure for region $regionId, removing DB record anyway", e)
+                }
+            }
+            // Always remove the DB record so the user never sees duplicate entries.
+            // Wrapped in its own try/catch so a Room exception here doesn't propagate
+            // to the onComplete handler and corrupt the download wizard's completion state.
+            try {
+                offlineMapRegionRepository.deleteRegion(regionId)
+                Log.d(TAG, "Deleted old region $regionId after update")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to remove old region DB record $regionId", e)
+            }
+        }
+
+        /**
          * Reset the wizard to start over.
          */
         fun reset() {
@@ -580,6 +664,16 @@ class OfflineMapDownloadViewModel
 
                     _state.update { it.copy(createdRegionId = regionId) }
 
+                    // Snapshot the current tile version before downloading so
+                    // the recorded version matches the tiles we actually fetch.
+                    val tileVersionSnapshot =
+                        try {
+                            TileDownloadManager.fetchCurrentTileVersion()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not snapshot tile version before download", e)
+                            null
+                        }
+
                     // Calculate bounds for the region
                     val bounds = calculateBounds(lat, lon, currentState.radiusOption.km)
 
@@ -635,6 +729,28 @@ class OfflineMapDownloadViewModel
                                         maplibreRegionId = maplibreRegionId,
                                     )
 
+                                    // 1b. Record the tile version so "Check for Updates"
+                                    //     can compare against the server later.
+                                    //     Prefers the pre-download snapshot (matches
+                                    //     actual tiles); falls back to a fresh fetch so
+                                    //     the region doesn't permanently lose update
+                                    //     checking if the snapshot was null.
+                                    val tileVersion =
+                                        tileVersionSnapshot ?: try {
+                                            TileDownloadManager.fetchCurrentTileVersion()
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "Failed to fetch tile version (non-fatal)", e)
+                                            null
+                                        }
+                                    if (tileVersion != null) {
+                                        offlineMapRegionRepository.updateTileVersion(
+                                            regionId,
+                                            tileVersion,
+                                        )
+                                    } else {
+                                        Log.w(TAG, "Tile version unavailable; update checking disabled for region $regionId")
+                                    }
+
                                     // 2. Show "Finalizing..." while style caching runs.
                                     //    This can take up to ~36s worst-case (3 retries ×
                                     //    10s timeout + backoff delays).
@@ -673,7 +789,14 @@ class OfflineMapDownloadViewModel
                                         settingsRepository.setHttpEnabledForDownload(false)
                                     }
 
-                                    // 5. Signal completion with any warnings.
+                                    // 5. If updating, delete the old region now that
+                                    //    the replacement is fully downloaded and cached.
+                                    val updateId = _state.value.updateRegionId
+                                    if (updateId != null) {
+                                        deleteOldRegion(updateId)
+                                    }
+
+                                    // 6. Signal completion with any warnings.
                                     //    Both httpAutoDisabled and styleCacheWarning
                                     //    are set atomically so the UI can consolidate
                                     //    them into a single notification.

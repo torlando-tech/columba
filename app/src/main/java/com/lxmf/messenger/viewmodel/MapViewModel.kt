@@ -109,6 +109,8 @@ data class MapState(
     val isRequestingTelemetry: Boolean = false,
     /** Center coordinates of the default offline map region (fallback when no GPS) */
     val defaultRegionCenter: SavedCameraPosition? = null,
+    /** Whether the default region lookup has completed (even if no region was found) */
+    val defaultRegionLoaded: Boolean = false,
     /** Last camera position for restoring viewport after tab switches */
     val lastCameraPosition: SavedCameraPosition? = null,
 )
@@ -468,7 +470,7 @@ class MapViewModel
                             zoom = it.maxZoom.toDouble().coerceIn(2.0, 14.0),
                         )
                     }
-                _state.update { it.copy(defaultRegionCenter = newCenter) }
+                _state.update { it.copy(defaultRegionCenter = newCenter, defaultRegionLoaded = true) }
                 if (defaultRegion != null) {
                     Log.d(TAG, "Default region loaded: ${defaultRegion.name} at ${defaultRegion.centerLatitude}, ${defaultRegion.centerLongitude}")
                 }
@@ -551,6 +553,14 @@ class MapViewModel
             _state.update {
                 it.copy(lastCameraPosition = SavedCameraPosition(latitude, longitude, zoom))
             }
+        }
+
+        /**
+         * Clear the saved camera position so the (0,0) fallback doesn't persist
+         * across tab switches and block future GPS/default-region centering.
+         */
+        fun clearCameraPosition() {
+            _state.update { it.copy(lastCameraPosition = null) }
         }
 
         /**

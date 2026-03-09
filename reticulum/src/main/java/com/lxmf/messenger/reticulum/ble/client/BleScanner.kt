@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lxmf.messenger.reticulum.ble.model.BleConstants
 import com.lxmf.messenger.reticulum.ble.model.BleDevice
+import com.lxmf.messenger.reticulum.ble.model.BlePowerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,6 +49,7 @@ import kotlinx.coroutines.withContext
  * @property scope Coroutine scope for async operations
  */
 @SuppressLint("MissingPermission")
+@Suppress("TooManyFunctions") // Cohesive BLE scanner — splitting would be artificial
 class BleScanner(
     private val context: Context,
     private val bluetoothAdapter: BluetoothAdapter,
@@ -55,15 +57,29 @@ class BleScanner(
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Scan"
+        private const val NEW_DEVICE_THRESHOLD = 3
+        private const val IDLE_SCANS_THRESHOLD = 3
+    }
 
-        // Scan intervals
-        private const val ACTIVE_SCAN_INTERVAL_MS = BleConstants.DISCOVERY_INTERVAL_MS
-        private const val IDLE_SCAN_INTERVAL_MS = BleConstants.DISCOVERY_INTERVAL_IDLE_MS
-        private const val SCAN_DURATION_MS = BleConstants.SCAN_DURATION_MS
+    // Power-tunable scan intervals (defaults from BleConstants)
+    @Volatile
+    var activeScanIntervalMs: Long = BleConstants.DISCOVERY_INTERVAL_MS
+        private set
 
-        // Smart polling
-        private const val NEW_DEVICE_THRESHOLD = 3 // Devices discovered before considering "active"
-        private const val IDLE_SCANS_THRESHOLD = 3 // Scans with no new devices before going idle
+    @Volatile
+    var idleScanIntervalMs: Long = BleConstants.DISCOVERY_INTERVAL_IDLE_MS
+        private set
+
+    @Volatile
+    var scanDurationMs: Long = BleConstants.SCAN_DURATION_MS
+        private set
+
+    fun updatePowerSettings(settings: BlePowerSettings) {
+        activeScanIntervalMs = settings.discoveryIntervalMs
+        idleScanIntervalMs = settings.discoveryIntervalIdleMs
+        scanDurationMs = settings.scanDurationMs
+        currentScanInterval = activeScanIntervalMs
+        Log.d(TAG, "Power settings updated: active=${activeScanIntervalMs}ms, idle=${idleScanIntervalMs}ms, duration=${scanDurationMs}ms")
     }
 
     private val bluetoothLeScanner: BluetoothLeScanner? = bluetoothAdapter.bluetoothLeScanner
@@ -82,7 +98,9 @@ class BleScanner(
     private var scanJob: Job? = null
     private var newDevicesInLastScan = 0
     private var scansWithoutNewDevices = 0
-    private var currentScanInterval = ACTIVE_SCAN_INTERVAL_MS
+
+    @Volatile
+    private var currentScanInterval = activeScanIntervalMs
 
     // Callbacks
     var onDeviceDiscovered: ((BleDevice) -> Unit)? = null
@@ -157,7 +175,7 @@ class BleScanner(
                 // Reset smart polling state
                 newDevicesInLastScan = 0
                 scansWithoutNewDevices = 0
-                currentScanInterval = ACTIVE_SCAN_INTERVAL_MS
+                currentScanInterval = activeScanIntervalMs
 
                 // Start periodic scanning
                 scanJob =
@@ -204,6 +222,29 @@ class BleScanner(
     }
 
     /**
+     * Immediately stop scanning without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     * Safe to call multiple times (idempotent).
+     */
+    fun stopImmediate() {
+        try {
+            scanJob?.cancel()
+            scanJob = null
+            if (_isScanning.value && bluetoothLeScanner != null) {
+                try {
+                    bluetoothLeScanner.stopScan(scanCallback)
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "Permission denied in stopImmediate", e)
+                }
+            }
+            _isScanning.value = false
+            Log.d(TAG, "Scanner stopped immediately")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in stopImmediate", e)
+        }
+    }
+
+    /**
      * Perform a single scan.
      */
     private suspend fun performScan(minRssi: Int) {
@@ -224,7 +265,7 @@ class BleScanner(
                         .Builder()
                         .setScanMode(determineScanMode())
                         .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-                        .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
+                        .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                         .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                         .setReportDelay(0) // Report immediately
                         .build()
@@ -243,7 +284,7 @@ class BleScanner(
                 )
 
                 // Scan for fixed duration
-                delay(SCAN_DURATION_MS)
+                delay(scanDurationMs)
 
                 // Stop scan
                 scanner.stopScan(scanCallback)
@@ -332,16 +373,16 @@ class BleScanner(
         if (newDevicesInLastScan > 0) {
             // Activity detected - use active interval
             scansWithoutNewDevices = 0
-            currentScanInterval = ACTIVE_SCAN_INTERVAL_MS
-            Log.d(TAG, "Scan interval: ACTIVE ($ACTIVE_SCAN_INTERVAL_MS ms)")
+            currentScanInterval = activeScanIntervalMs
+            Log.d(TAG, "Scan interval: ACTIVE ($activeScanIntervalMs ms)")
         } else {
             // No new devices
             scansWithoutNewDevices++
 
             if (scansWithoutNewDevices >= IDLE_SCANS_THRESHOLD) {
                 // Environment is stable - use idle interval
-                currentScanInterval = IDLE_SCAN_INTERVAL_MS
-                Log.d(TAG, "Scan interval: IDLE ($IDLE_SCAN_INTERVAL_MS ms)")
+                currentScanInterval = idleScanIntervalMs
+                Log.d(TAG, "Scan interval: IDLE ($idleScanIntervalMs ms)")
             }
         }
     }
@@ -350,14 +391,13 @@ class BleScanner(
      * Determine scan mode based on current state.
      *
      * - LOW_LATENCY: When actively discovering (high power but fast)
-     * - BALANCED: Normal mode
-     * - LOW_POWER: When idle (saves battery)
+     * - BALANCED: Normal and idle mode (idle interval already saves battery;
+     *   LOW_POWER's ~10% duty cycle leaves too few radio windows for discovery)
      */
     private fun determineScanMode(): Int =
         when {
             newDevicesInLastScan > NEW_DEVICE_THRESHOLD -> ScanSettings.SCAN_MODE_LOW_LATENCY
-            scansWithoutNewDevices < IDLE_SCANS_THRESHOLD -> ScanSettings.SCAN_MODE_BALANCED
-            else -> ScanSettings.SCAN_MODE_LOW_POWER
+            else -> ScanSettings.SCAN_MODE_BALANCED
         }
 
     /**

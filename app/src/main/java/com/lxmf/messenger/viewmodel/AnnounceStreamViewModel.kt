@@ -17,6 +17,7 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -212,6 +213,8 @@ class AnnounceStreamViewModel
 
                 _reachableAnnounceCount.value = count
                 Log.d(TAG, "Updated reachable announce count: $count (from ${pathTableHashes.size} paths)")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating reachable announce count", e)
             }
@@ -263,6 +266,8 @@ class AnnounceStreamViewModel
                         Log.e(TAG, "Timeout waiting for service to become READY")
                         _initializationStatus.value = "Timeout waiting for service"
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error waiting for service readiness", e)
                     _initializationStatus.value = "Error: ${e.message}"
@@ -308,6 +313,8 @@ class AnnounceStreamViewModel
 
                         // Mark dirty so periodic timer triggers an update
                         reachableCountDirty.set(true)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to save announce to database", e)
                     }
@@ -343,6 +350,8 @@ class AnnounceStreamViewModel
                             Log.e(TAG, "Cannot add contact: announce not found for $destinationHash")
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle contact status for $destinationHash", e)
                 }
@@ -425,6 +434,8 @@ class AnnounceStreamViewModel
                         delay(5000)
                         clearAnnounceStatus()
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     _isAnnouncing.value = false
                     _announceError.value = e.message ?: "Error triggering announce"
@@ -459,6 +470,8 @@ class AnnounceStreamViewModel
                 try {
                     propagationNodeManager.setManualRelay(destinationHash)
                     Log.d(TAG, "Set ${destinationHash.take(16)} as my relay")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set relay: $destinationHash", e)
                 }
@@ -481,6 +494,8 @@ class AnnounceStreamViewModel
                         excludeHash = destinationHash,
                     )
                     Log.d(TAG, "Unset relay and deleted: $destinationHash")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to unset relay: $destinationHash", e)
                 }
@@ -496,6 +511,8 @@ class AnnounceStreamViewModel
                 try {
                     announceRepository.deleteAnnounce(destinationHash)
                     Log.d(TAG, "Deleted announce: $destinationHash")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to delete announce: $destinationHash", e)
                 }
@@ -519,12 +536,18 @@ class AnnounceStreamViewModel
                         announceRepository.deleteAllAnnounces()
                         Log.d(TAG, "Deleted all announces (no active identity)")
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to delete announces", e)
                 }
             }
         }
 
+        // TODO: viewModelScope is cancelled shortly after onCleared() returns (as a
+        // registered Closeable), so the coroutine launched below is likely cancelled
+        // before reticulumProtocol.shutdown() executes. Shutdown is managed by
+        // ColumbaApplication. Consider removing or moving to a separate scope.
         override fun onCleared() {
             super.onCleared()
             // Shutdown Reticulum when ViewModel is cleared

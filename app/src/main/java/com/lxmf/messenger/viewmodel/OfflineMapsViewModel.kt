@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.repository.OfflineMapRegion
 import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapLibreOfflineManager
 import com.lxmf.messenger.map.OfflineMapStyleBuilder
+import com.lxmf.messenger.map.TileDownloadManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -338,19 +339,36 @@ class OfflineMapsViewModel
                 )
 
                 try {
-                    // For MapLibre regions, we can invalidate them to refresh tiles
-                    // For now, just indicate that updates require re-downloading
-                    // Version tracking not supported with OfflineManager
-                    _updateCheckResults.value = _updateCheckResults.value + (
-                        region.id to
-                            UpdateCheckResult(
-                                regionId = region.id,
-                                currentVersion = region.tileVersion,
-                                latestVersion = null,
-                                isChecking = false,
-                            )
-                    )
-                } catch (e: Exception) {
+                    val latestVersion = TileDownloadManager.fetchCurrentTileVersion()
+
+                    if (latestVersion != null) {
+                        _updateCheckResults.value = _updateCheckResults.value + (
+                            region.id to
+                                UpdateCheckResult(
+                                    regionId = region.id,
+                                    currentVersion = region.tileVersion,
+                                    latestVersion = latestVersion,
+                                    isChecking = false,
+                                )
+                        )
+                    } else {
+                        // Server reachable but no version info returned
+                        _updateCheckResults.value = _updateCheckResults.value + (
+                            region.id to
+                                UpdateCheckResult(
+                                    regionId = region.id,
+                                    currentVersion = region.tileVersion,
+                                    latestVersion = null,
+                                    isChecking = false,
+                                    error = "Could not reach update server",
+                                )
+                        )
+                    }
+                } catch (
+                    @Suppress("SwallowedException") e: Exception,
+                ) {
+                    // Defensive: fetchCurrentTileVersion() catches its own exceptions and
+                    // returns null, but we guard against future contract changes here.
                     Log.e(TAG, "Failed to check for updates", e)
                     _updateCheckResults.value = _updateCheckResults.value + (
                         region.id to
@@ -359,7 +377,7 @@ class OfflineMapsViewModel
                                 currentVersion = region.tileVersion,
                                 latestVersion = null,
                                 isChecking = false,
-                                error = e.message,
+                                error = "Check failed: ${e.message ?: "Unknown error"}",
                             )
                     )
                 }

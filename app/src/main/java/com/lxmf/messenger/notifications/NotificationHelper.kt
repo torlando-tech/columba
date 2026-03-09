@@ -167,7 +167,7 @@ class NotificationHelper
                     context,
                     destinationHash.hashCode(),
                     openIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // Create notification
@@ -267,7 +267,7 @@ class NotificationHelper
                     context,
                     destinationHash.hashCode(),
                     openIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             // Build notification text with interface info

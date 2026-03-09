@@ -50,6 +50,19 @@ class BleCoordinator(private val context: Context) {
     }
 
     /**
+     * Immediately stop all BLE operations without coroutines.
+     * Called from Main thread during forced shutdown (before System.exit).
+     */
+    fun stopImmediate() {
+        try {
+            getBridge().stopImmediate()
+            Log.d(TAG, "BLE stopped immediately")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in BLE stopImmediate", e)
+        }
+    }
+
+    /**
      * Get the BLE bridge instance.
      */
     fun getBridge(): KotlinBLEBridge = KotlinBLEBridge.getInstance(context)

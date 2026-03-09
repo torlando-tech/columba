@@ -64,6 +64,20 @@ class AndroidBLEInterface(BLEInterface):
         # Call parent constructor - it will use our driver_class
         super().__init__(owner, config)
 
+        # Configure BLE power settings from config.
+        # Safe to call after super().__init__(): the bridge (and its scanner/advertiser)
+        # is created in KotlinBLEBridge's constructor, so the objects already exist
+        # even though start() hasn't been called yet.
+        if config and hasattr(self, 'driver') and self.driver is not None:
+            power_preset = config.get("ble_power_preset", "balanced")
+            self.driver.configure_power(
+                preset=power_preset,
+                discovery_interval_ms=int(config.get("ble_discovery_interval_ms", 5000)),
+                discovery_interval_idle_ms=int(config.get("ble_discovery_interval_idle_ms", 30000)),
+                scan_duration_ms=int(config.get("ble_scan_duration_ms", 10000)),
+                advertising_refresh_interval_ms=int(config.get("ble_advertising_refresh_interval_ms", 60000)),
+            )
+
         RNS.log(f"Android BLE Interface '{self.name}' initialized", RNS.LOG_INFO)
 
         # Log configuration details if attributes are available

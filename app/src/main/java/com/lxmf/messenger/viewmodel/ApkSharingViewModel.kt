@@ -297,39 +297,11 @@ class ApkSharingViewModel
         /**
          * Check whether all permissions needed for [LocalHotspotManager] are granted.
          */
-        private fun hasHotspotPermissions(): Boolean {
-            // On API 33+ we need NEARBY_WIFI_DEVICES
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(
-                        application,
-                        Manifest.permission.NEARBY_WIFI_DEVICES,
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    return false
-                }
+        private fun hasHotspotPermissions(): Boolean =
+            getRequiredHotspotPermissions().all { permission ->
+                ContextCompat.checkSelfPermission(application, permission) ==
+                    PackageManager.PERMISSION_GRANTED
             }
-            // On API 28-32 fine location is required for startLocalOnlyHotspot
-            if (Build.VERSION.SDK_INT in Build.VERSION_CODES.P..Build.VERSION_CODES.S_V2) {
-                if (ContextCompat.checkSelfPermission(
-                        application,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    return false
-                }
-            }
-            // On API 26-27 coarse location is required for startLocalOnlyHotspot
-            if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.O_MR1) {
-                if (ContextCompat.checkSelfPermission(
-                        application,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    return false
-                }
-            }
-            return true
-        }
 
         /**
          * Returns the list of permissions that need to be requested for hotspot sharing.

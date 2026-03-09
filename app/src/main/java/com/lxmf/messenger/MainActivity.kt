@@ -65,7 +65,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lxmf.messenger.notifications.CallNotificationHelper
-import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.ble.util.BlePermissionManager
@@ -322,20 +321,6 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "Could not reinforce foreground notification", e)
         }
-
-        // Fallback: reprocess the current intent if it still has a notification action
-        // and pendingNavigation hasn't been set. This catches edge cases where the
-        // activity was recreated after process death and onNewIntent was not called.
-        if (pendingNavigation.value == null) {
-            val currentIntent = intent
-            val action = currentIntent?.action
-            if (action == NotificationHelper.ACTION_OPEN_CONVERSATION ||
-                action == NotificationHelper.ACTION_OPEN_ANNOUNCE
-            ) {
-                Log.d(TAG, "onResume fallback: reprocessing notification intent (action=$action)")
-                processIntent(currentIntent)
-            }
-        }
     }
 
     override fun onPause() {
@@ -376,16 +361,7 @@ class MainActivity : ComponentActivity() {
         Log.w(TAG, "📞 processIntent() - action=${intent.action}, extras=${intent.extras?.keySet()}")
         Log.d(TAG, "🔌 USB action check: action='${intent.action}' vs expected='${UsbManager.ACTION_USB_DEVICE_ATTACHED}'")
 
-        val action = intent.action
         intentHandler.handle(intent)
-
-        // Clear notification actions after processing to prevent re-processing
-        // in the onResume fallback on subsequent resumes.
-        if (action == NotificationHelper.ACTION_OPEN_CONVERSATION ||
-            action == NotificationHelper.ACTION_OPEN_ANNOUNCE
-        ) {
-            intent.action = null
-        }
     }
 
     /**

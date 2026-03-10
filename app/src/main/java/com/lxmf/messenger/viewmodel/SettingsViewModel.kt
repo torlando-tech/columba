@@ -162,6 +162,8 @@ data class SettingsState(
     // Update checker state
     val updateCheckResult: com.lxmf.messenger.service.AppUpdateResult = com.lxmf.messenger.service.AppUpdateResult.Idle,
     val includePrereleaseUpdates: Boolean = false,
+    // Message sort order: false = received time (default), true = sent time
+    val sortMessagesBySentTime: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -1565,6 +1567,11 @@ class SettingsViewModel
                     _state.update { it.copy(incomingMessageSizeLimitKb = limitKb) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.sortMessagesBySentTime.collect { sortBySent ->
+                    _state.update { it.copy(sortMessagesBySentTime = sortBySent) }
+                }
+            }
         }
 
         /**
@@ -1662,6 +1669,13 @@ class SettingsViewModel
                 if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
                     reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
                 }
+            }
+        }
+
+        fun setSortMessagesBySentTime(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setSortMessagesBySentTime(enabled)
+                Log.d(TAG, "Sort messages by sent time: $enabled")
             }
         }
 

@@ -45,7 +45,8 @@ class MessageDetailViewModel
                 .flatMapLatest { messageId ->
                     if (messageId != null) {
                         Log.d(TAG, "Observing message: $messageId")
-                        conversationRepository.observeMessageById(messageId)
+                        conversationRepository
+                            .observeMessageById(messageId)
                             .map { entity ->
                                 if (entity != null) {
                                     // Convert entity to domain model, then to UI model
@@ -64,6 +65,7 @@ class MessageDetailViewModel
                                             receivedInterface = entity.receivedInterface,
                                             receivedRssi = entity.receivedRssi,
                                             receivedSnr = entity.receivedSnr,
+                                            receivedAt = entity.receivedAt,
                                         )
                                     Log.d(TAG, "Message updated: status=${entity.status}, method=${entity.deliveryMethod}")
                                     domainMessage.toMessageUi()
@@ -75,8 +77,7 @@ class MessageDetailViewModel
                     } else {
                         flowOf(null)
                     }
-                }
-                .stateIn(
+                }.stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = null,

@@ -9,9 +9,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
@@ -124,15 +124,20 @@ class MessagingViewModel
                 .combine(
                     _currentConversation,
                     _messagesRefreshTrigger,
-                ) { peerHash, _ -> peerHash }
-                .flatMapLatest { peerHash ->
-                    Log.d(TAG, "Flow: Switching to conversation $peerHash")
+                    settingsRepository.sortMessagesBySentTime,
+                ) { peerHash, _, sortBySent -> peerHash to sortBySent }
+                .flatMapLatest { (peerHash, sortBySent) ->
+                    Log.d(TAG, "Flow: Switching to conversation $peerHash (sortBySent=$sortBySent)")
                     if (peerHash != null) {
-                        conversationRepository
-                            .getMessagesPaged(peerHash)
-                            .map { pagingData ->
-                                pagingData.map { it.toMessageUi() }
+                        val pagedFlow =
+                            if (sortBySent) {
+                                conversationRepository.getMessagesPagedBySentTime(peerHash)
+                            } else {
+                                conversationRepository.getMessagesPaged(peerHash)
                             }
+                        pagedFlow.map { pagingData ->
+                            pagingData.map { it.toMessageUi() }
+                        }
                     } else {
                         flowOf(PagingData.empty())
                     }
@@ -1186,6 +1191,7 @@ class MessagingViewModel
                     fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
                     replyToMessageId = replyToMessageId,
+                    receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
                 )
             clearSelectedImage()
             clearFileAttachments()
@@ -1199,16 +1205,18 @@ class MessagingViewModel
             deliveryMethodString: String,
         ) {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
+            val now = System.currentTimeMillis()
             val message =
                 DataMessage(
                     id = UUID.randomUUID().toString(),
                     destinationHash = destinationHash,
                     content = sanitized,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = now,
                     isFromMe = true,
                     status = "failed",
                     deliveryMethod = deliveryMethodString,
                     errorMessage = error.message,
+                    receivedAt = now,
                 )
             saveMessageToDatabase(destinationHash, currentPeerName, message)
         }

@@ -328,6 +328,25 @@ jobs:
             robolectric-4.16-
             robolectric-
 
+      - name: Resolve dependencies (with retry)
+        # Pre-resolve all dependencies before running tests. This isolates transient
+        # Maven repository errors (e.g. 502 from dl.google.com) from actual test failures,
+        # and avoids retrying the entire test suite for a network blip.
+        run: |
+          for attempt in 1 2 3; do
+            echo "Dependency resolution attempt $attempt/3..."
+            if ./gradlew :app:dependencies --configuration noSentryDebugUnitTestRuntimeClasspath -q 2>/dev/null; then
+              echo "Dependencies resolved successfully."
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to resolve dependencies after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::Dependency resolution failed (attempt $attempt), retrying in 15s..."
+            sleep 15
+          done
+
       - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above

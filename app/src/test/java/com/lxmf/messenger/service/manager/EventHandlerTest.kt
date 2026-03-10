@@ -7,7 +7,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.slot
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -398,56 +400,84 @@ class EventHandlerTest {
     @Test
     fun `handleMessageReceivedEvent calls persistMessage with correct parameters`() =
         runTest {
-            // Setup: Create EventHandler with persistence manager
-            val persistenceManager = mockk<ServicePersistenceManager>()
-            coEvery { persistenceManager.persistMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns true
+            // Mock android.util.Base64 since it's a stub in JVM unit tests (returnDefaultValues=true
+            // returns null for byte[], causing NPE → empty sourceHashHex → persistMessage skipped)
+            mockkStatic(android.util.Base64::class)
+            val senderHashBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
+            every { android.util.Base64.decode(eq("sender_xyz"), any()) } returns senderHashBytes
+            val expectedSourceHash = senderHashBytes.joinToString("") { "%02x".format(it) }
+            try {
+                // Setup: Create EventHandler with persistence manager
+                val persistenceManager = mockk<ServicePersistenceManager>()
+                coEvery {
+                    persistenceManager.persistMessage(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                    )
+                } returns true
 
-            val eventHandlerWithPersistence =
-                EventHandler(
-                    state = state,
-                    wrapperManager = wrapperManager,
-                    broadcaster = broadcaster,
-                    scope = testScope,
-                    attachmentStorage = null,
-                    persistenceManager = persistenceManager,
-                )
+                val eventHandlerWithPersistence =
+                    EventHandler(
+                        state = state,
+                        wrapperManager = wrapperManager,
+                        broadcaster = broadcaster,
+                        scope = testScope,
+                        attachmentStorage = null,
+                        persistenceManager = persistenceManager,
+                    )
 
-            // Message JSON with full_message flag
-            val messageJson =
-                """
-                {
-                    "full_message": true,
-                    "message_hash": "hash_abc",
-                    "content": "Test content",
-                    "source_hash": "sender_xyz",
-                    "timestamp": 9876543210
+                // Message JSON with full_message flag
+                val messageJson =
+                    """
+                    {
+                        "full_message": true,
+                        "message_hash": "hash_abc",
+                        "content": "Test content",
+                        "source_hash": "sender_xyz",
+                        "timestamp": 9876543210
+                    }
+                    """.trimIndent()
+
+                // Act - should complete successfully
+                val result =
+                    runCatching {
+                        eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
+                        testScope.advanceUntilIdle()
+                    }
+
+                // Assert: Function completed successfully
+                assertTrue("handleMessageReceivedEvent should complete successfully", result.isSuccess)
+                // Verify persistMessage was called with correct parameters
+                coVerify {
+                    persistenceManager.persistMessage(
+                        messageHash = "hash_abc",
+                        content = "Test content",
+                        sourceHash = expectedSourceHash,
+                        timestamp = 9876543210L,
+                        fieldsJson = any(),
+                        publicKey = any(),
+                        replyToMessageId = any(),
+                        deliveryMethod = any(),
+                        hasFileAttachments = any(),
+                        receivedHopCount = any(),
+                        receivedInterface = any(),
+                        receivedRssi = any(),
+                        receivedSnr = any(),
+                    )
                 }
-                """.trimIndent()
-
-            // Act - should complete successfully
-            val result =
-                runCatching {
-                    eventHandlerWithPersistence.handleMessageReceivedEvent(messageJson)
-                    testScope.advanceUntilIdle()
-                }
-
-            // Assert: Function completed successfully
-            assertTrue("handleMessageReceivedEvent should complete successfully", result.isSuccess)
-            // Verify persistMessage was called with correct parameters
-            coVerify {
-                persistenceManager.persistMessage(
-                    messageHash = "hash_abc",
-                    content = "Test content",
-                    sourceHash = "sender_xyz",
-                    timestamp = 9876543210L,
-                    fieldsJson = any(),
-                    publicKey = any(),
-                    replyToMessageId = any(),
-                    deliveryMethod = any(),
-                    hasFileAttachments = any(),
-                    receivedHopCount = any(),
-                    receivedInterface = any(),
-                )
+            } finally {
+                unmockkStatic(android.util.Base64::class)
             }
         }
 

@@ -475,4 +475,62 @@ class MockReticulumProtocol : ReticulumProtocol {
                 profile = null,
             ),
         )
+
+    // ==================== Guardian/Parental Control ====================
+
+    override suspend fun generateGuardianPairingQr(): GuardianQrResult? {
+        // Mock implementation - return a fake QR result with token
+        val mockToken = ByteArray(16).apply { random.nextBytes(this) }.joinToString("") { "%02x".format(it) }
+        return GuardianQrResult(
+            qrString = "lxmf-guardian://0123456789abcdef:mock_pubkey:${System.currentTimeMillis()}:mock_signature:$mockToken",
+            pairingToken = mockToken,
+        )
+    }
+
+    override suspend fun parseGuardianPairingQr(qrData: String): GuardianQrParsed? {
+        // Mock implementation - parse and return mock data
+        return if (qrData.startsWith("lxmf-guardian://")) {
+            val parts = qrData.removePrefix("lxmf-guardian://").split(":")
+            val token = if (parts.size >= 5) parts[4] else "mock_token"
+            GuardianQrParsed(
+                guardianDestHash = "0123456789abcdef",
+                guardianPublicKey = ByteArray(32) { it.toByte() },
+                pairingToken = token,
+            )
+        } else {
+            null
+        }
+    }
+
+    override suspend fun verifyGuardianCommand(
+        commandJson: String,
+        signature: ByteArray,
+        guardianPublicKey: ByteArray,
+    ): Boolean {
+        // Mock implementation - always return true
+        return true
+    }
+
+    override suspend fun signGuardianCommand(commandJson: String): ByteArray? {
+        // Mock implementation - return fake signature
+        return ByteArray(64) { it.toByte() }
+    }
+
+    override suspend fun sendGuardianCommand(
+        destinationHash: String,
+        command: String,
+        payload: Map<String, Any>,
+    ): Boolean {
+        // Mock implementation - always succeed
+        return true
+    }
+
+    override suspend fun updateGuardianConfig(
+        isLocked: Boolean,
+        guardianHash: String?,
+        allowedHashes: List<String>,
+    ): Boolean {
+        // Mock implementation - always succeed
+        return true
+    }
 }

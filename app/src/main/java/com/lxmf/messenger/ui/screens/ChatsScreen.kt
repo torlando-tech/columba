@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.QrCode2
@@ -63,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -74,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.ProfileIcon
@@ -81,8 +84,6 @@ import com.lxmf.messenger.ui.components.SearchableTopAppBar
 import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
-import androidx.compose.ui.res.stringResource
-import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.ChatsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
@@ -97,6 +98,7 @@ fun ChatsScreen(
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
+    isGuardianLocked: Boolean = false,
     viewModel: ChatsViewModel = hiltViewModel(),
     settingsViewModel: com.lxmf.messenger.viewmodel.SettingsViewModel = hiltViewModel(),
     debugViewModel: com.lxmf.messenger.viewmodel.DebugViewModel = hiltViewModel(),
@@ -165,6 +167,15 @@ fun ChatsScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search conversations...",
                 additionalActions = {
+                    // Guardian lock indicator
+                    if (isGuardianLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Parental controls active",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
                     // QR Code button
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(

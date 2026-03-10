@@ -232,25 +232,18 @@ class EventHandler(
     /**
      * Process a message directly from JSON callback data (truly event-driven).
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod") // LXMF message parsing requires handling all field types and routing cases
     private suspend fun processMessageFromJson(json: JSONObject) {
         try {
             val messageHash = json.optString("message_hash", "")
             val content = json.optString("content", "")
-            val sourceHashHex = json.optString("source_hash", "")
+            val sourceHashHex = decodeBase64ToHex(json.optString("source_hash", ""))
             val timestamp = json.optLong("timestamp", System.currentTimeMillis())
             val receivedHopCount = json.optInt("hops", -1).takeIf { it >= 0 }
             val receivedInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
             val receivedRssi = if (json.has("rssi") && !json.isNull("rssi")) json.optInt("rssi") else null
             val receivedSnr = if (json.has("snr") && !json.isNull("snr")) json.optDouble("snr").toFloat() else null
-
-            // Parse public key from hex string
-            val publicKeyHex = json.optString("public_key", "")
-            val publicKey =
-                if (publicKeyHex.isNotEmpty()) {
-                    publicKeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-                } else {
-                    null
-                }
+            val publicKey = decodeBase64OrNull(json.optString("public_key", ""))
 
             // Parse fields JSON if present
             val fieldsStr = json.optString("fields", "")
@@ -278,9 +271,10 @@ class EventHandler(
             // Extract reply_to_message_id from fields
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
 
-            // Persist to database and only broadcast if successful
-            // This ensures blocked messages don't trigger notifications in the app process
-            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+            // Guardian commands skip persistence -- processed by MessageCollector, not stored as chat
+            if (content.startsWith("__GUARDIAN_CMD__:")) {
+                broadcaster.broadcastMessage(messageJson = json.toString())
+            } else if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 val persisted =
                     persistenceManager.persistMessage(
                         messageHash = messageHash,
@@ -299,7 +293,6 @@ class EventHandler(
                     )
                 if (persisted) {
                     Log.d(TAG, "Message persisted from callback: $messageHash from $sourceHashHex")
-                    // Broadcast to app process for UI updates (only if persisted)
                     broadcaster.broadcastMessage(messageJson = json.toString())
                 } else {
                     Log.d(TAG, "Message blocked or failed to persist: $messageHash - not broadcasting")
@@ -538,9 +531,10 @@ class EventHandler(
                     publicKey,
                 )
 
-            // Persist to database first (survives app process death)
-            // Only broadcast if message was actually persisted (not blocked)
-            if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
+            // Guardian commands skip persistence -- processed by GuardianCommandProcessor, not stored as chat
+            if (content.startsWith("__GUARDIAN_CMD__:")) {
+                broadcaster.broadcastMessage(messageJson.toString())
+            } else if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 val persisted =
                     persistenceManager.persistMessage(
                         messageHash = messageHash,
@@ -557,7 +551,6 @@ class EventHandler(
                         receivedRssi = receivedRssi,
                         receivedSnr = receivedSnr,
                     )
-
                 if (persisted) {
                     Log.d(TAG, "Message persisted to database: $messageHash from $sourceHashHex")
                     broadcaster.broadcastMessage(messageJson.toString())
@@ -868,4 +861,20 @@ class EventHandler(
         Log.i(TAG, "Extracted ${attachments.length()} file attachment(s) to disk")
         return result
     }
+}
+
+/** Decode a Base64 string to hex, returning empty string on failure or empty input. */
+private fun decodeBase64ToHex(b64: String): String {
+    if (b64.isEmpty()) return ""
+    return runCatching {
+        android.util.Base64
+            .decode(b64, android.util.Base64.NO_WRAP)
+            .joinToString("") { "%02x".format(it) }
+    }.getOrDefault("")
+}
+
+/** Decode a Base64 string to ByteArray, returning null on failure or empty input. */
+private fun decodeBase64OrNull(b64: String): ByteArray? {
+    if (b64.isEmpty()) return null
+    return runCatching { android.util.Base64.decode(b64, android.util.Base64.NO_WRAP) }.getOrNull()
 }

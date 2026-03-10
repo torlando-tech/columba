@@ -9,11 +9,12 @@ import android.graphics.Bitmap
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.paging.PagingData
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
@@ -84,6 +85,7 @@ class MessagingViewModelImageLoadingTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
+    private lateinit var guardianRepository: GuardianRepository
     private lateinit var viewModel: MessagingViewModel
 
     /**
@@ -106,6 +108,7 @@ class MessagingViewModelImageLoadingTest {
                     identityRepository = identityRepository,
                     conversationLinkManager = conversationLinkManager,
                     receivedLocationRepository = receivedLocationRepository,
+                    guardianRepository = guardianRepository,
                 )
             advanceUntilIdle()
             testBody()
@@ -130,9 +133,13 @@ class MessagingViewModelImageLoadingTest {
         identityRepository = mockk()
         conversationLinkManager = mockk()
         receivedLocationRepository = mockk()
+        guardianRepository = mockk()
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
+
+        // Allow all contacts by default (guardian unlocked)
+        coEvery { guardianRepository.isContactAllowed(any()) } returns true
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())

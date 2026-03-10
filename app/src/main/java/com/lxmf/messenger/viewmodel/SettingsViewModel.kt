@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.GuardianRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -59,6 +60,7 @@ enum class SettingsCardId {
     SHARE_COLUMBA,
     ABOUT,
     SHARED_INSTANCE_BANNER,
+    GUARDIAN,
 }
 
 @androidx.compose.runtime.Immutable
@@ -162,6 +164,11 @@ data class SettingsState(
     // Update checker state
     val updateCheckResult: com.lxmf.messenger.service.AppUpdateResult = com.lxmf.messenger.service.AppUpdateResult.Idle,
     val includePrereleaseUpdates: Boolean = false,
+    // Guardian (parental control) state
+    val hasGuardian: Boolean = false,
+    val isGuardianLocked: Boolean = false,
+    val guardianName: String? = null,
+    val allowedContactCount: Int = 0,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -182,6 +189,7 @@ class SettingsViewModel
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val contactRepository: ContactRepository,
         private val updateChecker: com.lxmf.messenger.service.UpdateChecker,
+        private val guardianRepository: GuardianRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -205,6 +213,7 @@ class SettingsViewModel
                 SettingsState(
                     // Start with default theme - actual theme loads asynchronously in loadSettings()
                     selectedTheme = PresetTheme.VIBRANT,
+                    // Guardian state loads asynchronously via loadGuardianSettings() in init{}
                 ),
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -235,6 +244,8 @@ class SettingsViewModel
             loadContacts()
             // Load update checker settings and maybe check on startup
             loadUpdateSettings()
+            // Always load guardian settings (needed for feature restrictions)
+            loadGuardianSettings()
             // Always start sync state monitoring (no infinite loops, needed for UI)
             startSyncStateMonitor()
             if (enableMonitors) {
@@ -443,6 +454,11 @@ class SettingsViewModel
                             // Preserve update checker state from loadUpdateSettings()
                             updateCheckResult = _state.value.updateCheckResult,
                             includePrereleaseUpdates = _state.value.includePrereleaseUpdates,
+                            // Preserve guardian state from loadGuardianSettings()
+                            hasGuardian = _state.value.hasGuardian,
+                            isGuardianLocked = _state.value.isGuardianLocked,
+                            guardianName = _state.value.guardianName,
+                            allowedContactCount = _state.value.allowedContactCount,
                         )
                     }.distinctUntilChanged().collect { newState ->
                         applySettingsUpdate(newState)
@@ -1769,6 +1785,37 @@ class SettingsViewModel
                 mapTileSourceManager.hasOfflineMaps().collect { hasOffline ->
                     Log.d(TAG, "Has offline maps updated: $hasOffline")
                     _state.update { it.copy(hasOfflineMaps = hasOffline) }
+                }
+            }
+        }
+
+        // Guardian (parental control) methods
+
+        /**
+         * Load guardian settings from the repository.
+         *
+         * NOTE: Initial guardian state is loaded synchronously during property initialization
+         * (see initialGuardianConfig) to ensure feature restrictions are applied before
+         * the first UI render. This method sets up Flow collectors for ongoing updates.
+         */
+        private fun loadGuardianSettings() {
+            // Observe guardian config changes for ongoing updates
+            viewModelScope.launch {
+                guardianRepository.getGuardianConfigFlow().collect { config ->
+                    _state.update {
+                        it.copy(
+                            hasGuardian = config?.hasGuardian() ?: false,
+                            isGuardianLocked = config?.isLocked ?: false,
+                            guardianName = config?.guardianName,
+                        )
+                    }
+                    Log.d(TAG, "Guardian state updated: hasGuardian=${config?.hasGuardian()}, locked=${config?.isLocked}")
+                }
+            }
+            // Observe allowed contact count
+            viewModelScope.launch {
+                guardianRepository.getAllowedContactCount().collect { count ->
+                    _state.update { it.copy(allowedContactCount = count) }
                 }
             }
         }

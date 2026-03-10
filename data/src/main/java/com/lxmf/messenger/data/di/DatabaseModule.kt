@@ -5,14 +5,17 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.lxmf.messenger.data.db.ColumbaDatabase
+import com.lxmf.messenger.data.db.dao.AllowedContactDao
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.DraftDao
+import com.lxmf.messenger.data.db.dao.GuardianConfigDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
+import com.lxmf.messenger.data.db.dao.PairedChildDao
 import com.lxmf.messenger.data.db.dao.PeerIconDao
 import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
@@ -27,6 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Singleton
 
+@Suppress("TooManyFunctions") // Each migration and DAO provider requires a separate function
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -76,6 +80,8 @@ object DatabaseModule {
             MIGRATION_37_38,
             MIGRATION_38_39,
             MIGRATION_39_40,
+            MIGRATION_40_41,
+            MIGRATION_41_42,
         )
     }
 
@@ -1639,6 +1645,71 @@ object DatabaseModule {
             }
         }
 
+    // Migration from version 40 to 41: Add parental control tables
+    // Creates guardian_config for storing guardian pairing and lock state
+    // Creates allowed_contacts for the allow list when device is locked
+    private val MIGRATION_40_41 =
+        object : Migration(40, 41) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create guardian_config table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS guardian_config (
+                        identityHash TEXT NOT NULL PRIMARY KEY,
+                        guardianDestinationHash TEXT,
+                        guardianPublicKey BLOB,
+                        guardianName TEXT,
+                        isLocked INTEGER NOT NULL DEFAULT 0,
+                        lockedTimestamp INTEGER NOT NULL DEFAULT 0,
+                        lastCommandNonce TEXT,
+                        lastCommandTimestamp INTEGER NOT NULL DEFAULT 0,
+                        pairedTimestamp INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(identityHash) REFERENCES local_identities(identityHash) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_guardian_config_identityHash ON guardian_config(identityHash)")
+
+                // Create allowed_contacts table
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS allowed_contacts (
+                        identityHash TEXT NOT NULL,
+                        contactHash TEXT NOT NULL,
+                        displayName TEXT,
+                        addedTimestamp INTEGER NOT NULL,
+                        PRIMARY KEY(identityHash, contactHash),
+                        FOREIGN KEY(identityHash) REFERENCES local_identities(identityHash) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_allowed_contacts_identityHash ON allowed_contacts(identityHash)")
+            }
+        }
+
+    // Migration from version 41 to 42: Add paired_children table for parent/guardian tracking
+    // Stores information about children paired with this device when acting as guardian
+    private val MIGRATION_41_42 =
+        object : Migration(41, 42) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create paired_children table
+                // Note: No foreign key constraint - matches Room entity definition
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS paired_children (
+                        childDestinationHash TEXT NOT NULL PRIMARY KEY,
+                        displayName TEXT,
+                        isLocked INTEGER NOT NULL DEFAULT 0,
+                        lockChangedTimestamp INTEGER NOT NULL DEFAULT 0,
+                        pairedTimestamp INTEGER NOT NULL,
+                        lastSeenTimestamp INTEGER NOT NULL DEFAULT 0,
+                        guardianIdentityHash TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1689,6 +1760,15 @@ object DatabaseModule {
 
     @Provides
     fun provideDraftDao(database: ColumbaDatabase): DraftDao = database.draftDao()
+
+    @Provides
+    fun provideGuardianConfigDao(database: ColumbaDatabase): GuardianConfigDao = database.guardianConfigDao()
+
+    @Provides
+    fun provideAllowedContactDao(database: ColumbaDatabase): AllowedContactDao = database.allowedContactDao()
+
+    @Provides
+    fun providePairedChildDao(database: ColumbaDatabase): PairedChildDao = database.pairedChildDao()
 
     @Provides
     @Singleton

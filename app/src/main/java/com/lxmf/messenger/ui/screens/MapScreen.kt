@@ -480,11 +480,11 @@ fun MapScreen(
         }
     }
 
-    // Fall back to user location if no focus coordinates
+    // Fall back to user location if no focus coordinates and no pending "Locate on Map"
     LaunchedEffect(mapLibreMap, state.userLocation != null) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val location = state.userLocation ?: return@LaunchedEffect
-        if (!hasInitiallyCentered && focusLatitude == null) {
+        if (!hasInitiallyCentered && focusLatitude == null && viewModel.pendingFocusContact.value == null) {
             val cameraPosition =
                 CameraPosition
                     .Builder()
@@ -517,6 +517,10 @@ fun MapScreen(
     LaunchedEffect(mapLibreMap, state.defaultRegionLoaded) {
         val map = mapLibreMap ?: return@LaunchedEffect
         if (!state.defaultRegionLoaded) return@LaunchedEffect
+
+        // Skip initial positioning when a "Locate on Map" request is pending —
+        // the pendingFocus LaunchedEffect will handle camera positioning instead.
+        if (viewModel.pendingFocusContact.value != null) return@LaunchedEffect
 
         val savedPos = state.lastCameraPosition
         val defaultCenter = state.defaultRegionCenter

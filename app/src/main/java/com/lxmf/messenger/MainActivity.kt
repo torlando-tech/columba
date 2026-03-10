@@ -104,6 +104,7 @@ import com.lxmf.messenger.ui.util.LifecycleGuard
 import com.lxmf.messenger.util.CrashReportManager
 import com.lxmf.messenger.util.InterfaceReconnectSignal
 import com.lxmf.messenger.viewmodel.ContactsViewModel
+import com.lxmf.messenger.viewmodel.MapViewModel
 import com.lxmf.messenger.viewmodel.OnboardingViewModel
 import com.lxmf.messenger.viewmodel.SettingsViewModel
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
@@ -591,6 +592,9 @@ fun ColumbaNavigation(
     // Collect settings state (includes theme preference)
     val settingsState by settingsViewModel.state.collectAsState()
 
+    // Access MapViewModel at navigation level so "Locate on Map" can set pending focus
+    val mapViewModel: MapViewModel = hiltViewModel()
+
     // Access OnboardingViewModel to check onboarding status
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingState by onboardingViewModel.state.collectAsState()
@@ -1053,6 +1057,16 @@ fun ColumbaNavigation(
                                 val encodedHash = Uri.encode(peerHash)
                                 navController.navigate("announce_detail/$encodedHash")
                             },
+                            onLocateOnMap = { peerHash ->
+                                mapViewModel.focusOnContact(peerHash)
+                                navController.navigate(Screen.Map.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                             onNavigateToQrScanner = {
                                 navController.navigate("qr_scanner")
                             },
@@ -1098,6 +1112,16 @@ fun ColumbaNavigation(
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("announce_detail/$encodedHash")
                             },
+                            onLocateOnMap = { peerHash ->
+                                mapViewModel.focusOnContact(peerHash)
+                                navController.navigate(Screen.Map.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                             onNavigateToQrScanner = {
                                 navController.navigate("qr_scanner")
                             },
@@ -1124,6 +1148,7 @@ fun ColumbaNavigation(
                     composable(Screen.Map.route) {
                         DoubleBackToExitHandler(Screen.Map.route)
                         MapScreen(
+                            viewModel = mapViewModel,
                             onNavigateToConversation = { destinationHash ->
                                 // Navigate to messaging screen with the contact
                                 val encodedHash = Uri.encode(destinationHash)
@@ -1255,6 +1280,7 @@ fun ColumbaNavigation(
                             )
 
                         MapScreen(
+                            viewModel = mapViewModel,
                             onNavigateToConversation = { destinationHash ->
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("messaging/$encodedHash/Contact")
@@ -1820,6 +1846,16 @@ fun ColumbaNavigation(
                             onVoiceCall = { profileCode ->
                                 val encodedHash = Uri.encode(destinationHash)
                                 navController.navigate("voice_call/$encodedHash?profileCode=$profileCode")
+                            },
+                            onLocateOnMap = { peerHash ->
+                                mapViewModel.focusOnContact(peerHash)
+                                navController.navigate(Screen.Map.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             },
                         )
                     }

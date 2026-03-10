@@ -574,6 +574,31 @@ fun MapScreen(
             hasInitiallyCentered = true
         }
     }
+    // Animate camera to a contact marker requested via "Locate on Map".
+    // Uses contactMarkers as a key so it retries when markers load from the database.
+    val pendingFocus by viewModel.pendingFocusContact.collectAsState()
+    LaunchedEffect(pendingFocus, mapLibreMap, state.contactMarkers) {
+        val hash = pendingFocus ?: return@LaunchedEffect
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val marker = state.contactMarkers.find {
+            it.destinationHash.equals(hash, ignoreCase = true)
+        }
+        marker?.let {
+            val cameraPosition =
+                CameraPosition
+                    .Builder()
+                    .target(LatLng(it.latitude, it.longitude))
+                    .zoom(15.0)
+                    .build()
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+            viewModel.consumePendingFocus()
+        } ?: run {
+            // Markers loaded but contact not found — stop waiting to avoid stale focus
+            if (state.contactMarkers.isNotEmpty() || !state.isLoading) {
+                viewModel.consumePendingFocus()
+            }
+        }
+    }
 
     // Enable location component when permission is granted
     @SuppressLint("MissingPermission")

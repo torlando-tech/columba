@@ -1967,6 +1967,93 @@ class MapViewModelTest {
             assertFalse(vm2.state.value.isPermissionCardDismissed)
         }
 
+    // ========== Pending Focus Tests ==========
+
+    @Test
+    fun `pendingFocusContact is initially null`() =
+        runTest {
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                    offlineMapRegionRepository,
+                )
+
+            assertNull(viewModel.pendingFocusContact.value)
+        }
+
+    @Test
+    fun `focusOnContact sets pendingFocusContact`() =
+        runTest {
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                    offlineMapRegionRepository,
+                )
+
+            viewModel.focusOnContact("abc123")
+
+            assertEquals("abc123", viewModel.pendingFocusContact.value)
+        }
+
+    @Test
+    fun `consumePendingFocus clears pendingFocusContact`() =
+        runTest {
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                    offlineMapRegionRepository,
+                )
+
+            viewModel.focusOnContact("abc123")
+            assertEquals("abc123", viewModel.pendingFocusContact.value)
+
+            viewModel.consumePendingFocus()
+            assertNull(viewModel.pendingFocusContact.value)
+        }
+
+    @Test
+    fun `focusOnContact overwrites previous pending focus`() =
+        runTest {
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                    offlineMapRegionRepository,
+                )
+
+            viewModel.focusOnContact("first")
+            viewModel.focusOnContact("second")
+
+            assertEquals("second", viewModel.pendingFocusContact.value)
+        }
+
     // Helper function to create mock Location
     // Location is an Android framework class that requires relaxed mocking
     @Suppress("NoRelaxedMocks")

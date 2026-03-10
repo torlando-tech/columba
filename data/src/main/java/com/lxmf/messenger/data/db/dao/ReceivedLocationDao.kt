@@ -88,6 +88,19 @@ interface ReceivedLocationDao {
     suspend fun getLatestLocationForSender(senderHash: String): ReceivedLocationEntity?
 
     /**
+     * Observe the most recent location for a specific sender (reactive Flow).
+     */
+    @Query(
+        """
+        SELECT * FROM received_locations
+        WHERE senderHash = :senderHash
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestLocationForSender(senderHash: String): Flow<ReceivedLocationEntity?>
+
+    /**
      * Delete expired locations past the grace period (cleanup job).
      * Keeps expired locations for 1 hour to display as "last known" location.
      *

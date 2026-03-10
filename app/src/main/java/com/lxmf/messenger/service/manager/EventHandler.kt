@@ -237,37 +237,13 @@ class EventHandler(
         try {
             val messageHash = json.optString("message_hash", "")
             val content = json.optString("content", "")
-            // source_hash is now base64 encoded - decode and convert to hex for persistence
-            val sourceHashB64 = json.optString("source_hash", "")
-            val sourceHashHex = if (sourceHashB64.isNotEmpty()) {
-                try {
-                    val bytes = android.util.Base64.decode(sourceHashB64, android.util.Base64.NO_WRAP)
-                    bytes.joinToString("") { "%02x".format(it) }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not decode source_hash: ${e.message}")
-                    ""
-                }
-            } else {
-                ""
-            }
+            val sourceHashHex = decodeBase64ToHex(json.optString("source_hash", ""))
             val timestamp = json.optLong("timestamp", System.currentTimeMillis())
             val receivedHopCount = json.optInt("hops", -1).takeIf { it >= 0 }
             val receivedInterface = json.optString("receiving_interface", "").takeIf { it.isNotEmpty() }
             val receivedRssi = if (json.has("rssi") && !json.isNull("rssi")) json.optInt("rssi") else null
             val receivedSnr = if (json.has("snr") && !json.isNull("snr")) json.optDouble("snr").toFloat() else null
-
-            // Parse public key from base64 string (Python sends base64, not hex)
-            val publicKeyB64 = json.optString("public_key", "")
-            val publicKey = if (publicKeyB64.isNotEmpty()) {
-                try {
-                    android.util.Base64.decode(publicKeyB64, android.util.Base64.NO_WRAP)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not decode public key: ${e.message}")
-                    null
-                }
-            } else {
-                null
-            }
+            val publicKey = decodeBase64OrNull(json.optString("public_key", ""))
 
             // Parse fields JSON if present
             val fieldsStr = json.optString("fields", "")
@@ -295,11 +271,8 @@ class EventHandler(
             // Extract reply_to_message_id from fields
             val replyToMessageId = fieldsJson?.optString("9")?.takeIf { it.isNotBlank() }
 
-            // Skip persistence for guardian commands - these are processed by MessageCollector
-            // and should NOT be stored as regular chat messages
-            val isGuardianCommand = content.startsWith("__GUARDIAN_CMD__:")
-            if (isGuardianCommand) {
-                Log.d(TAG, "Guardian command detected - skipping persistence, will broadcast for processing")
+            // Guardian commands skip persistence -- processed by MessageCollector, not stored as chat
+            if (content.startsWith("__GUARDIAN_CMD__:")) {
                 broadcaster.broadcastMessage(messageJson = json.toString())
             } else if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
                 val persisted =
@@ -558,15 +531,10 @@ class EventHandler(
                     publicKey,
                 )
 
-            // Skip persistence for guardian commands - these are processed by GuardianCommandProcessor
-            // and should NOT be stored as regular chat messages
-            val isGuardianCommand = content.startsWith("__GUARDIAN_CMD__:")
-            if (isGuardianCommand) {
-                Log.d(TAG, "Guardian command detected in PyObject path - skipping persistence, will broadcast for processing")
+            // Guardian commands skip persistence -- processed by GuardianCommandProcessor, not stored as chat
+            if (content.startsWith("__GUARDIAN_CMD__:")) {
                 broadcaster.broadcastMessage(messageJson.toString())
             } else if (persistenceManager != null && messageHash.isNotBlank() && sourceHashHex.isNotBlank()) {
-                // Persist to database first (survives app process death)
-                // Only broadcast if message was actually persisted (not blocked)
                 val persisted =
                     persistenceManager.persistMessage(
                         messageHash = messageHash,
@@ -893,4 +861,20 @@ class EventHandler(
         Log.i(TAG, "Extracted ${attachments.length()} file attachment(s) to disk")
         return result
     }
+}
+
+/** Decode a Base64 string to hex, returning empty string on failure or empty input. */
+private fun decodeBase64ToHex(b64: String): String {
+    if (b64.isEmpty()) return ""
+    return runCatching {
+        android.util.Base64
+            .decode(b64, android.util.Base64.NO_WRAP)
+            .joinToString("") { "%02x".format(it) }
+    }.getOrDefault("")
+}
+
+/** Decode a Base64 string to ByteArray, returning null on failure or empty input. */
+private fun decodeBase64OrNull(b64: String): ByteArray? {
+    if (b64.isEmpty()) return null
+    return runCatching { android.util.Base64.decode(b64, android.util.Base64.NO_WRAP) }.getOrNull()
 }

@@ -437,7 +437,7 @@ fun NodeTypeFilterDialog(
                             NodeType.NODE -> "Node" to "Nomadnet nodes"
                             NodeType.PEER -> "Peer" to "Nodes you can message with"
                             NodeType.PROPAGATION_NODE -> "Relay" to "Relay/repeater nodes for signal propagation"
-                            NodeType.PHONE -> return@forEach // controlled by audio toggle
+                            NodeType.PHONE -> error("PHONE filtered above")
                         }
 
                     Row(

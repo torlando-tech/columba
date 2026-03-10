@@ -63,20 +63,22 @@ class BlockingManager:
 
     def restore_blocked_destinations(self, hashes_list):
         """Restore LXMF blocked destinations from Kotlin DB at startup."""
-        try:
-            if self.router is None:
-                return {"success": False, "error": "Router not initialized"}
-            count = 0
-            for hex_hash in hashes_list:
+        if self.router is None:
+            return {"success": False, "error": "Router not initialized"}
+        count = 0
+        errors = 0
+        for hex_hash in hashes_list:
+            try:
                 dest_hash = bytes.fromhex(hex_hash)
                 self.router.ignore_destination(dest_hash)
                 count += 1
-            log_info("BlockingManager", "restore_blocked_destinations",
-                     f"Restored {count} LXMF block(s)")
-            return {"success": True, "restored_count": count}
-        except Exception as e:
-            log_error("BlockingManager", "restore_blocked_destinations", f"Error: {e}")
-            return {"success": False, "error": str(e)}
+            except Exception as e:
+                log_error("BlockingManager", "restore_blocked_destinations",
+                          f"Failed to restore hash {hex_hash[:16]}: {e}")
+                errors += 1
+        log_info("BlockingManager", "restore_blocked_destinations",
+                 f"Restored {count} LXMF block(s), {errors} error(s)")
+        return {"success": True, "restored_count": count, "errors": errors}
 
     # ── Reticulum Blackhole (identity hash) ──────────────────────────
 
@@ -88,7 +90,7 @@ class BlockingManager:
                 return {"success": False, "error": "Reticulum not initialized"}
             identity_hash = bytes.fromhex(identity_hash_hex)
             result = self.reticulum.blackhole_identity(identity_hash)
-            success = result is not None and result is not False
+            success = result is True
             log_info("BlockingManager", "blackhole_identity",
                      f"Blackholed identity: {identity_hash_hex[:16]} (result={result})")
             return {"success": success, "result": str(result)}
@@ -103,7 +105,7 @@ class BlockingManager:
                 return {"success": False, "error": "Reticulum not initialized"}
             identity_hash = bytes.fromhex(identity_hash_hex)
             result = self.reticulum.unblackhole_identity(identity_hash)
-            success = result is not None and result is not False
+            success = result is True
             log_info("BlockingManager", "unblackhole_identity",
                      f"Unblackholed identity: {identity_hash_hex[:16]} (result={result})")
             return {"success": success, "result": str(result)}

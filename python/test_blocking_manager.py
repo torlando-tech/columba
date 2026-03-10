@@ -113,9 +113,20 @@ class TestRestoreBlockedDestinations(unittest.TestCase):
         self.assertEqual(result["error"], "Router not initialized")
 
     def test_restore_invalid_hex_in_list(self):
+        """A bad hash should be skipped, not abort the entire restore."""
         result = self.manager.restore_blocked_destinations(["not_hex!"])
-        self.assertFalse(result["success"])
-        self.assertIn("error", result)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["restored_count"], 0)
+        self.assertEqual(result["errors"], 1)
+
+    def test_restore_partial_failure(self):
+        """One bad hash should not prevent restoring the rest."""
+        good_hash = "a1b2c3d4e5f6a7b8" * 2
+        hashes = [good_hash, "not_hex!", "1122334455667788" * 2]
+        result = self.manager.restore_blocked_destinations(hashes)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["restored_count"], 2)
+        self.assertEqual(result["errors"], 1)
 
 
 class TestBlackholeIdentity(unittest.TestCase):

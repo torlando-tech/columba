@@ -427,7 +427,7 @@ fun MapScreen(
     // Platform LocationListener for cleanup when not using GMS (issue #456)
     var platformLocationListener by remember { mutableStateOf<android.location.LocationListener?>(null) }
 
-    // Permission launcher
+    // Permission launcher (foreground location)
     val permissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -1323,7 +1323,7 @@ fun MapScreen(
         }
     }
 
-    // Permission bottom sheet
+    // Permission bottom sheet (foreground location)
     if (showPermissionSheet) {
         LocationPermissionBottomSheet(
             onDismiss = {

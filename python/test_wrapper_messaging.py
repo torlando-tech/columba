@@ -1413,6 +1413,61 @@ class TestOnLXMFDelivery(unittest.TestCase):
         self.assertEqual(event['destination_hash'], mock_message.destination_hash.hex())
 
 
+    def test_on_lxmf_delivery_removes_from_pending_inbound_after_callback(self):
+        """Test that message is removed from pending_inbound after successful Kotlin callback"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.pending_inbound = []
+        wrapper.router = mock_router
+
+        mock_kotlin_callback = Mock()
+        wrapper.kotlin_message_received_callback = mock_kotlin_callback
+
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test message'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Kotlin callback should be invoked
+        mock_kotlin_callback.assert_called_once()
+
+        # Message should be REMOVED from pending_inbound after successful callback
+        self.assertEqual(len(mock_router.pending_inbound), 0)
+
+    def test_on_lxmf_delivery_keeps_in_pending_inbound_on_callback_failure(self):
+        """Test that message stays in pending_inbound if Kotlin callback fails"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        mock_router.pending_inbound = []
+        wrapper.router = mock_router
+
+        mock_kotlin_callback = Mock(side_effect=Exception("Callback failed"))
+        wrapper.kotlin_message_received_callback = mock_kotlin_callback
+
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test message'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Kotlin callback was attempted
+        mock_kotlin_callback.assert_called_once()
+
+        # Message should REMAIN in pending_inbound for polling fallback
+        self.assertEqual(len(mock_router.pending_inbound), 1)
+
+
 class TestPollReceivedMessages(unittest.TestCase):
     """Test poll_received_messages - message polling"""
 

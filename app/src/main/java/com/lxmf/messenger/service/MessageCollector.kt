@@ -83,6 +83,18 @@ class MessageCollector
 
             // Collect messages from the Reticulum protocol
             scope.launch {
+                // Pre-seed processedMessageIds with all existing received messages from the DB.
+                // This prevents duplicate notifications when messages are replayed via SharedFlow
+                // or re-broadcast by drainPendingMessages() after a service restart.
+                // Done inside the collection coroutine to ensure it completes before we subscribe.
+                try {
+                    val existingIds = conversationRepository.getReceivedMessageIds()
+                    processedMessageIds.addAll(existingIds)
+                    Log.i(TAG, "Pre-seeded ${existingIds.size} existing message IDs for notification dedup")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to pre-seed message IDs - duplicate notifications may occur", e)
+                }
+
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
                         // De-duplicate: Skip if we've already processed this message in-memory

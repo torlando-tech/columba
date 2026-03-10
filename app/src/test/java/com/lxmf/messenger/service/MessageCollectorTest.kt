@@ -88,6 +88,9 @@ class MessageCollectorTest {
         // Mock announce repository
         coEvery { announceRepository.getAnnounce(any()) } returns null
 
+        // Mock getReceivedMessageIds for pre-seeding (empty by default)
+        coEvery { conversationRepository.getReceivedMessageIds() } returns emptyList()
+
         // Mock identity repository - return a mock active identity matching test destination
         coEvery { identityRepository.getActiveIdentitySync() } returns
             mockk {
@@ -286,6 +289,42 @@ class MessageCollectorTest {
             assertTrue("updatePeerName should complete without throwing", result.isSuccess)
             coVerify(exactly = 0) {
                 conversationRepository.updatePeerName(any(), any())
+            }
+        }
+
+    // ========== Pre-seed Dedup Tests ==========
+
+    @Test
+    fun `pre-seeded message IDs prevent duplicate notifications on restart`() =
+        runBlocking {
+            // Given: A message that was already in the DB from a previous session
+            coEvery { conversationRepository.getReceivedMessageIds() } returns listOf("already_notified_msg")
+
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "already_notified_msg",
+                    content = "Old message replayed",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // When: Start collecting (pre-seeds IDs) and replay the message
+            messageCollector.startCollecting()
+            kotlinx.coroutines.delay(100)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: No notification should be shown (message was pre-seeded as already processed)
+            coVerify(exactly = 0) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = any(),
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = any(),
+                )
             }
         }
 

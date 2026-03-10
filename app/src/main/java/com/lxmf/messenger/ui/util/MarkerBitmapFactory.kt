@@ -57,8 +57,10 @@ object MarkerBitmapFactory {
         val textWidth = namePaint.measureText(displayName)
         val haloPadding = 6f * density // Extra space for halo stroke
 
-        // Total bitmap dimensions - width based on max of circle or text
-        val totalHeight = circleSizePx + textPadding + labelHeight
+        // Top padding = bottom text area so circle center aligns with bitmap center
+        // (needed for symmetric iconAnchor("center") positioning in declutter mode)
+        val topPadding = textPadding + labelHeight
+        val totalHeight = topPadding + circleSizePx + textPadding + labelHeight
         val minWidth = circleSizePx // At least as wide as the circle
         val textRequiredWidth = (textWidth + haloPadding * 2).toInt()
         val totalWidth = maxOf(minWidth, textRequiredWidth)
@@ -66,7 +68,7 @@ object MarkerBitmapFactory {
         val canvas = Canvas(bitmap)
 
         val centerX = totalWidth / 2f
-        val circleY = circleSizePx / 2f
+        val circleY = topPadding + circleSizePx / 2f
         val radius = circleSizePx / 2f - (2f * density)
 
         // Draw circle background
@@ -98,7 +100,7 @@ object MarkerBitmapFactory {
         canvas.drawText(initial.uppercase().toString(), centerX, initialY, initialPaint)
 
         // Draw display name below circle with halo effect for readability
-        val nameY = circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
+        val nameY = topPadding + circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
 
         // Configure namePaint for centered drawing (already has size and typeface from measurement)
         namePaint.textAlign = Paint.Align.CENTER
@@ -173,8 +175,9 @@ object MarkerBitmapFactory {
         val textWidth = namePaint.measureText(displayName)
         val haloPadding = 6f * density
 
-        // Total bitmap dimensions - width based on max of circle or text
-        val totalHeight = circleSizePx + textPadding + labelHeight
+        // Top padding = bottom text area so circle center aligns with bitmap center
+        val topPadding = textPadding + labelHeight
+        val totalHeight = topPadding + circleSizePx + textPadding + labelHeight
         val minWidth = circleSizePx
         val textRequiredWidth = (textWidth + haloPadding * 2).toInt()
         val totalWidth = maxOf(minWidth, textRequiredWidth)
@@ -182,7 +185,7 @@ object MarkerBitmapFactory {
         val canvas = Canvas(bitmap)
 
         val centerX = totalWidth / 2f
-        val circleY = circleSizePx / 2f
+        val circleY = topPadding + circleSizePx / 2f
         val radius = circleSizePx / 2f - (2f * density)
 
         // Draw circle background
@@ -215,7 +218,7 @@ object MarkerBitmapFactory {
         canvas.drawText(codepoint, centerX, iconY, iconPaint)
 
         // Draw display name below circle with halo effect for readability
-        val nameY = circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
+        val nameY = topPadding + circleSizePx.toFloat() + textPadding + labelHeight * 0.7f
 
         // Configure namePaint for centered drawing
         namePaint.textAlign = Paint.Align.CENTER

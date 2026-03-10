@@ -71,6 +71,11 @@ data class ContactMarker(
     val publicKey: ByteArray? = null,
 )
 
+internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
+    markers
+        .groupBy { it.destinationHash.lowercase() }
+        .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
+
 /**
  * Saved camera position for restoring viewport across tab switches.
  */
@@ -102,6 +107,7 @@ data class MapState(
     val isTelemetryRequestEnabled: Boolean = false,
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
+    val mapMarkerDeclutterEnabled: Boolean = true,
     /** Center coordinates of the default offline map region (fallback when no GPS) */
     val defaultRegionCenter: SavedCameraPosition? = null,
     /** Whether the default region lookup has completed (even if no region was found) */
@@ -260,6 +266,13 @@ class MapViewModel
                 }
             }
 
+            // Collect map marker declutter setting for map rendering behavior.
+            viewModelScope.launch {
+                settingsRepository.mapMarkerDeclutterEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(mapMarkerDeclutterEnabled = enabled) }
+                }
+            }
+
             // Note: Location permission sheet dismissal state is now managed via SavedStateHandle
             // (initialized above). This survives tab switches but resets on fresh app launch.
             // DataStore is still written to in dismissLocationPermissionSheet() for consistency
@@ -346,7 +359,7 @@ class MapViewModel
                             iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
                             publicKey = announce?.publicKey,
                         )
-                    }
+                    }.let(::deduplicateContactMarkersByDestination)
                 }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(

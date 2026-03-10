@@ -43,6 +43,8 @@ fun MapSourcesCard(
     onHttpEnabledChange: (Boolean) -> Unit,
     rmspEnabled: Boolean,
     onRmspEnabledChange: (Boolean) -> Unit,
+    markerDeclutterEnabled: Boolean = true,
+    onMarkerDeclutterEnabledChange: (Boolean) -> Unit = {},
     rmspServerCount: Int = 0,
     hasOfflineMaps: Boolean = false,
 ) {
@@ -54,7 +56,7 @@ fun MapSourcesCard(
     val showWarning = !httpEnabled && !effectiveRmspEnabled && !hasOfflineMaps
 
     CollapsibleSettingsCard(
-        title = "Map Sources",
+        title = "Map",
         icon = Icons.Default.Map,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -64,6 +66,14 @@ fun MapSourcesCard(
             text = "Configure how map tiles are fetched. Offline maps take priority when available.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text(
+            text = "Sources",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
         )
 
         // HTTP source toggle
@@ -98,6 +108,22 @@ fun MapSourcesCard(
                 isDisabled = !rmspEnabled && !canDisableRmsp,
             )
         }
+
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        // Marker declutter toggle
+        MapSourceToggle(
+            title = "Marker declutter",
+            description = "Spread overlapping markers for readability",
+            enabled = markerDeclutterEnabled,
+            onEnabledChange = onMarkerDeclutterEnabledChange,
+        )
 
         // Info when no sources enabled
         if (showWarning) {

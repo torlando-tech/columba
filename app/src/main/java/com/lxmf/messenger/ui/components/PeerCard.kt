@@ -35,14 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -302,7 +302,7 @@ fun NodeTypeBadge(nodeType: String) {
             "NODE" -> "Node" to MaterialTheme.colorScheme.tertiary
             "PEER" -> "Peer" to MaterialTheme.colorScheme.primary
             "PROPAGATION_NODE" -> "Relay" to MaterialTheme.colorScheme.secondary
-            "PHONE" -> "Phone" to MaterialTheme.colorScheme.tertiary
+            "PHONE" -> "Phone" to MaterialTheme.colorScheme.error
             else -> "Node" to MaterialTheme.colorScheme.tertiary
         }
 

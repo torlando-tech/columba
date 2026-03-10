@@ -15,7 +15,7 @@ data class AnnounceEvent(
     val timestamp: Long,
     val nodeType: NodeType = NodeType.NODE,
     val receivingInterface: String? = null,
-    val aspect: String? = null, // Aspect of the destination (e.g., "lxmf.delivery", "call.audio")
+    val aspect: String? = null, // Aspect of the destination (e.g., "lxmf.delivery", "lxst.telephony")
     val displayName: String? = null, // Pre-parsed by LXMF.display_name_from_app_data() in Python
     val stampCost: Int? = null, // Pre-parsed by LXMF stamp cost functions
     val stampCostFlexibility: Int? = null, // For propagation nodes only

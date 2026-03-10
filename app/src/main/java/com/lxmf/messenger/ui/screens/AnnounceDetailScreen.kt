@@ -326,7 +326,7 @@ fun AnnounceDetailScreen(
                             }
                         }
                         "lxmf.delivery" -> {
-                            val linkedPhone = linkedAnnounces.firstOrNull { it.nodeType == "PHONE" }
+                            val linkedPhone = linkedAnnounces.firstOrNull { it.aspect == "lxst.telephony" }
                             if (linkedPhone != null) {
                                 Button(
                                     onClick = { onViewAnnounce(linkedPhone.destinationHash) },

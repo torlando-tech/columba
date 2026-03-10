@@ -989,7 +989,7 @@ class AnnounceStreamViewModelTest {
                 emptyList()
             }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository, mockk())
             // Run the init block tasks (startCollectingAnnouncesWhenReady + first loop iteration)
             runCurrent()
 

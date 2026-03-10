@@ -153,33 +153,13 @@ class GuardianCommandProcessor
             guardianConfig: GuardianConfigEntity,
         ): Boolean {
             try {
-                // Extract command data from content (new format) or LXMF field 0x80 (legacy)
-                val commandDataStr: String =
-                    if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
-                        // New format: command JSON in message content
-                        message.content.removePrefix(GUARDIAN_CMD_PREFIX)
-                    } else {
-                        // Legacy format: command in LXMF field 0x80
-                        val fieldsJson = message.fieldsJson
-                        if (fieldsJson == null) {
-                            Log.e(TAG, "No fields JSON and no command in content")
-                            return false
-                        }
-                        val fields = JSONObject(fieldsJson)
-                        fields
-                            .optString(FIELD_PARENTAL_CONTROL.toString())
-                            .ifEmpty { fields.optString("128") }
-                    }
-
-                if (commandDataStr.isEmpty()) {
+                val commandDataStr = extractCommandData(message)
+                if (commandDataStr == null || commandDataStr.isEmpty()) {
                     Log.e(TAG, "No command data found in message")
                     return false
                 }
 
-                // Parse command JSON
-                // Expected format: {"cmd": "LOCK", "nonce": "hex", "timestamp": ms, "payload": {...}, "signature": "hex"}
                 val commandData = JSONObject(commandDataStr)
-
                 val cmd = commandData.getString("cmd")
                 val nonceHex = commandData.getString("nonce")
                 val timestamp = commandData.getLong("timestamp")
@@ -187,66 +167,17 @@ class GuardianCommandProcessor
 
                 Log.d(TAG, "Processing guardian command: $cmd")
 
-                // Validate timestamp (within window)
-                val now = System.currentTimeMillis()
-                if (kotlin.math.abs(now - timestamp) > COMMAND_WINDOW_MS) {
-                    Log.w(TAG, "Command timestamp outside window: $timestamp (now: $now)")
-                    return false
-                }
-
-                // Validate nonce hasn't been used (anti-replay)
-                if (!guardianRepository.validateCommand(nonceHex, timestamp)) {
-                    Log.w(TAG, "Command replay detected: nonce=$nonceHex")
-                    return false
-                }
-
-                // Verify Ed25519 command signature
-                val guardianPublicKey = guardianConfig.guardianPublicKey
-                if (guardianPublicKey == null) {
-                    Log.e(TAG, "Guardian has no public key stored, cannot verify command signature")
-                    return false
-                }
-                val signatureBytes =
-                    try {
-                        val sigHex = commandData.getString("signature")
-                        ByteArray(sigHex.length / 2) { i -> sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to decode command signature", e)
-                        return false
-                    }
-                val signatureValid =
-                    reticulumProtocol.verifyGuardianCommand(
-                        commandDataStr,
-                        signatureBytes,
-                        guardianPublicKey,
-                    )
-                if (!signatureValid) {
-                    Log.w(TAG, "Command signature verification FAILED - rejecting command")
-                    return false
-                }
+                if (!validateTimestamp(timestamp)) return false
+                if (!validateNonce(nonceHex, timestamp)) return false
+                if (!verifyCommandSignature(commandDataStr, commandData, guardianConfig)) return false
 
                 // Execute command
-                val success =
-                    when (cmd) {
-                        CMD_LOCK -> executeLock()
-                        CMD_UNLOCK -> executeUnlock()
-                        CMD_ALLOW_ADD -> executeAllowAdd(payload)
-                        CMD_ALLOW_REMOVE -> executeAllowRemove(payload)
-                        CMD_ALLOW_SET -> executeAllowSet(payload)
-                        CMD_STATUS_REQUEST -> executeStatusRequest()
-                        else -> {
-                            Log.w(TAG, "Unknown command type: $cmd")
-                            false
-                        }
-                    }
+                val success = dispatchCommand(cmd, payload)
 
                 if (success) {
-                    // Record command as processed (anti-replay)
                     guardianRepository.recordProcessedCommand(nonceHex, timestamp)
                     Log.i(TAG, "Command $cmd executed successfully")
 
-                    // Sync guardian config to Python for link filtering
-                    // Only for state-changing commands (not STATUS_REQUEST)
                     if (cmd in listOf(CMD_LOCK, CMD_UNLOCK, CMD_ALLOW_ADD, CMD_ALLOW_REMOVE, CMD_ALLOW_SET)) {
                         syncGuardianConfigToPython()
                     }
@@ -258,6 +189,101 @@ class GuardianCommandProcessor
                 return false
             }
         }
+
+        /**
+         * Extract command data string from message content (new format) or LXMF field 0x80 (legacy).
+         * @return The raw command JSON string, or null if not found.
+         */
+        private fun extractCommandData(message: ReceivedMessage): String? {
+            if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
+                return message.content.removePrefix(GUARDIAN_CMD_PREFIX)
+            }
+            val fieldsJson =
+                message.fieldsJson ?: run {
+                    Log.e(TAG, "No fields JSON and no command in content")
+                    return null
+                }
+            val fields = JSONObject(fieldsJson)
+            return fields
+                .optString(FIELD_PARENTAL_CONTROL.toString())
+                .ifEmpty { fields.optString("128") }
+        }
+
+        /** Validate that a command timestamp is within the allowed window. */
+        private fun validateTimestamp(timestamp: Long): Boolean {
+            val now = System.currentTimeMillis()
+            if (kotlin.math.abs(now - timestamp) > COMMAND_WINDOW_MS) {
+                Log.w(TAG, "Command timestamp outside window: $timestamp (now: $now)")
+                return false
+            }
+            return true
+        }
+
+        /** Validate that a nonce has not been used before (anti-replay). */
+        private suspend fun validateNonce(
+            nonceHex: String,
+            timestamp: Long,
+        ): Boolean {
+            if (!guardianRepository.validateCommand(nonceHex, timestamp)) {
+                Log.w(TAG, "Command replay detected: nonce=$nonceHex")
+                return false
+            }
+            return true
+        }
+
+        /** Verify the Ed25519 signature on a guardian command. */
+        @Suppress("ReturnCount")
+        private fun verifyCommandSignature(
+            commandDataStr: String,
+            commandData: JSONObject,
+            guardianConfig: GuardianConfigEntity,
+        ): Boolean {
+            val guardianPublicKey = guardianConfig.guardianPublicKey
+            if (guardianPublicKey == null) {
+                Log.e(TAG, "Guardian has no public key stored, cannot verify command signature")
+                return false
+            }
+            val signatureBytes =
+                decodeSignatureHex(commandData) ?: run {
+                    Log.e(TAG, "Failed to decode command signature")
+                    return false
+                }
+            val signatureValid =
+                reticulumProtocol.verifyGuardianCommand(commandDataStr, signatureBytes, guardianPublicKey)
+            if (!signatureValid) {
+                Log.w(TAG, "Command signature verification FAILED - rejecting command")
+                return false
+            }
+            return true
+        }
+
+        /** Decode the hex-encoded "signature" field from a command JSON object. */
+        private fun decodeSignatureHex(commandData: JSONObject): ByteArray? =
+            try {
+                val sigHex = commandData.getString("signature")
+                ByteArray(sigHex.length / 2) { i -> sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode signature hex", e)
+                null
+            }
+
+        /** Dispatch a validated command to the appropriate executor. */
+        private suspend fun dispatchCommand(
+            cmd: String,
+            payload: JSONObject,
+        ): Boolean =
+            when (cmd) {
+                CMD_LOCK -> executeLock()
+                CMD_UNLOCK -> executeUnlock()
+                CMD_ALLOW_ADD -> executeAllowAdd(payload)
+                CMD_ALLOW_REMOVE -> executeAllowRemove(payload)
+                CMD_ALLOW_SET -> executeAllowSet(payload)
+                CMD_STATUS_REQUEST -> executeStatusRequest()
+                else -> {
+                    Log.w(TAG, "Unknown command type: $cmd")
+                    false
+                }
+            }
 
         private suspend fun executeLock(): Boolean {
             guardianRepository.setLockState(true)
@@ -444,12 +470,11 @@ class GuardianCommandProcessor
          * @param message The received LXMF message containing PAIR_ACK
          * @return True if the child was successfully registered
          */
-        @Suppress("NestedBlockDepth", "SwallowedException", "ReturnCount", "CyclomaticComplexMethod")
+        @Suppress("ReturnCount", "CyclomaticComplexMethod")
         suspend fun processPairAck(message: ReceivedMessage): Boolean {
             try {
                 val senderHash = message.sourceHash.joinToString("") { "%02x".format(it) }
 
-                // --- Fix 2: Rate-limit per sender to prevent brute-force token guessing ---
                 if (!pairAckThrottle.shouldUpdate(senderHash)) {
                     Log.w(TAG, "PAIR_ACK rate-limited from $senderHash")
                     return false
@@ -457,109 +482,23 @@ class GuardianCommandProcessor
 
                 Log.i(TAG, "Processing PAIR_ACK from: $senderHash (${message.sourceHash.size} bytes)")
 
-                // Extract command JSON string early — needed for both payload parsing and signature verification
-                val commandDataStr: String
-                try {
-                    commandDataStr =
-                        if (message.content.startsWith(GUARDIAN_CMD_PREFIX)) {
-                            message.content.removePrefix(GUARDIAN_CMD_PREFIX)
-                        } else {
-                            val fieldsJson = message.fieldsJson
-                            if (fieldsJson != null) {
-                                val fields = JSONObject(fieldsJson)
-                                fields
-                                    .optString(FIELD_PARENTAL_CONTROL.toString())
-                                    .ifEmpty { fields.optString("128") }
-                            } else {
-                                ""
-                            }
-                        }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to extract command data from PAIR_ACK", e)
-                    return false
-                }
-
+                val commandDataStr = extractCommandDataOrEmpty(message)
                 if (commandDataStr.isEmpty()) {
                     Log.e(TAG, "PAIR_ACK rejected: no command data found")
                     return false
                 }
 
-                // Parse payload fields from command JSON
                 val commandData = JSONObject(commandDataStr)
                 val payload = commandData.optJSONObject("payload")
                 val displayName = payload?.optString("display_name")?.ifEmpty { null }
                 val receivedToken = payload?.optString("pairing_token")?.ifEmpty { null }
 
-                // --- Fix 3: Verify QR hasn't expired on parent side ---
-                val pending = pendingPairing.get()
-                if (pending == null) {
-                    Log.w(TAG, "PAIR_ACK rejected: no active pairing QR (no pending token)")
-                    return false
-                }
-                if (System.currentTimeMillis() - pending.createdAtMs > COMMAND_WINDOW_MS) {
-                    pendingPairing.set(null) // clean up expired token
-                    Log.w(TAG, "PAIR_ACK rejected: pairing QR expired (older than ${COMMAND_WINDOW_MS / 1000}s)")
-                    return false
-                }
+                if (!validatePairingToken(receivedToken)) return false
+                if (!verifyPairAckSignature(message, commandDataStr, commandData)) return false
 
-                // Verify pairing token matches the one from our QR code
-                if (receivedToken == null) {
-                    Log.w(TAG, "PAIR_ACK rejected: message contains no pairing token")
-                    return false
-                }
-                if (receivedToken != pending.token) {
-                    Log.w(TAG, "PAIR_ACK rejected: token mismatch (unauthorized pairing attempt)")
-                    return false
-                }
-
-                // --- Fix 1: Verify Ed25519 signature using sender's LXMF public key ---
-                // The child doesn't have a pre-established public key on the parent, so we
-                // verify against the sender's identity key from the LXMF message. Combined with
-                // the pairing token, this proves the sender both scanned the QR AND signed the message.
-                val senderPublicKey = message.publicKey
-                if (senderPublicKey != null) {
-                    // Validate timestamp window (same as processCommand)
-                    val timestamp = commandData.optLong("timestamp", 0L)
-                    if (timestamp > 0L) {
-                        val now = System.currentTimeMillis()
-                        if (kotlin.math.abs(now - timestamp) > COMMAND_WINDOW_MS) {
-                            Log.w(TAG, "PAIR_ACK rejected: command timestamp outside window")
-                            return false
-                        }
-                    }
-
-                    val signatureBytes =
-                        try {
-                            val sigHex = commandData.getString("signature")
-                            ByteArray(sigHex.length / 2) { i ->
-                                sigHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "PAIR_ACK rejected: missing or malformed signature", e)
-                            return false
-                        }
-
-                    val signatureValid =
-                        reticulumProtocol.verifyGuardianCommand(
-                            commandDataStr,
-                            signatureBytes,
-                            senderPublicKey,
-                        )
-                    if (!signatureValid) {
-                        Log.w(TAG, "PAIR_ACK rejected: signature verification FAILED")
-                        return false
-                    }
-                    Log.d(TAG, "PAIR_ACK signature verified against sender's LXMF identity key")
-                } else {
-                    // Some LXMF transports may not provide the sender's public key.
-                    // The pairing token already provides primary authentication.
-                    Log.w(TAG, "PAIR_ACK: sender public key not available, skipping signature verification")
-                }
-
-                // All checks passed — consume the pairing token so it can't be reused
+                // All checks passed -- consume the pairing token so it can't be reused
                 pendingPairing.set(null)
 
-                // Add the child to our paired children list
                 guardianRepository.addPairedChild(senderHash, displayName)
                 Log.i(TAG, "Added paired child: $senderHash (name: $displayName)")
 
@@ -568,5 +507,82 @@ class GuardianCommandProcessor
                 Log.e(TAG, "Error processing PAIR_ACK", e)
                 return false
             }
+        }
+
+        /**
+         * Extract command data string from a message, returning empty string on failure.
+         * Unlike [extractCommandData], this never returns null -- used by PAIR_ACK processing
+         * where the caller distinguishes empty vs. missing with a single check.
+         */
+        private fun extractCommandDataOrEmpty(message: ReceivedMessage): String =
+            try {
+                extractCommandData(message) ?: ""
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract command data from PAIR_ACK", e)
+                ""
+            }
+
+        /**
+         * Validate the pairing token against the pending QR pairing session.
+         * Checks that a QR session is active, not expired, and the token matches.
+         */
+        @Suppress("ReturnCount")
+        private fun validatePairingToken(receivedToken: String?): Boolean {
+            val pending = pendingPairing.get()
+            if (pending == null) {
+                Log.w(TAG, "PAIR_ACK rejected: no active pairing QR (no pending token)")
+                return false
+            }
+            if (System.currentTimeMillis() - pending.createdAtMs > COMMAND_WINDOW_MS) {
+                pendingPairing.set(null)
+                Log.w(TAG, "PAIR_ACK rejected: pairing QR expired (older than ${COMMAND_WINDOW_MS / 1000}s)")
+                return false
+            }
+            if (receivedToken == null) {
+                Log.w(TAG, "PAIR_ACK rejected: message contains no pairing token")
+                return false
+            }
+            if (receivedToken != pending.token) {
+                Log.w(TAG, "PAIR_ACK rejected: token mismatch (unauthorized pairing attempt)")
+                return false
+            }
+            return true
+        }
+
+        /**
+         * Verify the Ed25519 signature on a PAIR_ACK message using the sender's LXMF identity key.
+         * If the sender's public key is not available, verification is skipped (token provides auth).
+         */
+        @Suppress("ReturnCount")
+        private fun verifyPairAckSignature(
+            message: ReceivedMessage,
+            commandDataStr: String,
+            commandData: JSONObject,
+        ): Boolean {
+            val senderPublicKey = message.publicKey
+            if (senderPublicKey == null) {
+                Log.w(TAG, "PAIR_ACK: sender public key not available, skipping signature verification")
+                return true
+            }
+
+            val timestamp = commandData.optLong("timestamp", 0L)
+            if (timestamp > 0L && !validateTimestamp(timestamp)) {
+                Log.w(TAG, "PAIR_ACK rejected: command timestamp outside window")
+                return false
+            }
+
+            val signatureBytes = decodeSignatureHex(commandData)
+            if (signatureBytes == null) {
+                Log.w(TAG, "PAIR_ACK rejected: missing or malformed signature")
+                return false
+            }
+
+            val signatureValid = reticulumProtocol.verifyGuardianCommand(commandDataStr, signatureBytes, senderPublicKey)
+            if (!signatureValid) {
+                Log.w(TAG, "PAIR_ACK rejected: signature verification FAILED")
+                return false
+            }
+            Log.d(TAG, "PAIR_ACK signature verified against sender's LXMF identity key")
+            return true
         }
     }

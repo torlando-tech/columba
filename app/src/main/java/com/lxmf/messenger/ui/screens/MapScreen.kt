@@ -239,15 +239,21 @@ fun MapScreen(
         // Enable user location component (blue dot)
         if (hasLocationPermission) {
             @SuppressLint("MissingPermission")
-            map.locationComponent.apply {
-                activateLocationComponent(
-                    LocationComponentActivationOptions
-                        .builder(ctx, style)
-                        .build(),
-                )
-                isLocationComponentEnabled = true
-                cameraMode = CameraMode.NONE
-                renderMode = RenderMode.COMPASS
+            try {
+                map.locationComponent.apply {
+                    activateLocationComponent(
+                        LocationComponentActivationOptions
+                            .builder(ctx, style)
+                            .build(),
+                    )
+                    isLocationComponentEnabled = true
+                    cameraMode = CameraMode.NONE
+                    renderMode = RenderMode.COMPASS
+                }
+            } catch (e: SecurityException) {
+                // Permission was revoked between our check and MapLibre's
+                // internal LocationManager call (COLUMBA-5R)
+                Log.w("MapScreen", "Location permission revoked, disabling location component", e)
             }
         }
 
@@ -417,17 +423,24 @@ fun MapScreen(
         if (state.hasLocationPermission) {
             mapLibreMap?.let { map ->
                 map.style?.let { style ->
-                    map.locationComponent.apply {
-                        if (!isLocationComponentActivated) {
-                            activateLocationComponent(
-                                LocationComponentActivationOptions
-                                    .builder(context, style)
-                                    .build(),
-                            )
+                    try {
+                        map.locationComponent.apply {
+                            if (!isLocationComponentActivated) {
+                                activateLocationComponent(
+                                    LocationComponentActivationOptions
+                                        .builder(context, style)
+                                        .build(),
+                                )
+                            }
+                            isLocationComponentEnabled = true
+                            cameraMode = CameraMode.NONE
+                            renderMode = RenderMode.COMPASS
                         }
-                        isLocationComponentEnabled = true
-                        cameraMode = CameraMode.NONE
-                        renderMode = RenderMode.COMPASS
+                    } catch (e: SecurityException) {
+                        // Permission was revoked between our check and MapLibre's
+                        // internal LocationManager call (COLUMBA-5R)
+                        Log.w("MapScreen", "Location permission revoked, disabling location component", e)
+                        viewModel.onPermissionResult(false)
                     }
                 }
             }
@@ -486,6 +499,13 @@ fun MapScreen(
                     Lifecycle.Event.ON_RESUME -> {
                         view.onResume()
                         viewModel.refreshDefaultRegion()
+                        // Re-check actual Android permission on resume in case user
+                        // revoked it from Settings while the app was backgrounded.
+                        // This syncs ViewModel state with reality (fixes COLUMBA-5R).
+                        val stillHasPermission = LocationPermissionManager.hasPermission(context)
+                        if (state.hasLocationPermission && !stillHasPermission) {
+                            viewModel.onPermissionResult(false)
+                        }
                     }
                     Lifecycle.Event.ON_PAUSE -> view.onPause()
                     Lifecycle.Event.ON_STOP -> view.onStop()

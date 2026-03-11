@@ -230,6 +230,9 @@ class ServicePersistenceManager(
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
+            // Use local reception time for conversation ordering (immune to sender clock skew)
+            val receivedAt = System.currentTimeMillis()
+
             // Insert/update conversation
             if (existingConversation != null) {
                 // Update peerName if we resolved a better name (nickname or announce)
@@ -239,7 +242,7 @@ class ServicePersistenceManager(
                     existingConversation.copy(
                         peerName = updatedPeerName,
                         lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = timestamp,
+                        lastMessageTimestamp = receivedAt,
                         unreadCount = existingConversation.unreadCount + 1,
                         peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
                     )
@@ -252,7 +255,7 @@ class ServicePersistenceManager(
                         peerName = peerName,
                         peerPublicKey = publicKey,
                         lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = timestamp,
+                        lastMessageTimestamp = receivedAt,
                         unreadCount = 1,
                         lastSeenTimestamp = 0,
                     )
@@ -278,6 +281,7 @@ class ServicePersistenceManager(
                     receivedInterface = receivedInterface,
                     receivedRssi = receivedRssi,
                     receivedSnr = receivedSnr,
+                    receivedAt = receivedAt,
                 )
             messageDao.insertMessage(messageEntity)
 

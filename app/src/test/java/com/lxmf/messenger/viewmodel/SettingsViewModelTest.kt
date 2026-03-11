@@ -176,6 +176,7 @@ class SettingsViewModelTest {
         every { settingsRepository.telemetryHostModeEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
         every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
         coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Stub settings save methods

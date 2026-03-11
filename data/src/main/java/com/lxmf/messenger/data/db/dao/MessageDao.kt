@@ -16,7 +16,7 @@ interface MessageDao {
         """
         SELECT * FROM messages
         WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        ORDER BY timestamp ASC
+        ORDER BY COALESCE(receivedAt, timestamp) ASC
         """,
     )
     fun getMessagesForConversation(
@@ -28,7 +28,7 @@ interface MessageDao {
         """
         SELECT * FROM messages
         WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        ORDER BY timestamp DESC LIMIT 1
+        ORDER BY COALESCE(receivedAt, timestamp) DESC LIMIT 1
         """,
     )
     suspend fun getLastMessage(
@@ -133,12 +133,13 @@ interface MessageDao {
      * Get messages for conversation with pagination support.
      * Returns messages in DESC order (newest first) for efficient pagination.
      * UI displays with reverseLayout to show newest at bottom.
+     * Sorts by receivedAt (local clock) to handle sender clock skew.
      */
     @Query(
         """
         SELECT * FROM messages
         WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        ORDER BY timestamp DESC
+        ORDER BY COALESCE(receivedAt, timestamp) DESC
         """,
     )
     fun getMessagesForConversationPaged(
@@ -147,9 +148,24 @@ interface MessageDao {
     ): PagingSource<Int, MessageEntity>
 
     /**
+     * Get messages sorted by sender's timestamp (for "sort by sent time" preference).
+     */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationHash = :peerHash AND identityHash = :identityHash
+        ORDER BY timestamp DESC
+        """,
+    )
+    fun getMessagesForConversationPagedBySentTime(
+        peerHash: String,
+        identityHash: String,
+    ): PagingSource<Int, MessageEntity>
+
+    /**
      * Get all messages for an identity (sync, for export).
      */
-    @Query("SELECT * FROM messages WHERE identityHash = :identityHash ORDER BY timestamp ASC")
+    @Query("SELECT * FROM messages WHERE identityHash = :identityHash ORDER BY COALESCE(receivedAt, timestamp) ASC")
     suspend fun getAllMessagesForIdentity(identityHash: String): List<MessageEntity>
 
     /**

@@ -40,6 +40,13 @@ class RoutingManager(
      * @param destHash Destination hash bytes
      * @return true if path exists, false otherwise
      */
+
+    /**
+     * Get the next-hop interface name for a destination.
+     * Delegates to PythonWrapperManager's RnsApi (Strangler Fig Phase 0).
+     */
+    fun getNextHopInterfaceName(destHash: ByteArray): String? = wrapperManager.getNextHopInterfaceName(destHash)
+
     fun hasPath(destHash: ByteArray): Boolean =
         wrapperManager.withWrapper { wrapper ->
             try {

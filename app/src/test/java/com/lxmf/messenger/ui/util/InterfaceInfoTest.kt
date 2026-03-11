@@ -12,14 +12,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class ReceivingInterfaceInfoTest {
+class InterfaceInfoTest {
     // ===========================================
     // TCP Interface Tests
     // ===========================================
 
     @Test
     fun `TCP interface with user-configured name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[Sideband Server]")
+        val info = getInterfaceInfo("TCPClientInterface[Sideband Server]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("Sideband Server", info.text)
@@ -28,7 +28,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `TCP interface with name and address extracts friendly name before slash`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[Sideband Server/192.168.1.100:4965]")
+        val info = getInterfaceInfo("TCPClientInterface[Sideband Server/192.168.1.100:4965]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("Sideband Server", info.text)
@@ -37,7 +37,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `TCP interface with only address falls back to TCP IP`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[192.168.1.100:4965]")
+        val info = getInterfaceInfo("TCPClientInterface[192.168.1.100:4965]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("TCP/IP", info.text)
@@ -46,7 +46,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `TCP interface without brackets falls back to TCP IP`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface")
+        val info = getInterfaceInfo("TCPClientInterface")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("TCP/IP", info.text)
@@ -55,7 +55,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `TCPInterface variant also recognized`() {
-        val info = getReceivingInterfaceInfo("TCPInterface[My Server]")
+        val info = getInterfaceInfo("TCPInterface[My Server]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("My Server", info.text)
@@ -68,7 +68,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `BackboneInterface with user-configured name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("BackboneInterface[Beleth RNS Hub]")
+        val info = getInterfaceInfo("BackboneInterface[Beleth RNS Hub]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("Beleth RNS Hub", info.text)
@@ -77,7 +77,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `BackboneInterface with name and address extracts friendly name before slash`() {
-        val info = getReceivingInterfaceInfo("BackboneInterface[noDNS2/193.26.158.230:4965]")
+        val info = getInterfaceInfo("BackboneInterface[noDNS2/193.26.158.230:4965]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("noDNS2", info.text)
@@ -86,7 +86,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `BackboneClientInterface variant also recognized`() {
-        val info = getReceivingInterfaceInfo("BackboneClientInterface[My Backbone]")
+        val info = getInterfaceInfo("BackboneClientInterface[My Backbone]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("My Backbone", info.text)
@@ -95,7 +95,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `BackboneInterface without brackets falls back to TCP IP`() {
-        val info = getReceivingInterfaceInfo("BackboneInterface")
+        val info = getInterfaceInfo("BackboneInterface")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("TCP/IP", info.text)
@@ -108,7 +108,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `AutoInterface with user name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("AutoInterface[Home Network]")
+        val info = getInterfaceInfo("AutoInterface[Home Network]")
 
         assertEquals(Icons.Default.Wifi, info.icon)
         assertEquals("Home Network", info.text)
@@ -117,7 +117,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `AutoInterface without brackets falls back to Local Network`() {
-        val info = getReceivingInterfaceInfo("AutoInterface")
+        val info = getInterfaceInfo("AutoInterface")
 
         assertEquals(Icons.Default.Wifi, info.icon)
         assertEquals("Local Network", info.text)
@@ -126,7 +126,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Auto Discovery variant recognized`() {
-        val info = getReceivingInterfaceInfo("Auto Discovery[LAN]")
+        val info = getInterfaceInfo("Auto Discovery[LAN]")
 
         assertEquals(Icons.Default.Wifi, info.icon)
         assertEquals("LAN", info.text)
@@ -139,7 +139,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `BLE interface with user name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("AndroidBleInterface[My Phone]")
+        val info = getInterfaceInfo("AndroidBleInterface[My Phone]")
 
         assertEquals(Icons.Default.Bluetooth, info.icon)
         assertEquals("My Phone", info.text)
@@ -148,7 +148,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Bluetooth interface without brackets falls back to Bluetooth`() {
-        val info = getReceivingInterfaceInfo("BluetoothInterface")
+        val info = getInterfaceInfo("BluetoothInterface")
 
         assertEquals(Icons.Default.Bluetooth, info.icon)
         assertEquals("Bluetooth", info.text)
@@ -157,7 +157,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `AndroidBle variant recognized`() {
-        val info = getReceivingInterfaceInfo("AndroidBle[Tablet]")
+        val info = getInterfaceInfo("AndroidBle[Tablet]")
 
         assertEquals(Icons.Default.Bluetooth, info.icon)
         assertEquals("Tablet", info.text)
@@ -170,7 +170,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `RNode interface with user name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("RNodeInterface[My Radio]")
+        val info = getInterfaceInfo("RNodeInterface[My Radio]")
 
         assertEquals(Icons.Default.CellTower, info.icon)
         assertEquals("My Radio", info.text)
@@ -180,7 +180,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `RNode connected via BLE categorized as LoRa not Bluetooth`() {
         // RNode connected via BLE gets a name containing both "RNode" and "BLE"
-        val info = getReceivingInterfaceInfo("ColumbaRNodeInterface[RNode 5A3F BLE]")
+        val info = getInterfaceInfo("ColumbaRNodeInterface[RNode 5A3F BLE]")
 
         assertEquals(Icons.Default.CellTower, info.icon)
         assertEquals("RNode 5A3F BLE", info.text)
@@ -189,7 +189,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `RNode interface without brackets falls back to LoRa Radio`() {
-        val info = getReceivingInterfaceInfo("RNodeInterface")
+        val info = getInterfaceInfo("RNodeInterface")
 
         assertEquals(Icons.Default.CellTower, info.icon)
         assertEquals("LoRa Radio", info.text)
@@ -198,7 +198,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `LoRa variant recognized`() {
-        val info = getReceivingInterfaceInfo("LoRaInterface[Field Radio]")
+        val info = getInterfaceInfo("LoRaInterface[Field Radio]")
 
         assertEquals(Icons.Default.CellTower, info.icon)
         assertEquals("Field Radio", info.text)
@@ -211,7 +211,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Serial interface with user name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("SerialInterface[USB Modem]")
+        val info = getInterfaceInfo("SerialInterface[USB Modem]")
 
         assertEquals(Icons.Default.SettingsInputAntenna, info.icon)
         assertEquals("USB Modem", info.text)
@@ -220,7 +220,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Serial interface without brackets falls back to Serial`() {
-        val info = getReceivingInterfaceInfo("SerialInterface")
+        val info = getInterfaceInfo("SerialInterface")
 
         assertEquals(Icons.Default.SettingsInputAntenna, info.icon)
         assertEquals("Serial", info.text)
@@ -233,7 +233,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Unknown interface with user name extracts friendly name`() {
-        val info = getReceivingInterfaceInfo("CustomInterface[My Custom]")
+        val info = getInterfaceInfo("CustomInterface[My Custom]")
 
         assertEquals(Icons.Default.SettingsInputAntenna, info.icon)
         assertEquals("My Custom", info.text)
@@ -242,7 +242,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Unknown interface without brackets uses interface name`() {
-        val info = getReceivingInterfaceInfo("SomeOtherInterface")
+        val info = getInterfaceInfo("SomeOtherInterface")
 
         assertEquals(Icons.Default.SettingsInputAntenna, info.icon)
         assertEquals("SomeOtherInterface", info.text)
@@ -252,7 +252,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `Very long unknown interface name is truncated in text`() {
         val longName = "A".repeat(50)
-        val info = getReceivingInterfaceInfo(longName)
+        val info = getInterfaceInfo(longName)
 
         assertEquals(30, info.text.length)
         assertEquals(longName, info.subtitle)
@@ -264,7 +264,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Empty brackets returns fallback text`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[]")
+        val info = getInterfaceInfo("TCPClientInterface[]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -272,7 +272,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Brackets with only address returns fallback`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[10.0.0.1:4242]")
+        val info = getInterfaceInfo("TCPClientInterface[10.0.0.1:4242]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -280,7 +280,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Brackets with IPv6 address returns fallback`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[fe80::1]")
+        val info = getInterfaceInfo("TCPClientInterface[fe80::1]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -288,7 +288,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Name with slash extracts part before slash`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[Server Name/10.0.0.1:4242]")
+        val info = getInterfaceInfo("TCPClientInterface[Server Name/10.0.0.1:4242]")
 
         assertEquals("Server Name", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -296,7 +296,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Whitespace-only name in brackets returns fallback`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[   ]")
+        val info = getInterfaceInfo("TCPClientInterface[   ]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -304,20 +304,20 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `Case insensitive matching for interface types`() {
-        val tcpInfo = getReceivingInterfaceInfo("tcpclientinterface[Test]")
+        val tcpInfo = getInterfaceInfo("tcpclientinterface[Test]")
         assertEquals(Icons.Default.Cloud, tcpInfo.icon)
 
-        val bleInfo = getReceivingInterfaceInfo("ANDROIDBLEINTERFACE[Test]")
+        val bleInfo = getInterfaceInfo("ANDROIDBLEINTERFACE[Test]")
         assertEquals(Icons.Default.Bluetooth, bleInfo.icon)
 
-        val autoInfo = getReceivingInterfaceInfo("AUTOINTERFACE[Test]")
+        val autoInfo = getInterfaceInfo("AUTOINTERFACE[Test]")
         assertEquals(Icons.Default.Wifi, autoInfo.icon)
     }
 
     @Test
     fun `Nested brackets handled correctly`() {
         // Only extract content between first [ and last ]
-        val info = getReceivingInterfaceInfo("TCPClientInterface[Name[with]brackets]")
+        val info = getInterfaceInfo("TCPClientInterface[Name[with]brackets]")
 
         // substringAfter("[") gets "Name[with]brackets]"
         // substringBefore("]") gets "Name[with"
@@ -329,7 +329,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `Name with slash but blank before slash returns fallback`() {
         // Test when there's a slash but nothing before it
-        val info = getReceivingInterfaceInfo("TCPClientInterface[/192.168.1.100:4965]")
+        val info = getInterfaceInfo("TCPClientInterface[/192.168.1.100:4965]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -338,7 +338,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `Auto prefix without full AutoInterface name recognized`() {
         // Test the startsWith("auto") branch
-        val info = getReceivingInterfaceInfo("AutoDiscovery[LAN]")
+        val info = getInterfaceInfo("AutoDiscovery[LAN]")
 
         assertEquals(Icons.Default.Wifi, info.icon)
         assertEquals("LAN", info.text)
@@ -347,7 +347,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `IPv6 link-local address starting with fe80 returns fallback`() {
-        val info = getReceivingInterfaceInfo("TCPClientInterface[fe80::a00:27ff:fe4e:66a1%eth0]")
+        val info = getInterfaceInfo("TCPClientInterface[fe80::a00:27ff:fe4e:66a1%eth0]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -356,7 +356,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `Address with dot but no colon returns fallback`() {
         // Test looksLikeAddress with dot only (like hostname.local)
-        val info = getReceivingInterfaceInfo("TCPClientInterface[server.local]")
+        val info = getInterfaceInfo("TCPClientInterface[server.local]")
 
         assertEquals("TCP/IP", info.text)
         assertEquals("TCPClientInterface", info.subtitle)
@@ -364,7 +364,7 @@ class ReceivingInterfaceInfoTest {
 
     @Test
     fun `extractInterfaceType with no bracket uses full name`() {
-        val info = getReceivingInterfaceInfo("SomeInterface")
+        val info = getInterfaceInfo("SomeInterface")
 
         assertEquals("SomeInterface", info.subtitle)
     }
@@ -372,7 +372,7 @@ class ReceivingInterfaceInfoTest {
     @Test
     fun `Unknown interface shorter than 30 chars shows full name`() {
         val shortName = "ShortUnknown"
-        val info = getReceivingInterfaceInfo(shortName)
+        val info = getInterfaceInfo(shortName)
 
         assertEquals(shortName, info.text)
         assertEquals(shortName, info.subtitle)

@@ -60,6 +60,8 @@ data class Message(
     // Local reception timestamp (our clock), for sort ordering.
     // Null for messages received before this feature was added.
     val receivedAt: Long? = null,
+    // Interface name through which message was sent (null for received messages or pre-feature messages)
+    val sentInterface: String? = null,
 )
 
 /**
@@ -311,6 +313,7 @@ class ConversationRepository
                         errorMessage = message.errorMessage,
                         replyToMessageId = message.replyToMessageId, // Reply reference
                         receivedAt = message.receivedAt,
+                        sentInterface = message.sentInterface,
                     )
                 messageDao.insertMessage(messageEntity)
 
@@ -579,7 +582,19 @@ class ConversationRepository
                 receivedHopCount = receivedHopCount,
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
+                sentInterface = sentInterface,
             )
+
+        /**
+         * Update the sent interface name for a message (active identity scoped).
+         */
+        suspend fun updateMessageSentInterface(
+            messageId: String,
+            sentInterface: String?,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.updateSentInterface(messageId, activeIdentity.identityHash, sentInterface)
+        }
 
         /**
          * Update message delivery details (method and error) for the active identity

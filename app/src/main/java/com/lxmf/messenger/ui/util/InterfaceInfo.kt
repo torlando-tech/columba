@@ -8,7 +8,7 @@ import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
 
-data class ReceivingInterfaceInfo(
+data class InterfaceInfo(
     val icon: ImageVector,
     val text: String,
     val subtitle: String,
@@ -83,7 +83,7 @@ private fun categorizeInterface(interfaceName: String): InterfaceCategory {
     }
 }
 
-fun getReceivingInterfaceInfo(interfaceName: String): ReceivingInterfaceInfo {
+fun getInterfaceInfo(interfaceName: String): InterfaceInfo {
     val friendlyName = extractFriendlyName(interfaceName)
     val interfaceType = extractInterfaceType(interfaceName)
     val category = categorizeInterface(interfaceName)
@@ -94,7 +94,7 @@ fun getReceivingInterfaceInfo(interfaceName: String): ReceivingInterfaceInfo {
             else -> friendlyName ?: category.defaultText
         }
 
-    return ReceivingInterfaceInfo(
+    return InterfaceInfo(
         icon = category.icon,
         text = displayText,
         subtitle = interfaceType,

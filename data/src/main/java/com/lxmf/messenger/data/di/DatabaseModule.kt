@@ -80,6 +80,7 @@ object DatabaseModule {
             MIGRATION_39_40,
             MIGRATION_40_41,
             MIGRATION_41_42,
+            MIGRATION_42_43,
         )
     }
 
@@ -1675,6 +1676,14 @@ object DatabaseModule {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_blocked_peers_identityHash ON blocked_peers(identityHash)",
                 )
+            }
+        }
+
+    // Migration 42→43: Add sentInterface column to messages table
+    private val MIGRATION_42_43 =
+        object : Migration(42, 43) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE messages ADD COLUMN sentInterface TEXT")
             }
         }
 

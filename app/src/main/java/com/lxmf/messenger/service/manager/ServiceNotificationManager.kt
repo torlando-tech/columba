@@ -64,11 +64,10 @@ class ServiceNotificationManager(
         ConcurrentHashMap.newKeySet()
 
     // Debounce heads-up disconnect alerts to avoid notification spam on flaky BLE connections.
-    // The debounce only controls whether the notification triggers a heads-up overlay (sound +
-    // vibration); content-only updates are always posted silently via notify() with the same ID.
+    // Only gates fresh postings (notification not in the shade); content-only updates to a
+    // visible notification are always allowed since they don't re-trigger the heads-up overlay.
     private var lastDisconnectNotifyMs: Long = 0L
     private val disconnectNotifyCooldownMs = 10_000L
-    private var rnodeAlertVisible = false
 
     // Watchdog: auto-reset sync notification if Python never sends a terminal state.
     // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
@@ -245,23 +244,26 @@ class ServiceNotificationManager(
                         .setCategory(NotificationCompat.CATEGORY_STATUS)
                         .build()
 
-                val now = System.currentTimeMillis()
-                val shouldPostHeadsUp =
-                    !rnodeAlertVisible ||
-                        now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs
-                if (shouldPostHeadsUp) {
-                    // Fresh heads-up: alert not visible or cooldown expired
-                    lastDisconnectNotifyMs = now
+                // Query the system for ground truth — covers autoCancel tap, user swipe,
+                // and programmatic cancel without maintaining a stale flag.
+                val isCurrentlyVisible =
+                    notificationManager.activeNotifications
+                        .any { it.id == NOTIFICATION_ID_RNODE }
+
+                if (isCurrentlyVisible) {
+                    // Notification already in the shade — silent content update (no heads-up)
                     notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
-                    rnodeAlertVisible = true
-                } else if (rnodeAlertVisible) {
-                    // Silent content-only update while alert is still in the shade
-                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                } else {
+                    // Notification not visible — debounce fresh heads-up postings
+                    val now = System.currentTimeMillis()
+                    if (now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs) {
+                        lastDisconnectNotifyMs = now
+                        notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                    }
                 }
             } else {
                 // All RNode interfaces are online — dismiss the alert
                 notificationManager.cancel(NOTIFICATION_ID_RNODE)
-                rnodeAlertVisible = false
                 lastDisconnectNotifyMs = 0L
             }
 

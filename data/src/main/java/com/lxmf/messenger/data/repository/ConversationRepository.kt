@@ -514,13 +514,14 @@ class ConversationRepository
         }
 
         /**
-         * Get IDs of all received messages for the active identity.
+         * Get IDs of recent received messages for the active identity.
          * Used to pre-seed the notification dedup cache at startup so that
          * replayed/re-broadcast messages don't trigger duplicate notifications.
+         * Bounded to [since] to avoid unbounded memory growth.
          */
-        suspend fun getReceivedMessageIds(): List<String> {
+        suspend fun getReceivedMessageIds(since: Long): List<String> {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
-            return messageDao.getReceivedMessageIds(activeIdentity.identityHash)
+            return messageDao.getReceivedMessageIds(activeIdentity.identityHash, since)
         }
 
         /**

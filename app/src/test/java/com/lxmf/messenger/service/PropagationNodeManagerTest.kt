@@ -112,6 +112,7 @@ class PropagationNodeManagerTest {
         every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(30)
         every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
         coEvery { settingsRepository.saveLastSyncTimestamp(any()) } just Runs
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Default repository mocks
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())

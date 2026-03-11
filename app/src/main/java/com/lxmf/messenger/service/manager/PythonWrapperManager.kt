@@ -166,11 +166,7 @@ class PythonWrapperManager(
                     // Initialize thin RNS API (Strangler Fig Phase 0 - new path)
                     try {
                         val rnsApiModule = py.getModule("rns_api")
-                        val rnsApiObj = rnsApiModule.callAttr("RnsApi")
-                        val reticulumInstance = wrapper.get("reticulum")
-                        val router = wrapper.get("router")
-                        rnsApiObj.callAttr("set_reticulum", reticulumInstance, router)
-                        rnsApi = rnsApiObj
+                        rnsApi = rnsApiModule.callAttr("RnsApi")
                         Log.d(TAG, "RnsApi initialized (Strangler Fig Phase 0)")
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to initialize RnsApi (non-fatal): ${e.message}")

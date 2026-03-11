@@ -88,7 +88,12 @@ class RoutingManager(
     fun persistTransportData() {
         wrapperManager.withWrapper { wrapper ->
             try {
-                wrapper.callAttr("persist_transport_data")
+                val result = wrapper.callAttr("persist_transport_data")
+                val success = result.callAttr("get", "success").toBoolean()
+                if (!success) {
+                    val error = result.callAttr("get", "error").toString()
+                    Log.w(TAG, "persistTransportData failed: $error")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting transport data", e)
             }

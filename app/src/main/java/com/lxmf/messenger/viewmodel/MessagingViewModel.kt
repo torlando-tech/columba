@@ -89,7 +89,6 @@ class MessagingViewModel
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
-        private val identityResolutionManager: com.lxmf.messenger.service.IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -903,26 +902,8 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
-                    // Enrich sentInterface on delivery if it wasn't captured at send time.
-                    // Skip propagated messages: they route through the propagation node
-                    // (a different hash than conversationHash), so querying conversationHash
-                    // here would return the wrong interface or null. Propagated sends always
-                    // have a known path at send time, so the send-time capture handles them.
-                    if (message.isFromMe && message.sentInterface == null && message.deliveryMethod != "propagated") {
-                        try {
-                            val destHashBytes =
-                                message.conversationHash
-                                    .chunked(2)
-                                    .map { it.toInt(16).toByte() }
-                                    .toByteArray()
-                            val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
-                            if (sentInterface != null) {
-                                conversationRepository.updateMessageSentInterface(update.messageHash, sentInterface)
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
-                        }
-                    }
+                    // Enrich sentInterface on delivery if it wasn't captured at send time
+                    enrichSentInterfaceOnDelivery(message, update.messageHash)
 
                     // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
                     _messagesRefreshTrigger.value++
@@ -933,6 +914,32 @@ class MessagingViewModel
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Enrich sentInterface on delivery if it wasn't captured at send time.
+         * Skips propagated messages: they route through the propagation node
+         * (a different hash than conversationHash), so querying conversationHash
+         * would return the wrong interface or null.
+         */
+        private suspend fun enrichSentInterfaceOnDelivery(
+            message: com.lxmf.messenger.data.db.entity.MessageEntity,
+            messageHash: String,
+        ) {
+            if (!message.isFromMe || message.sentInterface != null || message.deliveryMethod == "propagated") return
+            try {
+                val destHashBytes =
+                    message.conversationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
+                val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
+                if (sentInterface != null) {
+                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
             }
         }
 

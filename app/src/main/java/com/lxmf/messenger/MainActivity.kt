@@ -1448,8 +1448,8 @@ fun ColumbaNavigation(
                                 },
                                 onConfigureTransport = {
                                     val route =
-                                        "rnode_flasher" +
-                                            "?tncConfigOnly=true" +
+                                        "rnode_wizard?connectionType=usb" +
+                                            "&transportMode=true" +
                                             "&usbDeviceId=$usbDeviceId" +
                                             "&usbVendorId=$usbVendorId" +
                                             "&usbProductId=$usbProductId" +
@@ -1612,6 +1612,7 @@ fun ColumbaNavigation(
                             route =
                                 "rnode_wizard?interfaceId={interfaceId}" +
                                     "&connectionType={connectionType}" +
+                                    "&transportMode={transportMode}" +
                                     "&usbDeviceId={usbDeviceId}" +
                                     "&usbVendorId={usbVendorId}" +
                                     "&usbProductId={usbProductId}" +
@@ -1630,6 +1631,10 @@ fun ColumbaNavigation(
                                         type = NavType.StringType
                                         nullable = true
                                         defaultValue = null
+                                    },
+                                    navArgument("transportMode") {
+                                        type = NavType.BoolType
+                                        defaultValue = false
                                     },
                                     navArgument("usbDeviceId") {
                                         type = NavType.IntType
@@ -1668,6 +1673,7 @@ fun ColumbaNavigation(
                         ) { backStackEntry ->
                             val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                             val connectionType = backStackEntry.arguments?.getString("connectionType")
+                            val transportMode = backStackEntry.arguments?.getBoolean("transportMode") ?: false
                             val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                             val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                             val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
@@ -1687,10 +1693,15 @@ fun ColumbaNavigation(
                                 preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
                                 preselectedLoraSf = if (loraSf > 0) loraSf else null,
                                 preselectedLoraCr = if (loraCr > 0) loraCr else null,
+                                transportMode = transportMode,
                                 onNavigateBack = { navController.popBackStack() },
                                 onComplete = {
-                                    navController.navigate("interface_management") {
-                                        popUpTo("interface_management") { inclusive = true }
+                                    if (transportMode) {
+                                        navController.popBackStack()
+                                    } else {
+                                        navController.navigate("interface_management") {
+                                            popUpTo("interface_management") { inclusive = true }
+                                        }
                                     }
                                 },
                             )

@@ -354,10 +354,6 @@ jobs:
         # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
         run: ./gradlew :app:testNoSentryDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
 
-      - name: Run reticulum and data module tests
-        if: matrix.shard == 0
-        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
-
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -394,6 +390,91 @@ jobs:
           path: |
             **/build/reports/jacoco/
           retention-days: 7
+
+  module-tests:
+    name: Module Tests (reticulum + data)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Clean AIDL generated code
+        run: |
+          # Clean AIDL generated code to avoid stale cache issues
+          # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
+
+      - name: Clean JaCoCo execution data
+        run: |
+          # Clean stale JaCoCo execution data to avoid "exceeds max age" errors in Codecov
+          rm -rf build/jacoco
+          rm -rf */build/jacoco
+          rm -rf build/reports/jacoco
+          rm -rf */build/reports/jacoco
+
+      - name: Cache Robolectric Android SDKs
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.16-${{ runner.os }}
+          restore-keys: |
+            robolectric-4.16-
+            robolectric-
+
+      - name: Run reticulum and data module tests
+        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-test-results
+          path: |
+            **/build/test-results/test*/*.xml
+            **/build/test-results/test*/*.html
+          retention-days: 7
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-test-reports
+          path: |
+            **/build/reports/tests/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./**/build/reports/jacoco/**/*.xml
+          flags: unittests
+          name: codecov-modules
+          fail_ci_if_error: false
+          verbose: true
 
   instrumented-tests:
     name: Instrumented Tests
@@ -534,7 +615,7 @@ jobs:
   ci-passed:
     name: ✅ CI Passed — APK Ready
     if: always()
-    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, instrumented-tests]
+    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, module-tests, instrumented-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -547,7 +628,8 @@ jobs:
              [[ "${{ needs.threading-audit.result }}" != "success" ]] || \
              [[ "${{ needs.proguard-verification.result }}" != "success" ]] || \
              [[ "${{ needs.python-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.kotlin-tests.result }}" != "success" ]]; then
+             [[ "${{ needs.kotlin-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.module-tests.result }}" != "success" ]]; then
             echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
@@ -558,6 +640,7 @@ jobs:
             echo "| ProGuard Verification | ${{ needs.proguard-verification.result }} |" >> $GITHUB_STEP_SUMMARY
             echo "| Python Tests | ${{ needs.python-tests.result }} |" >> $GITHUB_STEP_SUMMARY
             echo "| Kotlin Tests | ${{ needs.kotlin-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Module Tests | ${{ needs.module-tests.result }} |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 

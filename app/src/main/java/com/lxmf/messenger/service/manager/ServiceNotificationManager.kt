@@ -245,17 +245,19 @@ class ServiceNotificationManager(
                         .setCategory(NotificationCompat.CATEGORY_STATUS)
                         .build()
 
-                // Debounce only controls the initial heads-up posting (sound + vibration).
-                // Content-only updates (notify with same ID while visible) are silent.
-                // Also always post if the alert was dismissed (autoCancel tap or reconnect).
                 val now = System.currentTimeMillis()
-                if (!rnodeAlertVisible ||
-                    now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs
-                ) {
+                val shouldPostHeadsUp =
+                    !rnodeAlertVisible ||
+                        now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs
+                if (shouldPostHeadsUp) {
+                    // Fresh heads-up: alert not visible or cooldown expired
                     lastDisconnectNotifyMs = now
+                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                    rnodeAlertVisible = true
+                } else if (rnodeAlertVisible) {
+                    // Silent content-only update while alert is still in the shade
+                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
                 }
-                notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
-                rnodeAlertVisible = true
             } else {
                 // All RNode interfaces are online — dismiss the alert
                 notificationManager.cancel(NOTIFICATION_ID_RNODE)

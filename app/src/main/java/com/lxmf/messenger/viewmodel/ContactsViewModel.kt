@@ -521,7 +521,7 @@ class ContactsViewModel
          * @param destinationHash The contact's destination hash
          */
         fun retryIdentityResolution(destinationHash: String) {
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result = contactRepository.resetContactForRetry(destinationHash)
                     if (result.isSuccess) {

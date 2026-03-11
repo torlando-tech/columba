@@ -24,7 +24,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
@@ -74,7 +73,6 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ReticulumService
 import com.lxmf.messenger.ui.components.BlePermissionBottomSheet
 import com.lxmf.messenger.ui.components.OfflineModeBanner
-import com.lxmf.messenger.ui.components.shouldShowOfflineBanner
 import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
 import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.ApkSharingScreen
@@ -1024,12 +1022,8 @@ fun ColumbaNavigation(
                 },
             ) { _ ->
                 // Inner screens have their own Scaffolds with TopAppBars that handle content padding
-                val showBanner = shouldShowOfflineBanner(settingsState.networkStatus) || settingsState.isRestarting
                 Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .then(if (showBanner) Modifier.statusBarsPadding() else Modifier),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     OfflineModeBanner(
                         networkStatus = settingsState.networkStatus,

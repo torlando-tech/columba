@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, 'v[0-9].[0-9]+.x' ]
+    branches: [ main, 'v[0-9].[0-9]+.x', 'release/**' ]
   pull_request:
-    branches: [ main, 'v[0-9].[0-9]+.x' ]
+    branches: [ main, 'v[0-9].[0-9]+.x', 'release/**' ]
 
 permissions:
   contents: read

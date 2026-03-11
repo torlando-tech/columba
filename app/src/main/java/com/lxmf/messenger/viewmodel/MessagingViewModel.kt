@@ -903,8 +903,12 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
-                    // Enrich sentInterface on delivery if it wasn't captured at send time
-                    if (message.isFromMe && message.sentInterface == null) {
+                    // Enrich sentInterface on delivery if it wasn't captured at send time.
+                    // Skip propagated messages: they route through the propagation node
+                    // (a different hash than conversationHash), so querying conversationHash
+                    // here would return the wrong interface or null. Propagated sends always
+                    // have a known path at send time, so the send-time capture handles them.
+                    if (message.isFromMe && message.sentInterface == null && message.deliveryMethod != "propagated") {
                         try {
                             val destHashBytes =
                                 message.conversationHash

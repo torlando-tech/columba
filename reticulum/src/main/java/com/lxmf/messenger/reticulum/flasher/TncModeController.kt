@@ -67,6 +67,9 @@ class TncModeController(
                     flashState.value = RNodeFlasher.FlashState.Error("Failed to configure radio parameters")
                 }
                 success
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                usbBridge.disconnect()
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "TNC mode configuration failed", e)
                 usbBridge.disconnect()
@@ -118,6 +121,9 @@ class TncModeController(
                     flashState.value = RNodeFlasher.FlashState.Error("Failed to disable transport mode")
                 }
                 success
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                usbBridge.disconnect()
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Disable TNC mode failed", e)
                 usbBridge.disconnect()

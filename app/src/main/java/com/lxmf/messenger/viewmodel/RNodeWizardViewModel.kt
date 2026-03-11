@@ -106,6 +106,10 @@ data class RNodeWizardState(
     // Edit mode
     val editingInterfaceId: Long? = null,
     val isEditMode: Boolean = false,
+    // Transport mode - sends TNC KISS commands instead of saving interface config
+    val transportMode: Boolean = false,
+    val transportConfiguring: Boolean = false,
+    val transportConfigError: String? = null,
     // Step 1: Device Discovery
     val connectionType: RNodeConnectionType = RNodeConnectionType.BLUETOOTH,
     val isScanning: Boolean = false,
@@ -243,6 +247,11 @@ class RNodeWizardViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
     ) : ViewModel() {
+        private val flasher by lazy {
+            com.lxmf.messenger.reticulum.flasher
+                .RNodeFlasher(context)
+        }
+
         companion object {
             private const val TAG = "RNodeWizardVM"
             private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
@@ -646,7 +655,11 @@ class RNodeWizardViewModel
                 WizardStep.FREQUENCY_SLOT ->
                     true // Slot always has a valid selection
                 WizardStep.REVIEW_CONFIGURE ->
-                    state.interfaceName.isNotBlank() && validateConfigurationSilent()
+                    if (state.transportMode) {
+                        validateConfigurationSilent()
+                    } else {
+                        state.interfaceName.isNotBlank() && validateConfigurationSilent()
+                    }
             }
         }
 
@@ -3515,6 +3528,67 @@ class RNodeWizardViewModel
 
         fun clearSaveError() {
             _state.update { it.copy(saveError = null) }
+        }
+
+        fun clearTransportConfigError() {
+            _state.update { it.copy(transportConfigError = null) }
+        }
+
+        // ==================== Transport Mode ====================
+
+        fun enableTransportMode() {
+            _state.update { it.copy(transportMode = true) }
+        }
+
+        fun applyTransportMode() {
+            val state = _state.value
+            val usbDevice = state.selectedUsbDevice ?: return
+
+            val frequencyHz = state.frequency.toLongOrNull()?.toInt() ?: 915000000
+            val bandwidthHz = state.bandwidth.toIntOrNull() ?: 125000
+            val sf = state.spreadingFactor.toIntOrNull() ?: 8
+            val cr = state.codingRate.toIntOrNull() ?: 5
+            val txp = state.txPower.toIntOrNull() ?: 17
+
+            val band =
+                when {
+                    frequencyHz < 500_000_000 ->
+                        com.lxmf.messenger.reticulum.flasher.FrequencyBand.BAND_433
+                    else ->
+                        com.lxmf.messenger.reticulum.flasher.FrequencyBand.BAND_868_915
+                }
+
+            Log.i(TAG, "Applying transport mode: freq=$frequencyHz bw=$bandwidthHz sf=$sf cr=$cr txp=$txp")
+            _state.update { it.copy(transportConfiguring = true, transportConfigError = null) }
+
+            viewModelScope.launch {
+                val success =
+                    flasher.tncModeController.enableTncMode(
+                        deviceId = usbDevice.deviceId,
+                        band = band,
+                        frequency = frequencyHz,
+                        bandwidth = bandwidthHz,
+                        spreadingFactor = sf,
+                        codingRate = cr,
+                        txPower = txp,
+                    )
+
+                if (success) {
+                    _state.update {
+                        it.copy(
+                            transportConfiguring = false,
+                            saveSuccess = true,
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            transportConfiguring = false,
+                            transportConfigError = "Failed to configure transport mode",
+                        )
+                    }
+                }
+            }
         }
 
         /**

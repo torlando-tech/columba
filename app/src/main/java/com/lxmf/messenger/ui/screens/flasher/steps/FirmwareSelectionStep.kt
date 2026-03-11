@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens.flasher.steps
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.reticulum.flasher.FirmwarePackage
+import com.lxmf.messenger.reticulum.flasher.FirmwareSource
 import com.lxmf.messenger.reticulum.flasher.FrequencyBand
 import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 
@@ -54,6 +56,10 @@ import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FirmwareSelectionStep(
+    availableFirmwareSources: List<FirmwareSource>?,
+    selectedFirmwareSource: FirmwareSource,
+    customFirmwareUri: Uri?,
+    customFirmwareUrl: String,
     selectedBoard: RNodeBoard?,
     selectedBand: FrequencyBand,
     bandExplicitlySelected: Boolean,
@@ -65,6 +71,9 @@ fun FirmwareSelectionStep(
     downloadProgress: Int,
     downloadError: String?,
     useManualSelection: Boolean,
+    onFirmwareSourceSelected: (FirmwareSource) -> Unit,
+    onCustomUrlChanged: (String) -> Unit,
+    onPickFile: () -> Unit,
     onBoardSelected: (RNodeBoard) -> Unit,
     onBandSelected: (FrequencyBand) -> Unit,
     onFirmwareSelected: (FirmwarePackage) -> Unit,
@@ -91,6 +100,45 @@ fun FirmwareSelectionStep(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Firmware source selection
+        FirmwareSourceCard(
+            selectedSource = selectedFirmwareSource,
+            availableSources = availableFirmwareSources,
+            onSourceSelected = onFirmwareSourceSelected,
+        )
+
+        // microReticulum info note
+        if (selectedFirmwareSource is FirmwareSource.MicroReticulum) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "About microReticulum",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text =
+                            "microReticulum runs an embedded Reticulum transport stack on the device itself. " +
+                                "It operates as a standalone transport node and will not pair with Columba as a radio interface.\n\n" +
+                                "After flashing, you will be prompted to configure the radio parameters for transport mode.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Board selection (only if manual selection enabled)
         if (useManualSelection) {
@@ -137,17 +185,27 @@ fun FirmwareSelectionStep(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Version selection / cached firmware
-        FirmwareVersionCard(
-            selectedBoard = selectedBoard,
-            availableFirmware = availableFirmware,
-            selectedFirmware = selectedFirmware,
-            availableVersions = availableVersions,
-            selectedVersion = selectedVersion,
-            isDownloading = isDownloading,
-            onFirmwareSelected = onFirmwareSelected,
-            onDownloadFirmware = onDownloadFirmware,
-        )
+        // Custom firmware input (URL or local file)
+        if (selectedFirmwareSource == FirmwareSource.Custom) {
+            CustomFirmwareCard(
+                customFirmwareUri = customFirmwareUri,
+                customFirmwareUrl = customFirmwareUrl,
+                onCustomUrlChanged = onCustomUrlChanged,
+                onPickFile = onPickFile,
+            )
+        } else {
+            // Version selection / cached firmware
+            FirmwareVersionCard(
+                selectedBoard = selectedBoard,
+                availableFirmware = availableFirmware,
+                selectedFirmware = selectedFirmware,
+                availableVersions = availableVersions,
+                selectedVersion = selectedVersion,
+                isDownloading = isDownloading,
+                onFirmwareSelected = onFirmwareSelected,
+                onDownloadFirmware = onDownloadFirmware,
+            )
+        }
 
         // Provision only option (skip flashing)
         if (selectedBoard != null) {
@@ -571,6 +629,156 @@ private fun FirmwareVersionCard(
                         text = "Select a firmware version above to continue",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirmwareSourceCard(
+    selectedSource: FirmwareSource,
+    availableSources: List<FirmwareSource>?,
+    onSourceSelected: (FirmwareSource) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sources =
+        availableSources ?: listOf(
+            FirmwareSource.Official,
+            FirmwareSource.MicroReticulum,
+            FirmwareSource.CommunityEdition,
+            FirmwareSource.Custom,
+        )
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Firmware Source",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                sources.forEach { source ->
+                    FilterChip(
+                        selected = selectedSource == source,
+                        onClick = { onSourceSelected(source) },
+                        label = { Text(source.displayName) },
+                        colors =
+                            FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomFirmwareCard(
+    customFirmwareUri: Uri?,
+    customFirmwareUrl: String,
+    onCustomUrlChanged: (String) -> Unit,
+    onPickFile: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Custom Firmware",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+            // URL input
+            Text(
+                text = "Download from URL:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = customFirmwareUrl,
+                onValueChange = onCustomUrlChanged,
+                label = { Text("Firmware .zip URL") },
+                placeholder = { Text("https://example.com/firmware.zip") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (customFirmwareUrl.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        ),
+                ) {
+                    Text(
+                        text = "Will download when flashing starts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Or pick a local file:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            androidx.compose.material3.OutlinedButton(
+                onClick = onPickFile,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Pick .zip file")
+            }
+
+            if (customFirmwareUri != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                ) {
+                    Text(
+                        text = "File selected: ${customFirmwareUri.lastPathSegment ?: "custom firmware"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
             }

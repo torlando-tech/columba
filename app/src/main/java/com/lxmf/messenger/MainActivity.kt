@@ -1421,6 +1421,17 @@ fun ColumbaNavigation(
                             val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                             val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                             val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+
+                            // State for disable transport operation
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                            var isDisablingTransport by androidx.compose.runtime.remember {
+                                androidx.compose.runtime.mutableStateOf(false)
+                            }
+                            var disableTransportResult: Boolean? by androidx.compose.runtime.remember {
+                                androidx.compose.runtime.mutableStateOf(null)
+                            }
+
                             com.lxmf.messenger.ui.screens.UsbDeviceActionScreen(
                                 deviceName = usbDeviceName,
                                 onNavigateBack = { navController.popBackStack() },
@@ -1446,16 +1457,47 @@ fun ColumbaNavigation(
                                         popUpTo("usb_device_action") { inclusive = true }
                                     }
                                 },
+                                onConfigureTransport = {
+                                    val route =
+                                        "rnode_wizard?connectionType=usb" +
+                                            "&transportMode=true" +
+                                            "&usbDeviceId=$usbDeviceId" +
+                                            "&usbVendorId=$usbVendorId" +
+                                            "&usbProductId=$usbProductId" +
+                                            "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                    navController.navigate(route) {
+                                        popUpTo("usb_device_action") { inclusive = true }
+                                    }
+                                },
+                                onDisableTransport = {
+                                    isDisablingTransport = true
+                                    coroutineScope.launch {
+                                        val flasher =
+                                            com.lxmf.messenger.reticulum.flasher
+                                                .RNodeFlasher(context)
+                                        val success = flasher.tncModeController.disableTncMode(usbDeviceId)
+                                        isDisablingTransport = false
+                                        disableTransportResult = success
+                                    }
+                                },
+                                isDisablingTransport = isDisablingTransport,
+                                disableTransportResult = disableTransportResult,
+                                onDismissDisableResult = { disableTransportResult = null },
                             )
                         }
 
                         composable(
                             route =
-                                "rnode_flasher?skipDetection={skipDetection}&usbDeviceId={usbDeviceId}" +
+                                "rnode_flasher?skipDetection={skipDetection}&tncConfigOnly={tncConfigOnly}" +
+                                    "&usbDeviceId={usbDeviceId}" +
                                     "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
                             arguments =
                                 listOf(
                                     navArgument("skipDetection") {
+                                        type = NavType.BoolType
+                                        defaultValue = false
+                                    },
+                                    navArgument("tncConfigOnly") {
                                         type = NavType.BoolType
                                         defaultValue = false
                                     },
@@ -1479,6 +1521,7 @@ fun ColumbaNavigation(
                                 ),
                         ) { backStackEntry ->
                             val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
+                            val tncConfigOnly = backStackEntry.arguments?.getBoolean("tncConfigOnly") ?: false
                             val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                             RNodeFlasherScreen(
                                 onNavigateBack = { navController.popBackStack() },
@@ -1487,6 +1530,7 @@ fun ColumbaNavigation(
                                     navController.navigate("rnode_wizard")
                                 },
                                 skipDetection = skipDetection,
+                                tncConfigOnly = tncConfigOnly,
                                 preselectedUsbDeviceId = if (usbDeviceId > 0) usbDeviceId else null,
                             )
                         }
@@ -1593,6 +1637,7 @@ fun ColumbaNavigation(
                             route =
                                 "rnode_wizard?interfaceId={interfaceId}" +
                                     "&connectionType={connectionType}" +
+                                    "&transportMode={transportMode}" +
                                     "&usbDeviceId={usbDeviceId}" +
                                     "&usbVendorId={usbVendorId}" +
                                     "&usbProductId={usbProductId}" +
@@ -1611,6 +1656,10 @@ fun ColumbaNavigation(
                                         type = NavType.StringType
                                         nullable = true
                                         defaultValue = null
+                                    },
+                                    navArgument("transportMode") {
+                                        type = NavType.BoolType
+                                        defaultValue = false
                                     },
                                     navArgument("usbDeviceId") {
                                         type = NavType.IntType
@@ -1649,6 +1698,7 @@ fun ColumbaNavigation(
                         ) { backStackEntry ->
                             val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                             val connectionType = backStackEntry.arguments?.getString("connectionType")
+                            val transportMode = backStackEntry.arguments?.getBoolean("transportMode") ?: false
                             val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                             val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                             val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
@@ -1668,10 +1718,15 @@ fun ColumbaNavigation(
                                 preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
                                 preselectedLoraSf = if (loraSf > 0) loraSf else null,
                                 preselectedLoraCr = if (loraCr > 0) loraCr else null,
+                                transportMode = transportMode,
                                 onNavigateBack = { navController.popBackStack() },
                                 onComplete = {
-                                    navController.navigate("interface_management") {
-                                        popUpTo("interface_management") { inclusive = true }
+                                    if (transportMode) {
+                                        navController.popBackStack()
+                                    } else {
+                                        navController.navigate("interface_management") {
+                                            popUpTo("interface_management") { inclusive = true }
+                                        }
                                     }
                                 },
                             )

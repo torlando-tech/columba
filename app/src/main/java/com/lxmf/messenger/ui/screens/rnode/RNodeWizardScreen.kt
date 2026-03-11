@@ -41,11 +41,19 @@ fun RNodeWizardScreen(
     preselectedLoraBandwidth: Int? = null,
     preselectedLoraSf: Int? = null,
     preselectedLoraCr: Int? = null,
+    transportMode: Boolean = false,
     onNavigateBack: () -> Unit,
     onComplete: () -> Unit,
     viewModel: RNodeWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+
+    // Enable transport mode if requested
+    LaunchedEffect(transportMode) {
+        if (transportMode) {
+            viewModel.enableTransportMode()
+        }
+    }
 
     // Handle system back button - go to previous step or exit wizard
     BackHandler {
@@ -114,11 +122,16 @@ fun RNodeWizardScreen(
                     Text(
                         when (state.currentStep) {
                             WizardStep.DEVICE_DISCOVERY ->
-                                if (state.isEditMode) "Change RNode Device" else "Select RNode Device"
+                                when {
+                                    state.transportMode -> "Configure Transport"
+                                    state.isEditMode -> "Change RNode Device"
+                                    else -> "Select RNode Device"
+                                }
                             WizardStep.REGION_SELECTION -> "Choose Region"
                             WizardStep.MODEM_PRESET -> "Select Modem Preset"
                             WizardStep.FREQUENCY_SLOT -> "Select Frequency Slot"
-                            WizardStep.REVIEW_CONFIGURE -> "Review Settings"
+                            WizardStep.REVIEW_CONFIGURE ->
+                                if (state.transportMode) "Review Transport Config" else "Review Settings"
                         },
                     )
                 },
@@ -146,14 +159,23 @@ fun RNodeWizardScreen(
                 totalSteps = WizardStep.entries.size,
                 buttonText =
                     when (state.currentStep) {
-                        WizardStep.REVIEW_CONFIGURE -> if (state.isEditMode) "Update" else "Save"
+                        WizardStep.REVIEW_CONFIGURE ->
+                            when {
+                                state.transportMode -> "Enable Transport"
+                                state.isEditMode -> "Update"
+                                else -> "Save"
+                            }
                         else -> "Next"
                     },
                 canProceed = viewModel.canProceed(),
-                isSaving = state.isSaving,
+                isSaving = state.isSaving || state.transportConfiguring,
                 onButtonClick = {
                     if (state.currentStep == WizardStep.REVIEW_CONFIGURE) {
-                        viewModel.saveConfiguration()
+                        if (state.transportMode) {
+                            viewModel.applyTransportMode()
+                        } else {
+                            viewModel.saveConfiguration()
+                        }
                     } else {
                         viewModel.goToNextStep()
                     }
@@ -195,6 +217,20 @@ fun RNodeWizardScreen(
             text = { Text(error) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearSaveError() }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
+
+    // Transport config error dialog
+    state.transportConfigError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearTransportConfigError() },
+            title = { Text("Transport Configuration Failed") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearTransportConfigError() }) {
                     Text("OK")
                 }
             },

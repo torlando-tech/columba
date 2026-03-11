@@ -114,18 +114,20 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Interface name
-        OutlinedTextField(
-            value = state.interfaceName,
-            onValueChange = { viewModel.updateInterfaceName(it) },
-            label = { Text("Interface Name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = state.nameError != null,
-            supportingText = state.nameError?.let { { Text(it) } },
-        )
+        // Interface name (not relevant for transport mode)
+        if (!state.transportMode) {
+            OutlinedTextField(
+                value = state.interfaceName,
+                onValueChange = { viewModel.updateInterfaceName(it) },
+                label = { Text("Interface Name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = state.nameError != null,
+                supportingText = state.nameError?.let { { Text(it) } },
+            )
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
+        }
 
         // In custom mode or when using a popular preset, skip showing region/modem/slot summary cards
         // since user is either configuring manually or using preset values
@@ -444,95 +446,98 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                // Airtime limits, interface mode, and framebuffer are not relevant for transport mode
+                if (!state.transportMode) {
+                    Spacer(Modifier.height(16.dp))
 
-                // Airtime limits
-                Text(
-                    "Airtime Limits",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-
-                val maxAirtime = regionLimits?.dutyCycle?.takeIf { it < 100 }
-                val airtimePlaceholder = maxAirtime?.let { "Max: $it%" } ?: "Optional"
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = state.stAlock,
-                        onValueChange = { viewModel.updateStAlock(it) },
-                        label = { Text("Short-term (%)") },
-                        placeholder = { Text(airtimePlaceholder) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        isError = state.stAlockError != null,
-                        supportingText = state.stAlockError?.let { { Text(it) } },
+                    // Airtime limits
+                    Text(
+                        "Airtime Limits",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedTextField(
-                        value = state.ltAlock,
-                        onValueChange = { viewModel.updateLtAlock(it) },
-                        label = { Text("Long-term (%)") },
-                        placeholder = { Text(airtimePlaceholder) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        isError = state.ltAlockError != null,
-                        supportingText = state.ltAlockError?.let { { Text(it) } },
-                    )
-                }
+                    Spacer(Modifier.height(4.dp))
 
-                Spacer(Modifier.height(4.dp))
+                    val maxAirtime = regionLimits?.dutyCycle?.takeIf { it < 100 }
+                    val airtimePlaceholder = maxAirtime?.let { "Max: $it%" } ?: "Optional"
 
-                Text(
-                    if (maxAirtime != null) {
-                        "Regional duty cycle limit: $maxAirtime%. Values above this are not allowed."
-                    } else {
-                        "Limits duty cycle to prevent overuse. Leave empty for no limit."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color =
-                        if (maxAirtime != null) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Interface mode selector
-                InterfaceModeSelector(
-                    selectedMode = state.interfaceMode,
-                    onModeChange = { viewModel.updateInterfaceMode(it) },
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Display logo on RNode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Display Logo on RNode",
-                            style = MaterialTheme.typography.bodyLarge,
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = state.stAlock,
+                            onValueChange = { viewModel.updateStAlock(it) },
+                            label = { Text("Short-term (%)") },
+                            placeholder = { Text(airtimePlaceholder) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = state.stAlockError != null,
+                            supportingText = state.stAlockError?.let { { Text(it) } },
                         )
-                        Text(
-                            "Show Columba logo on RNode's display when connected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        OutlinedTextField(
+                            value = state.ltAlock,
+                            onValueChange = { viewModel.updateLtAlock(it) },
+                            label = { Text("Long-term (%)") },
+                            placeholder = { Text(airtimePlaceholder) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = state.ltAlockError != null,
+                            supportingText = state.ltAlockError?.let { { Text(it) } },
                         )
                     }
-                    Spacer(Modifier.width(16.dp))
-                    Switch(
-                        checked = state.enableFramebuffer,
-                        onCheckedChange = { viewModel.updateEnableFramebuffer(it) },
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        if (maxAirtime != null) {
+                            "Regional duty cycle limit: $maxAirtime%. Values above this are not allowed."
+                        } else {
+                            "Limits duty cycle to prevent overuse. Leave empty for no limit."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color =
+                            if (maxAirtime != null) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Interface mode selector
+                    InterfaceModeSelector(
+                        selectedMode = state.interfaceMode,
+                        onModeChange = { viewModel.updateInterfaceMode(it) },
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Display logo on RNode toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Display Logo on RNode",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Text(
+                                "Show Columba logo on RNode's display when connected",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Switch(
+                            checked = state.enableFramebuffer,
+                            onCheckedChange = { viewModel.updateEnableFramebuffer(it) },
+                        )
+                    }
                 }
             }
         }

@@ -1418,7 +1418,6 @@ class TestOnLXMFDelivery(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         mock_router = Mock()
-        mock_router.pending_inbound = []
         wrapper.router = mock_router
 
         mock_kotlin_callback = Mock()
@@ -1431,6 +1430,12 @@ class TestOnLXMFDelivery(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash123456789'
+        # Prevent MagicMock auto-creating signal attributes as MagicMock objects
+        mock_message._columba_rssi = None
+        mock_message._columba_snr = None
+
+        # Pre-populate pending_inbound as the LXMF router would before the callback fires
+        mock_router.pending_inbound = [mock_message]
 
         wrapper._on_lxmf_delivery(mock_message)
 
@@ -1445,7 +1450,6 @@ class TestOnLXMFDelivery(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         mock_router = Mock()
-        mock_router.pending_inbound = []
         wrapper.router = mock_router
 
         mock_kotlin_callback = Mock(side_effect=Exception("Callback failed"))
@@ -1458,6 +1462,12 @@ class TestOnLXMFDelivery(unittest.TestCase):
         mock_message.timestamp = 1234567890
         mock_message.fields = None
         mock_message.hash = b'msghash123456789'
+        # Prevent MagicMock auto-creating signal attributes as MagicMock objects
+        mock_message._columba_rssi = None
+        mock_message._columba_snr = None
+
+        # Pre-populate pending_inbound as the LXMF router would before the callback fires
+        mock_router.pending_inbound = [mock_message]
 
         wrapper._on_lxmf_delivery(mock_message)
 

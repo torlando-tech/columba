@@ -18,6 +18,7 @@ import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.service.state.ServiceState
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages foreground service notification for ReticulumService.
@@ -56,8 +57,15 @@ class ServiceNotificationManager(
     private var currentSyncProgress: Float = 0f
     private var lastNetworkStatus: String = "READY"
 
-    // Track RNode online status: null = no RNode configured, false = disconnected, true = online
-    private var rnodeOnline: Boolean? = null
+    // Track per-interface RNode disconnect state. Thread-safe because startForeground()
+    // (which reads this via getStatusTexts()) can be called from any thread, while mutations
+    // are posted to mainHandler.
+    private val disconnectedRNodeInterfaces: MutableSet<String> =
+        ConcurrentHashMap.newKeySet()
+
+    // Debounce heads-up disconnect alerts to avoid notification spam on flaky BLE connections
+    private var lastDisconnectNotifyMs: Long = 0L
+    private val disconnectNotifyCooldownMs = 10_000L
 
     // Watchdog: auto-reset sync notification if Python never sends a terminal state.
     // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
@@ -213,25 +221,34 @@ class ServiceNotificationManager(
         interfaceName: String,
     ) {
         mainHandler.post {
-            rnodeOnline = online
-
             if (!online) {
-                // Post heads-up disconnect alert
-                val pendingIntent = createContentIntent()
-                val alert =
-                    NotificationCompat
-                        .Builder(context, CHANNEL_ID_RNODE)
-                        .setSmallIcon(R.mipmap.ic_launcher)
-                        .setContentTitle("RNode Disconnected")
-                        .setContentText("$interfaceName lost connection. Attempting to reconnect...")
-                        .setContentIntent(pendingIntent)
-                        .setAutoCancel(true)
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setCategory(NotificationCompat.CATEGORY_STATUS)
-                        .build()
-                notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                disconnectedRNodeInterfaces.add(interfaceName)
             } else {
-                // RNode reconnected — dismiss the alert
+                disconnectedRNodeInterfaces.remove(interfaceName)
+            }
+
+            if (disconnectedRNodeInterfaces.isNotEmpty()) {
+                // Post heads-up disconnect alert (debounced to avoid spam on flaky BLE)
+                val now = System.currentTimeMillis()
+                if (now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs) {
+                    lastDisconnectNotifyMs = now
+                    val pendingIntent = createContentIntent()
+                    val names = disconnectedRNodeInterfaces.joinToString(", ")
+                    val alert =
+                        NotificationCompat
+                            .Builder(context, CHANNEL_ID_RNODE)
+                            .setSmallIcon(R.mipmap.ic_launcher)
+                            .setContentTitle("RNode Disconnected")
+                            .setContentText("$names lost connection. Attempting to reconnect...")
+                            .setContentIntent(pendingIntent)
+                            .setAutoCancel(true)
+                            .setPriority(NotificationCompat.PRIORITY_HIGH)
+                            .setCategory(NotificationCompat.CATEGORY_STATUS)
+                            .build()
+                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                }
+            } else {
+                // All RNode interfaces are online — dismiss the alert
                 notificationManager.cancel(NOTIFICATION_ID_RNODE)
             }
 
@@ -419,7 +436,7 @@ class ServiceNotificationManager(
             }
 
         // Append RNode status when network is otherwise healthy
-        if (networkStatus == "READY" && rnodeOnline == false) {
+        if (networkStatus == "READY" && disconnectedRNodeInterfaces.isNotEmpty()) {
             detailText += " (RNode disconnected)"
         }
 

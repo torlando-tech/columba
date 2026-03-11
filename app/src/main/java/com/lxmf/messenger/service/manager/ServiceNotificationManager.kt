@@ -63,9 +63,12 @@ class ServiceNotificationManager(
     private val disconnectedRNodeInterfaces: MutableSet<String> =
         ConcurrentHashMap.newKeySet()
 
-    // Debounce heads-up disconnect alerts to avoid notification spam on flaky BLE connections
+    // Debounce heads-up disconnect alerts to avoid notification spam on flaky BLE connections.
+    // The debounce only controls whether the notification triggers a heads-up overlay (sound +
+    // vibration); content-only updates are always posted silently via notify() with the same ID.
     private var lastDisconnectNotifyMs: Long = 0L
     private val disconnectNotifyCooldownMs = 10_000L
+    private var rnodeAlertVisible = false
 
     // Watchdog: auto-reset sync notification if Python never sends a terminal state.
     // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
@@ -228,29 +231,36 @@ class ServiceNotificationManager(
             }
 
             if (disconnectedRNodeInterfaces.isNotEmpty()) {
-                // Post heads-up disconnect alert (debounced to avoid spam on flaky BLE)
+                val pendingIntent = createContentIntent()
+                val names = disconnectedRNodeInterfaces.joinToString(", ")
+                val alert =
+                    NotificationCompat
+                        .Builder(context, CHANNEL_ID_RNODE)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle("RNode Disconnected")
+                        .setContentText("$names lost connection. Attempting to reconnect...")
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setCategory(NotificationCompat.CATEGORY_STATUS)
+                        .build()
+
+                // Debounce only controls the initial heads-up posting (sound + vibration).
+                // Content-only updates (notify with same ID while visible) are silent.
+                // Also always post if the alert was dismissed (autoCancel tap or reconnect).
                 val now = System.currentTimeMillis()
-                if (now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs) {
+                if (!rnodeAlertVisible ||
+                    now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs
+                ) {
                     lastDisconnectNotifyMs = now
-                    val pendingIntent = createContentIntent()
-                    val names = disconnectedRNodeInterfaces.joinToString(", ")
-                    val alert =
-                        NotificationCompat
-                            .Builder(context, CHANNEL_ID_RNODE)
-                            .setSmallIcon(R.mipmap.ic_launcher)
-                            .setContentTitle("RNode Disconnected")
-                            .setContentText("$names lost connection. Attempting to reconnect...")
-                            .setContentIntent(pendingIntent)
-                            .setAutoCancel(true)
-                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                            .setCategory(NotificationCompat.CATEGORY_STATUS)
-                            .build()
-                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
                 }
+                notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                rnodeAlertVisible = true
             } else {
                 // All RNode interfaces are online — dismiss the alert
                 notificationManager.cancel(NOTIFICATION_ID_RNODE)
-                lastDisconnectNotifyMs = 0L // reset so next disconnect always alerts
+                rnodeAlertVisible = false
+                lastDisconnectNotifyMs = 0L
             }
 
             // Refresh the foreground notification so status text reflects RNode state

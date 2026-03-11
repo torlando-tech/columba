@@ -179,24 +179,42 @@ class ServiceNotificationManagerRNodeTest {
     }
 
     @Test
-    fun `second interface disconnect within cooldown is suppressed while alert visible`() {
-        // First interface disconnects — notification posted
+    fun `second interface disconnect within cooldown updates notification content silently`() {
+        // First interface disconnects — notification posted with BLE name
         serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
         drainMainLooper()
-        val firstNotification = getRNodeNotification()
-        assertNotNull("First disconnect should post notification", firstNotification)
+        assertNotNull("First disconnect should post notification", getRNodeNotification())
 
-        // Second interface disconnects while first alert is still visible —
-        // debounce suppresses the re-post (no extra heads-up sound/vibration)
+        // Second interface disconnects — content should update to show both names
         serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[USB]")
         drainMainLooper()
 
-        // State is still tracked correctly even if the alert wasn't re-posted
-        val notification = serviceNotificationManager.createNotification("READY")
-        val bigText = notification.extras.getString("android.bigText") ?: ""
+        val notification = getRNodeNotification()
+        assertNotNull("Notification should still exist", notification)
+        val text = notification.extras.getString("android.text") ?: ""
         assertTrue(
-            "Both interfaces should be tracked as disconnected",
-            bigText.contains("(RNode disconnected)"),
+            "Notification body should list both disconnected interfaces",
+            text.contains("RNodeInterface[BLE]") && text.contains("RNodeInterface[USB]"),
+        )
+    }
+
+    @Test
+    fun `partial reconnect updates notification to show only remaining disconnected interface`() {
+        // Disconnect both
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[USB]")
+        drainMainLooper()
+
+        // BLE reconnects — notification should update to show only USB
+        serviceNotificationManager.updateRNodeStatus(true, "RNodeInterface[BLE]")
+        drainMainLooper()
+
+        val notification = getRNodeNotification()
+        assertNotNull("Notification should remain for USB", notification)
+        val text = notification.extras.getString("android.text") ?: ""
+        assertTrue(
+            "Notification should show only USB after BLE reconnects",
+            text.contains("RNodeInterface[USB]") && !text.contains("RNodeInterface[BLE]"),
         )
     }
 }

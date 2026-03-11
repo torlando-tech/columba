@@ -52,6 +52,7 @@ class MessageCollector
     ) {
         companion object {
             private const val TAG = "MessageCollector"
+            private const val PRESEED_WINDOW_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
         }
 
         // Application-scoped coroutine for background message collection
@@ -83,6 +84,20 @@ class MessageCollector
 
             // Collect messages from the Reticulum protocol
             scope.launch {
+                // Pre-seed processedMessageIds with recent received messages from the DB.
+                // This prevents duplicate notifications when messages are replayed via SharedFlow
+                // or re-broadcast by drainPendingMessages() after a service restart.
+                // Bounded to last 30 days to avoid unbounded memory growth.
+                // Done inside the collection coroutine to ensure it completes before we subscribe.
+                try {
+                    val thirtyDaysAgo = System.currentTimeMillis() - PRESEED_WINDOW_MS
+                    val existingIds = conversationRepository.getReceivedMessageIds(since = thirtyDaysAgo)
+                    processedMessageIds.addAll(existingIds)
+                    Log.i(TAG, "Pre-seeded ${existingIds.size} existing message IDs for notification dedup")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to pre-seed message IDs - duplicate notifications may occur", e)
+                }
+
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
                         // De-duplicate: Skip if we've already processed this message in-memory

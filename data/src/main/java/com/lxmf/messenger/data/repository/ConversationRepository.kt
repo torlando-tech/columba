@@ -514,6 +514,17 @@ class ConversationRepository
         }
 
         /**
+         * Get IDs of recent received messages for the active identity.
+         * Used to pre-seed the notification dedup cache at startup so that
+         * replayed/re-broadcast messages don't trigger duplicate notifications.
+         * Bounded to [since] to avoid unbounded memory growth.
+         */
+        suspend fun getReceivedMessageIds(since: Long): List<String> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return messageDao.getReceivedMessageIds(activeIdentity.identityHash, since)
+        }
+
+        /**
          * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
          * Returns a Flow that emits whenever the message changes in the database.
          */

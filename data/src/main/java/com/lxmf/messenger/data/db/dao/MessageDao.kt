@@ -163,6 +163,17 @@ interface MessageDao {
     ): PagingSource<Int, MessageEntity>
 
     /**
+     * Get IDs of received (not from me) messages for an identity since a cutoff time.
+     * Used to pre-seed duplicate notification prevention cache at startup.
+     * Bounded to recent messages to avoid unbounded memory growth.
+     */
+    @Query("SELECT id FROM messages WHERE identityHash = :identityHash AND isFromMe = 0 AND timestamp >= :since")
+    suspend fun getReceivedMessageIds(
+        identityHash: String,
+        since: Long,
+    ): List<String>
+
+    /**
      * Get all messages for an identity (sync, for export).
      */
     @Query("SELECT * FROM messages WHERE identityHash = :identityHash ORDER BY COALESCE(receivedAt, timestamp) ASC")

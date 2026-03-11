@@ -19,6 +19,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -74,6 +75,7 @@ import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
@@ -83,6 +85,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
@@ -109,6 +113,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -333,6 +338,9 @@ fun MessagingScreen(
     val voiceMessageViewModel: VoiceMessageViewModel = hiltViewModel()
     val recordingState by voiceMessageViewModel.recordingState.collectAsStateWithLifecycle()
     val voiceCoroutineScope = rememberCoroutineScope()
+
+    // Pending voice recording awaiting user confirmation (preview state)
+    var pendingVoiceRecording by remember { mutableStateOf<com.lxmf.messenger.audio.VoiceRecording?>(null) }
 
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
     val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
@@ -1299,6 +1307,8 @@ fun MessagingScreen(
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
                     hasTextOrAttachments = messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty(),
                     isRecording = recordingState.isRecording,
+                    recordingDurationMs = recordingState.durationMs,
+                    pendingVoiceRecording = pendingVoiceRecording,
                     onMicPress = {
                         if (AudioPermissionManager.hasPermission(context)) {
                             voiceMessageViewModel.startRecording()
@@ -1307,15 +1317,21 @@ fun MessagingScreen(
                         }
                     },
                     onMicRelease = {
-                        // stopRecording() is a suspend fun (dispatches AudioRecord.stop() to
-                        // IO thread to avoid ANR). Must be launched in a coroutine.
                         voiceCoroutineScope.launch {
                             val recording = voiceMessageViewModel.stopRecording()
                             if (recording != null) {
-                                viewModel.sendMessage(destinationHash, "", voiceRecording = recording)
+                                pendingVoiceRecording = recording
                             }
-                            // If null: recording was < 300ms, silently discarded
                         }
+                    },
+                    onVoiceSend = {
+                        pendingVoiceRecording?.let { recording ->
+                            viewModel.sendMessage(destinationHash, "", voiceRecording = recording)
+                            pendingVoiceRecording = null
+                        }
+                    },
+                    onVoiceDiscard = {
+                        pendingVoiceRecording = null
                     },
                 )
 
@@ -2102,6 +2118,17 @@ fun MessageBubble(
                             }
                         }
 
+                        // Display voice message if present (LXMF field 7 = AUDIO)
+                        if (message.hasAudioAttachment) {
+                            VoiceMessageBubble(
+                                durationMs = message.audioDurationMs ?: 0L,
+                                waveformPeaks = message.audioWaveform,
+                                isFromMe = isFromMe,
+                                fieldsJson = message.fieldsJson,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
                         if (message.hasFileAttachments) {
                             message.fileAttachments.forEach { fileAttachment ->
@@ -2119,11 +2146,14 @@ fun MessageBubble(
                             }
                         }
 
-                        LinkifiedMessageText(
-                            text = message.content,
-                            isFromMe = isFromMe,
-                            fontScale = fontScale,
-                        )
+                        // Hide text for voice-only messages (content is " " for Sideband compat)
+                        if (!(message.hasAudioAttachment && message.content.isBlank())) {
+                            LinkifiedMessageText(
+                                text = message.content,
+                                isFromMe = isFromMe,
+                                fontScale = fontScale,
+                            )
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2257,8 +2287,12 @@ fun MessageInputBar(
     isAttachmentPanelActive: Boolean = false,
     hasTextOrAttachments: Boolean = false,
     isRecording: Boolean = false,
+    recordingDurationMs: Long = 0L,
+    pendingVoiceRecording: com.lxmf.messenger.audio.VoiceRecording? = null,
     onMicPress: () -> Unit = {},
     onMicRelease: () -> Unit = {},
+    onVoiceSend: () -> Unit = {},
+    onVoiceDiscard: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2387,104 +2421,174 @@ fun MessageInputBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // BasicTextField with contentReceiver for keyboard GIFs and clipboard paste
-                val isError = messageText.length >= ValidationConstants.MAX_MESSAGE_LENGTH - 20
-                val borderColor =
-                    when {
-                        isError -> MaterialTheme.colorScheme.error
-                        else -> Color.Transparent
-                    }
-
-                Box(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp, max = 120.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainerHighest,
-                                RoundedCornerShape(24.dp),
-                            ).border(1.dp, borderColor, RoundedCornerShape(24.dp))
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    BasicTextField(
-                        state = textFieldState,
+                if (isRecording) {
+                    // Recording indicator: replaces text field during recording
+                    Box(
                         modifier =
                             Modifier
-                                .fillMaxWidth()
-                                .contentReceiver { transferableContent ->
-                                    // Check if content contains images
-                                    if (!transferableContent.hasMediaType(MediaType.Image)) {
-                                        return@contentReceiver transferableContent
-                                    }
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.errorContainer,
+                                    RoundedCornerShape(24.dp),
+                                ).padding(horizontal = 16.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // Pulsing red dot
+                            val infiniteTransition = rememberInfiniteTransition(label = "recording")
+                            val alpha by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 0.2f,
+                                animationSpec =
+                                    infiniteRepeatable(
+                                        animation = tween(600, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse,
+                                    ),
+                                label = "recordingDot",
+                            )
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(12.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.error.copy(alpha = alpha),
+                                            CircleShape,
+                                        ),
+                            )
 
-                                    // Process image content from keyboard or clipboard
-                                    val clipData = transferableContent.clipEntry.clipData
-                                    for (i in 0 until clipData.itemCount) {
-                                        val item = clipData.getItemAt(i)
-                                        val uri = item.uri
-                                        if (uri != null) {
-                                            scope.launch(Dispatchers.IO) {
-                                                val result =
-                                                    ImageUtils.compressImagePreservingAnimation(
-                                                        context,
-                                                        uri,
-                                                    )
-                                                result?.let { compressed ->
-                                                    withContext(Dispatchers.Main) {
-                                                        onImageContentReceived(
-                                                            compressed.data,
-                                                            compressed.format,
-                                                            compressed.isAnimated,
+                            // Duration display
+                            val seconds = (recordingDurationMs / 1000).toInt()
+                            val minutes = seconds / 60
+                            val remainingSeconds = seconds % 60
+                            Text(
+                                text = "%d:%02d".format(minutes, remainingSeconds),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+
+                            Text(
+                                text = "Recording...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                } else if (pendingVoiceRecording != null) {
+                    // Voice recording preview with playback
+                    VoicePreviewBar(
+                        recording = pendingVoiceRecording,
+                        onSend = onVoiceSend,
+                        onDiscard = onVoiceDiscard,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    // BasicTextField with contentReceiver for keyboard GIFs and clipboard paste
+                    val isError = messageText.length >= ValidationConstants.MAX_MESSAGE_LENGTH - 20
+                    val borderColor =
+                        when {
+                            isError -> MaterialTheme.colorScheme.error
+                            else -> Color.Transparent
+                        }
+
+                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp, max = 120.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    RoundedCornerShape(24.dp),
+                                ).border(1.dp, borderColor, RoundedCornerShape(24.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        BasicTextField(
+                            state = textFieldState,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .contentReceiver { transferableContent ->
+                                        // Check if content contains images
+                                        if (!transferableContent.hasMediaType(MediaType.Image)) {
+                                            return@contentReceiver transferableContent
+                                        }
+
+                                        // Process image content from keyboard or clipboard
+                                        val clipData = transferableContent.clipEntry.clipData
+                                        for (i in 0 until clipData.itemCount) {
+                                            val item = clipData.getItemAt(i)
+                                            val uri = item.uri
+                                            if (uri != null) {
+                                                scope.launch(Dispatchers.IO) {
+                                                    val result =
+                                                        ImageUtils.compressImagePreservingAnimation(
+                                                            context,
+                                                            uri,
                                                         )
+                                                    result?.let { compressed ->
+                                                        withContext(Dispatchers.Main) {
+                                                            onImageContentReceived(
+                                                                compressed.data,
+                                                                compressed.format,
+                                                                compressed.isAnimated,
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
+                                        null // Content consumed
+                                    },
+                            textStyle =
+                                MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions =
+                                KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.Sentences,
+                                ),
+                            lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
+                            decorator = { innerTextField ->
+                                Box {
+                                    if (textFieldState.text.isEmpty()) {
+                                        Text(
+                                            text = "Type a message...",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
-                                    null // Content consumed
-                                },
-                        textStyle =
-                            MaterialTheme.typography.bodyLarge.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                            ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions =
-                            KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences,
-                            ),
-                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
-                        decorator = { innerTextField ->
-                            Box {
-                                if (textFieldState.text.isEmpty()) {
-                                    Text(
-                                        text = "Type a message...",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                    innerTextField()
                                 }
-                                innerTextField()
-                            }
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
 
-                // Attachment panel toggle button - always visible
-                IconButton(
-                    onClick = onAttachmentPanelToggle,
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .padding(0.dp),
-                ) {
-                    Icon(
-                        imageVector = if (isAttachmentPanelActive) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription = if (isAttachmentPanelActive) "Close attachments" else "Attach",
-                        modifier = Modifier.size(24.dp),
-                    )
+                // Hide attachment and send/mic buttons during recording and preview
+                // (recording indicator and preview bar have their own controls)
+                if (!isRecording && pendingVoiceRecording == null) {
+                    // Attachment panel toggle button
+                    IconButton(
+                        onClick = onAttachmentPanelToggle,
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .padding(0.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isAttachmentPanelActive) Icons.Default.Close else Icons.Default.Add,
+                            contentDescription = if (isAttachmentPanelActive) "Close attachments" else "Attach",
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                 }
 
-                if (hasTextOrAttachments || isRecording) {
-                    // Send button: visible when there is text/attachments or actively recording
+                if (hasTextOrAttachments && pendingVoiceRecording == null) {
+                    // Send button: visible when there is text/attachments
                     FilledIconButton(
                         onClick = onSendClick,
                         enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
@@ -2511,10 +2615,14 @@ fun MessageInputBar(
                             )
                         }
                     }
-                } else {
-                    // Mic button: visible when text field is empty and no attachments
-                    IconButton(
-                        onClick = { /* no-op: gesture handled by pointerInput */ },
+                } else if (pendingVoiceRecording == null) {
+                    // Mic button: visible when no text/attachments and no pending recording.
+                    // MUST remain in composition during recording so tryAwaitRelease() can
+                    // detect finger lift and fire onMicRelease.
+                    // Uses Box instead of IconButton because IconButton's internal
+                    // clickable modifier consumes touch events before pointerInput
+                    // can detect press/release for hold-to-record.
+                    Box(
                         modifier =
                             Modifier
                                 .size(48.dp)
@@ -2527,10 +2635,12 @@ fun MessageInputBar(
                                         },
                                     )
                                 },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Mic,
                             contentDescription = "Hold to record voice message",
+                            modifier = Modifier.size(24.dp),
                             tint =
                                 if (isRecording) {
                                     MaterialTheme.colorScheme.error
@@ -2542,6 +2652,263 @@ fun MessageInputBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * Preview bar shown in [MessageInputBar] after recording completes.
+ * Allows playback, discard, and send of the recorded voice message.
+ */
+@Composable
+fun VoicePreviewBar(
+    recording: com.lxmf.messenger.audio.VoiceRecording,
+    onSend: () -> Unit,
+    onDiscard: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    val player =
+        remember {
+            com.lxmf.messenger.audio
+                .VoiceMessagePlayer()
+        }
+    val playbackState by player.state.collectAsState()
+
+    DisposableEffect(Unit) {
+        onDispose { player.stop() }
+    }
+
+    Box(
+        modifier =
+            modifier
+                .heightIn(min = 48.dp)
+                .background(
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    RoundedCornerShape(24.dp),
+                ).padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Discard button
+            IconButton(onClick = {
+                player.stop()
+                onDiscard()
+            }, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Discard recording",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            // Play/pause button
+            IconButton(
+                onClick = {
+                    if (playbackState.isPlaying) {
+                        player.stop()
+                    } else {
+                        scope.launch { player.play(recording.audioBytes, recording.durationMs) }
+                    }
+                },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector =
+                        if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+
+            // Duration
+            val seconds = (recording.durationMs / 1000).toInt()
+            Text(
+                text = "%d:%02d".format(seconds / 60, seconds % 60),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+
+            // Waveform with progress overlay
+            val peaks = recording.waveformPeaks
+            val progress = playbackState.progressFraction
+            if (peaks.isNotEmpty()) {
+                WaveformBar(
+                    peaks = peaks,
+                    activeColor = MaterialTheme.colorScheme.primary,
+                    inactiveColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f),
+                    progress = progress,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(32.dp),
+                )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+
+            // Send button
+            FilledIconButton(
+                onClick = {
+                    player.stop()
+                    onSend()
+                },
+                modifier = Modifier.size(36.dp),
+                shape = CircleShape,
+                colors =
+                    IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send voice message",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Waveform bar visualization with optional progress indicator.
+ * Bars before [progress] are drawn in [activeColor], bars after in [inactiveColor].
+ */
+@Composable
+fun WaveformBar(
+    peaks: List<Float>,
+    activeColor: androidx.compose.ui.graphics.Color,
+    inactiveColor: androidx.compose.ui.graphics.Color,
+    progress: Float = 0f,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val bw = 2.5.dp.toPx()
+        val gap = 1.dp.toPx()
+        val step = bw + gap
+        val maxBars = (size.width / step).toInt()
+        val sampled =
+            if (peaks.size > maxBars) {
+                (0 until maxBars).map { i -> peaks[(i * peaks.size.toLong() / maxBars).toInt()] }
+            } else {
+                peaks
+            }
+        val totalBars = sampled.size
+        sampled.forEachIndexed { index, peak ->
+            val h = (peak.coerceIn(0.05f, 1f) * size.height)
+            val x = index * step
+            val color = if (progress > 0f && index < (totalBars * progress).toInt()) activeColor else inactiveColor
+            drawRoundRect(
+                color = color,
+                topLeft =
+                    androidx.compose.ui.geometry
+                        .Offset(x, (size.height - h) / 2),
+                size =
+                    androidx.compose.ui.geometry
+                        .Size(bw, h),
+                cornerRadius =
+                    androidx.compose.ui.geometry
+                        .CornerRadius(bw / 2),
+            )
+        }
+    }
+}
+
+/**
+ * Voice message bubble shown inside [MessageBubble] for messages with audio attachments.
+ * Displays a play/pause button, duration, and waveform visualization.
+ */
+@Composable
+fun VoiceMessageBubble(
+    durationMs: Long,
+    waveformPeaks: List<Float>?,
+    isFromMe: Boolean,
+    fieldsJson: String? = null,
+) {
+    val scope = rememberCoroutineScope()
+    val player =
+        remember {
+            com.lxmf.messenger.audio
+                .VoiceMessagePlayer()
+        }
+    val playbackState by player.state.collectAsState()
+
+    // Extract audio bytes lazily on first play
+    val audioBytes =
+        remember(fieldsJson) {
+            fieldsJson?.let {
+                com.lxmf.messenger.ui.model
+                    .extractAudioBytes(it)
+            }
+        }
+
+    DisposableEffect(Unit) {
+        onDispose { player.stop() }
+    }
+
+    val seconds = (durationMs / 1000).toInt()
+    val barColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.widthIn(min = 180.dp),
+    ) {
+        // Play/pause button
+        IconButton(
+            onClick = {
+                if (playbackState.isPlaying) {
+                    player.stop()
+                } else {
+                    audioBytes?.let { bytes ->
+                        scope.launch { player.play(bytes, durationMs) }
+                    }
+                }
+            },
+            enabled = audioBytes != null,
+            modifier = Modifier.size(32.dp),
+        ) {
+            Icon(
+                imageVector =
+                    if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                modifier = Modifier.size(22.dp),
+                tint = barColor,
+            )
+        }
+
+        // Waveform with progress
+        if (!waveformPeaks.isNullOrEmpty()) {
+            WaveformBar(
+                peaks = waveformPeaks,
+                activeColor = if (isFromMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                inactiveColor = barColor.copy(alpha = 0.3f),
+                progress = playbackState.progressFraction,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(28.dp),
+            )
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        // Duration
+        Text(
+            text = "%d:%02d".format(seconds / 60, seconds % 60),
+            style = MaterialTheme.typography.labelMedium,
+            color = barColor.copy(alpha = 0.7f),
+        )
     }
 }
 

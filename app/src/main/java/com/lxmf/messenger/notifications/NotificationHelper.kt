@@ -8,9 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
 import com.lxmf.messenger.data.model.InterfaceType
@@ -55,6 +58,14 @@ class NotificationHelper
         }
 
         private val notificationManager = NotificationManagerCompat.from(context)
+
+        @VisibleForTesting
+        internal var isAppInForeground: () -> Boolean = {
+            ProcessLifecycleOwner
+                .get()
+                .lifecycle.currentState
+                .isAtLeast(Lifecycle.State.STARTED)
+        }
 
         init {
             createNotificationChannels()
@@ -149,8 +160,10 @@ class NotificationHelper
             // Check permission
             if (!hasNotificationPermission()) return
 
-            // Suppress notification if this conversation is currently active (visible on screen)
-            if (activeConversationManager.activeConversation.value == destinationHash) return
+            // Suppress notification only if this conversation is active AND the app is in the
+            // foreground. When the screen is off or the app is backgrounded, the user can't see
+            // the conversation, so they should still receive the notification.
+            if (isAppInForeground() && activeConversationManager.activeConversation.value == destinationHash) return
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)

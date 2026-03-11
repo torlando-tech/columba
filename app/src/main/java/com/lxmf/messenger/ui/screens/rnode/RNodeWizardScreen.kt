@@ -222,4 +222,18 @@ fun RNodeWizardScreen(
             },
         )
     }
+
+    // Transport config error dialog
+    state.transportConfigError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearTransportConfigError() },
+            title = { Text("Transport Configuration Failed") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearTransportConfigError() }) {
+                    Text("OK")
+                }
+            },
+        )
+    }
 }

@@ -3530,6 +3530,10 @@ class RNodeWizardViewModel
             _state.update { it.copy(saveError = null) }
         }
 
+        fun clearTransportConfigError() {
+            _state.update { it.copy(transportConfigError = null) }
+        }
+
         // ==================== Transport Mode ====================
 
         fun enableTransportMode() {

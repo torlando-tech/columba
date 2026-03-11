@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,7 @@ class ChatsViewModelTest {
         )
 
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var identityResolutionManager: IdentityResolutionManager
 
     @Before
     fun setup() {
@@ -95,6 +97,8 @@ class ChatsViewModelTest {
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
         receivedLocationRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
@@ -115,7 +119,7 @@ class ChatsViewModelTest {
                 reticulumProtocol,
                 propagationNodeManager,
                 receivedLocationRepository,
-                mockk(relaxed = true),
+                identityResolutionManager,
             )
     }
 
@@ -153,7 +157,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             // WhileSubscribed requires active collector - test() provides one
@@ -192,7 +196,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             newViewModel.chatsState.test {
@@ -270,7 +274,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -318,7 +322,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             newViewModel.chatsState.test {
@@ -356,7 +360,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             newViewModel.chatsState.test {
@@ -394,7 +398,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             // When: chatsState is collected
@@ -433,7 +437,7 @@ class ChatsViewModelTest {
                     reticulumProtocol,
                     propagationNodeManager,
                     receivedLocationRepository,
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             // When: Search query is set

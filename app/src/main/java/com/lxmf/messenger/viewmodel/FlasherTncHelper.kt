@@ -90,6 +90,8 @@ internal class FlasherTncHelper(
             if (uri != null) {
                 try {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to read custom firmware URI", e)
                     null
@@ -325,6 +327,8 @@ internal class FlasherTncHelper(
                 if (release != null && flasher.firmwareDownloader.hasFirmwareForBoard(release, board)) {
                     available.add(source)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to check source ${source.id} for ${board.displayName}", e)
                 available.add(source)

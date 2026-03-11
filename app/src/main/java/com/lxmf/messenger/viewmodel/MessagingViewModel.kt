@@ -11,7 +11,6 @@ import androidx.paging.cachedIn
 import androidx.paging.map
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod

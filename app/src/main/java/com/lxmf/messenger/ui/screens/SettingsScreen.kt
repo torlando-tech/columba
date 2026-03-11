@@ -145,19 +145,6 @@ fun SettingsScreen(
             }
         }
 
-    // Refresh background permission state on lifecycle resume (e.g. returning from system settings)
-    DisposableEffect(lifecycleOwner) {
-        val observer =
-            LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    hasForegroundPermission = LocationPermissionManager.hasPermission(context)
-                    hasBackgroundPermission = LocationPermissionManager.hasBackgroundLocationPermission(context)
-                }
-            }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
     // Check for pending crash report on launch
     LaunchedEffect(Unit) {
         if (!LifecycleGuard.isActiveForWindows(lifecycleOwner)) return@LaunchedEffect
@@ -358,33 +345,6 @@ fun SettingsScreen(
                     localIconName = state.iconName,
                     localIconForegroundColor = state.iconForegroundColor,
                     localIconBackgroundColor = state.iconBackgroundColor,
-                    // Background location permission indicator
-                    hasForegroundLocationPermission = hasForegroundPermission,
-                    hasBackgroundLocationPermission = hasBackgroundPermission,
-                    onBackgroundPermissionClick = {
-                        if (hasBackgroundPermission) {
-                            // Already granted — open app info, guide user to Permissions > Location
-                            Toast
-                                .makeText(
-                                    context,
-                                    "Go to Permissions > Location to change",
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                            val intent =
-                                Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.fromParts("package", context.packageName, null),
-                                )
-                            context.startActivity(intent)
-                        } else if (LocationPermissionManager.hasPermission(context)) {
-                            // Foreground granted but not background — show our custom sheet
-                            showBackgroundLocationSheet = true
-                        } else {
-                            // No foreground either — show foreground sheet first
-                            pendingTelemetryAction = null
-                            showTelemetryPermissionSheet = true
-                        }
-                    },
                 )
 
                 MapSourcesCard(

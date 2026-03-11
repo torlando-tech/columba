@@ -56,6 +56,7 @@ import com.lxmf.messenger.reticulum.flasher.RNodeBoard
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FirmwareSelectionStep(
+    availableFirmwareSources: List<FirmwareSource>?,
     selectedFirmwareSource: FirmwareSource,
     customFirmwareUri: Uri?,
     customFirmwareUrl: String,
@@ -103,6 +104,7 @@ fun FirmwareSelectionStep(
         // Firmware source selection
         FirmwareSourceCard(
             selectedSource = selectedFirmwareSource,
+            availableSources = availableFirmwareSources,
             onSourceSelected = onFirmwareSourceSelected,
         )
 
@@ -607,11 +609,12 @@ private fun FirmwareVersionCard(
 @Composable
 private fun FirmwareSourceCard(
     selectedSource: FirmwareSource,
+    availableSources: List<FirmwareSource>?,
     onSourceSelected: (FirmwareSource) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val sources =
-        listOf(
+        availableSources ?: listOf(
             FirmwareSource.Official,
             FirmwareSource.MicroReticulum,
             FirmwareSource.CommunityEdition,

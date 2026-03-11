@@ -101,6 +101,20 @@ class FirmwareDownloader {
         }
 
     /**
+     * Check whether a release contains any firmware asset for the given board.
+     */
+    fun hasFirmwareForBoard(
+        release: GitHubRelease,
+        board: RNodeBoard,
+    ): Boolean {
+        val prefix = board.firmwarePrefix.lowercase()
+        return release.assets.any { asset ->
+            val name = asset.name.lowercase()
+            name.startsWith(prefix) && name.endsWith(".zip")
+        }
+    }
+
+    /**
      * Find firmware asset for a specific board and frequency band.
      *
      * Some firmware files are "unified" and support multiple frequency bands

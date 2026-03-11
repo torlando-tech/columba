@@ -244,6 +244,7 @@ fun RNodeFlasherScreen(
 
                     FlasherStep.FIRMWARE_SELECTION ->
                         FirmwareSelectionStep(
+                            availableFirmwareSources = state.availableFirmwareSources,
                             selectedFirmwareSource = state.selectedFirmwareSource,
                             customFirmwareUri = state.customFirmwareUri,
                             customFirmwareUrl = state.customFirmwareUrl,

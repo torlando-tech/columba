@@ -67,6 +67,7 @@ data class FlasherUiState(
     val detectionError: String? = null,
     val useManualBoardSelection: Boolean = false,
     // Step 3: Firmware Selection
+    val availableFirmwareSources: List<FirmwareSource>? = null, // null = still loading
     val selectedFirmwareSource: FirmwareSource = FirmwareSource.Official,
     val customFirmwareUri: Uri? = null,
     val customFirmwareUrl: String = "",
@@ -380,9 +381,87 @@ class FlasherViewModel
                 it.copy(
                     currentStep = FlasherStep.FIRMWARE_SELECTION,
                     downloadError = null,
+                    availableFirmwareSources = null, // Reset while loading
                 )
             }
+            checkAvailableSources()
             loadAvailableFirmware()
+        }
+
+        /**
+         * Check which firmware sources have firmware for the selected board
+         * by querying each source's latest GitHub release.
+         */
+        private fun checkAvailableSources() {
+            val board = _state.value.selectedBoard
+
+            // If no board selected yet (manual mode), show all sources
+            if (board == null) {
+                _state.update {
+                    it.copy(
+                        availableFirmwareSources =
+                            listOf(
+                                FirmwareSource.Official,
+                                FirmwareSource.MicroReticulum,
+                                FirmwareSource.CommunityEdition,
+                                FirmwareSource.Custom,
+                            ),
+                    )
+                }
+                return
+            }
+
+            val githubSources =
+                listOf(
+                    FirmwareSource.Official,
+                    FirmwareSource.MicroReticulum,
+                    FirmwareSource.CommunityEdition,
+                )
+
+            viewModelScope.launch {
+                val available = mutableListOf<FirmwareSource>()
+
+                for (source in githubSources) {
+                    try {
+                        // Check cached firmware first
+                        val hasCached =
+                            flasher.firmwareRepository
+                                .getFirmwareForBoard(source, board)
+                                .isNotEmpty()
+                        if (hasCached) {
+                            available.add(source)
+                            continue
+                        }
+
+                        // Check GitHub latest release for matching assets
+                        val release = flasher.firmwareDownloader.getLatestRelease(source)
+                        if (release != null && flasher.firmwareDownloader.hasFirmwareForBoard(release, board)) {
+                            available.add(source)
+                        }
+                    } catch (e: Exception) {
+                        // If we can't reach GitHub, include the source to avoid
+                        // falsely hiding it — the real error shows at download time
+                        Log.w(TAG, "Failed to check source ${source.id} for ${board.displayName}", e)
+                        available.add(source)
+                    }
+                }
+                // Custom is always available
+                available.add(FirmwareSource.Custom)
+
+                _state.update { currentState ->
+                    // If the currently selected source is no longer available, switch to Official
+                    val selectedSource =
+                        if (currentState.selectedFirmwareSource in available) {
+                            currentState.selectedFirmwareSource
+                        } else {
+                            FirmwareSource.Official
+                        }
+                    currentState.copy(
+                        availableFirmwareSources = available,
+                        selectedFirmwareSource = selectedSource,
+                    )
+                }
+            }
         }
 
         fun selectFirmwareSource(source: FirmwareSource) {

@@ -902,8 +902,12 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
-                    // Enrich sentInterface on delivery if it wasn't captured at send time
-                    enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    // Enrich sentInterface on delivery if it wasn't captured at send time.
+                    // Skip if transitioning to propagated routing — conversationHash lookup
+                    // would return the wrong (direct) interface.
+                    if (update.status != "retrying_propagated") {
+                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    }
 
                     // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
                     _messagesRefreshTrigger.value++

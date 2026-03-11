@@ -4,6 +4,7 @@
 # reticulum_wrapper.py. All new Python-facing functionality goes here
 # as thin pass-throughs. Business logic goes in Kotlin.
 from interface_lookup import format_interface_name
+from logging_utils import log_debug
 
 
 class RnsApi:
@@ -24,8 +25,8 @@ class RnsApi:
                 if iface is None:
                     return None
                 return format_interface_name(iface)
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug("RnsApi", "get_next_hop_interface_name", f"lookup failed: {e}")
         return None
 
     def get_active_propagation_node_hash(self):
@@ -33,6 +34,6 @@ class RnsApi:
         try:
             if self._router and hasattr(self._router, 'get_outbound_propagation_node'):
                 return self._router.get_outbound_propagation_node()
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug("RnsApi", "get_active_propagation_node_hash", f"lookup failed: {e}")
         return None

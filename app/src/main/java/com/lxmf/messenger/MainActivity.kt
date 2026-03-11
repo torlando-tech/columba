@@ -1475,7 +1475,7 @@ fun ColumbaNavigation(
                                         val flasher =
                                             com.lxmf.messenger.reticulum.flasher
                                                 .RNodeFlasher(context)
-                                        val success = flasher.disableTncMode(usbDeviceId)
+                                        val success = flasher.tncModeController.disableTncMode(usbDeviceId)
                                         isDisablingTransport = false
                                         disableTransportResult = success
                                     }

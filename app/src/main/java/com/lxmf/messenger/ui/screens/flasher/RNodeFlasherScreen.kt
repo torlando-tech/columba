@@ -214,11 +214,15 @@ fun RNodeFlasherScreen(
                     .padding(paddingValues),
         ) {
             // Step indicator (hide during flashing, complete, TNC config, and TNC-only mode)
-            if (!tncConfigOnly &&
-                state.currentStep != FlasherStep.FLASH_PROGRESS &&
-                state.currentStep != FlasherStep.TNC_CONFIGURATION &&
-                state.currentStep != FlasherStep.COMPLETE
-            ) {
+            val showStepIndicator =
+                !tncConfigOnly &&
+                    state.currentStep !in
+                    setOf(
+                        FlasherStep.FLASH_PROGRESS,
+                        FlasherStep.TNC_CONFIGURATION,
+                        FlasherStep.COMPLETE,
+                    )
+            if (showStepIndicator) {
                 FlasherStepIndicator(
                     currentStep = state.currentStep,
                     modifier = Modifier.fillMaxWidth(),

@@ -5,7 +5,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lxmf.messenger.reticulum.flasher.FirmwareDownloader
 import com.lxmf.messenger.reticulum.flasher.FirmwarePackage
 import com.lxmf.messenger.reticulum.flasher.FirmwareSource
 import com.lxmf.messenger.reticulum.flasher.FrequencyBand
@@ -138,6 +137,8 @@ class FlasherViewModel
         private val _state = MutableStateFlow(FlasherUiState())
         val state: StateFlow<FlasherUiState> = _state.asStateFlow()
 
+        private val tncHelper = FlasherTncHelper(context, flasher, _state)
+
         // Flag to skip detection and go straight to manual board selection
         // Used when flashing fresh devices that are already in bootloader mode
         private var skipDetectionMode = false
@@ -245,62 +246,7 @@ class FlasherViewModel
             // re-enumerating on USB after the DFU reboot, and clearing the flag now
             // would let handleUsbDeviceAttached() navigate away from the success screen.
             // The flag is cleared in onCleared() (leaving flasher) and flashAnother().
-            val currentState = _state.value
-
-            // If we just finished TNC configuration
-            if (currentState.currentStep == FlasherStep.TNC_CONFIGURATION) {
-                if (tncConfigOnlyMode) {
-                    // In standalone mode, signal success and let UI pop back
-                    _state.update {
-                        it.copy(
-                            tncConfiguring = false,
-                            tncConfigComplete = true,
-                        )
-                    }
-                } else {
-                    _state.update {
-                        it.copy(
-                            currentStep = FlasherStep.COMPLETE,
-                            tncConfiguring = false,
-                            flashResult = FlashResult.Success(flashState.deviceInfo),
-                        )
-                    }
-                }
-                return
-            }
-
-            // For microReticulum, route to TNC configuration after flash+provision
-            if (currentState.selectedFirmwareSource is FirmwareSource.MicroReticulum) {
-                val defaultRegion =
-                    when (currentState.selectedBand) {
-                        FrequencyBand.BAND_433 ->
-                            com.lxmf.messenger.data.model.FrequencyRegions.regions
-                                .find { it.id == "eu_433" }
-                        else ->
-                            com.lxmf.messenger.data.model.FrequencyRegions.regions
-                                .find { it.id == "us_915" }
-                    }
-                val defaultPreset = com.lxmf.messenger.data.model.ModemPreset.DEFAULT
-                _state.update {
-                    it.copy(
-                        currentStep = FlasherStep.TNC_CONFIGURATION,
-                        isFlashing = false,
-                        needsManualReset = false,
-                        isProvisioning = false,
-                        tncSelectedRegion = defaultRegion,
-                        tncSelectedPreset = defaultPreset,
-                        tncFrequencyMhz =
-                            defaultRegion?.let { r ->
-                                String.format("%.3f", r.frequency / 1_000_000.0)
-                            } ?: "868.0",
-                        tncTxPower = (defaultRegion?.defaultTxPower ?: 17).toString(),
-                        tncBandwidthKhz = (defaultPreset.bandwidth / 1000).toString(),
-                        tncSpreadingFactor = defaultPreset.spreadingFactor.toString(),
-                        tncCodingRate = defaultPreset.codingRate.toString(),
-                    )
-                }
-                return
-            }
+            if (tncHelper.handleFlashComplete(flashState.deviceInfo, tncConfigOnlyMode)) return
 
             _state.update {
                 it.copy(
@@ -480,119 +426,23 @@ class FlasherViewModel
             loadAvailableFirmware()
         }
 
-        /**
-         * Check which firmware sources have firmware for the selected board
-         * by querying each source's latest GitHub release.
-         */
         private fun checkAvailableSources() {
             val board = _state.value.selectedBoard
-
-            // If no board selected yet (manual mode), show all sources
-            if (board == null) {
-                _state.update {
-                    it.copy(
-                        availableFirmwareSources =
-                            listOf(
-                                FirmwareSource.Official,
-                                FirmwareSource.MicroReticulum,
-                                FirmwareSource.CommunityEdition,
-                                FirmwareSource.Custom,
-                            ),
-                    )
-                }
-                return
-            }
-
-            val githubSources =
-                listOf(
-                    FirmwareSource.Official,
-                    FirmwareSource.MicroReticulum,
-                    FirmwareSource.CommunityEdition,
-                )
-
             viewModelScope.launch {
-                val available = mutableListOf<FirmwareSource>()
-
-                for (source in githubSources) {
-                    try {
-                        // Check cached firmware first
-                        val hasCached =
-                            flasher.firmwareRepository
-                                .getFirmwareForBoard(source, board)
-                                .isNotEmpty()
-                        if (hasCached) {
-                            available.add(source)
-                            continue
-                        }
-
-                        // Check GitHub latest release for matching assets
-                        val release = flasher.firmwareDownloader.getLatestRelease(source)
-                        if (release != null && flasher.firmwareDownloader.hasFirmwareForBoard(release, board)) {
-                            available.add(source)
-                        }
-                    } catch (e: Exception) {
-                        // If we can't reach GitHub, include the source to avoid
-                        // falsely hiding it — the real error shows at download time
-                        Log.w(TAG, "Failed to check source ${source.id} for ${board.displayName}", e)
-                        available.add(source)
-                    }
-                }
-                // Custom is always available
-                available.add(FirmwareSource.Custom)
-
-                _state.update { currentState ->
-                    // If the currently selected source is no longer available, switch to Official
-                    val selectedSource =
-                        if (currentState.selectedFirmwareSource in available) {
-                            currentState.selectedFirmwareSource
-                        } else {
-                            FirmwareSource.Official
-                        }
-                    currentState.copy(
-                        availableFirmwareSources = available,
-                        selectedFirmwareSource = selectedSource,
-                    )
-                }
+                tncHelper.checkAvailableSources(board)
             }
         }
 
         fun selectFirmwareSource(source: FirmwareSource) {
-            _state.update {
-                it.copy(
-                    selectedFirmwareSource = source,
-                    selectedFirmware = null,
-                    selectedVersion = null,
-                    customFirmwareUri = null,
-                    customFirmwareUrl = "",
-                    availableFirmware = emptyList(),
-                    availableVersions = emptyList(),
-                )
-            }
-            // Fetch cached firmware + GitHub versions for GitHub-backed sources
+            tncHelper.selectFirmwareSource(source)
             if (source != FirmwareSource.Custom) {
                 loadAvailableFirmware()
             }
         }
 
-        fun setCustomFirmwareUri(uri: Uri) {
-            _state.update {
-                it.copy(
-                    customFirmwareUri = uri,
-                    customFirmwareUrl = "",
-                    selectedFirmware = null,
-                )
-            }
-        }
+        fun setCustomFirmwareUri(uri: Uri) = tncHelper.setCustomFirmware(uri = uri)
 
-        fun setCustomFirmwareUrl(url: String) {
-            _state.update {
-                it.copy(
-                    customFirmwareUrl = url,
-                    customFirmwareUri = null,
-                    selectedFirmware = null,
-                )
-            }
-        }
+        fun setCustomFirmwareUrl(url: String) = tncHelper.setCustomFirmware(url = url)
 
         fun selectBoard(board: RNodeBoard) {
             _state.update {
@@ -766,7 +616,7 @@ class FlasherViewModel
 
                     val success =
                         if (source == FirmwareSource.Custom) {
-                            flashCustomFirmware(device.deviceId, board, band)
+                            tncHelper.flashCustomFirmware(device.deviceId, board, band)
                         } else if (selectedFirmware != null) {
                             // Use cached firmware
                             flasher.flashFirmware(
@@ -801,96 +651,6 @@ class FlasherViewModel
                     }
                 }
             }
-        }
-
-        private suspend fun flashCustomFirmware(
-            deviceId: Int,
-            board: RNodeBoard,
-            band: FrequencyBand,
-        ): Boolean {
-            val currentState = _state.value
-            val uri = currentState.customFirmwareUri
-            val url = currentState.customFirmwareUrl
-
-            // Resolve firmware bytes from URI or URL
-            val firmwareBytes: ByteArray? =
-                if (uri != null) {
-                    try {
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to read custom firmware URI", e)
-                        null
-                    }
-                } else if (url.isNotEmpty()) {
-                    var downloaded: ByteArray? = null
-                    flasher.firmwareDownloader.downloadFromUrl(
-                        url,
-                        object : FirmwareDownloader.DownloadCallback {
-                            override fun onProgress(
-                                bytesDownloaded: Long,
-                                totalBytes: Long,
-                            ) {
-                                val percent =
-                                    if (totalBytes > 0) (bytesDownloaded * 20 / totalBytes).toInt() else 5
-                                _state.update {
-                                    it.copy(
-                                        flashProgress = percent,
-                                        flashMessage = "Downloading: ${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB",
-                                    )
-                                }
-                            }
-
-                            override fun onComplete(data: ByteArray) {
-                                downloaded = data
-                            }
-
-                            override fun onError(error: String) {
-                                Log.e(TAG, "Custom URL download error: $error")
-                            }
-                        },
-                    )
-                    downloaded
-                } else {
-                    null
-                }
-
-            if (firmwareBytes == null) {
-                _state.update {
-                    it.copy(
-                        currentStep = FlasherStep.COMPLETE,
-                        isFlashing = false,
-                        flashResult = FlashResult.Failure("Failed to read custom firmware"),
-                    )
-                }
-                return false
-            }
-
-            // Save to custom cache dir and flash
-            val firmwarePackage =
-                flasher.firmwareRepository.saveFirmware(
-                    FirmwareSource.Custom,
-                    board,
-                    "custom",
-                    band,
-                    firmwareBytes,
-                )
-
-            if (firmwarePackage == null) {
-                _state.update {
-                    it.copy(
-                        currentStep = FlasherStep.COMPLETE,
-                        isFlashing = false,
-                        flashResult = FlashResult.Failure("Failed to save custom firmware"),
-                    )
-                }
-                return false
-            }
-
-            return flasher.flashFirmware(
-                deviceId = deviceId,
-                firmwarePackage = firmwarePackage,
-                consoleImage = flasher.getConsoleImageStream(),
-            )
         }
 
         fun showCancelConfirmation() {
@@ -974,84 +734,29 @@ class FlasherViewModel
 
         // ==================== Step 4d: TNC Configuration ====================
 
-        fun selectTncRegion(region: com.lxmf.messenger.data.model.FrequencyRegion) {
-            _state.update {
-                it.copy(
-                    tncSelectedRegion = region,
-                    tncFrequencyMhz = String.format("%.3f", region.frequency / 1_000_000.0),
-                    tncTxPower = region.defaultTxPower.toString(),
-                )
-            }
-        }
+        fun selectTncRegion(region: com.lxmf.messenger.data.model.FrequencyRegion) = tncHelper.selectTncRegion(region)
 
-        fun selectTncPreset(preset: com.lxmf.messenger.data.model.ModemPreset) {
-            _state.update {
-                it.copy(
-                    tncSelectedPreset = preset,
-                    tncBandwidthKhz = (preset.bandwidth / 1000).toString(),
-                    tncSpreadingFactor = preset.spreadingFactor.toString(),
-                    tncCodingRate = preset.codingRate.toString(),
-                )
-            }
-        }
+        fun selectTncPreset(preset: com.lxmf.messenger.data.model.ModemPreset) = tncHelper.selectTncPreset(preset)
 
-        fun updateTncFrequency(value: String) {
-            _state.update { it.copy(tncFrequencyMhz = value) }
-        }
+        fun updateTncFrequency(value: String) = tncHelper.updateTncFrequency(value)
 
-        fun updateTncBandwidth(value: String) {
-            _state.update { it.copy(tncBandwidthKhz = value) }
-        }
+        fun updateTncBandwidth(value: String) = tncHelper.updateTncBandwidth(value)
 
-        fun updateTncSpreadingFactor(value: String) {
-            _state.update { it.copy(tncSpreadingFactor = value) }
-        }
+        fun updateTncSpreadingFactor(value: String) = tncHelper.updateTncSpreadingFactor(value)
 
-        fun updateTncCodingRate(value: String) {
-            _state.update { it.copy(tncCodingRate = value) }
-        }
+        fun updateTncCodingRate(value: String) = tncHelper.updateTncCodingRate(value)
 
-        fun updateTncTxPower(value: String) {
-            _state.update { it.copy(tncTxPower = value) }
-        }
+        fun updateTncTxPower(value: String) = tncHelper.updateTncTxPower(value)
 
         fun applyTncConfiguration() {
             val device = _state.value.selectedDevice ?: return
             val band = _state.value.selectedBand
-            val currentState = _state.value
-
-            val frequencyHz = ((currentState.tncFrequencyMhz.toDoubleOrNull() ?: 868.0) * 1_000_000).toInt()
-            val bandwidthHz = ((currentState.tncBandwidthKhz.toDoubleOrNull() ?: 125.0) * 1_000).toInt()
-            val sf = currentState.tncSpreadingFactor.toIntOrNull() ?: 8
-            val cr = currentState.tncCodingRate.toIntOrNull() ?: 5
-            val txp = currentState.tncTxPower.toIntOrNull() ?: 17
-
-            Log.i(TAG, "Applying TNC config: freq=${frequencyHz}Hz bw=${bandwidthHz}Hz sf=$sf cr=$cr txp=$txp")
-
-            _state.update { it.copy(tncConfiguring = true, tncConfigError = null) }
-
             viewModelScope.launch {
-                flasher.enableTncMode(
-                    deviceId = device.deviceId,
-                    band = band,
-                    frequency = frequencyHz,
-                    bandwidth = bandwidthHz,
-                    spreadingFactor = sf,
-                    codingRate = cr,
-                    txPower = txp,
-                )
-                // State will be updated by observeFlashState (Complete or Error)
+                tncHelper.applyTncConfiguration(device.deviceId, band)
             }
         }
 
-        fun skipTncConfiguration() {
-            _state.update {
-                it.copy(
-                    currentStep = FlasherStep.COMPLETE,
-                    flashResult = FlashResult.Success(null),
-                )
-            }
-        }
+        fun skipTncConfiguration() = tncHelper.skipTncConfiguration()
 
         // ==================== Step 5: Complete ====================
 

@@ -28,6 +28,7 @@ import org.junit.Test
  * Disable TNC (rnodeconf --normal):
  *   1. CMD_CONF_DELETE(0x54) — 0x00
  */
+@Suppress("NoRelaxedMocks") // KotlinUSBBridge is a system-level USB dependency
 class RNodeTncCommandSequenceTest {
     private lateinit var mockBridge: KotlinUSBBridge
     private lateinit var detector: RNodeDetector

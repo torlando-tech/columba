@@ -211,7 +211,7 @@ fun TncConfigurationStep(
                 ) {
                     Column {
                         Text(
-                            text = "${String.format("%.3f", selectedRegion.frequency / 1_000_000.0)} MHz",
+                            text = "${String.format(java.util.Locale.US, "%.3f", selectedRegion.frequency / 1_000_000.0)} MHz",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                         )

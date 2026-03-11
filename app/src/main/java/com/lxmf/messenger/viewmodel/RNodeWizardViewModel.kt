@@ -3559,7 +3559,7 @@ class RNodeWizardViewModel
 
             viewModelScope.launch {
                 val success =
-                    flasher.enableTncMode(
+                    flasher.tncModeController.enableTncMode(
                         deviceId = usbDevice.deviceId,
                         band = band,
                         frequency = frequencyHz,

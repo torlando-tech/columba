@@ -287,7 +287,7 @@ data class GitHubRelease(
     val version: String
         get() {
             val cleanName = name.removePrefix("v").removePrefix("V").trim()
-            if (cleanName.firstOrNull()?.isDigit() == true) return cleanName
+            if (cleanName.matches(Regex("[\\d.]+"))) return cleanName
             return tagName.removePrefix("v").removePrefix("V")
         }
 }

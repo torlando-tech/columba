@@ -18,6 +18,7 @@ import com.lxmf.messenger.R
 import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.service.state.ServiceState
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages foreground service notification for ReticulumService.
@@ -34,6 +35,10 @@ class ServiceNotificationManager(
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "reticulum_service"
         const val CHANNEL_NAME = "Reticulum Network Service"
+
+        const val NOTIFICATION_ID_RNODE = 1002
+        private const val CHANNEL_ID_RNODE = "rnode_alerts"
+        private const val CHANNEL_NAME_RNODE = "RNode Connection Alerts"
     }
 
     private val notificationManager: NotificationManager by lazy {
@@ -51,6 +56,18 @@ class ServiceNotificationManager(
     @Suppress("unused")
     private var currentSyncProgress: Float = 0f
     private var lastNetworkStatus: String = "READY"
+
+    // Track per-interface RNode disconnect state. Thread-safe because startForeground()
+    // (which reads this via getStatusTexts()) can be called from any thread, while mutations
+    // are posted to mainHandler.
+    private val disconnectedRNodeInterfaces: MutableSet<String> =
+        ConcurrentHashMap.newKeySet()
+
+    // Debounce heads-up disconnect alerts to avoid notification spam on flaky BLE connections.
+    // Only gates fresh postings (notification not in the shade); content-only updates to a
+    // visible notification are always allowed since they don't re-trigger the heads-up overlay.
+    private var lastDisconnectNotifyMs: Long = 0L
+    private val disconnectNotifyCooldownMs = 10_000L
 
     // Watchdog: auto-reset sync notification if Python never sends a terminal state.
     // Timeout is sync timeout (5 min) + 30s buffer to let normal completion arrive first.
@@ -83,6 +100,18 @@ class ServiceNotificationManager(
                     enableVibration(false)
                 }
             notificationManager.createNotificationChannel(channel)
+
+            // RNode disconnect alerts — IMPORTANCE_HIGH for heads-up display
+            val rnodeChannel =
+                NotificationChannel(
+                    CHANNEL_ID_RNODE,
+                    CHANNEL_NAME_RNODE,
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Alerts when an RNode radio loses connection"
+                    setShowBadge(true)
+                }
+            notificationManager.createNotificationChannel(rnodeChannel)
         }
     }
 
@@ -176,6 +205,74 @@ class ServiceNotificationManager(
             currentSyncState = PropagationState.STATE_IDLE
             currentSyncProgress = 0f
             repostNotification(createNotification(lastNetworkStatus))
+        }
+    }
+
+    /**
+     * Update RNode connection status and manage the disconnect alert notification.
+     *
+     * When [online] is false, posts a heads-up notification on the RNode alert channel.
+     * When [online] is true, cancels any existing disconnect alert.
+     * Also refreshes the foreground notification to reflect RNode status.
+     *
+     * @param online True if RNode is online, false if disconnected
+     * @param interfaceName Name of the RNode interface for the notification body
+     */
+    fun updateRNodeStatus(
+        online: Boolean,
+        interfaceName: String,
+    ) {
+        mainHandler.post {
+            if (!online) {
+                disconnectedRNodeInterfaces.add(interfaceName)
+            } else {
+                disconnectedRNodeInterfaces.remove(interfaceName)
+            }
+
+            if (disconnectedRNodeInterfaces.isNotEmpty()) {
+                val pendingIntent = createContentIntent()
+                val names = disconnectedRNodeInterfaces.joinToString(", ")
+                val alert =
+                    NotificationCompat
+                        .Builder(context, CHANNEL_ID_RNODE)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle("RNode Disconnected")
+                        .setContentText("$names lost connection. Attempting to reconnect...")
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setCategory(NotificationCompat.CATEGORY_STATUS)
+                        .build()
+
+                // Query the system for ground truth — covers autoCancel tap, user swipe,
+                // and programmatic cancel without maintaining a stale flag.
+                val isCurrentlyVisible =
+                    notificationManager.activeNotifications
+                        .any { it.id == NOTIFICATION_ID_RNODE }
+
+                if (isCurrentlyVisible) {
+                    // Notification already in the shade — silent content update (no heads-up)
+                    notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                } else {
+                    // Notification not visible — debounce fresh heads-up postings
+                    val now = System.currentTimeMillis()
+                    if (now - lastDisconnectNotifyMs >= disconnectNotifyCooldownMs) {
+                        lastDisconnectNotifyMs = now
+                        notificationManager.notify(NOTIFICATION_ID_RNODE, alert)
+                    }
+                }
+            } else {
+                // All RNode interfaces are online — dismiss the alert
+                notificationManager.cancel(NOTIFICATION_ID_RNODE)
+                lastDisconnectNotifyMs = 0L
+            }
+
+            // Refresh the foreground notification so status text reflects RNode state
+            if (currentSyncState !in
+                PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED
+            ) {
+                repostNotification(createNotification(lastNetworkStatus))
+            }
         }
     }
 
@@ -343,7 +440,7 @@ class ServiceNotificationManager(
                 else -> "Disconnected"
             }
 
-        val detailText =
+        var detailText =
             when {
                 networkStatus == "READY" ->
                     "Background service running. Keep battery optimization disabled for reliable message delivery."
@@ -352,6 +449,11 @@ class ServiceNotificationManager(
                 networkStatus.startsWith("ERROR:") -> networkStatus.substringAfter("ERROR:")
                 else -> statusText
             }
+
+        // Append RNode status when network is otherwise healthy
+        if (networkStatus == "READY" && disconnectedRNodeInterfaces.isNotEmpty()) {
+            detailText += " (RNode disconnected)"
+        }
 
         return Pair(statusText, detailText)
     }

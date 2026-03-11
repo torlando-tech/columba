@@ -379,10 +379,16 @@ class InterfaceConfigManager
          * Generic batched restoration to prevent OOM when loading large tables across the
          * Chaquopy bridge. Fetches records in pages and yields between batches so the GC
          * can reclaim the previous batch's bridge objects.
+         *
+         * Batch size is kept at 200 (not 500) to reduce binder pressure: each batch
+         * serializes to ~20-24KB of JSON over binder IPC. Smaller batches with brief
+         * delays between them prevent saturating the 1MB binder buffer, which otherwise
+         * causes cascading DeadObjectException crashes in Room's multi-instance
+         * invalidation. See: GitHub #647, COLUMBA-14.
          */
         private suspend fun <T> restoreInBatches(
             label: String,
-            batchSize: Int = 500,
+            batchSize: Int = 200,
             fetchBatch: suspend (limit: Int, offset: Int) -> List<T>,
             processBatch: suspend (List<T>) -> Result<Int>,
         ): Int {
@@ -417,6 +423,9 @@ class InterfaceConfigManager
                         if (batchCount < batchSize) {
                             emptyList()
                         } else {
+                            // Brief delay lets the binder buffer drain between batches,
+                            // preventing buffer saturation on devices with slow Python execution.
+                            kotlinx.coroutines.delay(100)
                             yield() // Let GC reclaim previous batch's bridge objects
                             fetchBatch(batchSize, offset)
                         }

@@ -457,9 +457,15 @@ class ServiceReticulumProtocol(
                                 Log.w(TAG, "No alternative relay handler set, providing null")
                                 service?.provideAlternativeRelay(null)
                             }
+                        } catch (e: RemoteException) {
+                            Log.w(TAG, "Service died before alternative relay could be provided", e)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error handling alternative relay request", e)
-                            service?.provideAlternativeRelay(null)
+                            try {
+                                service?.provideAlternativeRelay(null)
+                            } catch (re: RemoteException) {
+                                Log.w(TAG, "Service died during alternative relay error recovery", re)
+                            }
                         }
                     }
                 } catch (e: Exception) {

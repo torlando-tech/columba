@@ -41,6 +41,7 @@ import com.lxmf.messenger.ui.screens.flasher.steps.DeviceSelectionStep
 import com.lxmf.messenger.ui.screens.flasher.steps.FirmwareSelectionStep
 import com.lxmf.messenger.ui.screens.flasher.steps.FlashCompleteStep
 import com.lxmf.messenger.ui.screens.flasher.steps.FlashProgressStep
+import com.lxmf.messenger.ui.screens.flasher.steps.TncConfigurationStep
 import com.lxmf.messenger.viewmodel.FlasherStep
 import com.lxmf.messenger.viewmodel.FlasherViewModel
 
@@ -65,6 +66,7 @@ fun RNodeFlasherScreen(
     onComplete: () -> Unit,
     onNavigateToRNodeWizard: () -> Unit = {},
     skipDetection: Boolean = false,
+    tncConfigOnly: Boolean = false,
     preselectedUsbDeviceId: Int? = null,
     viewModel: FlasherViewModel = hiltViewModel(),
 ) {
@@ -83,6 +85,20 @@ fun RNodeFlasherScreen(
     androidx.compose.runtime.LaunchedEffect(skipDetection) {
         if (skipDetection) {
             viewModel.enableSkipDetectionMode()
+        }
+    }
+
+    // Handle TNC config only mode (standalone transport configuration)
+    androidx.compose.runtime.LaunchedEffect(tncConfigOnly) {
+        if (tncConfigOnly) {
+            viewModel.enableTncConfigOnlyMode()
+        }
+    }
+
+    // In standalone TNC mode, navigate back when config is applied
+    if (state.tncConfigComplete) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            onComplete()
         }
     }
 
@@ -124,10 +140,12 @@ fun RNodeFlasherScreen(
                 title = {
                     Text(
                         when (state.currentStep) {
-                            FlasherStep.DEVICE_SELECTION -> "RNode Flasher"
+                            FlasherStep.DEVICE_SELECTION ->
+                                if (tncConfigOnly) "Configure Transport" else "RNode Flasher"
                             FlasherStep.DEVICE_DETECTION -> "Detecting Device"
                             FlasherStep.FIRMWARE_SELECTION -> "Select Firmware"
                             FlasherStep.FLASH_PROGRESS -> "Flashing..."
+                            FlasherStep.TNC_CONFIGURATION -> "Configure Transport"
                             FlasherStep.COMPLETE -> "Complete"
                         },
                     )
@@ -170,6 +188,7 @@ fun RNodeFlasherScreen(
         bottomBar = {
             // Only show bottom bar for steps that need Next/Continue
             if (state.currentStep != FlasherStep.FLASH_PROGRESS &&
+                state.currentStep != FlasherStep.TNC_CONFIGURATION &&
                 state.currentStep != FlasherStep.COMPLETE
             ) {
                 FlasherBottomBar(
@@ -194,8 +213,10 @@ fun RNodeFlasherScreen(
                     .fillMaxSize()
                     .padding(paddingValues),
         ) {
-            // Step indicator (hide during flashing and complete)
-            if (state.currentStep != FlasherStep.FLASH_PROGRESS &&
+            // Step indicator (hide during flashing, complete, TNC config, and TNC-only mode)
+            if (!tncConfigOnly &&
+                state.currentStep != FlasherStep.FLASH_PROGRESS &&
+                state.currentStep != FlasherStep.TNC_CONFIGURATION &&
                 state.currentStep != FlasherStep.COMPLETE
             ) {
                 FlasherStepIndicator(
@@ -280,6 +301,31 @@ fun RNodeFlasherScreen(
                             needsManualReset = state.needsManualReset,
                             isProvisioning = state.isProvisioning,
                             onDeviceReset = { viewModel.onDeviceReset() },
+                        )
+
+                    FlasherStep.TNC_CONFIGURATION ->
+                        TncConfigurationStep(
+                            frequencyMhz = state.tncFrequencyMhz,
+                            bandwidthKhz = state.tncBandwidthKhz,
+                            spreadingFactor = state.tncSpreadingFactor,
+                            codingRate = state.tncCodingRate,
+                            txPower = state.tncTxPower,
+                            isConfiguring = state.tncConfiguring,
+                            configError = state.tncConfigError,
+                            isStandaloneConfig = state.tncConfigOnly,
+                            onFrequencyChanged = { viewModel.updateTncFrequency(it) },
+                            onBandwidthChanged = { viewModel.updateTncBandwidth(it) },
+                            onSpreadingFactorChanged = { viewModel.updateTncSpreadingFactor(it) },
+                            onCodingRateChanged = { viewModel.updateTncCodingRate(it) },
+                            onTxPowerChanged = { viewModel.updateTncTxPower(it) },
+                            onApply = { viewModel.applyTncConfiguration() },
+                            onSkip = {
+                                if (tncConfigOnly) {
+                                    onNavigateBack()
+                                } else {
+                                    viewModel.skipTncConfiguration()
+                                }
+                            },
                         )
 
                     FlasherStep.COMPLETE ->

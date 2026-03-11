@@ -186,6 +186,59 @@ class RNodeFlasher(
         }
 
     /**
+     * Enable TNC mode on a connected device (used for microReticulum transport configuration).
+     *
+     * Connects to the device, sends radio configuration commands, and saves to EEPROM.
+     *
+     * @return true if configuration succeeded
+     */
+    suspend fun enableTncMode(
+        deviceId: Int,
+        band: FrequencyBand,
+        frequency: Int? = null,
+        bandwidth: Int = 125000,
+        spreadingFactor: Int = 8,
+        codingRate: Int = 5,
+        txPower: Int = 17,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                _flashState.value = FlashState.Progress(50, "Connecting to device...")
+
+                if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
+                    _flashState.value = FlashState.Error("Failed to connect to device")
+                    return@withContext false
+                }
+
+                _flashState.value = FlashState.Progress(60, "Configuring radio parameters...")
+
+                val success =
+                    detector.enableTncMode(
+                        band = band,
+                        frequency = frequency,
+                        bandwidth = bandwidth,
+                        spreadingFactor = spreadingFactor,
+                        codingRate = codingRate,
+                        txPower = txPower,
+                    )
+
+                usbBridge.disconnect()
+
+                if (success) {
+                    _flashState.value = FlashState.Complete(null)
+                } else {
+                    _flashState.value = FlashState.Error("Failed to configure radio parameters")
+                }
+                success
+            } catch (e: Exception) {
+                Log.e(TAG, "TNC mode configuration failed", e)
+                usbBridge.disconnect()
+                _flashState.value = FlashState.Error("Configuration failed: ${e.message}")
+                false
+            }
+        }
+
+    /**
      * Flash firmware to a device.
      *
      * @param deviceId USB device ID to flash

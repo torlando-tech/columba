@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.Card
@@ -42,6 +43,7 @@ fun UsbDeviceActionScreen(
     onNavigateBack: () -> Unit,
     onFlashFirmware: () -> Unit,
     onConfigureRNode: () -> Unit,
+    onConfigureTransport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -113,6 +115,16 @@ fun UsbDeviceActionScreen(
                 title = "Configure RNode",
                 description = "Set up this device as a Reticulum interface",
                 onClick = onConfigureRNode,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Configure Transport option (standalone TNC config)
+            ActionCard(
+                icon = Icons.Default.Router,
+                title = "Configure Transport",
+                description = "Set radio parameters for standalone transport mode",
+                onClick = onConfigureTransport,
             )
         }
     }

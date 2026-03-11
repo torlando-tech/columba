@@ -108,6 +108,36 @@ fun FirmwareSelectionStep(
             onSourceSelected = onFirmwareSourceSelected,
         )
 
+        // microReticulum info note
+        if (selectedFirmwareSource is FirmwareSource.MicroReticulum) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "About microReticulum",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text =
+                            "microReticulum runs an embedded Reticulum transport stack on the device itself. " +
+                                "It operates as a standalone transport node and will not pair with Columba as a radio interface.\n\n" +
+                                "After flashing, you will be prompted to configure the radio parameters for transport mode.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Board selection (only if manual selection enabled)

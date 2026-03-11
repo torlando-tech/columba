@@ -1446,16 +1446,33 @@ fun ColumbaNavigation(
                                         popUpTo("usb_device_action") { inclusive = true }
                                     }
                                 },
+                                onConfigureTransport = {
+                                    val route =
+                                        "rnode_flasher" +
+                                            "?tncConfigOnly=true" +
+                                            "&usbDeviceId=$usbDeviceId" +
+                                            "&usbVendorId=$usbVendorId" +
+                                            "&usbProductId=$usbProductId" +
+                                            "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                    navController.navigate(route) {
+                                        popUpTo("usb_device_action") { inclusive = true }
+                                    }
+                                },
                             )
                         }
 
                         composable(
                             route =
-                                "rnode_flasher?skipDetection={skipDetection}&usbDeviceId={usbDeviceId}" +
+                                "rnode_flasher?skipDetection={skipDetection}&tncConfigOnly={tncConfigOnly}" +
+                                    "&usbDeviceId={usbDeviceId}" +
                                     "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
                             arguments =
                                 listOf(
                                     navArgument("skipDetection") {
+                                        type = NavType.BoolType
+                                        defaultValue = false
+                                    },
+                                    navArgument("tncConfigOnly") {
                                         type = NavType.BoolType
                                         defaultValue = false
                                     },
@@ -1479,6 +1496,7 @@ fun ColumbaNavigation(
                                 ),
                         ) { backStackEntry ->
                             val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
+                            val tncConfigOnly = backStackEntry.arguments?.getBoolean("tncConfigOnly") ?: false
                             val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                             RNodeFlasherScreen(
                                 onNavigateBack = { navController.popBackStack() },
@@ -1487,6 +1505,7 @@ fun ColumbaNavigation(
                                     navController.navigate("rnode_wizard")
                                 },
                                 skipDetection = skipDetection,
+                                tncConfigOnly = tncConfigOnly,
                                 preselectedUsbDeviceId = if (usbDeviceId > 0) usbDeviceId else null,
                             )
                         }

@@ -465,7 +465,6 @@ class TestReactionReceiveCallback(unittest.TestCase):
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
 
         mock_router = MagicMock()
-        mock_router.pending_inbound = []
         wrapper.router = mock_router
 
         wrapper.kotlin_reaction_received_callback = MagicMock()
@@ -482,6 +481,12 @@ class TestReactionReceiveCallback(unittest.TestCase):
                 'reply_to': 'some_message_id'  # Reply, not reaction
             }
         }
+        # Prevent MagicMock auto-creating signal attributes as MagicMock objects
+        mock_message._columba_rssi = None
+        mock_message._columba_snr = None
+
+        # Pre-populate pending_inbound as the LXMF router would before the callback fires
+        mock_router.pending_inbound = [mock_message]
 
         wrapper._on_lxmf_delivery(mock_message)
 
@@ -491,8 +496,8 @@ class TestReactionReceiveCallback(unittest.TestCase):
         # Regular message callback SHOULD be invoked
         wrapper.kotlin_message_received_callback.assert_called_once()
 
-        # Message SHOULD be added to pending_inbound queue
-        self.assertEqual(len(mock_router.pending_inbound), 1)
+        # Message should be removed from pending_inbound after successful callback
+        self.assertEqual(len(mock_router.pending_inbound), 0)
 
     def test_on_lxmf_delivery_handles_callback_error(self):
         """Test that errors in reaction callback don't crash processing"""

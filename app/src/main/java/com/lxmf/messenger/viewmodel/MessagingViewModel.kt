@@ -89,6 +89,7 @@ class MessagingViewModel
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
+        private val identityResolutionManager: com.lxmf.messenger.service.IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -1024,15 +1025,7 @@ class MessagingViewModel
 
             // Request path for this conversation peer if we don't have one
             viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    val destHashBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-                    if (!reticulumProtocol.hasPath(destHashBytes)) {
-                        Log.d(TAG, "Requesting path for conversation ${destinationHash.take(8)}...")
-                        reticulumProtocol.requestPath(destHashBytes)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error requesting path for conversation", e)
-                }
+                identityResolutionManager.requestPathForContact(destinationHash)
             }
 
             // Mark conversation as read when opening

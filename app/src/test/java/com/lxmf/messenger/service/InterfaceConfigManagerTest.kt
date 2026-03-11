@@ -113,6 +113,7 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getTransportNodeEnabled() } returns true
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock
         coEvery { identityRepository.getActiveIdentitySync() } returns null

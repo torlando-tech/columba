@@ -15,6 +15,9 @@ class RnsApi:
         """Return formatted interface name for next hop to destination, or None."""
         try:
             import RNS
+            # Convert Chaquopy jarray to Python bytes for RNS dict key lookups
+            if not isinstance(dest_hash, (bytes, bytearray)):
+                dest_hash = bytes(dest_hash)
             if RNS.Transport.has_path(dest_hash):
                 iface = RNS.Transport.next_hop_interface(dest_hash)
                 if iface is None:

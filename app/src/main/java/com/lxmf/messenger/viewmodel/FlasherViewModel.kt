@@ -95,6 +95,8 @@ data class FlasherUiState(
     val provisioningMessage: String? = null,
     // Step 4d: TNC Configuration (microReticulum)
     val tncConfigOnly: Boolean = false, // standalone config mode (no flashing)
+    val tncSelectedRegion: com.lxmf.messenger.data.model.FrequencyRegion? = null,
+    val tncSelectedPreset: com.lxmf.messenger.data.model.ModemPreset = com.lxmf.messenger.data.model.ModemPreset.DEFAULT,
     val tncFrequencyMhz: String = "868.0",
     val tncBandwidthKhz: String = "125",
     val tncSpreadingFactor: String = "8",
@@ -269,18 +271,32 @@ class FlasherViewModel
 
             // For microReticulum, route to TNC configuration after flash+provision
             if (currentState.selectedFirmwareSource is FirmwareSource.MicroReticulum) {
-                val defaultFreq =
+                val defaultRegion =
                     when (currentState.selectedBand) {
-                        FrequencyBand.BAND_433 -> "433.775"
-                        else -> "868.0"
+                        FrequencyBand.BAND_433 ->
+                            com.lxmf.messenger.data.model.FrequencyRegions.regions
+                                .find { it.id == "eu_433" }
+                        else ->
+                            com.lxmf.messenger.data.model.FrequencyRegions.regions
+                                .find { it.id == "us_915" }
                     }
+                val defaultPreset = com.lxmf.messenger.data.model.ModemPreset.DEFAULT
                 _state.update {
                     it.copy(
                         currentStep = FlasherStep.TNC_CONFIGURATION,
                         isFlashing = false,
                         needsManualReset = false,
                         isProvisioning = false,
-                        tncFrequencyMhz = defaultFreq,
+                        tncSelectedRegion = defaultRegion,
+                        tncSelectedPreset = defaultPreset,
+                        tncFrequencyMhz =
+                            defaultRegion?.let { r ->
+                                String.format("%.3f", r.frequency / 1_000_000.0)
+                            } ?: "868.0",
+                        tncTxPower = (defaultRegion?.defaultTxPower ?: 17).toString(),
+                        tncBandwidthKhz = (defaultPreset.bandwidth / 1000).toString(),
+                        tncSpreadingFactor = defaultPreset.spreadingFactor.toString(),
+                        tncCodingRate = defaultPreset.codingRate.toString(),
                     )
                 }
                 return
@@ -957,6 +973,27 @@ class FlasherViewModel
         }
 
         // ==================== Step 4d: TNC Configuration ====================
+
+        fun selectTncRegion(region: com.lxmf.messenger.data.model.FrequencyRegion) {
+            _state.update {
+                it.copy(
+                    tncSelectedRegion = region,
+                    tncFrequencyMhz = String.format("%.3f", region.frequency / 1_000_000.0),
+                    tncTxPower = region.defaultTxPower.toString(),
+                )
+            }
+        }
+
+        fun selectTncPreset(preset: com.lxmf.messenger.data.model.ModemPreset) {
+            _state.update {
+                it.copy(
+                    tncSelectedPreset = preset,
+                    tncBandwidthKhz = (preset.bandwidth / 1000).toString(),
+                    tncSpreadingFactor = preset.spreadingFactor.toString(),
+                    tncCodingRate = preset.codingRate.toString(),
+                )
+            }
+        }
 
         fun updateTncFrequency(value: String) {
             _state.update { it.copy(tncFrequencyMhz = value) }

@@ -82,6 +82,20 @@ class RoutingManager(
         }
 
     /**
+     * Persist Reticulum's transport data (path table, destinations) to disk.
+     * Called periodically for crash resilience.
+     */
+    fun persistTransportData() {
+        wrapperManager.withWrapper { wrapper ->
+            try {
+                wrapper.callAttr("persist_transport_data")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error persisting transport data", e)
+            }
+        } ?: Log.w(TAG, "persistTransportData called but wrapper is null")
+    }
+
+    /**
      * Get hop count to destination.
      *
      * @param destHash Destination hash bytes

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.util.IdentityQrCodeUtils
@@ -12,6 +13,7 @@ import com.lxmf.messenger.util.validation.IdentityInput
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -77,6 +79,7 @@ class ContactsViewModel
     constructor(
         private val contactRepository: ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val identityResolutionManager: IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ContactsViewModel"
@@ -462,6 +465,9 @@ class ContactsViewModel
                             )
                         if (result.isSuccess) {
                             Log.d(TAG, "Added contact with full identity: $destinationHash")
+                            viewModelScope.launch(Dispatchers.IO) {
+                                identityResolutionManager.requestPathForContact(destinationHash)
+                            }
                             AddContactResult.Success
                         } else {
                             val error = result.exceptionOrNull()?.message ?: "Unknown error"
@@ -485,7 +491,9 @@ class ContactsViewModel
                                 }
                                 is ContactRepository.AddPendingResult.AddedAsPending -> {
                                     Log.d(TAG, "Added pending contact: $destinationHash")
-                                    // TODO: Trigger network path request here when service integration is ready
+                                    viewModelScope.launch(Dispatchers.IO) {
+                                        identityResolutionManager.requestPathForContact(identityInput.destinationHash)
+                                    }
                                     AddContactResult.PendingIdentity
                                 }
                                 null -> {
@@ -518,7 +526,7 @@ class ContactsViewModel
                     val result = contactRepository.resetContactForRetry(destinationHash)
                     if (result.isSuccess) {
                         Log.d(TAG, "Reset contact for retry: $destinationHash")
-                        // TODO: Trigger network path request here when service integration is ready
+                        identityResolutionManager.retryResolution(destinationHash)
                     } else {
                         Log.e(TAG, "Failed to reset contact for retry: ${result.exceptionOrNull()?.message}")
                     }

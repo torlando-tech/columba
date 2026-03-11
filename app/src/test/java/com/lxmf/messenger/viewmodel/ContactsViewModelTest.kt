@@ -82,7 +82,7 @@ class ContactsViewModelTest {
         every { contactRepository.getContactCountFlow() } returns contactCountFlow
         every { propagationNodeManager.currentRelay } returns currentRelayFlow
 
-        viewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+        viewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
     }
 
     @After
@@ -113,7 +113,7 @@ class ContactsViewModelTest {
             val testContactsFlow = MutableStateFlow(listOf(contact1, contact2))
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
 
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             newViewModel.contacts.test {
                 awaitItem() // Initial empty
@@ -324,7 +324,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -361,7 +361,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -393,7 +393,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             // Then: Should be in relay, not pinned - wait for data to propagate
             newViewModel.contactsState.test {
@@ -432,7 +432,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             // Then - wait for data to propagate through the flow chain
             newViewModel.contactsState.test {
@@ -468,7 +468,7 @@ class ContactsViewModelTest {
                     ),
                 )
             every { contactRepository.getEnrichedContacts() } returns testContactsFlow
-            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager)
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, mockk(relaxed = true))
 
             newViewModel.contactsState.test {
                 var groups = awaitItem().groupedContacts

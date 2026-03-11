@@ -95,7 +95,7 @@ class ChatsViewModelTest {
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
-        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager)
+        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager, mockk(relaxed = true))
     }
 
     @After
@@ -124,7 +124,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.chatsState.test {
@@ -154,7 +154,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -223,7 +223,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
             advanceUntilIdle()
 
             newViewModel.chatsState.test {
@@ -262,7 +262,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -291,7 +291,7 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -320,7 +320,7 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(duplicateConversations)
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             // When: chatsState is collected
             newViewModel.chatsState.test {
@@ -350,7 +350,7 @@ class ChatsViewModelTest {
                     ),
                 )
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager)
+            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, mockk(relaxed = true))
 
             // When: Search query is set
             newViewModel.searchQuery.value = "alice"

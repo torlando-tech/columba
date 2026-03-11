@@ -346,6 +346,15 @@ class AnnounceStreamViewModel
                             )
                             announceRepository.setFavorite(destinationHash, true)
                             Log.d(TAG, "Added contact from announce: $destinationHash")
+                            // Request path for the newly added contact
+                            viewModelScope.launch(Dispatchers.IO) {
+                                try {
+                                    val destHashBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                                    reticulumProtocol.requestPath(destHashBytes)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error requesting path for new contact", e)
+                                }
+                            }
                         } else {
                             Log.e(TAG, "Cannot add contact: announce not found for $destinationHash")
                         }

@@ -20,6 +20,8 @@ import javax.inject.Singleton
  * 1. Checks pending contacts against Reticulum's identity cache
  * 2. Requests paths for contacts that need resolution
  * 3. Marks contacts as UNRESOLVED after 24 hours
+ * 4. Persists transport data (paths) for crash resilience
+ * 5. Requests paths for all contacts at startup as a safety net
  */
 @Singleton
 class IdentityResolutionManager
@@ -36,6 +38,12 @@ class IdentityResolutionManager
 
             // Resolution timeout: 24 hours
             private const val RESOLUTION_TIMEOUT_MS = 24 * 60 * 60 * 1000L
+
+            // Stagger path requests to avoid flooding the network
+            private const val PATH_REQUEST_STAGGER_MS = 2_000L
+
+            // Delay before startup sweep to let Reticulum initialize
+            private const val STARTUP_SWEEP_DELAY_MS = 5_000L
         }
 
         private var resolutionJob: Job? = null
@@ -63,6 +71,12 @@ class IdentityResolutionManager
                         delay(CHECK_INTERVAL_MS)
                     }
                 }
+
+            // One-shot startup sweep: request paths for all contacts as a safety net
+            scope.launch(Dispatchers.IO) {
+                delay(STARTUP_SWEEP_DELAY_MS)
+                requestPathsForAllContacts()
+            }
         }
 
         /**
@@ -83,50 +97,125 @@ class IdentityResolutionManager
 
             if (pendingContacts.isEmpty()) {
                 Log.d(TAG, "No pending contacts to resolve")
-                return
+            } else {
+                Log.d(TAG, "Checking ${pendingContacts.size} pending contact(s)")
+
+                val currentTime = System.currentTimeMillis()
+
+                for (contact in pendingContacts) {
+                    try {
+                        // Check if resolution has timed out (24 hours)
+                        val age = currentTime - contact.addedTimestamp
+                        if (age > RESOLUTION_TIMEOUT_MS) {
+                            Log.d(TAG, "Contact ${contact.destinationHash.take(8)}... timed out after 24h")
+                            contactRepository.updateContactStatus(
+                                destinationHash = contact.destinationHash,
+                                status = ContactStatus.UNRESOLVED,
+                            )
+                            continue
+                        }
+
+                        // Try to recall identity from Reticulum's cache
+                        val destHashBytes =
+                            contact.destinationHash
+                                .chunked(2)
+                                .map { it.toInt(16).toByte() }
+                                .toByteArray()
+
+                        val identity = reticulumProtocol.recallIdentity(destHashBytes)
+
+                        if (identity != null && identity.publicKey != null) {
+                            // Identity found! Update the contact
+                            Log.i(TAG, "Resolved identity for ${contact.destinationHash.take(8)}...")
+                            contactRepository.updateContactWithIdentity(
+                                destinationHash = contact.destinationHash,
+                                publicKey = identity.publicKey,
+                            )
+                        } else {
+                            // Not in cache, request path to trigger network search
+                            Log.d(TAG, "Requesting path for ${contact.destinationHash.take(8)}...")
+                            reticulumProtocol.requestPath(destHashBytes)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing contact ${contact.destinationHash.take(8)}...", e)
+                    }
+                }
             }
 
-            Log.d(TAG, "Checking ${pendingContacts.size} pending contact(s)")
+            // Periodically persist transport data (paths, destinations) to survive process kills
+            try {
+                reticulumProtocol.persistTransportData()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error persisting transport data", e)
+            }
+        }
 
-            val currentTime = System.currentTimeMillis()
+        /**
+         * Request a path for a single contact if one doesn't already exist.
+         * Used when adding a new contact or opening a conversation.
+         */
+        suspend fun requestPathForContact(destinationHash: String) {
+            try {
+                val destHashBytes =
+                    destinationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
 
-            for (contact in pendingContacts) {
-                try {
-                    // Check if resolution has timed out (24 hours)
-                    val age = currentTime - contact.addedTimestamp
-                    if (age > RESOLUTION_TIMEOUT_MS) {
-                        Log.d(TAG, "Contact ${contact.destinationHash.take(8)}... timed out after 24h")
-                        contactRepository.updateContactStatus(
-                            destinationHash = contact.destinationHash,
-                            status = ContactStatus.UNRESOLVED,
-                        )
-                        continue
-                    }
-
-                    // Try to recall identity from Reticulum's cache
-                    val destHashBytes =
-                        contact.destinationHash
-                            .chunked(2)
-                            .map { it.toInt(16).toByte() }
-                            .toByteArray()
-
-                    val identity = reticulumProtocol.recallIdentity(destHashBytes)
-
-                    if (identity != null && identity.publicKey != null) {
-                        // Identity found! Update the contact
-                        Log.i(TAG, "Resolved identity for ${contact.destinationHash.take(8)}...")
-                        contactRepository.updateContactWithIdentity(
-                            destinationHash = contact.destinationHash,
-                            publicKey = identity.publicKey,
-                        )
-                    } else {
-                        // Not in cache, request path to trigger network search
-                        Log.d(TAG, "Requesting path for ${contact.destinationHash.take(8)}...")
-                        reticulumProtocol.requestPath(destHashBytes)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error processing contact ${contact.destinationHash.take(8)}...", e)
+                if (reticulumProtocol.hasPath(destHashBytes)) {
+                    Log.d(TAG, "Path already exists for ${destinationHash.take(8)}..., skipping request")
+                    return
                 }
+
+                Log.d(TAG, "Requesting path for ${destinationHash.take(8)}...")
+                reticulumProtocol.requestPath(destHashBytes)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error requesting path for ${destinationHash.take(8)}...", e)
+            }
+        }
+
+        /**
+         * Request paths for all active and pending contacts.
+         * Called once at startup as a safety net to repopulate the path table.
+         */
+        private suspend fun requestPathsForAllContacts() {
+            try {
+                val contacts =
+                    contactRepository.getContactsByStatus(
+                        listOf(ContactStatus.ACTIVE, ContactStatus.PENDING_IDENTITY),
+                    )
+
+                if (contacts.isEmpty()) {
+                    Log.d(TAG, "Startup sweep: no contacts to request paths for")
+                    return
+                }
+
+                Log.d(TAG, "Startup sweep: requesting paths for ${contacts.size} contact(s)")
+
+                for (contact in contacts) {
+                    try {
+                        val destHashBytes =
+                            contact.destinationHash
+                                .chunked(2)
+                                .map { it.toInt(16).toByte() }
+                                .toByteArray()
+
+                        if (reticulumProtocol.hasPath(destHashBytes)) {
+                            Log.d(TAG, "Startup sweep: path exists for ${contact.destinationHash.take(8)}..., skipping")
+                            continue
+                        }
+
+                        Log.d(TAG, "Startup sweep: requesting path for ${contact.destinationHash.take(8)}...")
+                        reticulumProtocol.requestPath(destHashBytes)
+                        delay(PATH_REQUEST_STAGGER_MS)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Startup sweep: error for ${contact.destinationHash.take(8)}...", e)
+                    }
+                }
+
+                Log.d(TAG, "Startup sweep complete")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during startup path sweep", e)
             }
         }
 

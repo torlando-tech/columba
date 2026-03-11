@@ -639,9 +639,9 @@ class MessageDetailScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Direct").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message received directly from sender").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hop Count").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Direct").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message received directly from sender").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -662,9 +662,9 @@ class MessageDetailScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
-        composeTestRule.onNodeWithText("1 hop").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message traveled through 1 relay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hop Count").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 hop").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 1 relay").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -685,9 +685,9 @@ class MessageDetailScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Hop Count").assertIsDisplayed()
-        composeTestRule.onNodeWithText("3 hops").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message traveled through 3 relays").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hop Count").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 hops").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message traveled through 3 relays").performScrollTo().assertIsDisplayed()
     }
 
     @Test

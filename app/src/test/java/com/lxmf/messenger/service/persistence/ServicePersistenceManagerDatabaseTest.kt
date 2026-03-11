@@ -213,7 +213,12 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             val updated = conversationDao.getConversation(TEST_PEER_HASH, TEST_IDENTITY_HASH)
             assertEquals("New message", updated?.lastMessage)
             assertEquals(3, updated?.unreadCount) // 2 + 1
-            assertEquals(1000L, updated?.lastMessageTimestamp)
+            // lastMessageTimestamp now uses local receive time (System.currentTimeMillis()),
+            // not the sender's timestamp, to prevent clock-drift reordering.
+            assertTrue(
+                "lastMessageTimestamp should be recent wall-clock time",
+                updated!!.lastMessageTimestamp > 500L,
+            )
         }
 
     @Test

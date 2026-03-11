@@ -49,6 +49,7 @@ class MapTileSourceManagerTest {
         coEvery { settingsRepository.getMapSourceRmspEnabled() } returns false
         every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)
         every { settingsRepository.mapSourceRmspEnabledFlow } returns flowOf(false)
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         mapTileSourceManager =
             MapTileSourceManager(

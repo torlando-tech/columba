@@ -13,6 +13,7 @@ import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.ReplyPreview
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
@@ -123,6 +124,7 @@ class MessagingViewModelTest {
         coEvery { settingsRepository.getTryPropagationOnFail() } returns true
         coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
         every { settingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
@@ -530,6 +532,7 @@ class MessagingViewModelTest {
             coEvery { failingSettingsRepository.getTryPropagationOnFail() } returns true
             coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
             every { failingSettingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
+            every { failingSettingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
             val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -4798,14 +4801,15 @@ class MessagingViewModelTest {
             // Pre-populate reply preview cache via loadReplyPreviewIfNeeded
             coEvery {
                 conversationRepository.getReplyPreview("test-message-id", any())
-            } returns com.lxmf.messenger.data.repository.ReplyPreview(
-                messageId = "test-message-id",
-                senderName = "Test Peer",
-                contentPreview = "Hello world",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            } returns
+                com.lxmf.messenger.data.repository.ReplyPreview(
+                    messageId = "test-message-id",
+                    senderName = "Test Peer",
+                    contentPreview = "Hello world",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             viewModel.loadReplyPreviewAsync("reply-msg", "test-message-id")
             advanceUntilIdle()
 

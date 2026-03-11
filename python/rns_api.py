@@ -21,6 +21,8 @@ class RnsApi:
             import RNS
             if RNS.Transport.has_path(dest_hash):
                 iface = RNS.Transport.next_hop_interface(dest_hash)
+                if iface is None:
+                    return None
                 return format_interface_name(iface)
         except Exception:
             pass

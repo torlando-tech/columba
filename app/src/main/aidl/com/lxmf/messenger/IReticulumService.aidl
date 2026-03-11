@@ -144,6 +144,12 @@ interface IReticulumService {
     String requestPath(in byte[] destHash);
 
     /**
+     * Persist Reticulum's transport data (path table, destinations) to disk.
+     * Called periodically for crash resilience.
+     */
+    void persistTransportData();
+
+    /**
      * Get hop count to destination.
      * @param destHash Destination hash bytes
      * @return Hop count, or -1 if unknown

@@ -102,6 +102,8 @@ interface ReticulumProtocol {
 
     suspend fun requestPath(destinationHash: ByteArray): Result<Unit>
 
+    suspend fun persistTransportData()
+
     fun getHopCount(destinationHash: ByteArray): Int?
 
     suspend fun getPathTableHashes(): List<String>

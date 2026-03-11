@@ -1022,6 +1022,19 @@ class MessagingViewModel
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
 
+            // Request path for this conversation peer if we don't have one
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val destHashBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                    if (!reticulumProtocol.hasPath(destHashBytes)) {
+                        Log.d(TAG, "Requesting path for conversation ${destinationHash.take(8)}...")
+                        reticulumProtocol.requestPath(destHashBytes)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error requesting path for conversation", e)
+                }
+            }
+
             // Mark conversation as read when opening
             viewModelScope.launch {
                 try {

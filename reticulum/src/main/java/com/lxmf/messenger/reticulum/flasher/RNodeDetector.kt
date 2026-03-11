@@ -687,12 +687,33 @@ class RNodeDetector(
                 Log.d(TAG, "Setting coding rate: $codingRate")
                 if (!setRadioCodingRate(codingRate)) return@withContext false
 
+                // Turn radio on (CMD_RADIO_STATE 0x06 with 0x01)
+                // This must be done before saving config, matching rnodeconf's initRadio()
+                Log.d(TAG, "Turning radio on...")
+                val radioOnFrame =
+                    KISSCodec.createFrame(
+                        RNodeConstants.CMD_RADIO_STATE,
+                        byteArrayOf(0x01),
+                    )
+                if (usbBridge.write(radioOnFrame) <= 0) return@withContext false
+                delay(500)
+
                 // Save config to EEPROM (CMD_CONF_SAVE) - this persists the settings
                 Log.d(TAG, "Saving configuration to EEPROM...")
                 if (!saveConfig()) {
                     Log.w(TAG, "Config save command failed")
                     return@withContext false
                 }
+
+                // Reset device so it reboots into transport mode with the saved config
+                Log.d(TAG, "Resetting device to apply transport mode...")
+                val resetFrame =
+                    KISSCodec.createFrame(
+                        RNodeConstants.CMD_RESET,
+                        byteArrayOf(RNodeConstants.CMD_RESET_BYTE),
+                    )
+                usbBridge.write(resetFrame)
+                delay(2000) // Wait for device to reboot
 
                 Log.i(TAG, "TNC mode enabled successfully")
                 true

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -294,7 +295,6 @@ class MessageCollectorTest {
 
     // ========== Pre-seed Dedup Tests ==========
 
-    @Suppress("NoVerifyOnlyTests") // Verifying side-effect absence: no notification for pre-seeded messages
     @Test
     fun `pre-seeded message IDs prevent duplicate notifications on restart`() =
         runBlocking {
@@ -318,7 +318,10 @@ class MessageCollectorTest {
             messageFlow.emit(testMessage)
             kotlinx.coroutines.delay(200)
 
-            // Then: No notification should be shown (message was pre-seeded as already processed)
+            // Then: Message was skipped entirely - counter didn't increment
+            assertEquals(0, messageCollector.messagesCollected.value)
+
+            // And no notification was shown (message was pre-seeded as already processed)
             coVerify(exactly = 0) {
                 notificationHelper.notifyMessageReceived(
                     destinationHash = any(),

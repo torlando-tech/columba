@@ -3,7 +3,9 @@ package com.lxmf.messenger.service.manager
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
+import com.lxmf.messenger.reticulum.protocol.PropagationState
 import com.lxmf.messenger.service.state.ServiceState
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -215,6 +217,29 @@ class ServiceNotificationManagerRNodeTest {
         assertTrue(
             "Notification should show only USB after BLE reconnects",
             text.contains("RNodeInterface[USB]") && !text.contains("RNodeInterface[BLE]"),
+        )
+    }
+
+    // ========== Sync guard ==========
+
+    @Test
+    fun `foreground notification is not refreshed during active sync`() {
+        // Drive the manager into an active sync state
+        val syncJson =
+            """{"state": ${PropagationState.STATE_PATH_REQUESTED}, "state_name": "path_requested", "progress": 0.0}"""
+        serviceNotificationManager.updateSyncProgress(syncJson)
+        drainMainLooper()
+
+        val beforeCount = shadowNotificationManager.allNotifications.size
+
+        // RNode disconnect should post the alert but NOT refresh the foreground notification
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        drainMainLooper()
+
+        assertEquals(
+            "Only the RNode alert should be added, foreground notification should not be reposted",
+            beforeCount + 1,
+            shadowNotificationManager.allNotifications.size,
         )
     }
 }

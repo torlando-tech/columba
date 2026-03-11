@@ -90,7 +90,7 @@ class MessageCollectorTest {
         coEvery { announceRepository.getAnnounce(any()) } returns null
 
         // Mock getReceivedMessageIds for pre-seeding (empty by default)
-        coEvery { conversationRepository.getReceivedMessageIds() } returns emptyList()
+        coEvery { conversationRepository.getReceivedMessageIds(since = any()) } returns emptyList()
 
         // Mock identity repository - return a mock active identity matching test destination
         coEvery { identityRepository.getActiveIdentitySync() } returns
@@ -299,7 +299,7 @@ class MessageCollectorTest {
     fun `pre-seeded message IDs prevent duplicate notifications on restart`() =
         runBlocking {
             // Given: A message that was already in the DB from a previous session
-            coEvery { conversationRepository.getReceivedMessageIds() } returns listOf("already_notified_msg")
+            coEvery { conversationRepository.getReceivedMessageIds(since = any()) } returns listOf("already_notified_msg")
 
             val testMessage =
                 ReceivedMessage(

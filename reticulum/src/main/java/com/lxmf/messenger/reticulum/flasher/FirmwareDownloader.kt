@@ -276,11 +276,16 @@ data class GitHubRelease(
     val htmlUrl: String,
 ) {
     /**
-     * Extract version number, preferring the release name over the tag
-     * (some repos use a short tag like "1.85" but name the release "1.85.9").
+     * Extract version number from the release tag or name.
+     * Prefers the name when it looks like a bare version (e.g. "1.85.9"),
+     * falls back to tagName (e.g. "v1.78" → "1.78").
      */
     val version: String
-        get() = name.removePrefix("v").removePrefix("V")
+        get() {
+            val cleanName = name.removePrefix("v").removePrefix("V").trim()
+            if (cleanName.firstOrNull()?.isDigit() == true) return cleanName
+            return tagName.removePrefix("v").removePrefix("V")
+        }
 }
 
 /**

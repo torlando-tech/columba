@@ -276,10 +276,11 @@ data class GitHubRelease(
     val htmlUrl: String,
 ) {
     /**
-     * Extract version number from tag name.
+     * Extract version number, preferring the release name over the tag
+     * (some repos use a short tag like "1.85" but name the release "1.85.9").
      */
     val version: String
-        get() = tagName.removePrefix("v").removePrefix("V")
+        get() = name.removePrefix("v").removePrefix("V")
 }
 
 /**

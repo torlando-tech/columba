@@ -100,6 +100,9 @@ fun MessageDeliveryRetrievalCard(
     // Incoming message size limit
     incomingMessageSizeLimitKb: Int = 1024,
     onIncomingMessageSizeLimitChange: (Int) -> Unit = {},
+    // Message sorting
+    sortMessagesBySentTime: Boolean = false,
+    onSortMessagesBySentTimeToggle: (Boolean) -> Unit = {},
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
@@ -595,6 +598,44 @@ fun MessageDeliveryRetrievalCard(
                 )
             }
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Message Sort Order Section
+        Text(
+            text = "MESSAGE SORT ORDER",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Sort by sender's time",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text =
+                        if (sortMessagesBySentTime) {
+                            "Messages ordered by sender's clock (may be inaccurate)"
+                        } else {
+                            "Messages ordered by when you received them"
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = sortMessagesBySentTime,
+                onCheckedChange = onSortMessagesBySentTimeToggle,
+            )
+        }
     }
 
     // Custom interval dialog
@@ -750,13 +791,12 @@ private fun formatRelativeTime(
 /**
  * Format interval in seconds to a readable string (e.g., "30s", "2min", "5min").
  */
-private fun formatIntervalDisplay(seconds: Int): String {
-    return when {
+private fun formatIntervalDisplay(seconds: Int): String =
+    when {
         seconds < 60 -> "${seconds}s"
         seconds % 60 == 0 -> "${seconds / 60}min"
         else -> "${seconds / 60}m ${seconds % 60}s"
     }
-}
 
 @Composable
 private fun CustomRetrievalIntervalDialog(
@@ -1070,8 +1110,8 @@ private fun SizeLimitChip(
 /**
  * Format size limit in KB to a readable string (e.g., "1 MB", "5.5 MB", "128 MB").
  */
-private fun formatSizeLimit(limitKb: Int): String {
-    return when {
+private fun formatSizeLimit(limitKb: Int): String =
+    when {
         limitKb >= 131072 -> "Unlimited (128 MB)"
         limitKb >= 1024 -> {
             val mb = limitKb / 1024.0
@@ -1083,7 +1123,6 @@ private fun formatSizeLimit(limitKb: Int): String {
         }
         else -> "$limitKb KB"
     }
-}
 
 @Composable
 private fun CustomSizeLimitDialog(

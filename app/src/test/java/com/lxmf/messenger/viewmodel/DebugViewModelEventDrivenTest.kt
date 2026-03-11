@@ -21,12 +21,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -490,6 +492,13 @@ class DebugViewModelEventDrivenTest {
                 """.trimIndent()
             debugInfoFlow.emit(debugJson)
             advanceUntilIdle()
+
+            // parseAndUpdateDebugInfo uses withContext(Dispatchers.IO) which schedules on
+            // the real IO pool, so advanceUntilIdle() alone isn't enough. Wait for the
+            // state to reflect the emitted debug info before proceeding to SHUTDOWN.
+            withTimeout(2000) {
+                viewModel.debugInfo.first { it.initialized }
+            }
 
             // When - network status changes to SHUTDOWN
             networkStatusFlow.value = NetworkStatus.SHUTDOWN

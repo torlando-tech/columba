@@ -16,6 +16,7 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,7 @@ class AnnounceStreamViewModelTest {
     private lateinit var contactRepository: ContactRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var identityRepository: IdentityRepository
+    private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
     private lateinit var announceFlow: MutableSharedFlow<AnnounceEvent>
     private lateinit var viewModel: AnnounceStreamViewModel
@@ -105,6 +107,8 @@ class AnnounceStreamViewModelTest {
         contactRepository = mockk()
         propagationNodeManager = mockk()
         identityRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Setup network status flow
         networkStatusFlow = MutableStateFlow(NetworkStatus.SHUTDOWN)
@@ -166,7 +170,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             // Status starts as SHUTDOWN - should wait
@@ -195,7 +199,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             viewModel.initializationStatus.test {
@@ -225,7 +229,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             // Fast-forward past the 10 second timeout
@@ -256,7 +260,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -303,7 +307,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -349,7 +353,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -379,7 +383,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -410,7 +414,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
 
             viewModel.initializationStatus.test {
@@ -445,7 +449,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -487,7 +491,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -515,7 +519,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -552,7 +556,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -588,7 +592,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -623,7 +627,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -663,7 +667,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -693,7 +697,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -723,7 +727,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -753,7 +757,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -792,7 +796,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -825,7 +829,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -858,7 +862,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -886,7 +890,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -921,7 +925,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -955,7 +959,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -980,7 +984,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1001,7 +1005,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1029,7 +1033,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1065,7 +1069,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1094,7 +1098,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1134,7 +1138,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1162,7 +1166,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1194,7 +1198,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1221,7 +1225,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1254,7 +1258,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1293,7 +1297,7 @@ class AnnounceStreamViewModelTest {
                     propagationNodeManager,
                     identityRepository,
                     mockk(),
-                    mockk(relaxed = true),
+                    identityResolutionManager,
                 )
             // Run the init block tasks (startCollectingAnnouncesWhenReady + first loop iteration)
             runCurrent()

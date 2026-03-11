@@ -8,13 +8,8 @@ from logging_utils import log_debug
 
 
 class RnsApi:
-    def __init__(self, reticulum_instance=None, router=None):
-        self._reticulum = reticulum_instance
-        self._router = router
-
-    def set_reticulum(self, reticulum_instance, router):
-        self._reticulum = reticulum_instance
-        self._router = router
+    def __init__(self):
+        pass
 
     def get_next_hop_interface_name(self, dest_hash):
         """Return formatted interface name for next hop to destination, or None."""
@@ -27,13 +22,4 @@ class RnsApi:
                 return format_interface_name(iface)
         except Exception as e:
             log_debug("RnsApi", "get_next_hop_interface_name", f"lookup failed: {e}")
-        return None
-
-    def get_active_propagation_node_hash(self):
-        """Return the currently set outbound propagation node hash, or None."""
-        try:
-            if self._router and hasattr(self._router, 'get_outbound_propagation_node'):
-                return self._router.get_outbound_propagation_node()
-        except Exception as e:
-            log_debug("RnsApi", "get_active_propagation_node_hash", f"lookup failed: {e}")
         return None

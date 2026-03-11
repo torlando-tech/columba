@@ -902,10 +902,11 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
-                    // Enrich sentInterface on delivery if it wasn't captured at send time.
-                    // Skip if transitioning to propagated routing — conversationHash lookup
-                    // would return the wrong (direct) interface.
-                    if (update.status != "retrying_propagated") {
+                    // Enrich sentInterface on delivery — only on successful delivery,
+                    // where the routing table still reflects the actual send path.
+                    // Other statuses (failed, retrying_propagated) carry too much
+                    // routing ambiguity to produce accurate interface data.
+                    if (update.status == "delivered") {
                         enrichSentInterfaceOnDelivery(message, update.messageHash)
                     }
 

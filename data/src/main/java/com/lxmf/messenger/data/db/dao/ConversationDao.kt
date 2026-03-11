@@ -46,6 +46,10 @@ interface ConversationDao {
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
         LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
+            AND NOT EXISTS (
+                SELECT 1 FROM blocked_peers bp
+                WHERE bp.peerHash = c.peerHash AND bp.identityHash = c.identityHash
+            )
         ORDER BY c.lastMessageTimestamp DESC
         """,
     )
@@ -73,6 +77,10 @@ interface ConversationDao {
         LEFT JOIN contacts ct ON c.peerHash = ct.destinationHash AND c.identityHash = ct.identityHash
         LEFT JOIN peer_icons pi ON c.peerHash = pi.destinationHash
         WHERE c.identityHash = :identityHash
+            AND NOT EXISTS (
+                SELECT 1 FROM blocked_peers bp
+                WHERE bp.peerHash = c.peerHash AND bp.identityHash = c.identityHash
+            )
             AND (ct.customNickname LIKE '%' || :query || '%'
                 OR a.peerName LIKE '%' || :query || '%'
                 OR c.peerName LIKE '%' || :query || '%'

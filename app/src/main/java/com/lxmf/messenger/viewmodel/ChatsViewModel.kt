@@ -3,10 +3,12 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.repository.BlockedPeerRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
@@ -37,11 +39,27 @@ class ChatsViewModel
     constructor(
         private val conversationRepository: ConversationRepository,
         private val contactRepository: ContactRepository,
+        private val blockedPeerRepository: BlockedPeerRepository,
+        private val reticulumProtocol: ReticulumProtocol,
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ChatsViewModel"
+        }
+
+        // Whether Reticulum transport mode is enabled (for blackhole option)
+        private val _isTransportEnabled = MutableStateFlow(false)
+        val isTransportEnabled: StateFlow<Boolean> = _isTransportEnabled
+
+        init {
+            viewModelScope.launch {
+                try {
+                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
         }
 
         // Sync state from PropagationNodeManager
@@ -58,7 +76,8 @@ class ChatsViewModel
 
         // Draft texts keyed by peerHash - for showing "Draft:" in conversation list
         val draftsMap: StateFlow<Map<String, String>> =
-            conversationRepository.observeDrafts()
+            conversationRepository
+                .observeDrafts()
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),
@@ -154,6 +173,33 @@ class ChatsViewModel
                     Log.d(TAG, "Removed $peerHash from contacts")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error removing from contacts", e)
+                }
+            }
+        }
+
+        /**
+         * Block a user: persist to DB, notify LXMF router, optionally blackhole and delete conversation.
+         */
+        fun blockUser(
+            peerHash: String,
+            peerIdentityHash: String?,
+            displayName: String?,
+            deleteConversation: Boolean,
+            blackholeEnabled: Boolean,
+        ) {
+            viewModelScope.launch {
+                try {
+                    blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, displayName, blackholeEnabled)
+                    reticulumProtocol.blockDestination(peerHash)
+                    if (blackholeEnabled && peerIdentityHash != null) {
+                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                    }
+                    if (deleteConversation) {
+                        conversationRepository.deleteConversation(peerHash)
+                    }
+                    Log.d(TAG, "Blocked user ${peerHash.take(16)} (blackhole=$blackholeEnabled, delete=$deleteConversation)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error blocking user", e)
                 }
             }
         }

@@ -417,6 +417,18 @@ interface ReticulumProtocol {
 
     // ==================== Voice Calls (LXST) ====================
 
+    // Peer Blocking & Blackhole
+
+    suspend fun blockDestination(destinationHashHex: String): Result<Unit>
+
+    suspend fun unblockDestination(destinationHashHex: String): Result<Unit>
+
+    suspend fun blackholeIdentity(identityHashHex: String): Result<Unit>
+
+    suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit>
+
+    suspend fun isTransportEnabled(): Boolean
+
     /**
      * Initiate an outgoing voice call to a destination.
      *

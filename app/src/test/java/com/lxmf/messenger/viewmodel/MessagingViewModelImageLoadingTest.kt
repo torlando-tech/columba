@@ -106,6 +106,7 @@ class MessagingViewModelImageLoadingTest {
                     identityRepository = identityRepository,
                     conversationLinkManager = conversationLinkManager,
                     receivedLocationRepository = receivedLocationRepository,
+                    blockedPeerRepository = mockk(),
                 )
             advanceUntilIdle()
             testBody()

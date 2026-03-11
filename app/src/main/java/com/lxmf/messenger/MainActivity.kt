@@ -77,6 +77,7 @@ import com.lxmf.messenger.ui.screens.AnnounceDetailScreen
 import com.lxmf.messenger.ui.screens.AnnounceStreamScreen
 import com.lxmf.messenger.ui.screens.ApkSharingScreen
 import com.lxmf.messenger.ui.screens.BleConnectionStatusScreen
+import com.lxmf.messenger.ui.screens.BlockedUsersScreen
 import com.lxmf.messenger.ui.screens.ChatsScreen
 import com.lxmf.messenger.ui.screens.ContactsScreen
 import com.lxmf.messenger.ui.screens.DiscoveredInterfacesScreen
@@ -1382,6 +1383,9 @@ fun ColumbaNavigation(
                                 onNavigateToFlasher = {
                                     navController.navigate("rnode_flasher")
                                 },
+                                onNavigateToBlockedUsers = {
+                                    navController.navigate("blocked_users")
+                                },
                             )
                         }
 
@@ -1700,6 +1704,12 @@ fun ColumbaNavigation(
                         composable("notification_settings") {
                             NotificationSettingsScreen(
                                 onNavigateBack = { navController.popBackStack() },
+                            )
+                        }
+
+                        composable("blocked_users") {
+                            BlockedUsersScreen(
+                                onBackClick = { navController.popBackStack() },
                             )
                         }
 

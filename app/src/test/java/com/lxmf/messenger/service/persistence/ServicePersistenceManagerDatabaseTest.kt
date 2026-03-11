@@ -369,6 +369,82 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertNotNull("Message from contact should be saved", saved)
         }
 
+    // ========== Blocked Peer Tests ==========
+
+    @Test
+    fun `persistMessage blocks message from blocked peer`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            // Block the peer in the database
+            val blockedPeerDao = database.blockedPeerDao()
+            blockedPeerDao.insertBlockedPeer(
+                com.lxmf.messenger.data.db.entity.BlockedPeerEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked User",
+                    blockedTimestamp = System.currentTimeMillis(),
+                    isBlackholeEnabled = false,
+                ),
+            )
+
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "msg_from_blocked_12345678901234",
+                    content = "You should not see this",
+                    sourceHash = TEST_PEER_HASH,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
+            advanceUntilIdle()
+
+            assertFalse("Should return false for blocked peer", result)
+
+            val saved = messageDao.getMessageById("msg_from_blocked_12345678901234", TEST_IDENTITY_HASH)
+            assertNull("Message from blocked peer should not be saved", saved)
+        }
+
+    @Test
+    fun `persistMessage allows message from non-blocked peer`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            // Block a different peer
+            val blockedPeerDao = database.blockedPeerDao()
+            blockedPeerDao.insertBlockedPeer(
+                com.lxmf.messenger.data.db.entity.BlockedPeerEntity(
+                    peerHash = "some_other_peer_hash_1234567890",
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Other Blocked User",
+                    blockedTimestamp = System.currentTimeMillis(),
+                    isBlackholeEnabled = false,
+                ),
+            )
+
+            val result =
+                persistenceManager.persistMessage(
+                    messageHash = "msg_from_allowed_12345678901234",
+                    content = "Hello from unblocked peer",
+                    sourceHash = TEST_PEER_HASH,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                    replyToMessageId = null,
+                    deliveryMethod = null,
+                )
+            advanceUntilIdle()
+
+            assertTrue("Should return true for non-blocked peer", result)
+
+            val saved = messageDao.getMessageById("msg_from_allowed_12345678901234", TEST_IDENTITY_HASH)
+            assertNotNull("Message from non-blocked peer should be saved", saved)
+        }
+
     // ========== announceExists() Tests ==========
 
     @Test

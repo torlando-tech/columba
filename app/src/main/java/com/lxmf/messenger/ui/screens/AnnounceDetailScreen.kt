@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Hub
@@ -92,6 +93,10 @@ fun AnnounceDetailScreen(
 
     // Dialog state for relay unset confirmation
     var showUnsetRelayDialog by remember { mutableStateOf(false) }
+
+    // Block dialog state
+    var showBlockDialog by remember { mutableStateOf(false) }
+    val isTransportEnabled by viewModel.isTransportEnabled.collectAsState(initial = false)
 
     Scaffold(
         topBar = {
@@ -283,6 +288,33 @@ fun AnnounceDetailScreen(
                     }
                 }
 
+                // Block button
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { showBlockDialog = true },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Block",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
                 // Information cards
                 InfoCard(
                     icon = Icons.Default.Fingerprint,
@@ -400,6 +432,28 @@ fun AnnounceDetailScreen(
             onDismiss = {
                 showRemoveDialog = false
             },
+        )
+    }
+
+    // Block user dialog
+    if (showBlockDialog) {
+        BlockUserDialog(
+            peerName = announce?.peerName ?: "this peer",
+            isTransportEnabled = isTransportEnabled,
+            onConfirm = { deleteMessages, blackholeEnabled ->
+                val ann = announce
+                if (ann != null) {
+                    viewModel.blockPeer(
+                        destinationHash = ann.destinationHash,
+                        peerName = ann.peerName,
+                        publicKey = ann.publicKey,
+                        blackholeEnabled = blackholeEnabled,
+                    )
+                }
+                showBlockDialog = false
+                onBackClick()
+            },
+            onDismiss = { showBlockDialog = false },
         )
     }
 

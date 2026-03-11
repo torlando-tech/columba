@@ -222,12 +222,12 @@ class IdentityResolutionManager
         /**
          * Manually trigger a resolution check for a specific contact.
          * Used when user taps "retry" on an unresolved contact.
+         *
+         * Note: The caller (ContactsViewModel.retryIdentityResolution) is responsible
+         * for calling contactRepository.resetContactForRetry() before invoking this.
          */
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
-
-            // Reset status to PENDING_IDENTITY and restart 48-hour timeout
-            contactRepository.resetContactForRetry(destinationHash)
 
             // Request path on network
             val destHashBytes =

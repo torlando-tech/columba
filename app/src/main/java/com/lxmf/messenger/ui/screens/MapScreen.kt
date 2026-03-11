@@ -419,6 +419,7 @@ fun MapScreen(
                 // Permission was revoked between our check and MapLibre's
                 // internal LocationManager call (COLUMBA-5R)
                 Log.w("MapScreen", "Location permission revoked, disabling location component", e)
+                viewModel.onPermissionResult(false)
             }
         }
 
@@ -688,15 +689,25 @@ fun MapScreen(
                 when (event) {
                     Lifecycle.Event.ON_START -> view.onStart()
                     Lifecycle.Event.ON_RESUME -> {
-                        view.onResume()
-                        viewModel.refreshDefaultRegion()
-                        // Re-check actual Android permission on resume in case user
-                        // revoked it from Settings while the app was backgrounded.
-                        // This syncs ViewModel state with reality (fixes COLUMBA-5R).
+                        // Re-check actual Android permission BEFORE view.onResume(),
+                        // which may internally resume the location engine and throw
+                        // SecurityException if permission was revoked (COLUMBA-5R).
                         val stillHasPermission = LocationPermissionManager.hasPermission(context)
                         if (state.hasLocationPermission && !stillHasPermission) {
+                            // Disable location component before MapLibre resumes it
+                            mapLibreMap?.locationComponent?.let { lc ->
+                                if (lc.isLocationComponentActivated) {
+                                    lc.isLocationComponentEnabled = false
+                                }
+                            }
                             viewModel.onPermissionResult(false)
+                            platformLocationListener?.let {
+                                LocationCompat.removeLocationUpdates(context, it)
+                            }
+                            platformLocationListener = null
                         }
+                        view.onResume()
+                        viewModel.refreshDefaultRegion()
                     }
                     Lifecycle.Event.ON_PAUSE -> view.onPause()
                     Lifecycle.Event.ON_STOP -> view.onStop()

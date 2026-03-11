@@ -149,8 +149,15 @@ class NotificationHelper
             // Check permission
             if (!hasNotificationPermission()) return
 
-            // Suppress notification if this conversation is currently active (visible on screen)
-            if (activeConversationManager.activeConversation.value == destinationHash) return
+            // Suppress notification only if this conversation is active AND the app is in the
+            // foreground. When the screen is off or the app is backgrounded, the user can't see
+            // the conversation, so they should still receive the notification.
+            val appInForeground =
+                androidx.lifecycle.ProcessLifecycleOwner
+                    .get()
+                    .lifecycle.currentState
+                    .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+            if (appInForeground && activeConversationManager.activeConversation.value == destinationHash) return
 
             // Create intent to open the conversation
             // Use SINGLE_TOP to reuse existing activity via onNewIntent (avoids splash screen flash)

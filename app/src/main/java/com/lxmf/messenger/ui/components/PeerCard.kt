@@ -35,14 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.ui.theme.MeshConnected
@@ -302,6 +302,7 @@ fun NodeTypeBadge(nodeType: String) {
             "NODE" -> "Node" to MaterialTheme.colorScheme.tertiary
             "PEER" -> "Peer" to MaterialTheme.colorScheme.primary
             "PROPAGATION_NODE" -> "Relay" to MaterialTheme.colorScheme.secondary
+            "PHONE" -> "Phone" to MaterialTheme.colorScheme.error
             else -> "Node" to MaterialTheme.colorScheme.tertiary
         }
 
@@ -311,24 +312,6 @@ fun NodeTypeBadge(nodeType: String) {
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-fun AudioBadge() {
-    val color = MaterialTheme.colorScheme.error
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = color.copy(alpha = 0.15f),
-    ) {
-        Text(
-            text = "Audio",
             style = MaterialTheme.typography.labelSmall,
             color = color,
             fontWeight = FontWeight.SemiBold,
@@ -358,6 +341,4 @@ fun OtherBadge() {
 /**
  * Format a destination hash string for display.
  */
-fun formatHashString(hashString: String): String {
-    return hashString
-}
+fun formatHashString(hashString: String): String = hashString

@@ -81,6 +81,26 @@ interface AnnounceDao {
     suspend fun getAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
 
     /**
+     * Find all announces sharing the same identity hash, excluding one destination.
+     * Used for cross-linking telephony and messaging destinations of the same peer.
+     */
+    @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash AND destinationHash != :excludeHash")
+    suspend fun getAnnouncesByIdentityHashExcluding(
+        identityHash: String,
+        excludeHash: String,
+    ): List<AnnounceEntity>
+
+    /**
+     * Reactive version: emits whenever announces sharing the same identity hash change.
+     * Used for live cross-link buttons on the announce detail screen.
+     */
+    @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash AND destinationHash != :excludeHash")
+    fun getAnnouncesByIdentityHashExcludingFlow(
+        identityHash: String,
+        excludeHash: String,
+    ): Flow<List<AnnounceEntity>>
+
+    /**
      * Check if an announce exists for a given destination hash
      */
     @Query("SELECT EXISTS(SELECT 1 FROM announces WHERE destinationHash = :destinationHash)")
@@ -159,6 +179,23 @@ interface AnnounceDao {
     """,
     )
     suspend fun deleteAllAnnouncesExceptContacts(identityHash: String)
+
+    /**
+     * Delete announces older than a cutoff time, preserving favorites and contacts.
+     * Contacts are protected across all identities (not scoped to a single identity).
+     *
+     * @param cutoffTime Epoch millis; announces with lastSeenTimestamp < this are eligible for deletion
+     * @return Number of deleted rows
+     */
+    @Query(
+        """
+        DELETE FROM announces
+        WHERE lastSeenTimestamp < :cutoffTime
+        AND isFavorite = 0
+        AND destinationHash NOT IN (SELECT destinationHash FROM contacts)
+    """,
+    )
+    suspend fun deleteStaleAnnounces(cutoffTime: Long): Int
 
     /**
      * Get count of all announces

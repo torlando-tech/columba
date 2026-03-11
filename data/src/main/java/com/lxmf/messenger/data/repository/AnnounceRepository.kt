@@ -27,7 +27,7 @@ data class Announce(
     val nodeType: String,
     val receivingInterface: String? = null,
     val receivingInterfaceType: String? = null,
-    val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "call.audio")
+    val aspect: String? = null, // Destination aspect (e.g., "lxmf.delivery", "lxst.telephony")
     val isFavorite: Boolean = false,
     val favoritedTimestamp: Long? = null,
     val stampCost: Int? = null, // Stamp cost for message delivery
@@ -263,6 +263,26 @@ class AnnounceRepository
         }
 
         /**
+         * Find all announces for the same identity, excluding a given destination hash.
+         * Used for cross-linking telephony and messaging destinations of the same peer.
+         */
+        suspend fun getLinkedAnnounces(
+            identityHash: String,
+            excludeHash: String,
+        ): List<Announce> = announceDao.getAnnouncesByIdentityHashExcluding(identityHash, excludeHash).map { it.toAnnounce() }
+
+        /**
+         * Reactive version: emits whenever linked announces for the same identity change.
+         */
+        fun getLinkedAnnouncesFlow(
+            identityHash: String,
+            excludeHash: String,
+        ): Flow<List<Announce>> =
+            announceDao.getAnnouncesByIdentityHashExcludingFlow(identityHash, excludeHash).map { entities ->
+                entities.map { it.toAnnounce() }
+            }
+
+        /**
          * Delete an announce
          */
         suspend fun deleteAnnounce(destinationHash: String) {
@@ -371,6 +391,14 @@ class AnnounceRepository
         suspend fun deleteAllAnnouncesExceptContacts(identityHash: String) {
             announceDao.deleteAllAnnouncesExceptContacts(identityHash)
         }
+
+        /**
+         * Delete announces older than [maxAgeMillis], preserving favorites and contacts.
+         *
+         * @param maxAgeMillis Maximum age in milliseconds; announces last seen longer ago than this are deleted
+         * @return Number of deleted rows
+         */
+        suspend fun deleteStaleAnnounces(maxAgeMillis: Long): Int = announceDao.deleteStaleAnnounces(System.currentTimeMillis() - maxAgeMillis)
 
         /**
          * Get count of announces grouped by nodeType.

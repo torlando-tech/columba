@@ -294,6 +294,7 @@ class MessageCollectorTest {
 
     // ========== Pre-seed Dedup Tests ==========
 
+    @Suppress("NoVerifyOnlyTests") // Verifying side-effect absence: no notification for pre-seeded messages
     @Test
     fun `pre-seeded message IDs prevent duplicate notifications on restart`() =
         runBlocking {

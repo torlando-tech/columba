@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.repository.ThemeColorSet
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -92,6 +93,8 @@ class ThemeEditorViewModelTest {
         coEvery {
             customThemeRepository.updateTheme(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } just Runs
+
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
     }
 
     @After

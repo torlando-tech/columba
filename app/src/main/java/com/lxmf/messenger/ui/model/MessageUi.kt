@@ -116,6 +116,13 @@ data class MessageUi(
      * Null for BLE/TCP/AutoInterface, sent messages, or pre-feature messages.
      */
     val receivedSnr: Float? = null,
+    /**
+     * Local reception timestamp (our clock) for sorting.
+     * For received messages: System.currentTimeMillis() when we received it.
+     * For sent messages: same as timestamp (our clock is authoritative).
+     * Null for messages created before this feature was added.
+     */
+    val receivedAt: Long? = null,
 ) {
     /**
      * Whether this message should be displayed as a standalone media item without a bubble.

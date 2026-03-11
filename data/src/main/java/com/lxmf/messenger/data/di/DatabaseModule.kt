@@ -76,6 +76,7 @@ object DatabaseModule {
             MIGRATION_37_38,
             MIGRATION_38_39,
             MIGRATION_39_40,
+            MIGRATION_40_41,
         )
     }
 
@@ -1636,6 +1637,17 @@ object DatabaseModule {
 
                 // Re-enable FK enforcement
                 database.execSQL("PRAGMA foreign_keys = ON")
+            }
+        }
+
+    // Migration 40→41: Add receivedAt column to messages table.
+    // Stores the local device timestamp when a message was received/sent,
+    // separate from the sender's claimed timestamp. Fixes message ordering
+    // when the sender's clock is wrong.
+    private val MIGRATION_40_41 =
+        object : Migration(40, 41) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE messages ADD COLUMN receivedAt INTEGER")
             }
         }
 

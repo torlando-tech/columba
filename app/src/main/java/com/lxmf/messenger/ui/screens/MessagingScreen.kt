@@ -134,6 +134,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -155,7 +156,6 @@ import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lxmf.messenger.R
-import androidx.compose.ui.res.stringResource
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.AttachmentPanel
@@ -1787,7 +1787,7 @@ fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = formatTimestamp(message.timestamp),
+                            text = formatTimestamp(message.receivedAt ?: message.timestamp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
@@ -2047,7 +2047,7 @@ fun MessageBubble(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = formatTimestamp(message.timestamp),
+                                text = formatTimestamp(message.receivedAt ?: message.timestamp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color =
                                     if (isFromMe) {

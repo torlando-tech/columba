@@ -61,7 +61,7 @@ class ApkSharingViewModelTest {
 
     @Test
     fun `viewModel init triggers startServer which sets error state in test environment`() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
             advanceUntilIdle()
 
@@ -76,14 +76,14 @@ class ApkSharingViewModelTest {
 
     @Test
     fun `state flow is exposed as immutable StateFlow`() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
             assertNotNull(viewModel.state)
         }
 
     @Test
     fun `startServer is idempotent when already running`() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
             advanceUntilIdle()
 
@@ -101,7 +101,7 @@ class ApkSharingViewModelTest {
 
     @Test
     fun `createShareIntent returns a valid share intent`() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
             advanceUntilIdle()
 
@@ -146,7 +146,7 @@ class ApkSharingViewModelTest {
 
     @Test
     fun `viewModel emits error when APK preparation fails`() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
             advanceUntilIdle()
 

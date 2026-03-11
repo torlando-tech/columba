@@ -42,7 +42,7 @@ import com.lxmf.messenger.data.db.entity.RmspServerEntity
         RmspServerEntity::class,
         DraftEntity::class,
     ],
-    version = 40,
+    version = 41,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {

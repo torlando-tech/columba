@@ -35,18 +35,17 @@ class RoutingManager(
     @Volatile private var cachedPathTableTimestamp: Long = 0L
 
     /**
-     * Check if a path to destination exists.
-     *
-     * @param destHash Destination hash bytes
-     * @return true if path exists, false otherwise
-     */
-
-    /**
      * Get the next-hop interface name for a destination.
      * Delegates to PythonWrapperManager's RnsApi (Strangler Fig Phase 0).
      */
     fun getNextHopInterfaceName(destHash: ByteArray): String? = wrapperManager.getNextHopInterfaceName(destHash)
 
+    /**
+     * Check if a path to destination exists.
+     *
+     * @param destHash Destination hash bytes
+     * @return true if path exists, false otherwise
+     */
     fun hasPath(destHash: ByteArray): Boolean =
         wrapperManager.withWrapper { wrapper ->
             try {

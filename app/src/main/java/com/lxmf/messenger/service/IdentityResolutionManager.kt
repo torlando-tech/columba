@@ -47,6 +47,7 @@ class IdentityResolutionManager
         }
 
         private var resolutionJob: Job? = null
+        private var startupSweepJob: Job? = null
 
         /**
          * Start the periodic identity resolution checks.
@@ -73,10 +74,11 @@ class IdentityResolutionManager
                 }
 
             // One-shot startup sweep: request paths for all contacts as a safety net
-            scope.launch(Dispatchers.IO) {
-                delay(STARTUP_SWEEP_DELAY_MS)
-                requestPathsForAllContacts()
-            }
+            startupSweepJob =
+                scope.launch(Dispatchers.IO) {
+                    delay(STARTUP_SWEEP_DELAY_MS)
+                    requestPathsForAllContacts()
+                }
         }
 
         /**
@@ -86,6 +88,8 @@ class IdentityResolutionManager
             Log.d(TAG, "Stopping identity resolution manager")
             resolutionJob?.cancel()
             resolutionJob = null
+            startupSweepJob?.cancel()
+            startupSweepJob = null
         }
 
         /**

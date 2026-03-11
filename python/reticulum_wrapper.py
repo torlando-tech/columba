@@ -3329,6 +3329,14 @@ class ReticulumWrapper:
                     self.kotlin_message_received_callback(json.dumps(message_event))
                     log_info("ReticulumWrapper", "_on_lxmf_delivery",
                             "✅ Kotlin callback invoked with full message (event-driven)")
+
+                    # Remove from pending_inbound since callback succeeded.
+                    # This prevents the queue from growing unbounded and avoids
+                    # duplicate processing when drainPendingMessages() runs on restart.
+                    if hasattr(self.router, 'pending_inbound') and lxmf_message in self.router.pending_inbound:
+                        self.router.pending_inbound.remove(lxmf_message)
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"Removed message from pending_inbound after successful callback (queue now has {len(self.router.pending_inbound)} messages)")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Error invoking Kotlin callback: {e}")

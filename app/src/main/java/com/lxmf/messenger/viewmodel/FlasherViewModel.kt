@@ -30,6 +30,7 @@ enum class FlasherStep {
     DEVICE_DETECTION,
     FIRMWARE_SELECTION,
     FLASH_PROGRESS,
+    TNC_CONFIGURATION,
     COMPLETE,
 }
 
@@ -92,6 +93,16 @@ data class FlasherUiState(
     // Step 4c: Provisioning
     val isProvisioning: Boolean = false,
     val provisioningMessage: String? = null,
+    // Step 4d: TNC Configuration (microReticulum)
+    val tncConfigOnly: Boolean = false, // standalone config mode (no flashing)
+    val tncFrequencyMhz: String = "868.0",
+    val tncBandwidthKhz: String = "125",
+    val tncSpreadingFactor: String = "8",
+    val tncCodingRate: String = "5",
+    val tncTxPower: String = "17",
+    val tncConfiguring: Boolean = false,
+    val tncConfigError: String? = null,
+    val tncConfigComplete: Boolean = false, // signals standalone config finished
     // Step 5: Complete
     val flashResult: FlashResult? = null,
     // General state
@@ -129,6 +140,9 @@ class FlasherViewModel
         // Used when flashing fresh devices that are already in bootloader mode
         private var skipDetectionMode = false
 
+        // Flag for standalone TNC configuration (no flashing)
+        private var tncConfigOnlyMode = false
+
         // Firmware hash from the flashed binary (used for provisioning)
         private var firmwareHashForProvisioning: ByteArray? = null
 
@@ -150,6 +164,17 @@ class FlasherViewModel
             // Disable USB auto-navigation when bootloader mode is active
             com.lxmf.messenger.MainActivity.bootloaderFlashModeActive = true
             _state.update { it.copy(useManualBoardSelection = true) }
+        }
+
+        /**
+         * Enable TNC config only mode for standalone transport configuration.
+         * Selecting a device will skip detection and firmware selection,
+         * going directly to TNC configuration.
+         */
+        fun enableTncConfigOnlyMode() {
+            Log.d(TAG, "TNC config only mode enabled")
+            tncConfigOnlyMode = true
+            _state.update { it.copy(tncConfigOnly = true) }
         }
 
         private fun observeFlashState() {
@@ -218,6 +243,49 @@ class FlasherViewModel
             // re-enumerating on USB after the DFU reboot, and clearing the flag now
             // would let handleUsbDeviceAttached() navigate away from the success screen.
             // The flag is cleared in onCleared() (leaving flasher) and flashAnother().
+            val currentState = _state.value
+
+            // If we just finished TNC configuration
+            if (currentState.currentStep == FlasherStep.TNC_CONFIGURATION) {
+                if (tncConfigOnlyMode) {
+                    // In standalone mode, signal success and let UI pop back
+                    _state.update {
+                        it.copy(
+                            tncConfiguring = false,
+                            tncConfigComplete = true,
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            currentStep = FlasherStep.COMPLETE,
+                            tncConfiguring = false,
+                            flashResult = FlashResult.Success(flashState.deviceInfo),
+                        )
+                    }
+                }
+                return
+            }
+
+            // For microReticulum, route to TNC configuration after flash+provision
+            if (currentState.selectedFirmwareSource is FirmwareSource.MicroReticulum) {
+                val defaultFreq =
+                    when (currentState.selectedBand) {
+                        FrequencyBand.BAND_433 -> "433.775"
+                        else -> "868.0"
+                    }
+                _state.update {
+                    it.copy(
+                        currentStep = FlasherStep.TNC_CONFIGURATION,
+                        isFlashing = false,
+                        needsManualReset = false,
+                        isProvisioning = false,
+                        tncFrequencyMhz = defaultFreq,
+                    )
+                }
+                return
+            }
+
             _state.update {
                 it.copy(
                     currentStep = FlasherStep.COMPLETE,
@@ -243,6 +311,14 @@ class FlasherViewModel
                             needsManualReset = false,
                             isProvisioning = false,
                             flashResult = FlashResult.Failure(flashState.message),
+                        )
+                    }
+                }
+                FlasherStep.TNC_CONFIGURATION -> {
+                    _state.update {
+                        it.copy(
+                            tncConfiguring = false,
+                            tncConfigError = flashState.message,
                         )
                     }
                 }
@@ -880,6 +956,66 @@ class FlasherViewModel
             }
         }
 
+        // ==================== Step 4d: TNC Configuration ====================
+
+        fun updateTncFrequency(value: String) {
+            _state.update { it.copy(tncFrequencyMhz = value) }
+        }
+
+        fun updateTncBandwidth(value: String) {
+            _state.update { it.copy(tncBandwidthKhz = value) }
+        }
+
+        fun updateTncSpreadingFactor(value: String) {
+            _state.update { it.copy(tncSpreadingFactor = value) }
+        }
+
+        fun updateTncCodingRate(value: String) {
+            _state.update { it.copy(tncCodingRate = value) }
+        }
+
+        fun updateTncTxPower(value: String) {
+            _state.update { it.copy(tncTxPower = value) }
+        }
+
+        fun applyTncConfiguration() {
+            val device = _state.value.selectedDevice ?: return
+            val band = _state.value.selectedBand
+            val currentState = _state.value
+
+            val frequencyHz = ((currentState.tncFrequencyMhz.toDoubleOrNull() ?: 868.0) * 1_000_000).toInt()
+            val bandwidthHz = ((currentState.tncBandwidthKhz.toDoubleOrNull() ?: 125.0) * 1_000).toInt()
+            val sf = currentState.tncSpreadingFactor.toIntOrNull() ?: 8
+            val cr = currentState.tncCodingRate.toIntOrNull() ?: 5
+            val txp = currentState.tncTxPower.toIntOrNull() ?: 17
+
+            Log.i(TAG, "Applying TNC config: freq=${frequencyHz}Hz bw=${bandwidthHz}Hz sf=$sf cr=$cr txp=$txp")
+
+            _state.update { it.copy(tncConfiguring = true, tncConfigError = null) }
+
+            viewModelScope.launch {
+                flasher.enableTncMode(
+                    deviceId = device.deviceId,
+                    band = band,
+                    frequency = frequencyHz,
+                    bandwidth = bandwidthHz,
+                    spreadingFactor = sf,
+                    codingRate = cr,
+                    txPower = txp,
+                )
+                // State will be updated by observeFlashState (Complete or Error)
+            }
+        }
+
+        fun skipTncConfiguration() {
+            _state.update {
+                it.copy(
+                    currentStep = FlasherStep.COMPLETE,
+                    flashResult = FlashResult.Success(null),
+                )
+            }
+        }
+
         // ==================== Step 5: Complete ====================
 
         fun flashAnother() {
@@ -908,7 +1044,13 @@ class FlasherViewModel
             when (currentState.currentStep) {
                 FlasherStep.DEVICE_SELECTION -> {
                     if (canProceedFromDeviceSelection()) {
-                        if (skipDetectionMode) {
+                        if (tncConfigOnlyMode) {
+                            // Skip detection and firmware - go straight to TNC config
+                            Log.d(TAG, "Skipping to TNC config (config only mode)")
+                            _state.update {
+                                it.copy(currentStep = FlasherStep.TNC_CONFIGURATION)
+                            }
+                        } else if (skipDetectionMode) {
                             // Skip detection entirely - go straight to firmware selection
                             Log.d(TAG, "Skipping detection (bootloader mode)")
                             goToFirmwareSelection()
@@ -928,6 +1070,7 @@ class FlasherViewModel
                     }
                 }
                 FlasherStep.FLASH_PROGRESS,
+                FlasherStep.TNC_CONFIGURATION,
                 FlasherStep.COMPLETE,
                 -> {
                     // No next step from these
@@ -950,6 +1093,9 @@ class FlasherViewModel
                 FlasherStep.FLASH_PROGRESS -> {
                     // Can't go back during flashing
                 }
+                FlasherStep.TNC_CONFIGURATION -> {
+                    // Can't go back - flash already completed
+                }
                 FlasherStep.COMPLETE -> {
                     // Use "Flash Another" instead
                 }
@@ -963,6 +1109,7 @@ class FlasherViewModel
                 FlasherStep.DEVICE_DETECTION -> !currentState.isDetecting
                 FlasherStep.FIRMWARE_SELECTION -> true
                 FlasherStep.FLASH_PROGRESS -> false
+                FlasherStep.TNC_CONFIGURATION -> false
                 FlasherStep.COMPLETE -> false
             }
         }

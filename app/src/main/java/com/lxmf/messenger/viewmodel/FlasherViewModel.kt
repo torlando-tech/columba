@@ -750,7 +750,8 @@ class FlasherViewModel
 
         fun applyTncConfiguration() {
             val device = _state.value.selectedDevice ?: return
-            val band = _state.value.selectedBand
+            val freqHz = ((_state.value.tncFrequencyMhz.toDoubleOrNull() ?: 868.0) * 1_000_000).toLong()
+            val band = if (freqHz < 500_000_000L) FrequencyBand.BAND_433 else FrequencyBand.BAND_868_915
             viewModelScope.launch {
                 tncHelper.applyTncConfiguration(device.deviceId, band)
             }

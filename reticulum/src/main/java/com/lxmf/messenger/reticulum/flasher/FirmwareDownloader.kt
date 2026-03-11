@@ -26,7 +26,11 @@ class FirmwareDownloader {
         private const val USER_AGENT = "Columba-RNode-Flasher/1.0"
     }
 
-    private fun githubReleasesUrl(source: FirmwareSource): String = "$GITHUB_API_BASE/${source.owner}/${source.repo}/releases"
+    private fun githubReleasesUrl(source: FirmwareSource): String {
+        requireNotNull(source.owner) { "FirmwareSource.Custom has no GitHub owner" }
+        requireNotNull(source.repo) { "FirmwareSource.Custom has no GitHub repo" }
+        return "$GITHUB_API_BASE/${source.owner}/${source.repo}/releases"
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 

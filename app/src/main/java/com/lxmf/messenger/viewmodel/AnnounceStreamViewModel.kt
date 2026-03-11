@@ -588,18 +588,19 @@ class AnnounceStreamViewModel
          * Get all announces sharing the same identity as [destinationHash], excluding [destinationHash] itself.
          * Used to surface cross-links between telephony (lxst.telephony) and messaging (lxmf.delivery)
          * destinations that belong to the same peer identity.
+         *
+         * Reactive: re-emits whenever the source announce or its linked announces change in the DB.
          */
         fun getLinkedAnnouncesFlow(destinationHash: String): Flow<List<Announce>> =
-            kotlinx.coroutines.flow.flow {
-                val announce = announceRepository.getAnnounce(destinationHash)
+            announceRepository.getAnnounceFlow(destinationHash).flatMapLatest { announce ->
                 if (announce == null) {
-                    emit(emptyList<Announce>())
-                    return@flow
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                } else {
+                    val identityHash =
+                        com.lxmf.messenger.data.util.HashUtils
+                            .computeIdentityHash(announce.publicKey)
+                    announceRepository.getLinkedAnnouncesFlow(identityHash, destinationHash)
                 }
-                val identityHash =
-                    com.lxmf.messenger.data.util.HashUtils
-                        .computeIdentityHash(announce.publicKey)
-                emit(announceRepository.getLinkedAnnounces(identityHash, destinationHash))
             }
 
         // TODO: viewModelScope is cancelled shortly after onCleared() returns (as a

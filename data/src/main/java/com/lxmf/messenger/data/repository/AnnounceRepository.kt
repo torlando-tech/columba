@@ -272,6 +272,17 @@ class AnnounceRepository
         ): List<Announce> = announceDao.getAnnouncesByIdentityHashExcluding(identityHash, excludeHash).map { it.toAnnounce() }
 
         /**
+         * Reactive version: emits whenever linked announces for the same identity change.
+         */
+        fun getLinkedAnnouncesFlow(
+            identityHash: String,
+            excludeHash: String,
+        ): Flow<List<Announce>> =
+            announceDao.getAnnouncesByIdentityHashExcludingFlow(identityHash, excludeHash).map { entities ->
+                entities.map { it.toAnnounce() }
+            }
+
+        /**
          * Delete an announce
          */
         suspend fun deleteAnnounce(destinationHash: String) {
@@ -384,13 +395,10 @@ class AnnounceRepository
         /**
          * Delete announces older than [maxAgeMillis], preserving favorites and contacts.
          *
-         * @param maxAgeMillis Maximum age in milliseconds; announces older than this are deleted
+         * @param maxAgeMillis Maximum age in milliseconds; announces last seen longer ago than this are deleted
          * @return Number of deleted rows
          */
-        suspend fun deleteStaleAnnounces(maxAgeMillis: Long): Int {
-            val cutoffTime = System.currentTimeMillis() - maxAgeMillis
-            return announceDao.deleteStaleAnnounces(cutoffTime)
-        }
+        suspend fun deleteStaleAnnounces(maxAgeMillis: Long): Int = announceDao.deleteStaleAnnounces(System.currentTimeMillis() - maxAgeMillis)
 
         /**
          * Get count of announces grouped by nodeType.

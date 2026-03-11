@@ -1908,6 +1908,9 @@ fun ColumbaNavigation(
                             AnnounceDetailScreen(
                                 destinationHash = destinationHash,
                                 onBackClick = { navController.popBackStack() },
+                                onViewAnnounce = { hash ->
+                                    navController.navigate("announce_detail/${Uri.encode(hash)}")
+                                },
                                 onStartChat = { destHash, peerName ->
                                     // Navigate back to chats tab
                                     selectedTab = 0

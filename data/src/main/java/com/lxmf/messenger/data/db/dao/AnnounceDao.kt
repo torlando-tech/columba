@@ -91,6 +91,16 @@ interface AnnounceDao {
     ): List<AnnounceEntity>
 
     /**
+     * Reactive version: emits whenever announces sharing the same identity hash change.
+     * Used for live cross-link buttons on the announce detail screen.
+     */
+    @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash AND destinationHash != :excludeHash")
+    fun getAnnouncesByIdentityHashExcludingFlow(
+        identityHash: String,
+        excludeHash: String,
+    ): Flow<List<AnnounceEntity>>
+
+    /**
      * Check if an announce exists for a given destination hash
      */
     @Query("SELECT EXISTS(SELECT 1 FROM announces WHERE destinationHash = :destinationHash)")

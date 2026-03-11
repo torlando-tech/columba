@@ -118,12 +118,34 @@ fun MessageDetailScreen(
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Timestamp card - label depends on message direction
-                MessageInfoCard(
-                    icon = Icons.Default.AccessTime,
-                    title = if (msg.isFromMe) "Sent" else "Received",
-                    content = formatFullTimestamp(msg.timestamp),
-                )
+                // Timestamp cards
+                if (msg.isFromMe) {
+                    // Sent messages: show sent time
+                    MessageInfoCard(
+                        icon = Icons.Default.AccessTime,
+                        title = "Sent",
+                        content = formatFullTimestamp(msg.timestamp),
+                    )
+                } else {
+                    // Received messages: show received time prominently, sent time as secondary
+                    MessageInfoCard(
+                        icon = Icons.Default.AccessTime,
+                        title = "Received",
+                        content = formatFullTimestamp(msg.receivedAt ?: msg.timestamp),
+                    )
+                    // Show sender's claimed time (may differ if their clock is wrong)
+                    MessageInfoCard(
+                        icon = Icons.AutoMirrored.Filled.Send,
+                        title = "Sent by Sender",
+                        content = formatFullTimestamp(msg.timestamp),
+                        subtitle =
+                            if (msg.receivedAt != null && msg.receivedAt != msg.timestamp) {
+                                "Sender's local time (may differ from yours)"
+                            } else {
+                                null
+                            },
+                    )
+                }
 
                 // Status, delivery method, and error cards only apply to sent messages
                 if (msg.isFromMe) {
@@ -293,8 +315,8 @@ private data class StatusInfo(
 )
 
 @Composable
-private fun getStatusInfo(status: String): StatusInfo {
-    return when (status) {
+private fun getStatusInfo(status: String): StatusInfo =
+    when (status) {
         "delivered" ->
             StatusInfo(
                 icon = Icons.Default.CheckCircle,
@@ -325,7 +347,6 @@ private fun getStatusInfo(status: String): StatusInfo {
                 subtitle = "Message has been sent",
             )
     }
-}
 
 private data class DeliveryMethodInfo(
     val icon: ImageVector,
@@ -333,8 +354,8 @@ private data class DeliveryMethodInfo(
     val subtitle: String,
 )
 
-private fun getDeliveryMethodInfo(method: String): DeliveryMethodInfo {
-    return when (method) {
+private fun getDeliveryMethodInfo(method: String): DeliveryMethodInfo =
+    when (method) {
         "opportunistic" ->
             DeliveryMethodInfo(
                 icon = Icons.AutoMirrored.Filled.Send,
@@ -360,7 +381,6 @@ private fun getDeliveryMethodInfo(method: String): DeliveryMethodInfo {
                 subtitle = "Unknown delivery method",
             )
     }
-}
 
 private fun formatFullTimestamp(timestamp: Long): String {
     val date = Date(timestamp)
@@ -373,8 +393,8 @@ private data class HopCountInfo(
     val subtitle: String,
 )
 
-private fun getHopCountInfo(hops: Int): HopCountInfo {
-    return when {
+private fun getHopCountInfo(hops: Int): HopCountInfo =
+    when {
         hops < 0 ->
             HopCountInfo(
                 text = "Unknown",
@@ -396,4 +416,3 @@ private fun getHopCountInfo(hops: Int): HopCountInfo {
                 subtitle = "Message traveled through $hops relays",
             )
     }
-}

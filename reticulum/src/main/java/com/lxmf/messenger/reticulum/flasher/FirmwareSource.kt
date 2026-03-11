@@ -17,7 +17,7 @@ sealed class FirmwareSource(
 ) {
     object Official : FirmwareSource(
         id = "official",
-        displayName = "Official",
+        displayName = "RNode Official",
         owner = "markqvist",
         repo = "RNode_Firmware",
     )
@@ -31,7 +31,7 @@ sealed class FirmwareSource(
 
     object CommunityEdition : FirmwareSource(
         id = "ce",
-        displayName = "Community Edition",
+        displayName = "RNode Community Edition",
         owner = "liberatedsystems",
         repo = "RNode_Firmware_CE",
     )

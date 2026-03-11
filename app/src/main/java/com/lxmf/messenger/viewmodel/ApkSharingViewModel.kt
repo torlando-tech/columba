@@ -10,6 +10,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.R
 import com.lxmf.messenger.service.ApkSharingServer
 import com.lxmf.messenger.service.LocalHotspotManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -83,7 +84,11 @@ class ApkSharingViewModel
         private val _state = MutableStateFlow(ApkSharingState())
         val state: StateFlow<ApkSharingState> = _state.asStateFlow()
 
-        private val server = ApkSharingServer().apply { downloadFileName = APK_FILE_NAME }
+        private val server =
+            ApkSharingServer().apply {
+                downloadFileName = APK_FILE_NAME
+                iconBase64 = loadIconBase64()
+            }
         private var serverJob: Job? = null
         private var cachedApkFile: File? = null
         private val hotspotManager = LocalHotspotManager(application)
@@ -151,10 +156,11 @@ class ApkSharingViewModel
                         launchHttpServer(apkFile, localIp, SharingMode.WIFI)
                     } else if (LocalHotspotManager.isSupported()) {
                         // No WiFi — offer hotspot mode
-                        _state.value = _state.value.copy(
-                            errorMessage = null,
-                            needsHotspotPermission = !hasHotspotPermissions(),
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                errorMessage = null,
+                                needsHotspotPermission = !hasHotspotPermissions(),
+                            )
                         if (hasHotspotPermissions()) {
                             startHotspotAndServe(apkFile)
                         }
@@ -204,10 +210,11 @@ class ApkSharingViewModel
         }
 
         private fun startHotspotAndServe(apkFile: File) {
-            _state.value = _state.value.copy(
-                isHotspotStarting = true,
-                errorMessage = null,
-            )
+            _state.value =
+                _state.value.copy(
+                    isHotspotStarting = true,
+                    errorMessage = null,
+                )
 
             hotspotManager.start(
                 onSystemStopped = {
@@ -215,53 +222,66 @@ class ApkSharingViewModel
                     server.stop()
                     serverJob?.cancel()
                     serverJob = null
-                    _state.value = ApkSharingState(
-                        errorMessage = "WiFi hotspot was stopped by the system. " +
-                            "Please start sharing again.",
-                    )
+                    _state.value =
+                        ApkSharingState(
+                            errorMessage =
+                                "WiFi hotspot was stopped by the system. " +
+                                    "Please start sharing again.",
+                        )
                 },
             ) { result ->
-                result.onSuccess { info ->
-                    Log.i(TAG, "Hotspot started: SSID=${info.ssid}")
-                    // Give the hotspot interface a moment to come up,
-                    // then find the IP and start the HTTP server
-                    serverJob = viewModelScope.launch {
-                        // Brief delay for the network interface to be assigned an IP
-                        kotlinx.coroutines.delay(1000)
-                        val localIp = ApkSharingServer.getLocalIpAddress()
-                        if (localIp == null) {
-                            _state.value = _state.value.copy(
+                result
+                    .onSuccess { info ->
+                        Log.i(TAG, "Hotspot started: SSID=${info.ssid}")
+                        // Give the hotspot interface a moment to come up,
+                        // then find the IP and start the HTTP server
+                        serverJob =
+                            viewModelScope.launch {
+                                // Brief delay for the network interface to be assigned an IP
+                                kotlinx.coroutines.delay(1000)
+                                val localIp = ApkSharingServer.getLocalIpAddress()
+                                if (localIp == null) {
+                                    _state.value =
+                                        _state.value.copy(
+                                            isHotspotStarting = false,
+                                            errorMessage =
+                                                "Hotspot started but could not determine IP address. " +
+                                                    "Please try again.",
+                                        )
+                                    hotspotManager.stop()
+                                    return@launch
+                                }
+                                _state.value =
+                                    _state.value.copy(
+                                        isHotspotStarting = false,
+                                        hotspotSsid = info.ssid,
+                                        hotspotPassword = info.password,
+                                    )
+                                launchHttpServer(apkFile, localIp, SharingMode.HOTSPOT)
+                            }
+                    }.onFailure { error ->
+                        Log.e(TAG, "Failed to start hotspot", error)
+                        _state.value =
+                            _state.value.copy(
                                 isHotspotStarting = false,
-                                errorMessage = "Hotspot started but could not determine IP address. " +
-                                    "Please try again.",
+                                errorMessage =
+                                    when (error) {
+                                        is SecurityException ->
+                                            "Permission required to create a WiFi hotspot. " +
+                                                "Please grant the permission and try again."
+                                        else ->
+                                            error.message ?: "Could not start WiFi hotspot"
+                                    },
                             )
-                            hotspotManager.stop()
-                            return@launch
-                        }
-                        _state.value = _state.value.copy(
-                            isHotspotStarting = false,
-                            hotspotSsid = info.ssid,
-                            hotspotPassword = info.password,
-                        )
-                        launchHttpServer(apkFile, localIp, SharingMode.HOTSPOT)
                     }
-                }.onFailure { error ->
-                    Log.e(TAG, "Failed to start hotspot", error)
-                    _state.value = _state.value.copy(
-                        isHotspotStarting = false,
-                        errorMessage = when (error) {
-                            is SecurityException ->
-                                "Permission required to create a WiFi hotspot. " +
-                                    "Please grant the permission and try again."
-                            else ->
-                                error.message ?: "Could not start WiFi hotspot"
-                        },
-                    )
-                }
             }
         }
 
-        private suspend fun launchHttpServer(apkFile: File, localIp: String, mode: SharingMode) {
+        private suspend fun launchHttpServer(
+            apkFile: File,
+            localIp: String,
+            mode: SharingMode,
+        ) {
             // Obtain the readiness signal before launching so both the
             // caller and the server use the same CompletableDeferred instance.
             val portDeferred = server.prepareStart()
@@ -360,6 +380,49 @@ class ApkSharingViewModel
                 null
             }
         }
+
+        /**
+         * Load the app launcher icon as a base64-encoded PNG string
+         * for embedding in the download page HTML.
+         */
+        private fun loadIconBase64(): String? =
+            try {
+                val resources = application.resources
+                val iconResId = android.R.mipmap.sym_def_app_icon
+                // Use our own launcher icon if available, fall back to default
+                val resId =
+                    try {
+                        R.mipmap.ic_launcher
+                    } catch (_: Exception) {
+                        iconResId
+                    }
+                val drawable =
+                    resources.getDrawableForDensity(
+                        resId,
+                        android.util.DisplayMetrics.DENSITY_XHIGH,
+                        null,
+                    )
+                if (drawable != null) {
+                    val bitmap =
+                        android.graphics.Bitmap.createBitmap(
+                            drawable.intrinsicWidth,
+                            drawable.intrinsicHeight,
+                            android.graphics.Bitmap.Config.ARGB_8888,
+                        )
+                    val canvas = android.graphics.Canvas(bitmap)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    val stream = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                    bitmap.recycle()
+                    android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not load app icon for download page", e)
+                null
+            }
 
         override fun onCleared() {
             super.onCleared()

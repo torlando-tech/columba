@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,13 +69,14 @@ fun ApkSharingScreen(
     val context = LocalContext.current
 
     // Permission launcher for hotspot permissions
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { grants ->
-        if (grants.values.all { it }) {
-            viewModel.onHotspotPermissionGranted()
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { grants ->
+            if (grants.values.all { it }) {
+                viewModel.onHotspotPermissionGranted()
+            }
         }
-    }
 
     Scaffold(
         topBar = {
@@ -91,20 +90,22 @@ fun ApkSharingScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
             )
         },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .consumeWindowInsets(paddingValues)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -171,26 +172,29 @@ private fun SharingSection(
     ) {
         // Status icon
         Icon(
-            imageVector = when {
-                sharingMode == SharingMode.HOTSPOT -> Icons.Default.WifiTethering
-                isServerRunning -> Icons.Default.Wifi
-                else -> Icons.Default.WifiOff
-            },
+            imageVector =
+                when {
+                    sharingMode == SharingMode.HOTSPOT -> Icons.Default.WifiTethering
+                    isServerRunning -> Icons.Default.Wifi
+                    else -> Icons.Default.WifiOff
+                },
             contentDescription = null,
             modifier = Modifier.size(32.dp),
-            tint = if (isServerRunning) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            tint =
+                if (isServerRunning) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
         )
 
         Text(
-            text = when (sharingMode) {
-                SharingMode.HOTSPOT -> "Share via Hotspot"
-                SharingMode.WIFI -> "Share via WiFi"
-                null -> "Share via WiFi"
-            },
+            text =
+                when (sharingMode) {
+                    SharingMode.HOTSPOT -> "Share via Hotspot"
+                    SharingMode.WIFI -> "Share via WiFi"
+                    null -> "Share via WiFi"
+                },
             style = MaterialTheme.typography.titleLarge,
         )
 
@@ -221,43 +225,70 @@ private fun SharingSection(
             }
 
             isServerRunning && downloadUrl != null -> {
-                // Server running — show QR code and instructions
                 if (sharingMode == SharingMode.HOTSPOT && hotspotSsid != null) {
-                    HotspotCredentialsCard(
+                    // Hotspot mode: two-step QR flow
+                    val password = hotspotPassword ?: ""
+
+                    // Step 1: WiFi credentials QR code
+                    Text(
+                        text = "Step 1: Scan to connect to hotspot",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+
+                    QrCodeImage(
+                        data = buildWifiQrData(hotspotSsid, password),
+                        size = 280.dp,
+                    )
+
+                    // Fallback: show credentials as text
+                    HotspotCredentialsFallback(
                         ssid = hotspotSsid,
-                        password = hotspotPassword ?: "",
+                        password = password,
+                    )
+
+                    // Step 2: Download URL QR code
+                    Text(
+                        text = "Step 2: Scan to download Columba",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+
+                    QrCodeImage(
+                        data = downloadUrl,
+                        size = 280.dp,
+                    )
+                } else {
+                    // WiFi mode: single QR code
+                    Text(
+                        text = "Have the other person scan this QR code",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+
+                    QrCodeImage(
+                        data = downloadUrl,
+                        size = 280.dp,
                     )
                 }
-
-                Text(
-                    text = if (sharingMode == SharingMode.HOTSPOT) {
-                        "After connecting to the hotspot, scan this QR code to download"
-                    } else {
-                        "Have the other person scan this QR code"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-
-                QrCodeImage(
-                    data = downloadUrl,
-                    size = 280.dp,
-                )
 
                 // URL display
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
                         text = downloadUrl,
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -294,9 +325,10 @@ private fun SharingSection(
 private fun ErrorCard(errorMessage: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
         shape = RoundedCornerShape(12.dp),
     ) {
         Text(
@@ -338,9 +370,10 @@ private fun HotspotFallbackSection(onStartHotspot: () -> Unit) {
 private fun PermissionRequestSection(onRequestPermissions: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            ),
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(
@@ -361,74 +394,61 @@ private fun PermissionRequestSection(onRequestPermissions: () -> Unit) {
     }
 }
 
+/**
+ * Build a WIFI QR code URI from SSID and password.
+ *
+ * Uses the standard `WIFI:T:WPA;S:<ssid>;P:<password>;;` format
+ * that Android and iOS camera apps recognise for auto-connecting.
+ * Special characters (`\`, `;`, `,`, `"`, `:`) are backslash-escaped
+ * per the spec.
+ */
+private fun buildWifiQrData(
+    ssid: String,
+    password: String,
+): String {
+    fun escape(s: String): String =
+        s
+            .replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace("\"", "\\\"")
+            .replace(":", "\\:")
+
+    return if (password.isEmpty()) {
+        "WIFI:T:nopass;S:${escape(ssid)};;"
+    } else {
+        "WIFI:T:WPA;S:${escape(ssid)};P:${escape(password)};;"
+    }
+}
+
+/** Small fallback text showing hotspot credentials for manual entry. */
 @Composable
-private fun HotspotCredentialsCard(
+private fun HotspotCredentialsFallback(
     ssid: String,
     password: String,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        ),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Connect to this hotspot",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Network:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    text = ssid,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
+    Text(
+        text =
             if (password.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "Password:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                    Text(
-                        text = password,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-            }
-        }
-    }
+                "Network: $ssid  /  Password: $password"
+            } else {
+                "Network: $ssid  (no password)"
+            },
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
 private fun InstructionsCard(sharingMode: SharingMode) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            ),
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(
@@ -441,10 +461,9 @@ private fun InstructionsCard(sharingMode: SharingMode) {
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             if (sharingMode == SharingMode.HOTSPOT) {
-                InstructionStep("1.", "On the other phone, open WiFi settings and connect to the hotspot shown above")
-                InstructionStep("2.", "Open the camera app and scan the QR code")
-                InstructionStep("3.", "Tap the link to open it in a browser")
-                InstructionStep("4.", "Download and install the APK")
+                InstructionStep("1.", "On the other phone, scan the first QR code to connect to the hotspot")
+                InstructionStep("2.", "Once connected, scan the second QR code to open the download page")
+                InstructionStep("3.", "Download and install the APK")
             } else {
                 InstructionStep("1.", "Both phones must be on the same WiFi network")
                 InstructionStep("2.", "Open the camera app on the other phone and scan the QR code above")
@@ -456,7 +475,10 @@ private fun InstructionsCard(sharingMode: SharingMode) {
 }
 
 @Composable
-private fun InstructionStep(number: String, text: String) {
+private fun InstructionStep(
+    number: String,
+    text: String,
+) {
     Text(
         text = "$number $text",
         style = MaterialTheme.typography.bodySmall,
@@ -465,9 +487,7 @@ private fun InstructionStep(number: String, text: String) {
 }
 
 @Composable
-private fun AlternativeSharingSection(
-    onShareViaIntent: () -> Unit,
-) {
+private fun AlternativeSharingSection(onShareViaIntent: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),

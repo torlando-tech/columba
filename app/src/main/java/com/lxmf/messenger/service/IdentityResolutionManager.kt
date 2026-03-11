@@ -207,10 +207,10 @@ class IdentityResolutionManager
 
                         Log.d(TAG, "Startup sweep: requesting path for ${contact.destinationHash.take(8)}...")
                         reticulumProtocol.requestPath(destHashBytes)
-                        delay(PATH_REQUEST_STAGGER_MS)
                     } catch (e: Exception) {
                         Log.e(TAG, "Startup sweep: error for ${contact.destinationHash.take(8)}...", e)
                     }
+                    delay(PATH_REQUEST_STAGGER_MS)
                 }
 
                 Log.d(TAG, "Startup sweep complete")

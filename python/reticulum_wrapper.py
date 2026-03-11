@@ -6297,6 +6297,8 @@ class ReticulumWrapper:
 
     def persist_transport_data(self) -> Dict:
         """Persist Reticulum's transport data (path table, destinations) to disk."""
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return {"success": False, "error": "Reticulum not available"}
         try:
             RNS.Transport.persist_data()
             return {"success": True}

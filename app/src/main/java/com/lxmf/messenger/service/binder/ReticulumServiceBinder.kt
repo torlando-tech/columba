@@ -235,8 +235,13 @@ class ReticulumServiceBinder(
             // Register online status listener to trigger UI refresh when RNode connects/disconnects
             rnodeBridge?.addOnlineStatusListener(
                 object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
-                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
-                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                    override fun onRNodeOnlineStatusChanged(
+                        isOnline: Boolean,
+                        interfaceName: String,
+                    ) {
+                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ [$interfaceName] online=$isOnline")
+                        // Update RNode alert notification (heads-up on disconnect, cancel on reconnect)
+                        notificationManager.updateRNodeStatus(isOnline, interfaceName)
                         // Broadcast status change so UI can refresh interface list
                         broadcaster.broadcastStatusChange(
                             if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",

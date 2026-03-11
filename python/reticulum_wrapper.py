@@ -7653,7 +7653,7 @@ class ReticulumWrapper:
                                 f"████ RNODE ONLINE STATUS CHANGED ████ [{interface_name}] online={is_online}")
                         if self.kotlin_rnode_bridge:
                             try:
-                                self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online)
+                                self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online, interface_name)
                             except Exception as e:
                                 log_error("ReticulumWrapper", "RNodeStatus",
                                         f"Failed to notify Kotlin of online status: {e}")

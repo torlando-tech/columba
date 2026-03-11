@@ -452,7 +452,7 @@ class TestRNodeInterfaceInitialization(unittest.TestCase):
         status_callback(True)
 
         # Verify Kotlin bridge was notified
-        self.wrapper.kotlin_rnode_bridge.notifyOnlineStatusChanged.assert_called_once_with(True)
+        self.wrapper.kotlin_rnode_bridge.notifyOnlineStatusChanged.assert_called_once_with(True, 'rnode0')
 
     @patch('rnode_interface.ColumbaRNodeInterface')
     def test_initialize_rnode_interface_callback_exception_handling(self, mock_rnode_interface_class):

@@ -402,6 +402,30 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Clean AIDL generated code
+        run: |
+          # Clean AIDL generated code to avoid stale cache issues
+          # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
+
+      - name: Clean JaCoCo execution data
+        run: |
+          # Clean stale JaCoCo execution data to avoid "exceeds max age" errors in Codecov
+          rm -rf build/jacoco
+          rm -rf */build/jacoco
+          rm -rf build/reports/jacoco
+          rm -rf */build/reports/jacoco
+
+      - name: Cache Robolectric Android SDKs
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.16-${{ runner.os }}
+          restore-keys: |
+            robolectric-4.16-
+            robolectric-
+
       - name: Run reticulum and data module tests
         run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
 

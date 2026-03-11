@@ -250,6 +250,7 @@ class ServiceNotificationManager(
             } else {
                 // All RNode interfaces are online — dismiss the alert
                 notificationManager.cancel(NOTIFICATION_ID_RNODE)
+                lastDisconnectNotifyMs = 0L // reset so next disconnect always alerts
             }
 
             // Refresh the foreground notification so status text reflects RNode state

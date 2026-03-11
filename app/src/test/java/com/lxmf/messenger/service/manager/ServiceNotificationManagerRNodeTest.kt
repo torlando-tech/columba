@@ -52,13 +52,6 @@ class ServiceNotificationManagerRNodeTest {
         ShadowLooper.idleMainLooper()
     }
 
-    private fun findRNodeNotification() =
-        shadowNotificationManager.allNotifications.find {
-            // Match by notification ID — Robolectric tracks (id, notification) pairs
-            shadowNotificationManager.allNotifications.indexOf(it) >= 0 &&
-                it.extras?.getString("android.title") == "RNode Disconnected"
-        }
-
     private fun getRNodeNotification() =
         shadowNotificationManager
             .getNotification(ServiceNotificationManager.NOTIFICATION_ID_RNODE)
@@ -163,30 +156,46 @@ class ServiceNotificationManagerRNodeTest {
     // ========== Debounce ==========
 
     @Test
-    fun `rapid disconnects within cooldown do not re-post notification`() {
+    fun `disconnect after reconnect re-posts alert because debounce resets on cancel`() {
         // First disconnect — should post
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        drainMainLooper()
+        assertNotNull("First disconnect should post notification", getRNodeNotification())
+
+        // Reconnect cancels notification and resets debounce timer
+        serviceNotificationManager.updateRNodeStatus(true, "RNodeInterface[BLE]")
+        drainMainLooper()
+        assertNull("Reconnect should cancel notification", getRNodeNotification())
+
+        // Disconnect again — should re-post even if within 10s of first disconnect,
+        // because the debounce timer was reset when the notification was cancelled
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        drainMainLooper()
+
+        assertNotNull(
+            "Second disconnect should re-post alert because prior notification was cancelled",
+            getRNodeNotification(),
+        )
+    }
+
+    @Test
+    fun `second interface disconnect within cooldown is suppressed while alert visible`() {
+        // First interface disconnects — notification posted
         serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
         drainMainLooper()
         val firstNotification = getRNodeNotification()
         assertNotNull("First disconnect should post notification", firstNotification)
 
-        // Reconnect then disconnect again quickly (within 10s cooldown)
-        serviceNotificationManager.updateRNodeStatus(true, "RNodeInterface[BLE]")
-        drainMainLooper()
-        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        // Second interface disconnects while first alert is still visible —
+        // debounce suppresses the re-post (no extra heads-up sound/vibration)
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[USB]")
         drainMainLooper()
 
-        // The notification should still exist (not re-posted with heads-up) because
-        // the debounce suppresses the notify() call. The set tracks the state correctly
-        // but the heads-up alert is not re-fired.
-        // We verify that only 1 notify() call happened by checking the notification
-        // text still references the original interface (not a re-posted one).
-        // Since we can't easily count notify() calls with Robolectric's shadow,
-        // we verify the state is correct: interface is tracked as disconnected.
+        // State is still tracked correctly even if the alert wasn't re-posted
         val notification = serviceNotificationManager.createNotification("READY")
         val bigText = notification.extras.getString("android.bigText") ?: ""
         assertTrue(
-            "Interface should still be tracked as disconnected despite debounce",
+            "Both interfaces should be tracked as disconnected",
             bigText.contains("(RNode disconnected)"),
         )
     }

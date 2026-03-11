@@ -468,7 +468,7 @@ class ContactsViewModel
                         if (result.isSuccess) {
                             Log.d(TAG, "Added contact with full identity: $destinationHash")
                             viewModelScope.launch(Dispatchers.IO) {
-                                identityResolutionManager.requestPathForContact(destinationHash)
+                                identityResolutionManager.requestPathForContact(identityInput.destinationHash)
                             }
                             AddContactResult.Success
                         } else {
@@ -489,6 +489,9 @@ class ContactsViewModel
                             when (result.getOrNull()) {
                                 is ContactRepository.AddPendingResult.ResolvedImmediately -> {
                                     Log.d(TAG, "Contact resolved from existing announce: $destinationHash")
+                                    viewModelScope.launch(Dispatchers.IO) {
+                                        identityResolutionManager.requestPathForContact(identityInput.destinationHash)
+                                    }
                                     AddContactResult.Success
                                 }
                                 is ContactRepository.AddPendingResult.AddedAsPending -> {

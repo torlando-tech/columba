@@ -1421,6 +1421,17 @@ fun ColumbaNavigation(
                             val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                             val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                             val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+
+                            // State for disable transport operation
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                            var isDisablingTransport by androidx.compose.runtime.remember {
+                                androidx.compose.runtime.mutableStateOf(false)
+                            }
+                            var disableTransportResult: Boolean? by androidx.compose.runtime.remember {
+                                androidx.compose.runtime.mutableStateOf(null)
+                            }
+
                             com.lxmf.messenger.ui.screens.UsbDeviceActionScreen(
                                 deviceName = usbDeviceName,
                                 onNavigateBack = { navController.popBackStack() },
@@ -1458,6 +1469,20 @@ fun ColumbaNavigation(
                                         popUpTo("usb_device_action") { inclusive = true }
                                     }
                                 },
+                                onDisableTransport = {
+                                    isDisablingTransport = true
+                                    coroutineScope.launch {
+                                        val flasher =
+                                            com.lxmf.messenger.reticulum.flasher
+                                                .RNodeFlasher(context)
+                                        val success = flasher.disableTncMode(usbDeviceId)
+                                        isDisablingTransport = false
+                                        disableTransportResult = success
+                                    }
+                                },
+                                isDisablingTransport = isDisablingTransport,
+                                disableTransportResult = disableTransportResult,
+                                onDismissDisableResult = { disableTransportResult = null },
                             )
                         }
 

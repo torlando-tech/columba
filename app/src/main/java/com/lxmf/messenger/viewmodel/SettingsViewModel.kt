@@ -86,6 +86,7 @@ data class SettingsState(
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
     val isRestarting: Boolean = false,
+    val networkStatus: NetworkStatus = NetworkStatus.CONNECTING,
     // Shared instance state
     val isSharedInstance: Boolean = false,
     val preferOwnInstance: Boolean = false,
@@ -379,6 +380,7 @@ class SettingsViewModel
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
                             isRestarting = _state.value.isRestarting,
+                            networkStatus = _state.value.networkStatus,
                             // Shared instance state from repository (set by service)
                             isSharedInstance = isSharedInstance,
                             preferOwnInstance = preferOwnInstance,
@@ -1096,6 +1098,7 @@ class SettingsViewModel
 
                     // Monitor the service's network status for logging
                     reticulumProtocol.networkStatus.collect { status ->
+                        _state.update { it.copy(networkStatus = status) }
                         val currentState = _state.value
 
                         // Only log when we're using a shared instance

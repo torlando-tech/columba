@@ -239,15 +239,22 @@ fun MapScreen(
         // Enable user location component (blue dot)
         if (hasLocationPermission) {
             @SuppressLint("MissingPermission")
-            map.locationComponent.apply {
-                activateLocationComponent(
-                    LocationComponentActivationOptions
-                        .builder(ctx, style)
-                        .build(),
-                )
-                isLocationComponentEnabled = true
-                cameraMode = CameraMode.NONE
-                renderMode = RenderMode.COMPASS
+            try {
+                map.locationComponent.apply {
+                    activateLocationComponent(
+                        LocationComponentActivationOptions
+                            .builder(ctx, style)
+                            .build(),
+                    )
+                    isLocationComponentEnabled = true
+                    cameraMode = CameraMode.NONE
+                    renderMode = RenderMode.COMPASS
+                }
+            } catch (e: SecurityException) {
+                // Permission was revoked between our check and MapLibre's
+                // internal LocationManager call (COLUMBA-5R)
+                Log.w("MapScreen", "Location permission revoked, disabling location component", e)
+                viewModel.onPermissionResult(false)
             }
         }
 
@@ -417,17 +424,24 @@ fun MapScreen(
         if (state.hasLocationPermission) {
             mapLibreMap?.let { map ->
                 map.style?.let { style ->
-                    map.locationComponent.apply {
-                        if (!isLocationComponentActivated) {
-                            activateLocationComponent(
-                                LocationComponentActivationOptions
-                                    .builder(context, style)
-                                    .build(),
-                            )
+                    try {
+                        map.locationComponent.apply {
+                            if (!isLocationComponentActivated) {
+                                activateLocationComponent(
+                                    LocationComponentActivationOptions
+                                        .builder(context, style)
+                                        .build(),
+                                )
+                            }
+                            isLocationComponentEnabled = true
+                            cameraMode = CameraMode.NONE
+                            renderMode = RenderMode.COMPASS
                         }
-                        isLocationComponentEnabled = true
-                        cameraMode = CameraMode.NONE
-                        renderMode = RenderMode.COMPASS
+                    } catch (e: SecurityException) {
+                        // Permission was revoked between our check and MapLibre's
+                        // internal LocationManager call (COLUMBA-5R)
+                        Log.w("MapScreen", "Location permission revoked, disabling location component", e)
+                        viewModel.onPermissionResult(false)
                     }
                 }
             }
@@ -484,6 +498,23 @@ fun MapScreen(
                 when (event) {
                     Lifecycle.Event.ON_START -> view.onStart()
                     Lifecycle.Event.ON_RESUME -> {
+                        // Re-check actual Android permission BEFORE view.onResume(),
+                        // which may internally resume the location engine and throw
+                        // SecurityException if permission was revoked (COLUMBA-5R).
+                        val stillHasPermission = LocationPermissionManager.hasPermission(context)
+                        if (state.hasLocationPermission && !stillHasPermission) {
+                            // Disable location component before MapLibre resumes it
+                            mapLibreMap?.locationComponent?.let { lc ->
+                                if (lc.isLocationComponentActivated) {
+                                    lc.isLocationComponentEnabled = false
+                                }
+                            }
+                            viewModel.onPermissionResult(false)
+                            platformLocationListener?.let {
+                                LocationCompat.removeLocationUpdates(context, it)
+                            }
+                            platformLocationListener = null
+                        }
                         view.onResume()
                         viewModel.refreshDefaultRegion()
                     }

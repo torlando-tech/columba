@@ -109,6 +109,7 @@ class RoutingManager(
      *
      * @return JSON string containing array of hex-encoded destination hashes
      */
+    @Synchronized
     fun getPathTableHashes(): String {
         val now = System.currentTimeMillis()
         val cached = cachedPathTableJson
@@ -124,16 +125,17 @@ class RoutingManager(
                     JSONArray(hashes).toString()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error getting path table hashes", e)
-                    "[]"
+                    null
                 }
-            } ?: run {
-                Log.w(TAG, "getPathTableHashes called but wrapper is null")
-                "[]"
             }
 
-        cachedPathTableJson = result
-        cachedPathTableTimestamp = System.currentTimeMillis()
-        return result
+        if (result != null) {
+            cachedPathTableJson = result
+            cachedPathTableTimestamp = System.currentTimeMillis()
+            return result
+        }
+        // Return stale cache on error if available, otherwise empty
+        return cached ?: "[]"
     }
 
     /**

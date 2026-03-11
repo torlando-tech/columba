@@ -491,8 +491,8 @@ class TestReactionReceiveCallback(unittest.TestCase):
         # Regular message callback SHOULD be invoked
         wrapper.kotlin_message_received_callback.assert_called_once()
 
-        # Message SHOULD be added to pending_inbound queue
-        self.assertEqual(len(mock_router.pending_inbound), 1)
+        # Message was added to pending_inbound then removed after successful callback
+        self.assertEqual(len(mock_router.pending_inbound), 0)
 
     def test_on_lxmf_delivery_handles_callback_error(self):
         """Test that errors in reaction callback don't crash processing"""

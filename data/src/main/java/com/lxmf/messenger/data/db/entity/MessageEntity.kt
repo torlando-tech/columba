@@ -1,5 +1,6 @@
 package com.lxmf.messenger.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -61,4 +62,9 @@ data class MessageEntity(
     // Used for sorting messages by arrival order (immune to sender clock skew).
     // Null for messages created before this feature was added.
     val receivedAt: Long? = null,
+    // Whether this voice message has been played by the user.
+    // Persisted so the unplayed indicator survives app restarts.
+    // Defaults to false (unplayed) for all new and existing messages.
+    @ColumnInfo(defaultValue = "0")
+    val voicePlayed: Boolean = false,
 )

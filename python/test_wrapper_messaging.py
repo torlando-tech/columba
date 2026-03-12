@@ -1908,8 +1908,8 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify interface was captured from LXMF directly (AutoInterfacePeer -> AutoInterface)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        # Verify interface was captured from LXMF directly using format_interface_name
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
@@ -1944,9 +1944,9 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify both hop count and interface were captured (AutoInterfacePeer -> AutoInterface)
+        # Verify both hop count and interface were captured via format_interface_name
         self.assertEqual(mock_message._columba_hops, 0)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
@@ -1967,7 +1967,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.receiving_interface = None  # Force path_table lookup
         mock_message.receiving_hops = None
 
-        # Create interface with proper class name (we use type().__name__ now)
+        # Create interface with proper class name
         class AutoInterfacePeer:
             pass
         mock_interface = AutoInterfacePeer()
@@ -1983,7 +1983,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         # Verify both hop count and interface captured for multi-hop
         self.assertEqual(mock_message._columba_hops, 3)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')

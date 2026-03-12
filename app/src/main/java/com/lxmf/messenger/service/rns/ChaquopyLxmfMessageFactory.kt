@@ -15,7 +15,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
  *
  * @param api The live Python `RnsApi` instance
  */
-@Suppress("UnusedImport") // Imports needed for interface contract; implementation deferred to Phase 4
+@Suppress("UnusedPrivateProperty") // api will be used in Phase 4 when source/dest wiring is complete
 class ChaquopyLxmfMessageFactory(
     private val api: PyObject,
 ) : LxmfMessageFactory {

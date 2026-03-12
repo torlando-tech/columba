@@ -1,5 +1,6 @@
 package com.lxmf.messenger.ui.screens.onboarding.pages
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -23,9 +23,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 
 /**
  * Welcome page - introduces privacy-first messaging.
@@ -49,11 +51,10 @@ fun WelcomePage(
         Spacer(modifier = Modifier.weight(1f))
 
         // App icon
-        Icon(
-            imageVector = Icons.Default.Sensors,
+        Image(
+            painter = painterResource(id = R.drawable.ic_launcher_foreground),
             contentDescription = "Columba",
             modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary,
         )
 
         Spacer(modifier = Modifier.height(24.dp))

@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -21,6 +22,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -2693,8 +2698,12 @@ fun MessageInputBar(
                     }
                 }
 
-                if (hasTextOrAttachments && pendingVoiceRecording == null) {
-                    // Send button: visible when there is text/attachments
+                // Send button: animated in/out when text/attachments state changes
+                AnimatedVisibility(
+                    visible = hasTextOrAttachments && pendingVoiceRecording == null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                ) {
                     FilledIconButton(
                         onClick = onSendClick,
                         enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
@@ -2721,13 +2730,12 @@ fun MessageInputBar(
                             )
                         }
                     }
-                } else if (pendingVoiceRecording == null) {
-                    // Mic button: visible when no text/attachments and no pending recording.
-                    // MUST remain in composition during recording so tryAwaitRelease() can
-                    // detect finger lift and fire onMicRelease.
-                    // Uses Box instead of IconButton because IconButton's internal
-                    // clickable modifier consumes touch events before pointerInput
-                    // can detect press/release for hold-to-record.
+                }
+
+                // Mic button: plain conditional (NOT AnimatedVisibility) so that the
+                // pointerInput coroutine hosting tryAwaitRelease() is never killed by
+                // an animation state change during an active hold-to-record gesture.
+                if (!hasTextOrAttachments && pendingVoiceRecording == null) {
                     Box(
                         modifier =
                             Modifier

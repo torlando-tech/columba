@@ -176,14 +176,20 @@ private fun MicronLineComposable(
 
     val indentPadding = (line.indentLevel * INDENT_DP).dp
 
-    // For centered/right-aligned lines, use exact viewport width so text wraps
-    // within the viewport (matching NomadNet terminal behavior). For left-aligned
-    // lines, use min width so they can extend beyond the viewport for scrolling.
+    // In scroll mode (MONOSPACE_SCROLL), use min-width for ALL alignments so wide
+    // lines (e.g. ASCII art) can extend beyond the viewport and scroll horizontally.
+    // In other modes, centered/right-aligned lines use exact viewport width so text
+    // wraps within the viewport (matching NomadNet terminal behavior).
+    val isScrollMode = renderingMode == RenderingMode.MONOSPACE_SCROLL
     val widthModifier =
         if (minLineWidth != Dp.Unspecified) {
-            when (line.alignment) {
-                MicronAlignment.CENTER, MicronAlignment.RIGHT -> Modifier.width(minLineWidth)
-                MicronAlignment.LEFT -> Modifier.widthIn(min = minLineWidth)
+            if (isScrollMode) {
+                Modifier.widthIn(min = minLineWidth)
+            } else {
+                when (line.alignment) {
+                    MicronAlignment.CENTER, MicronAlignment.RIGHT -> Modifier.width(minLineWidth)
+                    MicronAlignment.LEFT -> Modifier.widthIn(min = minLineWidth)
+                }
             }
         } else {
             Modifier
@@ -308,7 +314,7 @@ private fun MicronLineComposable(
 
     val lineModifier =
         widthModifier
-            .fillMaxWidth()
+            .then(if (isScrollMode) Modifier else Modifier.fillMaxWidth())
             .padding(start = indentPadding)
             .then(if (headingBg != null) Modifier.background(headingBg) else Modifier)
             .then(
@@ -323,6 +329,7 @@ private fun MicronLineComposable(
         ClickableText(
             text = annotatedString,
             modifier = lineModifier,
+            softWrap = !isScrollMode,
             style =
                 MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = fontFamily,
@@ -346,6 +353,7 @@ private fun MicronLineComposable(
         Text(
             text = annotatedString,
             modifier = lineModifier,
+            softWrap = !isScrollMode,
             style =
                 MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = fontFamily,

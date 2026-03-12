@@ -56,7 +56,7 @@ Plans:
 
 - [x] **Phase 7: Protocol and Transport Foundation** - Wire format, field collision resolution, send/receive pipeline
 - [x] **Phase 8: Recording, Send, and Playback** - VoiceRecorder, hold-to-record, preview-before-send, inline playback bubbles
-- [ ] **Phase 9: Playback Polish** - Unplayed indicator, single-playback enforcement, Oboe native output, audio focus
+- [x] **Phase 9: Playback Polish** - Unplayed indicator, single-playback enforcement, Oboe native output, audio focus
 - [ ] **Phase 10: Recording UI and Edge Cases** - Slide-to-cancel, mic/send button swap, interruption handling
 
 ## Phase Details
@@ -121,11 +121,11 @@ Plans:
   2. User can cancel an in-progress recording by sliding their finger left (slide-to-cancel gesture with visual affordance)
   3. An incoming phone call during recording stops and discards the recording without crashing or sending a partial message
   4. App being backgrounded during recording stops and discards the recording; headphone disconnect during playback pauses playback
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md -- Slide-to-cancel gesture on recording indicator + animated mic/send button swap
+- [ ] 10-02-PLAN.md -- Interruption handling (lifecycle ON_STOP, audio focus loss, headphone disconnect) + on-device verification
 
 ## Progress
 

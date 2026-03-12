@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.10.0 Voice Messages -- Phase 9: Playback Polish
+**Current focus:** v0.10.0 Voice Messages -- Phase 9: Playback Polish (COMPLETE)
 
 ## Current Position
 
-Phase: 9 of 10 (Playback Polish) -- In Progress
-Plan: 2 of 3 in phase (09-01, 09-02 complete)
-Status: In progress
-Last activity: 2026-03-12 -- Completed 09-02: Oboe player rewrite, duration extraction, audio focus
+Phase: 9 of 10 (Playback Polish) -- COMPLETE
+Plan: 3 of 3 in phase (09-01, 09-02, 09-03 complete)
+Status: Phase complete
+Last activity: 2026-03-12 -- Completed 09-03: Unplayed dot, shared player, off-screen audio continuity
 
-Progress: [████████░░░░] ~60% -- Phase 9 plan 2/3 complete (7/8 voice message plans done)
+Progress: [██████████░░] ~75% -- Phase 9 complete (8/8 voice message plans done, Phase 10 pending)
 
 ## Milestone Summary
 
@@ -24,7 +24,7 @@ Progress: [████████░░░░] ~60% -- Phase 9 plan 2/3 comple
 |-------|------|--------------|--------|
 | 7. Protocol Foundation | Audio round-trips through LXMF pipeline | PROTO-01..05 | **COMPLETE** |
 | 8. Recording + Send + Playback | Record, preview, send, and play voice messages | REC-01,04..07,09 PLAY-01..04 EDGE-01,06,07 | **COMPLETE** |
-| 9. Playback Polish | Unplayed indicator, single-playback, Oboe output | PLAY-05..07 EDGE-02 | In progress (1/3 plans) |
+| 9. Playback Polish | Unplayed indicator, single-playback, Oboe output | PLAY-05..07 EDGE-02 | **COMPLETE** |
 | 10. UI Polish + Edge Cases | Slide-to-cancel, mic/send swap, interruptions | REC-02,03 EDGE-03..05 | Not started |
 
 ## Accumulated Context
@@ -90,6 +90,7 @@ Progress: [████████░░░░] ~60% -- Phase 9 plan 2/3 comple
 
 - **09-01:** voicePlayed persistence layer -- Room schema v43, MessageEntity column, domain Message field, MessageDao.markVoicePlayed(), ConversationRepository.markVoicePlayed()
 - **09-02:** VoiceMessagePlayer rewrite -- NativePlaybackEngine (Oboe) replaces AudioTrack; messageId tracking; savedPositions for resume; AUDIOFOCUS_GAIN_TRANSIENT; countOpusFrames() duration extraction in MessageMapper; VoiceMessageBubble now shows correct duration without playback
+- **09-03:** Unplayed indicator UI -- voicePlayed in MessageUi/MessageMapper; shared VoiceMessagePlayer in MessagingViewModel (lazy, onCleared cleanup); blue dot + accent waveform for unplayed received messages; off-screen audio continuity (no per-bubble player)
 
 ### Decisions (Phase 9)
 
@@ -102,6 +103,9 @@ Progress: [████████░░░░] ~60% -- Phase 9 plan 2/3 comple
 | getCallbackFrameCount() for progress (not getBufferedFrameCount) | Callback count reflects frames actually rendered to speaker; buffered count is ring buffer backlog | 9-02 |
 | AudioTrack MODE_STATIC replaced by NativePlaybackEngine (Oboe) | Low-latency SPSC ring buffer; consistent with telephony infrastructure; required by PLAY-07 | 9-02 |
 | countOpusFrames() walks hex wire format directly | No ByteArray allocation needed for a counting operation; fast enough for toMessageUi() call path | 9-02 |
+| Shared VoiceMessagePlayer in ViewModel (not CompositionLocal/singleton) | ViewModel lifecycle ties cleanup to screen exit; onCleared() stops player and releases Oboe engine | 9-03 |
+| voicePlayer nullable in MessageBubble (default null) | Allows MessageBubble usage in previews/tests without real player; voice bubble only renders when player non-null | 9-03 |
+| onVoicePlay accepts fieldsJson (not audioBytes) | Deferred IO extraction in scope.launch+withContext(IO) inside MessagingScreen; keeps MessageBubble coroutine-free | 9-03 |
 
 ### Blockers/Concerns
 
@@ -110,6 +114,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 09-02-PLAN.md
+Stopped at: Completed 09-03-PLAN.md (Phase 9 complete)
 Resume file: None
-Next: Phase 9 plan 03 -- unplayed indicator UI (dot badge, mark-played on first full listen)
+Next: Phase 10 -- UI Polish + Edge Cases (slide-to-cancel, mic/send swap, interruptions)

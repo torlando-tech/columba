@@ -14,10 +14,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -31,6 +33,7 @@ import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -117,6 +120,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -139,6 +143,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -154,6 +159,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -211,6 +217,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val URL_ANNOTATION_TAG = "url"
 
@@ -1346,6 +1353,9 @@ fun MessagingScreen(
                             }
                         }
                     },
+                    onMicCancel = {
+                        voiceMessageViewModel.cancelRecording()
+                    },
                     onVoiceSend = {
                         pendingVoiceRecording?.let { recording ->
                             viewModel.sendMessage(destinationHash, "", voiceRecording = recording)
@@ -2328,6 +2338,7 @@ fun MessageInputBar(
     pendingVoiceRecording: com.lxmf.messenger.audio.VoiceRecording? = null,
     onMicPress: () -> Unit = {},
     onMicRelease: () -> Unit = {},
+    onMicCancel: () -> Unit = {},
     onVoiceSend: () -> Unit = {},
     onVoiceDiscard: () -> Unit = {},
 ) {
@@ -2460,15 +2471,54 @@ fun MessageInputBar(
             ) {
                 if (isRecording) {
                     // Recording indicator: replaces text field during recording
+                    // Slide-to-cancel gesture state
+                    var slideOffset by remember { mutableFloatStateOf(0f) }
+                    var cancelTriggered by remember { mutableStateOf(false) }
+                    val animatedOffset by animateFloatAsState(
+                        targetValue = slideOffset,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                        label = "slide_cancel_offset",
+                    )
+                    val cancelThresholdPx =
+                        with(LocalDensity.current) {
+                            (LocalConfiguration.current.screenWidthDp.dp / 3).toPx()
+                        }
+                    val haptic = LocalHapticFeedback.current
+
                     Box(
                         modifier =
                             Modifier
                                 .weight(1f)
+                                .offset { IntOffset(animatedOffset.roundToInt(), 0) }
                                 .heightIn(min = 48.dp)
                                 .background(
                                     MaterialTheme.colorScheme.errorContainer,
                                     RoundedCornerShape(24.dp),
-                                ).padding(horizontal = 16.dp, vertical = 12.dp),
+                                ).padding(horizontal = 16.dp, vertical = 12.dp)
+                                .pointerInput(Unit) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { cancelTriggered = false },
+                                        onDragEnd = {
+                                            if (cancelTriggered) {
+                                                onMicCancel()
+                                            }
+                                            slideOffset = 0f
+                                            cancelTriggered = false
+                                        },
+                                        onDragCancel = {
+                                            slideOffset = 0f
+                                            cancelTriggered = false
+                                        },
+                                        onHorizontalDrag = { _, dragAmount ->
+                                            val newOffset = slideOffset + dragAmount
+                                            slideOffset = newOffset.coerceIn(-cancelThresholdPx * 1.5f, 0f)
+                                            if (slideOffset <= -cancelThresholdPx && !cancelTriggered) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                cancelTriggered = true
+                                            }
+                                        },
+                                    )
+                                },
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         Row(
@@ -2512,6 +2562,25 @@ fun MessageInputBar(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
                             )
+
+                            Spacer(modifier = Modifier.weight(1f))
+                            val cancelHintAlpha = (-slideOffset / cancelThresholdPx).coerceIn(0f, 1f)
+                            if (!cancelTriggered) {
+                                Text(
+                                    text = "< Slide to cancel",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color =
+                                        MaterialTheme.colorScheme.onErrorContainer.copy(
+                                            alpha = 0.4f + cancelHintAlpha * 0.6f,
+                                        ),
+                                )
+                            } else {
+                                Text(
+                                    text = "Release to cancel",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
                 } else if (pendingVoiceRecording != null) {

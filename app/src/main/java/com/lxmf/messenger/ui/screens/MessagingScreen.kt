@@ -550,8 +550,10 @@ fun MessagingScreen(
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    viewModel.refreshTimestamps()
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> viewModel.refreshTimestamps()
+                    Lifecycle.Event.ON_STOP -> voiceMessageViewModel.cancelRecording()
+                    else -> {}
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)

@@ -83,8 +83,16 @@ class ChaquopyLxmfMessage(
                 if (result != null && result.toString() != "None") {
                     // Python dict with int keys — convert to Kotlin Map<Int, Any>
                     val pyDict = result.asMap() as Map<PyObject, PyObject>
-                    pyDict.entries.associate { (k, v) ->
-                        k.toInt() to (v.toJava(Any::class.java) as Any)
+                    try {
+                        pyDict.entries.associate { (k, v) ->
+                            k.toInt() to (v.toJava(Any::class.java) as Any)
+                        }
+                    } finally {
+                        // Close all PyObject keys and values from the dict view
+                        for ((k, v) in pyDict) {
+                            k.close()
+                            v.close()
+                        }
                     }
                 } else {
                     null

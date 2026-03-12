@@ -27,15 +27,15 @@ class ChaquopyRnsDestinationProvider(
         val pyIdentity = (identity as ChaquopyRnsIdentity).pyIdentity
         val directionInt =
             when (direction) {
-                Direction.IN -> 1 // RNS.Destination.IN
-                Direction.OUT -> 2 // RNS.Destination.OUT
+                Direction.IN -> 0x11 // RNS.Destination.IN (17)
+                Direction.OUT -> 0x12 // RNS.Destination.OUT (18)
             }
         val typeInt =
             when (type) {
-                DestinationType.SINGLE -> 1
-                DestinationType.GROUP -> 2
-                DestinationType.PLAIN -> 3
-                DestinationType.LINK -> 4
+                DestinationType.SINGLE -> 0 // RNS.Destination.SINGLE
+                DestinationType.GROUP -> 1 // RNS.Destination.GROUP
+                DestinationType.PLAIN -> 2 // RNS.Destination.PLAIN
+                DestinationType.LINK -> 3 // RNS.Destination.LINK
             }
         // Convert Kotlin vararg to Python list
         val pyAspects =

@@ -76,33 +76,41 @@ class ChaquopyRnsTransport(
             val pyList = result?.asList() ?: return emptyList()
             pyList.map { item ->
                 val dict = item.asMap() as Map<PyObject, PyObject>
-                RnsInterfaceInfo(
-                    name =
-                        dict.entries
-                            .find { it.key.toString() == "name" }
-                            ?.value
-                            ?.toString() ?: "",
-                    online =
-                        dict.entries
-                            .find { it.key.toString() == "online" }
-                            ?.value
-                            ?.toBoolean() ?: false,
-                    type =
-                        dict.entries
-                            .find { it.key.toString() == "type" }
-                            ?.value
-                            ?.toString() ?: "",
-                    rxBytes =
-                        dict.entries
-                            .find { it.key.toString() == "rxb" }
-                            ?.value
-                            ?.toLong() ?: 0L,
-                    txBytes =
-                        dict.entries
-                            .find { it.key.toString() == "txb" }
-                            ?.value
-                            ?.toLong() ?: 0L,
-                )
+                try {
+                    RnsInterfaceInfo(
+                        name =
+                            dict.entries
+                                .find { it.key.toString() == "name" }
+                                ?.value
+                                ?.toString() ?: "",
+                        online =
+                            dict.entries
+                                .find { it.key.toString() == "online" }
+                                ?.value
+                                ?.toBoolean() ?: false,
+                        type =
+                            dict.entries
+                                .find { it.key.toString() == "type" }
+                                ?.value
+                                ?.toString() ?: "",
+                        rxBytes =
+                            dict.entries
+                                .find { it.key.toString() == "rxb" }
+                                ?.value
+                                ?.toLong() ?: 0L,
+                        txBytes =
+                            dict.entries
+                                .find { it.key.toString() == "txb" }
+                                ?.value
+                                ?.toLong() ?: 0L,
+                    )
+                } finally {
+                    // Close all PyObject keys and values from the dict view
+                    for ((k, v) in dict) {
+                        k.close()
+                        v.close()
+                    }
+                }
             }
         } finally {
             result?.close()

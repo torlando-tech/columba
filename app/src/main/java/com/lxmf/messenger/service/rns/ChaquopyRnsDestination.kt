@@ -61,16 +61,12 @@ class ChaquopyRnsDestination(
     }
 
     override fun setLinkEstablishedCallback(callback: ((RnsLink) -> Unit)?) {
-        // Callback bridging: Python calls this with a raw Link, we wrap it
         if (callback != null) {
-            val pyCallback = createLinkCallback(callback)
-            api
-                .callAttr(
-                    "destination_set_link_established_callback",
-                    pyDestination,
-                    pyCallback,
-                )?.close()
+            // TODO: Phase 4 — bridge Kotlin callback to Python-callable proxy.
+            // Cannot register yet; doing so would pass a non-callable placeholder
+            // that crashes when RNS fires the link-established event.
         } else {
+            // Clear the callback on the Python side
             api
                 .callAttr(
                     "destination_set_link_established_callback",
@@ -108,19 +104,6 @@ class ChaquopyRnsDestination(
             appName = "", // Not cached — retrieve from Python if needed
             aspects = emptyList(),
         )
-
-    /**
-     * Create a Python-callable wrapper that converts a raw Python Link to [RnsLink]
-     * before forwarding to the Kotlin callback.
-     */
-    @Suppress("UnusedParameter") // callback wired in Phase 4
-    private fun createLinkCallback(callback: (RnsLink) -> Unit): PyObject {
-        // Use Chaquopy's proxy mechanism — the Python side receives a Java lambda
-        // that wraps the incoming PyObject Link in ChaquopyRnsLink
-        // This is wired in Phase 4 when we have the full callback bridge
-        // For now, return a no-op proxy
-        return api // placeholder — real wiring in Phase 4
-    }
 
     override fun close() {
         pyDestination.close()

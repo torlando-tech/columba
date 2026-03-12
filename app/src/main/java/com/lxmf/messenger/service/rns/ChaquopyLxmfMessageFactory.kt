@@ -15,6 +15,7 @@ import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
  *
  * @param api The live Python `RnsApi` instance
  */
+@Suppress("UnusedImport") // Imports needed for interface contract; implementation deferred to Phase 4
 class ChaquopyLxmfMessageFactory(
     private val api: PyObject,
 ) : LxmfMessageFactory {
@@ -26,32 +27,12 @@ class ChaquopyLxmfMessageFactory(
         desiredMethod: DeliveryMethod,
         tryPropagationOnFail: Boolean,
     ): LxmfMessage {
-        // Map DeliveryMethod enum to LXMF Python constants
-        val methodInt =
-            when (desiredMethod) {
-                DeliveryMethod.OPPORTUNISTIC -> 0
-                DeliveryMethod.DIRECT -> 1
-                DeliveryMethod.PROPAGATED -> 2
-            }
-
-        // TODO: Phase 4 — resolve destinationHash to live Python Destination objects
-        // For now, we pass primitives and let the Python side handle destination lookup.
-        // The full wiring requires the LXMF router's delivery destination for source,
-        // and a recalled/created destination for the recipient.
-        val pyMessage =
-            api.callAttr(
-                "create_lxmf_message",
-                null as Any?, // source_destination — wired in Phase 4
-                null as Any?, // dest_destination — wired in Phase 4
-                content,
-                fields,
-                methodInt,
-                tryPropagationOnFail,
-            )
-
-        return ChaquopyLxmfMessage(pyMessage, api).also {
-            it.desiredMethod = desiredMethod
-            it.tryPropagationOnFail = tryPropagationOnFail
-        }
+        // Phase 4 will resolve destinationHash to live Python Destination objects.
+        // LXMF.LXMessage requires non-null source and destination Destination objects;
+        // passing null would crash the Python constructor immediately.
+        throw UnsupportedOperationException(
+            "LxmfMessageFactory.create() requires live Python Destination objects. " +
+                "This will be wired in Phase 4 when the LXMF router provides source/dest.",
+        )
     }
 }

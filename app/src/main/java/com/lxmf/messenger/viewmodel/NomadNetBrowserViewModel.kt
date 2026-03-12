@@ -86,6 +86,8 @@ class NomadNetBrowserViewModel
         }
 
         private val history = mutableListOf<HistoryEntry>()
+        private val _canGoBack = MutableStateFlow(false)
+        val canGoBack: StateFlow<Boolean> = _canGoBack.asStateFlow()
         private var currentNodeHash = ""
 
         private val partialManager: PartialManager? by lazy {
@@ -101,8 +103,6 @@ class NomadNetBrowserViewModel
 
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
             get() = partialManager?.states ?: MutableStateFlow(emptyMap())
-
-        val canGoBack: Boolean get() = history.isNotEmpty()
 
         fun loadPage(
             destinationHash: String,
@@ -148,6 +148,7 @@ class NomadNetBrowserViewModel
                         document = currentState.document,
                     ),
                 )
+                _canGoBack.value = true
             }
 
             partialManager?.clear()
@@ -232,6 +233,7 @@ class NomadNetBrowserViewModel
 
             partialManager?.clear()
             val entry = history.removeLast()
+            _canGoBack.value = history.isNotEmpty()
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document

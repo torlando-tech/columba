@@ -84,6 +84,7 @@ fun NomadNetBrowserScreen(
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
+    val canGoBack by viewModel.canGoBack.collectAsState()
     val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
     var showIdentifyConfirm by remember { mutableStateOf(false) }
@@ -106,7 +107,7 @@ fun NomadNetBrowserScreen(
     }
 
     // Handle system back — go back in browser history first
-    BackHandler(enabled = viewModel.canGoBack) {
+    BackHandler(enabled = canGoBack) {
         viewModel.goBack()
     }
 

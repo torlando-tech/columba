@@ -44,7 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
+import com.lxmf.messenger.ui.util.getInterfaceInfo
 import com.lxmf.messenger.ui.util.getRssiInfo
 import com.lxmf.messenger.ui.util.getSnrInfo
 import com.lxmf.messenger.viewmodel.MessageDetailViewModel
@@ -170,6 +170,17 @@ fun MessageDetailScreen(
                         )
                     }
 
+                    // Sent interface card (only if available)
+                    msg.sentInterface?.let { interfaceName ->
+                        val interfaceInfo = getInterfaceInfo(interfaceName)
+                        MessageInfoCard(
+                            icon = interfaceInfo.icon,
+                            title = "Sent Via",
+                            content = interfaceInfo.text,
+                            subtitle = interfaceInfo.subtitle,
+                        )
+                    }
+
                     // Error card (only if failed and has error message)
                     if (msg.status == "failed" && !msg.errorMessage.isNullOrBlank()) {
                         MessageInfoCard(
@@ -196,7 +207,7 @@ fun MessageDetailScreen(
 
                     // Receiving interface card (only if available)
                     msg.receivedInterface?.let { interfaceName ->
-                        val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
+                        val interfaceInfo = getInterfaceInfo(interfaceName)
                         MessageInfoCard(
                             icon = interfaceInfo.icon,
                             title = "Received Via",

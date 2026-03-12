@@ -66,7 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.ProfileIcon
-import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
+import com.lxmf.messenger.ui.util.getInterfaceInfo
 import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
@@ -421,9 +421,9 @@ fun AnnounceDetailScreen(
                 // Show interface information if available
                 // The Python layer now provides the full interface name including user-configured names
                 // (e.g., "TCPInterface[Sideband Server/192.168.1.100:4965]")
-                // getReceivingInterfaceInfo() extracts the friendly name from this string
+                // getInterfaceInfo() extracts the friendly name from this string
                 announceNonNull.receivingInterface?.let { interfaceName ->
-                    val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
+                    val interfaceInfo = getInterfaceInfo(interfaceName)
                     InfoCard(
                         icon = interfaceInfo.icon,
                         title = "Received Via",

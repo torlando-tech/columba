@@ -61,4 +61,6 @@ data class MessageEntity(
     // Used for sorting messages by arrival order (immune to sender clock skew).
     // Null for messages created before this feature was added.
     val receivedAt: Long? = null,
+    // Interface name through which message was sent (null for received messages or pre-feature messages)
+    val sentInterface: String? = null,
 )

@@ -66,6 +66,7 @@ class MessageDetailViewModel
                                             receivedRssi = entity.receivedRssi,
                                             receivedSnr = entity.receivedSnr,
                                             receivedAt = entity.receivedAt,
+                                            sentInterface = entity.sentInterface,
                                         )
                                     Log.d(TAG, "Message updated: status=${entity.status}, method=${entity.deliveryMethod}")
                                     domainMessage.toMessageUi()

@@ -216,6 +216,8 @@ class MockReticulumProtocol : ReticulumProtocol {
 
     override fun getHopCount(destinationHash: ByteArray): Int = 3
 
+    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = null
+
     override suspend fun getPathTableHashes(): List<String> = emptyList()
 
     override suspend fun probeLinkSpeed(

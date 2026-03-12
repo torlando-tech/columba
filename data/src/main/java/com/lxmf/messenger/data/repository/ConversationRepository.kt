@@ -60,6 +60,9 @@ data class Message(
     // Local reception timestamp (our clock), for sort ordering.
     // Null for messages received before this feature was added.
     val receivedAt: Long? = null,
+    // Whether this voice message has been played by the user.
+    // Persisted so the unplayed indicator survives app restarts.
+    val voicePlayed: Boolean = false,
 )
 
 /**
@@ -338,6 +341,16 @@ class ConversationRepository
         }
 
         /**
+         * Mark a voice message as played for the active identity.
+         * Persists the played state so the unplayed indicator survives app restarts.
+         * No-op if there is no active identity.
+         */
+        suspend fun markVoicePlayed(messageId: String) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.markVoicePlayed(messageId, activeIdentity.identityHash)
+        }
+
+        /**
          * Mark conversation as unread (sets unread count to 1) for the active identity
          * Useful for flagging important conversations
          */
@@ -579,6 +592,7 @@ class ConversationRepository
                 receivedHopCount = receivedHopCount,
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
+                voicePlayed = voicePlayed,
             )
 
         /**

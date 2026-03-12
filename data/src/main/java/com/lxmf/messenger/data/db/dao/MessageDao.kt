@@ -223,6 +223,16 @@ interface MessageDao {
     ): ReplyPreviewEntity?
 
     /**
+     * Mark a voice message as played for the given identity.
+     * Used to persist the played state so the unplayed indicator survives app restarts.
+     */
+    @Query("UPDATE messages SET voicePlayed = 1 WHERE id = :messageId AND identityHash = :identityHash")
+    suspend fun markVoicePlayed(
+        messageId: String,
+        identityHash: String,
+    )
+
+    /**
      * Find pending file notification messages in a conversation.
      * These are lightweight system messages sent when a file falls back to propagation,
      * notifying the recipient that a file is coming via relay.

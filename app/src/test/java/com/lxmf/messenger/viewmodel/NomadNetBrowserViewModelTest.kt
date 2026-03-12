@@ -14,6 +14,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -30,7 +32,7 @@ import org.junit.Test
 
 /**
  * Tests for [NomadNetBrowserViewModel] — navigation state machine, caching,
- * history, form submission, and identify-to-node logic.
+ * history, form submission, identify-to-node logic, URL helpers, and lxmf@ routing.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NomadNetBrowserViewModelTest {
@@ -211,6 +213,44 @@ class NomadNetBrowserViewModelTest {
                     any(),
                 )
             }
+        }
+
+    @Test
+    fun `navigateToLink with lxmf@ emits OpenConversation event`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            val eventDeferred = async { viewModel.navigationEvent.first() }
+            viewModel.navigateToLink("lxmf@deadbeef01234567", emptyList())
+            advanceUntilIdle()
+
+            val event = eventDeferred.await()
+            assertTrue(event is NomadNetBrowserViewModel.NavigationEvent.OpenConversation)
+            assertEquals(
+                "deadbeef01234567",
+                (event as NomadNetBrowserViewModel.NavigationEvent.OpenConversation).destinationHash,
+            )
+        }
+
+    @Test
+    fun `navigateToLink with lxmf@ does not push history`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // Collect event to avoid suspension
+            val eventDeferred = async { viewModel.navigationEvent.first() }
+            viewModel.navigateToLink("lxmf@somehash", emptyList())
+            advanceUntilIdle()
+            eventDeferred.await()
+
+            // Should NOT have pushed to history
+            assertFalse(viewModel.canGoBack.value)
         }
 
     // ── goBack ──
@@ -424,4 +464,154 @@ class NomadNetBrowserViewModelTest {
         assertNull(viewModel.identifyError.value)
         assertFalse(viewModel.canGoBack.value)
     }
+
+    // ── getCurrentUrl ──
+
+    @Test
+    fun `getCurrentUrl returns hash colon path when PageLoaded`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.loadPage(nodeHash, "/page/about.mu")
+            advanceUntilIdle()
+
+            assertEquals("$nodeHash:/page/about.mu", viewModel.getCurrentUrl())
+        }
+
+    @Test
+    fun `getCurrentUrl returns null in Initial state`() {
+        assertNull(viewModel.getCurrentUrl())
+    }
+
+    @Test
+    fun `getCurrentUrl returns null in Loading state`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns null
+            // Don't resolve the network call so state stays Loading
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } coAnswers {
+                // Never complete
+                kotlinx.coroutines.awaitCancellation()
+            }
+
+            viewModel.loadPage(nodeHash)
+            // State is Loading now
+            assertNull(viewModel.getCurrentUrl())
+        }
+
+    @Test
+    fun `getCurrentUrl returns null in Error state`() =
+        runTest(testDispatcher) {
+            viewModel.cancelLoading() // Forces Error state
+            advanceUntilIdle()
+
+            assertNull(viewModel.getCurrentUrl())
+        }
+
+    // ── getShareableUrl ──
+
+    @Test
+    fun `getShareableUrl prepends nomadnetwork scheme`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            assertEquals("nomadnetwork://$nodeHash:/page/index.mu", viewModel.getShareableUrl())
+        }
+
+    @Test
+    fun `getShareableUrl returns null when not loaded`() {
+        assertNull(viewModel.getShareableUrl())
+    }
+
+    // ── navigateToUrl ──
+
+    @Test
+    fun `navigateToUrl with hash colon path navigates to page`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.navigateToUrl("$nodeHash:/page/about.mu")
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals(nodeHash, state.nodeHash)
+            assertEquals("/page/about.mu", state.path)
+        }
+
+    @Test
+    fun `navigateToUrl with hash only defaults to index path`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.navigateToUrl(nodeHash)
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals(nodeHash, state.nodeHash)
+            assertEquals("/page/index.mu", state.path)
+        }
+
+    @Test
+    fun `navigateToUrl strips nomadnetwork scheme and navigates`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.navigateToUrl("nomadnetwork://$nodeHash:/page/status.mu")
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals(nodeHash, state.nodeHash)
+            assertEquals("/page/status.mu", state.path)
+        }
+
+    @Test
+    fun `navigateToUrl with lxmf@ emits OpenConversation event`() =
+        runTest(testDispatcher) {
+            val eventDeferred = async { viewModel.navigationEvent.first() }
+            viewModel.navigateToUrl("lxmf@deadbeef01234567")
+            advanceUntilIdle()
+
+            val event = eventDeferred.await()
+            assertTrue(event is NomadNetBrowserViewModel.NavigationEvent.OpenConversation)
+            assertEquals(
+                "deadbeef01234567",
+                (event as NomadNetBrowserViewModel.NavigationEvent.OpenConversation).destinationHash,
+            )
+        }
+
+    @Test
+    fun `navigateToUrl lowercases node hash`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.navigateToUrl("ABCDEF01234567890ABCDEF012345678:/page/index.mu")
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals("abcdef01234567890abcdef012345678", state.nodeHash)
+        }
+
+    @Test
+    fun `navigateToUrl with empty input is no-op`() =
+        runTest(testDispatcher) {
+            viewModel.navigateToUrl("")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial)
+        }
+
+    @Test
+    fun `navigateToUrl trims whitespace`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            viewModel.navigateToUrl("  $nodeHash:/page/test.mu  ")
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals(nodeHash, state.nodeHash)
+            assertEquals("/page/test.mu", state.path)
+        }
 }

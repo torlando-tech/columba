@@ -1,6 +1,8 @@
 package com.lxmf.messenger.ui.screens
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
@@ -19,6 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -55,18 +61,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.MicronPageContent
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.BrowserState
+import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.NavigationEvent
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.RenderingMode
 import kotlin.math.roundToInt
 
@@ -74,7 +92,9 @@ import kotlin.math.roundToInt
 @Composable
 fun NomadNetBrowserScreen(
     destinationHash: String,
+    initialPath: String = "/page/index.mu",
     onBackClick: () -> Unit,
+    onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
 ) {
     val browserState by viewModel.browserState.collectAsState()
@@ -91,10 +111,28 @@ fun NomadNetBrowserScreen(
     var zoomScale by remember { mutableFloatStateOf(1f) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
+
+    // URL bar state
+    var isEditingUrl by remember { mutableStateOf(false) }
+    var urlFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    val urlFocusRequester = remember { FocusRequester() }
+
     // Load initial page
-    LaunchedEffect(destinationHash) {
+    LaunchedEffect(destinationHash, initialPath) {
         if (browserState is BrowserState.Initial) {
-            viewModel.loadPage(destinationHash)
+            viewModel.loadPage(destinationHash, initialPath)
+        }
+    }
+
+    // Collect navigation events (e.g., lxmf@ links)
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvent.collect { event ->
+            when (event) {
+                is NavigationEvent.OpenConversation -> onOpenConversation(event.destinationHash)
+            }
         }
     }
 
@@ -106,9 +144,14 @@ fun NomadNetBrowserScreen(
         }
     }
 
-    // Handle system back — go back in browser history first
-    BackHandler(enabled = canGoBack) {
-        viewModel.goBack()
+    // Handle system back — cancel URL editing first, then browser history
+    BackHandler(enabled = isEditingUrl || canGoBack) {
+        if (isEditingUrl) {
+            isEditingUrl = false
+            focusManager.clearFocus()
+        } else {
+            viewModel.goBack()
+        }
     }
 
     if (showIdentifyConfirm) {
@@ -149,27 +192,80 @@ fun NomadNetBrowserScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    // Derive URL from compose state (not viewModel.getCurrentUrl())
+                    // so Compose tracks the dependency and recomposes the title
+                    val currentUrl =
+                        (browserState as? BrowserState.PageLoaded)?.let {
+                            "${it.nodeHash}:${it.path}"
+                        }
+                    if (currentUrl != null || isEditingUrl) {
+                        // Address bar — rounded container with contrasting background
+                        BasicTextField(
+                            value = urlFieldValue,
+                            onValueChange = { urlFieldValue = it },
+                            singleLine = true,
+                            textStyle =
+                                TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions =
+                                KeyboardActions(
+                                    onGo = {
+                                        viewModel.navigateToUrl(urlFieldValue.text)
+                                        isEditingUrl = false
+                                        focusManager.clearFocus()
+                                    },
+                                ),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(urlFocusRequester)
+                                    .onFocusChanged { focusState ->
+                                        if (focusState.isFocused && !isEditingUrl) {
+                                            isEditingUrl = true
+                                            val text = currentUrl ?: ""
+                                            urlFieldValue =
+                                                TextFieldValue(
+                                                    text = text,
+                                                    selection = TextRange(0, text.length),
+                                                )
+                                        } else if (!focusState.isFocused && isEditingUrl) {
+                                            isEditingUrl = false
+                                        }
+                                    },
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                MaterialTheme.colorScheme.surface,
+                                                RoundedCornerShape(20.dp),
+                                            ).padding(horizontal = 12.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    innerTextField()
+                                }
+                            },
+                        )
+                    } else {
                         Text(
                             text = "NomadNet Browser",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
-                        val currentPath = (browserState as? BrowserState.PageLoaded)?.path
-                        if (currentPath != null) {
-                            Text(
-                                text = currentPath,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (!viewModel.goBack()) {
+                        if (isEditingUrl) {
+                            isEditingUrl = false
+                            focusManager.clearFocus()
+                        } else if (!viewModel.goBack()) {
                             onBackClick()
                         }
                     }) {
@@ -205,6 +301,34 @@ fun NomadNetBrowserScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                         ) {
+                            // Copy URL — derive from compose state
+                            val shareableUrl =
+                                (browserState as? BrowserState.PageLoaded)?.let {
+                                    "nomadnetwork://${it.nodeHash}:${it.path}"
+                                }
+                            if (shareableUrl != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Copy URL") },
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(shareableUrl))
+                                        showMenu = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share") },
+                                    onClick = {
+                                        val intent =
+                                            Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, shareableUrl)
+                                            }
+                                        context.startActivity(Intent.createChooser(intent, "Share NomadNet URL"))
+                                        showMenu = false
+                                    },
+                                )
+                                HorizontalDivider()
+                            }
+
                             RenderingMode.entries.forEach { mode ->
                                 DropdownMenuItem(
                                     text = {
@@ -297,6 +421,14 @@ fun NomadNetBrowserScreen(
             }
 
             is BrowserState.PageLoaded -> {
+                // Update URL field when page changes (only if not editing)
+                LaunchedEffect(state.nodeHash, state.path) {
+                    if (!isEditingUrl) {
+                        val url = "${state.nodeHash}:${state.path}"
+                        urlFieldValue = TextFieldValue(url)
+                    }
+                }
+
                 PullToRefreshBox(
                     isRefreshing = false,
                     onRefresh = { viewModel.refresh() },

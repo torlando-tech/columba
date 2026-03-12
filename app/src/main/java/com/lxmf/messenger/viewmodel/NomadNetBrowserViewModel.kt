@@ -11,7 +11,9 @@ import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -50,6 +52,12 @@ class NomadNetBrowserViewModel
             ) : BrowserState()
         }
 
+        sealed class NavigationEvent {
+            data class OpenConversation(
+                val destinationHash: String,
+            ) : NavigationEvent()
+        }
+
         enum class RenderingMode {
             MONOSPACE_SCROLL,
             MONOSPACE_ZOOM,
@@ -81,6 +89,9 @@ class NomadNetBrowserViewModel
         private val _identifyError = MutableStateFlow<String?>(null)
         val identifyError: StateFlow<String?> = _identifyError.asStateFlow()
 
+        private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
+        val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent
+
         fun clearIdentifyError() {
             _identifyError.value = null
         }
@@ -103,6 +114,52 @@ class NomadNetBrowserViewModel
 
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
             get() = partialManager?.states ?: MutableStateFlow(emptyMap())
+
+        /** Returns "nodeHash:/path" format for display in the URL bar. */
+        fun getCurrentUrl(): String? {
+            val state = browserState.value as? BrowserState.PageLoaded ?: return null
+            return "${state.nodeHash}:${state.path}"
+        }
+
+        /** Returns "nomadnetwork://nodeHash:/path" for sharing. */
+        fun getShareableUrl(): String? = getCurrentUrl()?.let { "nomadnetwork://$it" }
+
+        /**
+         * Parse user-edited URL and navigate. Supports:
+         * - "hash:/path" or "hash" (navigate to page)
+         * - "nomadnetwork://hash:/path" (strip scheme, navigate)
+         * - "lxmf@hash" (emit OpenConversation event)
+         */
+        fun navigateToUrl(input: String) {
+            val trimmed = input.trim()
+            if (trimmed.isEmpty()) return
+
+            // Strip nomadnetwork:// scheme if present
+            val raw =
+                if (trimmed.startsWith("nomadnetwork://")) {
+                    trimmed.removePrefix("nomadnetwork://")
+                } else {
+                    trimmed
+                }
+
+            // Handle lxmf@ links
+            if (raw.startsWith("lxmf@")) {
+                val hash = raw.removePrefix("lxmf@")
+                viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(hash)) }
+                return
+            }
+
+            // Split on first colon: "hash:/path" or just "hash"
+            val colonIdx = raw.indexOf(':')
+            val (nodeHash, path) =
+                if (colonIdx > 0) {
+                    raw.substring(0, colonIdx) to raw.substring(colonIdx + 1)
+                } else {
+                    raw to DEFAULT_PATH
+                }
+
+            loadPage(nodeHash.lowercase(), path)
+        }
 
         fun loadPage(
             destinationHash: String,
@@ -134,6 +191,13 @@ class NomadNetBrowserViewModel
             if (destination.startsWith("p:")) {
                 val pids = destination.substringAfter("p:").split("|")
                 pids.forEach { partialManager?.reloadPartial(it) }
+                return
+            }
+
+            // Handle lxmf@ links — emit navigation event instead of page navigation
+            if (destination.startsWith("lxmf@")) {
+                val hash = destination.removePrefix("lxmf@")
+                viewModelScope.launch { _navigationEvent.emit(NavigationEvent.OpenConversation(hash)) }
                 return
             }
 

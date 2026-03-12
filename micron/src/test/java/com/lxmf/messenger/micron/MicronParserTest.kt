@@ -755,6 +755,48 @@ class MicronParserTest {
         assertTrue(texts.none { it.content.contains("`") })
     }
 
+    // ==================== Unknown formatting commands (backtick + unrecognized char) ====================
+
+    @Test
+    fun `backtick-space after link is consumed not rendered`() {
+        // NomadNet pattern: `[Send`:/page/rrc/chat.mu`fields]`
+        // The trailing ` (backtick-space) should be silently discarded
+        val doc = MicronParser.parse("`[Send`:/page/rrc/chat.mu`msg]` after")
+        val elements = doc.lines[0].elements
+        val link = elements.filterIsInstance<MicronElement.Link>().first()
+        assertEquals("Send", link.label)
+        assertEquals(":/page/rrc/chat.mu", link.destination)
+        // No stray backtick in any text element
+        val texts = elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.none { it.content.contains("`") })
+        // "after" should appear without a leading backtick
+        assertTrue(texts.any { it.content.trimStart() == "after" })
+    }
+
+    @Test
+    fun `real-world NomadNet page with multiple styled links has no stray backticks`() {
+        // Adapted from a real NomadNet chat page
+        val markup = "`B333`[Send`:/page/rrc/chat.mu`msg]` `[Clear`:/page/rrc/chat.mu]` "
+        val doc = MicronParser.parse(markup)
+        val elements = doc.lines[0].elements
+        val links = elements.filterIsInstance<MicronElement.Link>()
+        assertEquals(2, links.size)
+        assertEquals("Send", links[0].label)
+        assertEquals("Clear", links[1].label)
+        // No stray backtick in any text element
+        val texts = elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.none { it.content.contains("`") })
+    }
+
+    @Test
+    fun `backtick plus unrecognized char both discarded`() {
+        // `x should silently consume both the backtick and 'x'
+        val doc = MicronParser.parse("before`xafter")
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        val combined = texts.joinToString("") { it.content }
+        assertEquals("beforeafter", combined)
+    }
+
     // ==================== Partials ====================
 
     @Test

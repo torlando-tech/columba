@@ -288,9 +288,11 @@ object MicronParser {
                     continue
                 }
 
-                // Unknown command — output the backtick literally
-                textBuffer.append(c)
-                i++
+                // Unknown formatting command — consume backtick + command char
+                // (matches Python MicronParser.py lines 684-686: unrecognized
+                // chars in formatting mode are silently discarded)
+                flushText()
+                i += 2
                 continue
             }
 

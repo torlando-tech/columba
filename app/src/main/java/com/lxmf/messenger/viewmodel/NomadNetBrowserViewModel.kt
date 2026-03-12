@@ -282,7 +282,10 @@ class NomadNetBrowserViewModel
                         reticulumProtocol as? ServiceReticulumProtocol
                             ?: throw IllegalStateException("Service not available")
                     protocol.identifyNomadnetLink(nodeHash).fold(
-                        onSuccess = { _isIdentified.value = true },
+                        onSuccess = {
+                            _isIdentified.value = true
+                            refresh()
+                        },
                         onFailure = { _identifyError.value = it.message },
                     )
                 } catch (e: Exception) {

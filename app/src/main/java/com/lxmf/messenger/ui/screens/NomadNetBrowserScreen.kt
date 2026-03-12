@@ -86,6 +86,7 @@ fun NomadNetBrowserScreen(
     val partialStates by viewModel.partialStates.collectAsState()
     val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
+    var showIdentifyConfirm by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -107,6 +108,39 @@ fun NomadNetBrowserScreen(
     // Handle system back — go back in browser history first
     BackHandler(enabled = viewModel.canGoBack) {
         viewModel.goBack()
+    }
+
+    if (showIdentifyConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showIdentifyConfirm = false },
+            icon = {
+                Icon(
+                    Icons.Default.Fingerprint,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            title = { Text("Identify to Node") },
+            text = {
+                Text(
+                    "This will reveal your identity to the node operator. " +
+                        "The page will refresh after identifying.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showIdentifyConfirm = false
+                    viewModel.identifyToNode()
+                }) {
+                    Text("Identify")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIdentifyConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     Scaffold(
@@ -144,7 +178,7 @@ fun NomadNetBrowserScreen(
                 actions = {
                     if (browserState is BrowserState.PageLoaded) {
                         IconButton(
-                            onClick = { viewModel.identifyToNode() },
+                            onClick = { showIdentifyConfirm = true },
                             enabled = !isIdentified && !identifyInProgress,
                         ) {
                             Icon(
@@ -213,8 +247,8 @@ fun NomadNetBrowserScreen(
                                 },
                                 enabled = !isIdentified && !identifyInProgress,
                                 onClick = {
-                                    viewModel.identifyToNode()
                                     showMenu = false
+                                    showIdentifyConfirm = true
                                 },
                             )
                         }

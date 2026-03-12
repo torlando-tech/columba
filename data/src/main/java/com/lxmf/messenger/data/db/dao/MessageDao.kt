@@ -116,6 +116,18 @@ interface MessageDao {
 
     @Query(
         """
+        UPDATE messages SET sentInterface = :sentInterface
+        WHERE id = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateSentInterface(
+        messageId: String,
+        identityHash: String,
+        sentInterface: String?,
+    )
+
+    @Query(
+        """
         UPDATE messages
         SET fieldsJson = :fieldsJson
         WHERE id = :messageId AND identityHash = :identityHash

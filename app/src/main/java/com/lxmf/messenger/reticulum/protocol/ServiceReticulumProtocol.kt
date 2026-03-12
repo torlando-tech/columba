@@ -1580,6 +1580,14 @@ class ServiceReticulumProtocol(
             null
         }
 
+    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? =
+        try {
+            service?.getNextHopInterfaceName(destinationHash)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting next hop interface name", e)
+            null
+        }
+
     override suspend fun getPathTableHashes(): List<String> =
         withContext(Dispatchers.IO) {
             try {

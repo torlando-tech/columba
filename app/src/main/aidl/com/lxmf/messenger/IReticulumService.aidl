@@ -157,6 +157,13 @@ interface IReticulumService {
     int getHopCount(in byte[] destHash);
 
     /**
+     * Get the next-hop interface name for a destination.
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return Formatted interface name (e.g., "TCPInterface[Server/1.2.3.4:4242]"), or null
+     */
+    String getNextHopInterfaceName(in byte[] destHash);
+
+    /**
      * Get list of destination hashes from RNS path table.
      * @return JSON string containing array of hex-encoded destination hashes
      */

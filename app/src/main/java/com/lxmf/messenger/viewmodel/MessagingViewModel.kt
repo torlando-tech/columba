@@ -903,6 +903,14 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
+                    // Enrich sentInterface on delivery — only on successful delivery,
+                    // where the routing table still reflects the actual send path.
+                    // Other statuses (failed, retrying_propagated) carry too much
+                    // routing ambiguity to produce accurate interface data.
+                    if (update.status == "delivered") {
+                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    }
+
                     // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
                     _messagesRefreshTrigger.value++
 
@@ -912,6 +920,32 @@ class MessagingViewModel
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Enrich sentInterface on delivery if it wasn't captured at send time.
+         * Skips propagated messages: they route through the propagation node
+         * (a different hash than conversationHash), so querying conversationHash
+         * would return the wrong interface or null.
+         */
+        private suspend fun enrichSentInterfaceOnDelivery(
+            message: com.lxmf.messenger.data.db.entity.MessageEntity,
+            messageHash: String,
+        ) {
+            if (!message.isFromMe || message.sentInterface != null || message.deliveryMethod == "propagated") return
+            try {
+                val destHashBytes =
+                    message.conversationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
+                val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
+                if (sentInterface != null) {
+                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
             }
         }
 
@@ -1230,6 +1264,15 @@ class MessagingViewModel
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
+            // Query outbound interface immediately after send (best-effort)
+            val sentInterface =
+                try {
+                    reticulumProtocol.getNextHopInterfaceName(receipt.destinationHash)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to query sent interface: ${e.message}")
+                    null
+                }
+
             val message =
                 DataMessage(
                     id = receipt.messageHash.joinToString("") { "%02x".format(it) },
@@ -1242,6 +1285,7 @@ class MessagingViewModel
                     deliveryMethod = deliveryMethodString,
                     replyToMessageId = replyToMessageId,
                     receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
+                    sentInterface = sentInterface,
                 )
             clearSelectedImage()
             clearFileAttachments()

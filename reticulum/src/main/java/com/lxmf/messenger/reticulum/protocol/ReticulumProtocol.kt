@@ -106,6 +106,16 @@ interface ReticulumProtocol {
 
     fun getHopCount(destinationHash: ByteArray): Int?
 
+    /**
+     * Get the next-hop interface name for a destination.
+     * Returns the formatted name of the interface that would be used to reach
+     * this destination (e.g., "TCPInterface[Server/1.2.3.4:4242]").
+     *
+     * @param destinationHash 16-byte destination hash
+     * @return Formatted interface name, or null if path is unknown
+     */
+    fun getNextHopInterfaceName(destinationHash: ByteArray): String?
+
     suspend fun getPathTableHashes(): List<String>
 
     /**

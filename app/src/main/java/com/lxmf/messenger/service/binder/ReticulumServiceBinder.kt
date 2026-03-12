@@ -471,6 +471,8 @@ class ReticulumServiceBinder(
 
     override fun getHopCount(destHash: ByteArray): Int = routingManager.getHopCount(destHash)
 
+    override fun getNextHopInterfaceName(destHash: ByteArray): String? = routingManager.getNextHopInterfaceName(destHash)
+
     override fun getPathTableHashes(): String = routingManager.getPathTableHashes()
 
     override fun probeLinkSpeed(

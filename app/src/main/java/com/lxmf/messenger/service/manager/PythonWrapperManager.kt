@@ -62,6 +62,10 @@ class PythonWrapperManager(
     @Volatile
     private var pythonNetworkTransport: PythonNetworkTransport? = null
 
+    // Thin RNS API (Strangler Fig Phase 0 - new path alongside reticulum_wrapper.py)
+    @Volatile
+    private var rnsApi: PyObject? = null
+
     companion object {
         private const val TAG = "PythonWrapperManager"
         private const val INIT_TIMEOUT_MS = 15_000L // 15s ANR protection
@@ -158,6 +162,16 @@ class PythonWrapperManager(
                     // Parse is_shared_instance from Python result
                     val isSharedInstance = result.getDictValue("is_shared_instance")?.toBoolean() ?: false
                     Log.d(TAG, "Reticulum initialized successfully (shared instance: $isSharedInstance)")
+
+                    // Initialize thin RNS API (Strangler Fig Phase 0 - new path)
+                    try {
+                        val rnsApiModule = py.getModule("rns_api")
+                        rnsApi = rnsApiModule.callAttr("RnsApi")
+                        Log.d(TAG, "RnsApi initialized (Strangler Fig Phase 0)")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to initialize RnsApi (non-fatal): ${e.message}")
+                    }
+
                     onSuccess(isSharedInstance)
                 } else {
                     val error = result.getDictValue("error")?.toString() ?: "Unknown error"
@@ -194,6 +208,9 @@ class PythonWrapperManager(
             wrapperToShutdown = state.wrapper
             state.wrapper = null
             shutdownGeneration = state.initializationGeneration.get()
+
+            // Clear RnsApi reference
+            rnsApi = null
 
             // Signal PythonNetworkTransport before Telephone shutdown
             // (Telephone.shutdown() may trigger teardownLink which calls into Python)
@@ -770,6 +787,30 @@ class PythonWrapperManager(
      * Convert ByteArray to hex string for logging.
      */
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
+
+    // ============================================================================
+    // RNS API (Strangler Fig Phase 0)
+    // ============================================================================
+
+    /**
+     * Get the next-hop interface name for a destination hash.
+     *
+     * Uses the thin rns_api.py module (Strangler Fig) to query RNS.Transport
+     * for the outbound interface that would be used to reach this destination.
+     *
+     * @param destHash 16-byte destination hash
+     * @return Formatted interface name (e.g., "TCPInterface[Server/1.2.3.4:4242]"), or null
+     */
+    fun getNextHopInterfaceName(destHash: ByteArray): String? {
+        if (state.isPythonShutdownStarted.get()) return null
+        val api = rnsApi ?: return null
+        return try {
+            api.callAttr("get_next_hop_interface_name", destHash)?.toString()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get next hop interface name: ${e.message}")
+            null
+        }
+    }
 
     // ============================================================================
     // RMSP (Reticulum Map Service Protocol) Methods

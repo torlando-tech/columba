@@ -69,35 +69,36 @@ class ChaquopyLxmfRouter(
         val result = api.callAttr("lxmf_get_propagation_state")
         return try {
             val dict = result?.asMap() as? Map<PyObject, PyObject>
-            if (dict != null) {
-                PropagationState(
-                    state =
-                        dict.entries
-                            .find { it.key.toString() == "state" }
-                            ?.value
-                            ?.toInt() ?: 0,
-                    stateName =
-                        dict.entries
-                            .find { it.key.toString() == "state_name" }
-                            ?.value
-                            ?.toString() ?: "idle",
-                    progress =
-                        dict.entries
-                            .find { it.key.toString() == "progress" }
-                            ?.value
-                            ?.toFloat() ?: 0f,
-                    messagesReceived =
-                        dict.entries
-                            .find { it.key.toString() == "messages_received" }
-                            ?.value
-                            ?.toInt() ?: 0,
-                )
-            } else {
-                PropagationState.IDLE
-            }
+            if (dict != null) parsePropagationDict(dict) else PropagationState.IDLE
         } finally {
             result?.close()
         }
+    }
+
+    private fun parsePropagationDict(dict: Map<PyObject, PyObject>): PropagationState {
+        var state = 0
+        var stateName = "idle"
+        var progress = 0f
+        var messagesReceived = 0
+        for ((k, v) in dict) {
+            try {
+                when (k.toString()) {
+                    "state" -> state = v.toInt()
+                    "state_name" -> stateName = v.toString()
+                    "progress" -> progress = v.toFloat()
+                    "messages_received" -> messagesReceived = v.toInt()
+                }
+            } finally {
+                k.close()
+                v.close()
+            }
+        }
+        return PropagationState(
+            state = state,
+            stateName = stateName,
+            progress = progress,
+            messagesReceived = messagesReceived,
+        )
     }
 
     override fun getVersion(): String? {

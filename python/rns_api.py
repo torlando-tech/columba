@@ -30,12 +30,14 @@ class RnsApi:
 
     # ─── RnsReticulum ─────────────────────────────────────────────
 
-    def start(self, config_dir, enable_transport=False):
+    def start(self, config_dir, enable_transport=False, loglevel=None):
         """Start Reticulum. Returns True on success."""
+        if loglevel is None:
+            loglevel = RNS.LOG_WARNING
         try:
             self.reticulum = RNS.Reticulum(
                 configdir=config_dir,
-                loglevel=RNS.LOG_DEBUG,
+                loglevel=loglevel,
             )
             if enable_transport:
                 RNS.Transport.start()

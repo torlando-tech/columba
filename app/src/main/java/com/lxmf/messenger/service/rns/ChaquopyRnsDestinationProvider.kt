@@ -45,14 +45,18 @@ class ChaquopyRnsDestinationProvider(
                 .callAttr("list", aspects.toList().toTypedArray())
 
         val pyDestination =
-            api.callAttr(
-                "create_destination",
-                pyIdentity,
-                directionInt,
-                typeInt,
-                appName,
-                pyAspects,
-            )
+            try {
+                api.callAttr(
+                    "create_destination",
+                    pyIdentity,
+                    directionInt,
+                    typeInt,
+                    appName,
+                    pyAspects,
+                )
+            } finally {
+                pyAspects.close()
+            }
         return ChaquopyRnsDestination(
             pyDestination = pyDestination,
             rnsIdentity = identity,

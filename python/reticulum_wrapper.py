@@ -16,7 +16,7 @@ import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
 from signal_quality import extract_signal_metrics, add_signal_to_message_event
-from interface_lookup import get_receiving_interface
+from interface_lookup import get_receiving_interface, format_interface_name
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -3158,17 +3158,12 @@ class ReticulumWrapper:
                     # Only use if it's a real interface (has string name), not a Mock auto-attribute
                     receiving_interface = getattr(lxmf_message, 'receiving_interface', None)
                     if receiving_interface is not None:
-                        # Use class name to identify interface type (reliable, not user-configured)
-                        class_name = type(receiving_interface).__name__
-                        # AutoInterfacePeer -> AutoInterface, otherwise use class name directly
-                        if "AutoInterface" in class_name:
-                            interface_type = "AutoInterface"
-                        else:
-                            interface_type = class_name
-                        lxmf_message._columba_interface = interface_type
-                        captured_interface = True
-                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                 f"📡 Got interface from LXMF message (opportunistic): {interface_type}")
+                        interface_name = format_interface_name(receiving_interface)
+                        if interface_name:
+                            lxmf_message._columba_interface = interface_name
+                            captured_interface = True
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Got interface from LXMF message (opportunistic): {interface_name}")
 
                         # Extract signal quality metrics from interface
                         rssi, snr = extract_signal_metrics(receiving_interface)
@@ -3201,16 +3196,12 @@ class ReticulumWrapper:
                                 path_entry = RNS.Transport.path_table.get(source_hash)
                                 if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
                                     interface_obj = path_entry[5]
-                                    # Use class name to identify interface type (reliable, not user-configured)
-                                    class_name = type(interface_obj).__name__
-                                    if "AutoInterface" in class_name:
-                                        interface_type = "AutoInterface"
-                                    else:
-                                        interface_type = class_name
-                                    lxmf_message._columba_interface = interface_type
-                                    captured_interface = True
-                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                             f"📡 Captured interface from path_table: {interface_type}")
+                                    interface_name = format_interface_name(interface_obj)
+                                    if interface_name:
+                                        lxmf_message._columba_interface = interface_name
+                                        captured_interface = True
+                                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                                 f"📡 Captured interface from path_table: {interface_name}")
 
                                     # Extract signal quality metrics from interface
                                     rssi, snr = extract_signal_metrics(interface_obj)

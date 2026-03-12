@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -200,20 +203,18 @@ fun NomadNetBrowserScreen(
                             .fillMaxSize()
                             .padding(paddingValues),
                 ) {
-                    LazyColumn(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                    ) {
-                        items(
-                            items = state.document.lines,
-                            key = null,
-                        ) { line ->
+                    if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
+                        // Single scrollable Column so all lines scroll horizontally together
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
                             MicronPageContent(
-                                document =
-                                    com.lxmf.messenger.micron
-                                        .MicronDocument(listOf(line)),
+                                document = state.document,
                                 formFields = formFields,
                                 renderingMode = renderingMode,
                                 isDark = isDark,
@@ -224,6 +225,33 @@ fun NomadNetBrowserScreen(
                                     viewModel.updateField(name, value)
                                 },
                             )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            items(
+                                items = state.document.lines,
+                                key = null,
+                            ) { line ->
+                                MicronPageContent(
+                                    document =
+                                        com.lxmf.messenger.micron
+                                            .MicronDocument(listOf(line)),
+                                    formFields = formFields,
+                                    renderingMode = renderingMode,
+                                    isDark = isDark,
+                                    onLinkClick = { destination, fieldNames ->
+                                        viewModel.navigateToLink(destination, fieldNames)
+                                    },
+                                    onFieldUpdate = { name, value ->
+                                        viewModel.updateField(name, value)
+                                    },
+                                )
+                            }
                         }
                     }
                 }

@@ -1,7 +1,6 @@
 package com.lxmf.messenger.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -247,12 +245,6 @@ private fun MicronLineComposable(
             .then(
                 if (hasLinks) {
                     Modifier.defaultMinSize(minHeight = MIN_LINK_HEIGHT_DP.dp)
-                } else {
-                    Modifier
-                },
-            ).then(
-                if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
-                    Modifier.horizontalScroll(rememberScrollState())
                 } else {
                     Modifier
                 },

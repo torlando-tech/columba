@@ -2869,6 +2869,26 @@ class ServiceReticulumProtocol(
         }
     }
 
+    /**
+     * Identify ourselves on an existing NomadNet link.
+     * @return Result<Boolean> where Boolean = alreadyIdentified
+     */
+    suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+                val resultJson = service.identifyNomadnetLink(destinationHash.hexToByteArray())
+                val result = org.json.JSONObject(resultJson)
+                if (result.optBoolean("success", false)) {
+                    result.optBoolean("already_identified", false)
+                } else {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
     data class NomadnetPageResult(
         val content: String,
         val path: String,

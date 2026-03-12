@@ -71,6 +71,19 @@ class NomadNetBrowserViewModel
         private val _renderingMode = MutableStateFlow(RenderingMode.MONOSPACE_SCROLL)
         val renderingMode: StateFlow<RenderingMode> = _renderingMode.asStateFlow()
 
+        private val _isIdentified = MutableStateFlow(false)
+        val isIdentified: StateFlow<Boolean> = _isIdentified.asStateFlow()
+
+        private val _identifyInProgress = MutableStateFlow(false)
+        val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
+
+        private val _identifyError = MutableStateFlow<String?>(null)
+        val identifyError: StateFlow<String?> = _identifyError.asStateFlow()
+
+        fun clearIdentifyError() {
+            _identifyError.value = null
+        }
+
         private val history = mutableListOf<HistoryEntry>()
         private var currentNodeHash = ""
 
@@ -80,6 +93,9 @@ class NomadNetBrowserViewModel
             destinationHash: String,
             path: String = DEFAULT_PATH,
         ) {
+            if (destinationHash != currentNodeHash) {
+                _isIdentified.value = false
+            }
             currentNodeHash = destinationHash
             _formFields.value = emptyMap()
 
@@ -182,6 +198,9 @@ class NomadNetBrowserViewModel
                 path = destination
             }
 
+            if (nodeHash != currentNodeHash) {
+                _isIdentified.value = false
+            }
             _formFields.value = emptyMap()
 
             // Form submissions always fetch fresh (response depends on submitted data)
@@ -291,6 +310,29 @@ class NomadNetBrowserViewModel
 
         fun setRenderingMode(mode: RenderingMode) {
             _renderingMode.value = mode
+        }
+
+        fun identifyToNode() {
+            if (_identifyInProgress.value || _isIdentified.value) return
+            val nodeHash = currentNodeHash
+            if (nodeHash.isEmpty()) return
+
+            _identifyInProgress.value = true
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val protocol =
+                        reticulumProtocol as? ServiceReticulumProtocol
+                            ?: throw IllegalStateException("Service not available")
+                    protocol.identifyNomadnetLink(nodeHash).fold(
+                        onSuccess = { _isIdentified.value = true },
+                        onFailure = { _identifyError.value = it.message },
+                    )
+                } catch (e: Exception) {
+                    _identifyError.value = e.message
+                } finally {
+                    _identifyInProgress.value = false
+                }
+            }
         }
 
         /**

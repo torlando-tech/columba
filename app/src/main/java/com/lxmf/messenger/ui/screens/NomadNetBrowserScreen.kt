@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -30,12 +31,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -77,14 +81,26 @@ fun NomadNetBrowserScreen(
     val browserState by viewModel.browserState.collectAsState()
     val formFields by viewModel.formFields.collectAsState()
     val renderingMode by viewModel.renderingMode.collectAsState()
+    val isIdentified by viewModel.isIdentified.collectAsState()
+    val identifyInProgress by viewModel.identifyInProgress.collectAsState()
+    val identifyError by viewModel.identifyError.collectAsState()
     val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Load initial page
     LaunchedEffect(destinationHash) {
         if (browserState is BrowserState.Initial) {
             viewModel.loadPage(destinationHash)
+        }
+    }
+
+    // Show identify errors via snackbar
+    LaunchedEffect(identifyError) {
+        identifyError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearIdentifyError()
         }
     }
 
@@ -94,6 +110,7 @@ fun NomadNetBrowserScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -126,6 +143,21 @@ fun NomadNetBrowserScreen(
                 },
                 actions = {
                     if (browserState is BrowserState.PageLoaded) {
+                        IconButton(
+                            onClick = { viewModel.identifyToNode() },
+                            enabled = !isIdentified && !identifyInProgress,
+                        ) {
+                            Icon(
+                                Icons.Default.Fingerprint,
+                                contentDescription = if (isIdentified) "Identified" else "Identify to node",
+                                tint =
+                                    if (isIdentified) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
+                            )
+                        }
                         IconButton(onClick = { viewModel.refresh() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
@@ -162,6 +194,29 @@ fun NomadNetBrowserScreen(
                                     },
                                 )
                             }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (isIdentified) "Identified" else "Identify to node")
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Fingerprint,
+                                        contentDescription = null,
+                                        tint =
+                                            if (isIdentified) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                    )
+                                },
+                                enabled = !isIdentified && !identifyInProgress,
+                                onClick = {
+                                    viewModel.identifyToNode()
+                                    showMenu = false
+                                },
+                            )
                         }
                     }
                 },

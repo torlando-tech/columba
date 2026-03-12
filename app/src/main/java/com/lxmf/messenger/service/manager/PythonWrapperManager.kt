@@ -812,6 +812,26 @@ class PythonWrapperManager(
         }
     }
 
+    /**
+     * Identify ourselves on an existing NomadNet link.
+     * Uses rns_api.py (Strangler Fig) to call link.identify() on the cached link.
+     *
+     * @param destHash 16-byte destination hash
+     * @return JSON string: {"success": true, "already_identified": false} or error
+     */
+    fun identifyNomadnetLink(destHash: ByteArray): String {
+        if (state.isPythonShutdownStarted.get()) {
+            return """{"success": false, "error": "Service shutting down"}"""
+        }
+        val api = rnsApi ?: return """{"success": false, "error": "RnsApi not initialized"}"""
+        return try {
+            api.callAttr("identify_nomadnet_link", destHash).toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error identifying on NomadNet link", e)
+            """{"success": false, "error": "${e.message}"}"""
+        }
+    }
+
     // ============================================================================
     // RMSP (Reticulum Map Service Protocol) Methods
     // ============================================================================

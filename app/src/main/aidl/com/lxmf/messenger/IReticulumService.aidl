@@ -677,4 +677,11 @@ interface IReticulumService {
      * Fire-and-forget (oneway) since cancellation is best-effort.
      */
     oneway void cancelNomadnetPageRequest();
+
+    /**
+     * Identify ourselves on an existing NomadNet link (Strangler Fig -> rns_api.py).
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string: {"success": true, "already_identified": false} or error
+     */
+    String identifyNomadnetLink(in byte[] destHash);
 }

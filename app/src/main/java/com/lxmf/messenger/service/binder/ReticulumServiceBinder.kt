@@ -1285,6 +1285,8 @@ class ReticulumServiceBinder(
         }
     }
 
+    override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)
+
     // ===========================================
     // Event Broadcasting Helpers
     // ===========================================

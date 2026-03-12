@@ -26,3 +26,41 @@ class RnsApi:
         except Exception as e:
             log_debug("RnsApi", "get_next_hop_interface_name", f"lookup failed: {e}")
         return None
+
+    def identify_nomadnet_link(self, dest_hash):
+        """Identify ourselves on an existing NomadNet link (thin pass-through)."""
+        import reticulum_wrapper
+        import RNS
+
+        if not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
+        dest_hash_hex = dest_hash.hex()
+
+        wrapper = reticulum_wrapper._global_wrapper_instance
+        if not wrapper:
+            return {"success": False, "error": "Wrapper not initialized"}
+
+        if not hasattr(wrapper, '_nomadnet_links'):
+            return {"success": False, "error": "No active connections"}
+
+        link = wrapper._nomadnet_links.get(dest_hash_hex)
+        if link is None or link.status != RNS.Link.ACTIVE:
+            if link is not None:
+                wrapper._nomadnet_links.pop(dest_hash_hex, None)
+            return {"success": False, "error": "No active link to this node. Load a page first."}
+
+        if not wrapper.router or not wrapper.router.identity:
+            return {"success": False, "error": "No local identity available"}
+
+        # Track already-identified links by link_id
+        if not hasattr(self, '_identified_links'):
+            self._identified_links = set()
+        link_id_hex = link.link_id.hex() if link.link_id else None
+        if link_id_hex and link_id_hex in self._identified_links:
+            return {"success": True, "already_identified": True}
+
+        link.identify(wrapper.router.identity)
+
+        if link_id_hex:
+            self._identified_links.add(link_id_hex)
+        return {"success": True, "already_identified": False}

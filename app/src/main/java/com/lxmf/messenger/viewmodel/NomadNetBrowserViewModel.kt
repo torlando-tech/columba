@@ -184,16 +184,20 @@ class NomadNetBrowserViewModel
                 val colonIdx = destination.indexOf(':')
                 val hashPart = destination.substring(0, colonIdx)
                 val pathPart = destination.substring(colonIdx + 1)
-                if (hashPart.length == 32 && hashPart.all { it in '0'..'9' || it in 'a'..'f' }) {
-                    nodeHash = hashPart
+                if (hashPart.length == 32 && hashPart.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                    nodeHash = hashPart.lowercase()
                     path = pathPart.ifEmpty { DEFAULT_PATH }
                 } else {
                     // Not a valid hash, treat as same-node path
                     nodeHash = currentNodeHash
                     path = destination
                 }
+            } else if (destination.length == 32 && destination.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                // Bare 32-char hex hash — cross-node, default path
+                nodeHash = destination.lowercase()
+                path = DEFAULT_PATH
             } else {
-                // Bare hash or unknown format
+                // Unknown format — treat as same-node path
                 nodeHash = currentNodeHash
                 path = destination
             }

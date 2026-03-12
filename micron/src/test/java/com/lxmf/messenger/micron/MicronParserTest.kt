@@ -701,6 +701,52 @@ class MicronParserTest {
         assertEquals("/page/home.mu", link.label)
     }
 
+    // ==================== Backtick-prefixed links and fields ====================
+
+    @Test
+    fun `backtick before link is consumed not output literally`() {
+        // `[label`dest] is the formatting-mode link syntax — backtick should not appear in output
+        val doc = MicronParser.parse("`[Home`/page/index.mu]")
+        val elements = doc.lines[0].elements
+        val link = elements.filterIsInstance<MicronElement.Link>().first()
+        assertEquals("Home", link.label)
+        assertEquals("/page/index.mu", link.destination)
+        // No stray backtick text element before the link
+        val texts = elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.none { it.content.contains("`") })
+    }
+
+    @Test
+    fun `backtick before link with formatting`() {
+        // Real-world pattern: `c`F0ad`_`[label`dest]`_`f
+        val doc = MicronParser.parse("`c`F0ad`_`[\"Hoard's Heart\"`/page/hoardsheart.mu]`_`f")
+        assertEquals(MicronAlignment.CENTER, doc.lines[0].alignment)
+        val link =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Link>()
+                .first()
+        assertEquals("\"Hoard's Heart\"", link.label)
+        assertEquals("/page/hoardsheart.mu", link.destination)
+        // No stray backtick in any text element
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.none { it.content.contains("`") })
+    }
+
+    @Test
+    fun `backtick before field is consumed not output literally`() {
+        val doc = MicronParser.parse("`<|username`john>")
+        val field =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Field>()
+                .first()
+        assertEquals("username", field.name)
+        assertEquals("john", field.defaultValue)
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.none { it.content.contains("`") })
+    }
+
     @Test
     fun `field width clamped to max`() {
         val doc = MicronParser.parse("<999|wide`>")

@@ -257,6 +257,15 @@ object MicronParser {
                     continue
                 }
 
+                // Backtick before link `[...] or field `<...> — consume the
+                // backtick (formatting-mode entry) and let the next character be
+                // processed as a link/field opener on the next iteration.
+                if (cmd == '[' || cmd == '<') {
+                    flushText()
+                    i++ // skip the backtick only; '[' or '<' handled next iteration
+                    continue
+                }
+
                 // Unknown command — output the backtick literally
                 textBuffer.append(c)
                 i++

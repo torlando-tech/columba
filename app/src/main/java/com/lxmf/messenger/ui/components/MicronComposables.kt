@@ -20,21 +20,30 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.micron.MicronAlignment
 import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronElement
@@ -42,6 +51,9 @@ import com.lxmf.messenger.micron.MicronLine
 import com.lxmf.messenger.micron.MicronStyle
 import com.lxmf.messenger.nomadnet.PartialManager
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.RenderingMode
+
+/** JetBrains Mono NL — block elements (▄ █ etc.) have the same advance width as ASCII. */
+private val JetBrainsMonoFamily = FontFamily(Font(R.font.jetbrains_mono_nl_regular))
 
 private const val INDENT_DP = 12
 private const val HEADING1_SP = 24
@@ -66,6 +78,26 @@ fun MicronPageContent(
     val pageBg = document.pageBackground?.toArgb()?.let { Color(it) }
     val containerModifier = if (pageBg != null) modifier.background(pageBg) else modifier
 
+    // Measure monospace char width once so MicronLineComposable can set
+    // lineHeight = 2 × charWidth (in sp), giving square half-block pixels.
+    // Using TextStyle.lineHeight (not Modifier.layout) ensures SpanStyle.background
+    // fills the full line height — critical for pixel art top-pixel rendering.
+    val density = LocalDensity.current
+    val squareLineHeightSp =
+        if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
+            val textMeasurer = rememberTextMeasurer()
+            remember(density) {
+                val result =
+                    textMeasurer.measure(
+                        AnnotatedString("A"),
+                        TextStyle(fontFamily = JetBrainsMonoFamily, fontSize = 14.sp),
+                    )
+                with(density) { (result.size.width * 2).toDp().toSp() }
+            }
+        } else {
+            TextUnit.Unspecified
+        }
+
     Column(modifier = containerModifier) {
         for ((lineIndex, line) in document.lines.withIndex()) {
             MicronLineComposable(
@@ -78,6 +110,7 @@ fun MicronPageContent(
                 onFieldUpdate = onFieldUpdate,
                 minLineWidth = minLineWidth,
                 partialStates = partialStates,
+                squareLineHeightSp = squareLineHeightSp,
             )
         }
     }
@@ -94,6 +127,7 @@ private fun MicronLineComposable(
     onFieldUpdate: (name: String, value: String) -> Unit,
     minLineWidth: Dp = Dp.Unspecified,
     partialStates: Map<String, PartialManager.PartialState> = emptyMap(),
+    squareLineHeightSp: TextUnit = TextUnit.Unspecified,
 ) {
     // Check if line is a line break
     if (line.elements.size == 1 && line.elements[0] is MicronElement.LineBreak) {
@@ -154,7 +188,7 @@ private fun MicronLineComposable(
 
     val fontFamily =
         when (renderingMode) {
-            RenderingMode.MONOSPACE_SCROLL, RenderingMode.MONOSPACE_ZOOM -> FontFamily.Monospace
+            RenderingMode.MONOSPACE_SCROLL, RenderingMode.MONOSPACE_ZOOM -> JetBrainsMonoFamily
             RenderingMode.PROPORTIONAL_WRAP -> FontFamily.Default
         }
 
@@ -318,24 +352,47 @@ private fun MicronLineComposable(
             .padding(start = indentPadding)
             .then(if (headingBg != null) Modifier.background(headingBg) else Modifier)
             .then(
-                if (hasLinks) {
+                if (hasLinks && !isScrollMode) {
                     Modifier.defaultMinSize(minHeight = MIN_LINK_HEIGHT_DP.dp)
                 } else {
                     Modifier
                 },
             )
 
+    // In scroll mode, use tight line metrics for pixel-art rendering:
+    // - lineHeight = squareLineHeightSp so ▄ half-blocks are square (height = 2 × charWidth)
+    //   and SpanStyle.background fills the full line height (no transparent gaps)
+    // - letterSpacing = 0 so all characters have uniform spacing
+    // - No font padding so consecutive lines are flush
+    val textStyle =
+        if (isScrollMode) {
+            TextStyle(
+                fontFamily = fontFamily,
+                fontSize = baseFontSize,
+                lineHeight = if (squareLineHeightSp != TextUnit.Unspecified) squareLineHeightSp else baseFontSize,
+                letterSpacing = 0.sp,
+                textAlign = textAlign,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle =
+                    LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    ),
+            )
+        } else {
+            MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = fontFamily,
+                fontSize = baseFontSize,
+                textAlign = textAlign,
+            )
+        }
+
     if (hasLinks) {
         ClickableText(
             text = annotatedString,
             modifier = lineModifier,
             softWrap = !isScrollMode,
-            style =
-                MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = fontFamily,
-                    fontSize = baseFontSize,
-                    textAlign = textAlign,
-                ),
+            style = textStyle,
             onClick = { offset ->
                 annotatedString
                     .getStringAnnotations("link", offset, offset)
@@ -354,12 +411,7 @@ private fun MicronLineComposable(
             text = annotatedString,
             modifier = lineModifier,
             softWrap = !isScrollMode,
-            style =
-                MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = fontFamily,
-                    fontSize = baseFontSize,
-                    textAlign = textAlign,
-                ),
+            style = textStyle,
         )
     }
 }

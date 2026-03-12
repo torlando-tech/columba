@@ -2125,6 +2125,7 @@ fun MessageBubble(
                                 waveformPeaks = message.audioWaveform,
                                 isFromMe = isFromMe,
                                 fieldsJson = message.fieldsJson,
+                                messageId = message.id,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -2667,10 +2668,11 @@ fun VoicePreviewBar(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val player =
         remember {
             com.lxmf.messenger.audio
-                .VoiceMessagePlayer()
+                .VoiceMessagePlayer(context)
         }
     val playbackState by player.state.collectAsState()
 
@@ -2711,7 +2713,7 @@ fun VoicePreviewBar(
                     if (playbackState.isPlaying) {
                         player.stop()
                     } else {
-                        scope.launch { player.play(recording.audioBytes, recording.durationMs) }
+                        scope.launch { player.play("preview", recording.audioBytes, recording.durationMs) }
                     }
                 },
                 modifier = Modifier.size(36.dp),
@@ -2829,12 +2831,14 @@ fun VoiceMessageBubble(
     waveformPeaks: List<Float>?,
     isFromMe: Boolean,
     fieldsJson: String? = null,
+    messageId: String = "",
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val player =
         remember {
             com.lxmf.messenger.audio
-                .VoiceMessagePlayer()
+                .VoiceMessagePlayer(context)
         }
     val playbackState by player.state.collectAsState()
 
@@ -2871,7 +2875,7 @@ fun VoiceMessageBubble(
                     player.stop()
                 } else {
                     audioBytes?.let { bytes ->
-                        scope.launch { player.play(bytes, durationMs) }
+                        scope.launch { player.play(messageId, bytes, durationMs) }
                     }
                 }
             },

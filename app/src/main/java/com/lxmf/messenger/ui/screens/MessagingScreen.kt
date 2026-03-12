@@ -104,10 +104,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +149,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -508,6 +513,33 @@ fun MessagingScreen(
     LaunchedEffect(Unit) {
         viewModel.sharedImageError.collect { errorMessage ->
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Compose-level clock for refreshing relative timestamps ("Just now" → "5 min ago").
+    // Reading this state in the item composable triggers recomposition of visible items only —
+    // unlike the old _messagesRefreshTrigger approach, this does NOT recreate PagingData,
+    // so scroll position is preserved.
+    var timestampTick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            timestampTick++
+        }
+    }
+
+    // Also bump the tick when returning from background so timestamps catch up immediately
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    timestampTick++
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -1087,6 +1119,12 @@ fun MessagingScreen(
                                 // All items are message bubbles
                                 contentType = { "message" },
                             ) { index ->
+                                // Read timestampTick to create a Compose snapshot dependency —
+                                // when it increments, visible items recompose and formatTimestamp()
+                                // re-evaluates with fresh System.currentTimeMillis()
+                                @Suppress("UNUSED_EXPRESSION")
+                                timestampTick
+
                                 val message = pagingItems[index]
                                 if (message != null) {
                                     // Track message position for jump-to-original

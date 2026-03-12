@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronParser
 import com.lxmf.messenger.nomadnet.NomadNetPageCache
+import com.lxmf.messenger.nomadnet.PartialManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -87,12 +88,27 @@ class NomadNetBrowserViewModel
         private val history = mutableListOf<HistoryEntry>()
         private var currentNodeHash = ""
 
+        private val partialManager: PartialManager? by lazy {
+            (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
+                PartialManager(
+                    protocol = protocol,
+                    scope = viewModelScope,
+                    currentNodeHash = { currentNodeHash },
+                    formFields = { _formFields.value },
+                )
+            }
+        }
+
+        val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
+            get() = partialManager?.states ?: MutableStateFlow(emptyMap())
+
         val canGoBack: Boolean get() = history.isNotEmpty()
 
         fun loadPage(
             destinationHash: String,
             path: String = DEFAULT_PATH,
         ) {
+            partialManager?.clear()
             if (destinationHash != currentNodeHash) {
                 _isIdentified.value = false
             }
@@ -103,12 +119,7 @@ class NomadNetBrowserViewModel
             val cached = pageCache.get(destinationHash, path)
             if (cached != null) {
                 val document = MicronParser.parse(cached)
-                _browserState.value =
-                    BrowserState.PageLoaded(
-                        document = document,
-                        path = path,
-                        nodeHash = destinationHash,
-                    )
+                emitPageLoaded(document, path, destinationHash)
                 return
             }
 
@@ -119,6 +130,13 @@ class NomadNetBrowserViewModel
             destination: String,
             fieldNames: List<String>,
         ) {
+            // Handle partial reload links: p:<pid> or p:<pid1>|<pid2>
+            if (destination.startsWith("p:")) {
+                val pids = destination.substringAfter("p:").split("|")
+                pids.forEach { partialManager?.reloadPartial(it) }
+                return
+            }
+
             // Save current page to history (with document for instant back-nav)
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
@@ -131,6 +149,8 @@ class NomadNetBrowserViewModel
                     ),
                 )
             }
+
+            partialManager?.clear()
 
             // Collect form field values for submission
             val isFormSubmission = fieldNames.isNotEmpty()
@@ -146,61 +166,8 @@ class NomadNetBrowserViewModel
                     null
                 }
 
-            // Parse destination per NomadNet URL format:
-            //   ":/page/path.mu" = same node (colon with empty hash)
-            //   "/page/path.mu" = same node (direct path)
-            //   "<32-char-hash>:/page/path.mu" = cross-node by hash
-            //   "<32-char-hash>" = cross-node, default path
-            //   "type@<hash>:<path>" = cross-type link (e.g., lxmf@hash)
-            val nodeHash: String
-            val path: String
-            if (destination.contains("@")) {
-                // Cross-type link: "type@hash:path" or "type@hash/path"
-                val afterAt = destination.substringAfter("@")
-                val colonIdx = afterAt.indexOf(':')
-                if (colonIdx >= 32) {
-                    // hash:path format
-                    nodeHash = afterAt.substring(0, 32)
-                    path = afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
-                } else if (afterAt.length >= 32) {
-                    val hashPart = afterAt.take(32)
-                    val pathPart = afterAt.drop(32)
-                    nodeHash = hashPart
-                    path = if (pathPart.startsWith(":")) pathPart.drop(1).ifEmpty { DEFAULT_PATH } else pathPart.ifEmpty { DEFAULT_PATH }
-                } else {
-                    nodeHash = currentNodeHash
-                    path = destination
-                }
-            } else if (destination.startsWith(":")) {
-                // Same-node link with colon prefix: ":/page/path.mu"
-                nodeHash = currentNodeHash
-                path = destination.drop(1).ifEmpty { DEFAULT_PATH }
-            } else if (destination.startsWith("/")) {
-                // Same-node link with direct path: "/page/path.mu"
-                nodeHash = currentNodeHash
-                path = destination
-            } else if (destination.contains(":")) {
-                // Cross-node link: "hash:/page/path.mu" or "hash:path"
-                val colonIdx = destination.indexOf(':')
-                val hashPart = destination.substring(0, colonIdx)
-                val pathPart = destination.substring(colonIdx + 1)
-                if (hashPart.length == 32 && hashPart.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                    nodeHash = hashPart.lowercase()
-                    path = pathPart.ifEmpty { DEFAULT_PATH }
-                } else {
-                    // Not a valid hash, treat as same-node path
-                    nodeHash = currentNodeHash
-                    path = destination
-                }
-            } else if (destination.length == 32 && destination.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                // Bare 32-char hex hash — cross-node, default path
-                nodeHash = destination.lowercase()
-                path = DEFAULT_PATH
-            } else {
-                // Unknown format — treat as same-node path
-                nodeHash = currentNodeHash
-                path = destination
-            }
+            // Resolve destination URL using shared utility
+            val (nodeHash, path) = PartialManager.resolveNomadNetUrl(destination, currentNodeHash)
 
             if (nodeHash != currentNodeHash) {
                 _isIdentified.value = false
@@ -231,12 +198,7 @@ class NomadNetBrowserViewModel
                                 currentNodeHash = nodeHash
                                 val document = MicronParser.parse(pageResult.content)
                                 // Don't cache form responses
-                                _browserState.value =
-                                    BrowserState.PageLoaded(
-                                        document = document,
-                                        path = pageResult.path,
-                                        nodeHash = nodeHash,
-                                    )
+                                emitPageLoaded(document, pageResult.path, nodeHash)
                             },
                             onFailure = { error ->
                                 _browserState.value =
@@ -258,12 +220,7 @@ class NomadNetBrowserViewModel
             if (cached != null) {
                 currentNodeHash = nodeHash
                 val document = MicronParser.parse(cached)
-                _browserState.value =
-                    BrowserState.PageLoaded(
-                        document = document,
-                        path = path,
-                        nodeHash = nodeHash,
-                    )
+                emitPageLoaded(document, path, nodeHash)
                 return
             }
 
@@ -273,22 +230,19 @@ class NomadNetBrowserViewModel
         fun goBack(): Boolean {
             if (history.isEmpty()) return false
 
+            partialManager?.clear()
             val entry = history.removeLast()
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
-            _browserState.value =
-                BrowserState.PageLoaded(
-                    document = entry.document,
-                    path = entry.path,
-                    nodeHash = entry.nodeHash,
-                )
+            emitPageLoaded(entry.document, entry.path, entry.nodeHash)
             return true
         }
 
         fun refresh() {
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
+                partialManager?.clear()
                 // Bypass cache read, but still cache the fresh response
                 fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
             }
@@ -340,6 +294,23 @@ class NomadNetBrowserViewModel
         }
 
         /**
+         * Emit a [BrowserState.PageLoaded] and trigger partial detection.
+         */
+        private fun emitPageLoaded(
+            document: MicronDocument,
+            path: String,
+            nodeHash: String,
+        ) {
+            _browserState.value =
+                BrowserState.PageLoaded(
+                    document = document,
+                    path = path,
+                    nodeHash = nodeHash,
+                )
+            partialManager?.detectAndLoad(document)
+        }
+
+        /**
          * Fetch a page from the network, optionally caching the response.
          */
         private fun fetchPage(
@@ -373,12 +344,7 @@ class NomadNetBrowserViewModel
                             if (cacheResponse) {
                                 pageCache.put(nodeHash, pageResult.path, pageResult.content, document.cacheTime)
                             }
-                            _browserState.value =
-                                BrowserState.PageLoaded(
-                                    document = document,
-                                    path = pageResult.path,
-                                    nodeHash = nodeHash,
-                                )
+                            emitPageLoaded(document, pageResult.path, nodeHash)
                         },
                         onFailure = { error ->
                             _browserState.value =

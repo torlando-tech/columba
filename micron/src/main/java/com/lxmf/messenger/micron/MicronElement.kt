@@ -41,5 +41,12 @@ sealed class MicronElement {
         val style: MicronStyle,
     ) : MicronElement()
 
+    data class Partial(
+        val url: String,
+        val refreshInterval: Int?,
+        val fieldNames: List<String>,
+        val partialId: String?,
+    ) : MicronElement()
+
     data object LineBreak : MicronElement()
 }

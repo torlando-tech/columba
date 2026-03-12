@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -38,6 +40,7 @@ import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronElement
 import com.lxmf.messenger.micron.MicronLine
 import com.lxmf.messenger.micron.MicronStyle
+import com.lxmf.messenger.nomadnet.PartialManager
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.RenderingMode
 
 private const val INDENT_DP = 12
@@ -56,21 +59,25 @@ fun MicronPageContent(
     onFieldUpdate: (name: String, value: String) -> Unit,
     modifier: Modifier = Modifier,
     minLineWidth: Dp = Dp.Unspecified,
+    partialStates: Map<String, PartialManager.PartialState> = emptyMap(),
+    lineIndexOffset: Int = 0,
 ) {
     val defaultFg = MaterialTheme.colorScheme.onSurface
     val pageBg = document.pageBackground?.toArgb()?.let { Color(it) }
     val containerModifier = if (pageBg != null) modifier.background(pageBg) else modifier
 
     Column(modifier = containerModifier) {
-        for (line in document.lines) {
+        for ((lineIndex, line) in document.lines.withIndex()) {
             MicronLineComposable(
                 line = line,
+                lineIndex = lineIndex + lineIndexOffset,
                 formFields = formFields,
                 defaultFg = defaultFg,
                 renderingMode = renderingMode,
                 onLinkClick = onLinkClick,
                 onFieldUpdate = onFieldUpdate,
                 minLineWidth = minLineWidth,
+                partialStates = partialStates,
             )
         }
     }
@@ -79,12 +86,14 @@ fun MicronPageContent(
 @Composable
 private fun MicronLineComposable(
     line: MicronLine,
+    lineIndex: Int,
     formFields: Map<String, String>,
     defaultFg: Color,
     renderingMode: RenderingMode,
     onLinkClick: (destination: String, fieldNames: List<String>) -> Unit,
     onFieldUpdate: (name: String, value: String) -> Unit,
     minLineWidth: Dp = Dp.Unspecified,
+    partialStates: Map<String, PartialManager.PartialState> = emptyMap(),
 ) {
     // Check if line is a line break
     if (line.elements.size == 1 && line.elements[0] is MicronElement.LineBreak) {
@@ -99,6 +108,47 @@ private fun MicronLineComposable(
             modifier = Modifier.padding(start = (line.indentLevel * INDENT_DP).dp, top = 4.dp, bottom = 4.dp),
             color = MaterialTheme.colorScheme.outline,
         )
+        return
+    }
+
+    // Check if line is a partial
+    val partial = line.elements.firstOrNull() as? MicronElement.Partial
+    if (partial != null) {
+        val key = partial.partialId?.let { "pid:$it" } ?: "pos:$lineIndex"
+        val state = partialStates[key]
+        when (state?.status) {
+            null, PartialManager.PartialState.Status.LOADING -> {
+                Box(
+                    Modifier.fillMaxWidth().padding(4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LinearProgressIndicator(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
+            }
+            PartialManager.PartialState.Status.LOADED -> {
+                state.document?.let { doc ->
+                    MicronPageContent(
+                        document = doc,
+                        formFields = formFields,
+                        renderingMode = renderingMode,
+                        isDark = true,
+                        onLinkClick = onLinkClick,
+                        onFieldUpdate = onFieldUpdate,
+                        partialStates = emptyMap(),
+                    )
+                }
+            }
+            PartialManager.PartialState.Status.ERROR -> {
+                Text(
+                    "Failed to load partial",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(4.dp),
+                )
+            }
+        }
         return
     }
 
@@ -346,6 +396,7 @@ private fun buildMicronAnnotatedString(
                 is MicronElement.Field,
                 is MicronElement.Checkbox,
                 is MicronElement.Radio,
+                is MicronElement.Partial,
                 -> { /* handled separately */ }
             }
         }

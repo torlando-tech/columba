@@ -144,6 +144,24 @@ object MicronParser {
                 continue
             }
 
+            // Partials: `{url`refresh`fields}
+            if (line.startsWith("`{")) {
+                val closeBrace = line.indexOf('}')
+                if (closeBrace != -1) {
+                    val partial = parsePartial(line.substring(2, closeBrace))
+                    if (partial != null) {
+                        outputLines.add(
+                            MicronLine(
+                                elements = listOf(partial),
+                                alignment = currentAlignment,
+                                indentLevel = sectionDepth,
+                            ),
+                        )
+                        continue
+                    }
+                }
+            }
+
             // Regular content line — parse inline elements
             val (elements, updatedStyle, updatedAlignment) =
                 parseInline(
@@ -213,12 +231,16 @@ object MicronParser {
                     i++
                     continue
                 }
-                flushText()
                 val fieldElement = parseField(line.substring(i + 1, fieldEnd), style)
                 if (fieldElement != null) {
+                    flushText()
                     elements.add(fieldElement)
+                    i = fieldEnd + 1
+                    continue
                 }
-                i = fieldEnd + 1
+                // Not a valid field — treat '<' as literal text
+                textBuffer.append(c)
+                i++
                 continue
             }
 
@@ -409,6 +431,28 @@ object MicronParser {
             destination = destination,
             fieldNames = fieldNames,
             style = style.copy(underline = true),
+        )
+    }
+
+    /**
+     * Parse a partial from the content between `{ and }.
+     * Format: `url`, `url`refresh`, or `url`refresh`fields`
+     * Fields are pipe-separated; "pid=<value>" extracts a partial ID.
+     */
+    private fun parsePartial(content: String): MicronElement.Partial? {
+        if (content.isEmpty()) return null
+        val components = content.split('`')
+        val url = components[0]
+        if (url.isEmpty()) return null
+        val refreshInterval = components.getOrNull(1)?.toIntOrNull()?.takeIf { it >= 1 }
+        val fieldsStr = components.getOrNull(2) ?: ""
+        val fieldNames = if (fieldsStr.isNotEmpty()) fieldsStr.split('|') else emptyList()
+        val partialId = fieldNames.firstOrNull { it.startsWith("pid=") }?.substringAfter("pid=")
+        return MicronElement.Partial(
+            url = url,
+            refreshInterval = refreshInterval,
+            fieldNames = fieldNames,
+            partialId = partialId,
         )
     }
 

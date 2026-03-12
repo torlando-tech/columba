@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -84,6 +83,7 @@ fun NomadNetBrowserScreen(
     val isIdentified by viewModel.isIdentified.collectAsState()
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
+    val partialStates by viewModel.partialStates.collectAsState()
     val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
@@ -326,6 +326,7 @@ fun NomadNetBrowserScreen(
                                         viewModel.updateField(name, value)
                                     },
                                     minLineWidth = viewportLineWidth,
+                                    partialStates = partialStates,
                                 )
                             }
                         }
@@ -336,14 +337,14 @@ fun NomadNetBrowserScreen(
                                     .fillMaxSize()
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                         ) {
+                            val lines = state.document.lines
                             items(
-                                items = state.document.lines,
-                                key = null,
-                            ) { line ->
+                                count = lines.size,
+                            ) { index ->
                                 MicronPageContent(
                                     document =
                                         com.lxmf.messenger.micron
-                                            .MicronDocument(listOf(line)),
+                                            .MicronDocument(listOf(lines[index])),
                                     formFields = formFields,
                                     renderingMode = renderingMode,
                                     isDark = isDark,
@@ -353,6 +354,8 @@ fun NomadNetBrowserScreen(
                                     onFieldUpdate = { name, value ->
                                         viewModel.updateField(name, value)
                                     },
+                                    partialStates = partialStates,
+                                    lineIndexOffset = index,
                                 )
                             }
                         }

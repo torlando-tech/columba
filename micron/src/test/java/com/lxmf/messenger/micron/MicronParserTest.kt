@@ -537,6 +537,14 @@ class MicronParserTest {
         assertEquals("<no closing bracket", text.content)
     }
 
+    @Test
+    fun `angle brackets without backtick treated as text`() {
+        val doc = MicronParser.parse("Status: <Active>")
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        val combined = texts.joinToString("") { it.content }
+        assertTrue(combined.contains("<Active>"))
+    }
+
     // ==================== Formatting Persistence ====================
 
     @Test
@@ -745,6 +753,74 @@ class MicronParserTest {
         assertEquals("john", field.defaultValue)
         val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
         assertTrue(texts.none { it.content.contains("`") })
+    }
+
+    // ==================== Partials ====================
+
+    @Test
+    fun `partial with url only`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu}")
+        assertEquals(1, doc.lines.size)
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertEquals("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu", partial.url)
+        assertNull(partial.refreshInterval)
+        assertTrue(partial.fieldNames.isEmpty())
+        assertNull(partial.partialId)
+    }
+
+    @Test
+    fun `partial with refresh interval`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu`30}")
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertEquals(30, partial.refreshInterval)
+    }
+
+    @Test
+    fun `partial with refresh and fields`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu`10`field1|field2}")
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertEquals(10, partial.refreshInterval)
+        assertEquals(listOf("field1", "field2"), partial.fieldNames)
+    }
+
+    @Test
+    fun `partial with pid extraction`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/partial.mu`0`pid=status|field1}")
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertNull(partial.refreshInterval) // 0 maps to null (< 1)
+        assertEquals("status", partial.partialId)
+        assertEquals(listOf("pid=status", "field1"), partial.fieldNames)
+    }
+
+    @Test
+    fun `partial same-node url`() {
+        val doc = MicronParser.parse("`{:/page/local_partial.mu`60}")
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertEquals(":/page/local_partial.mu", partial.url)
+        assertEquals(60, partial.refreshInterval)
+    }
+
+    @Test
+    fun `partial zero refresh maps to null`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu`0}")
+        val partial = doc.lines[0].elements[0] as MicronElement.Partial
+        assertNull(partial.refreshInterval)
+    }
+
+    @Test
+    fun `partial malformed no closing brace falls through to inline`() {
+        val doc = MicronParser.parse("`{a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4:/page/status.mu")
+        // Should be parsed as inline text (no closing brace)
+        val elements = doc.lines[0].elements
+        assertTrue(elements[0] is MicronElement.Text)
+    }
+
+    @Test
+    fun `partial empty content returns null falls through to inline`() {
+        val doc = MicronParser.parse("`{}")
+        // Empty content → parsePartial returns null → falls through to inline
+        val elements = doc.lines[0].elements
+        assertTrue(elements[0] is MicronElement.Text)
     }
 
     @Test

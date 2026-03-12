@@ -1246,6 +1246,28 @@ fun MessagingScreen(
                                                 selectedImageForOptionsIsAnimated = isAnimated
                                                 showImageOptionsSheet = true
                                             },
+                                            voicePlayer = viewModel.voicePlayer,
+                                            onVoicePlay = { msgId, fieldsJson, durationMs, isFromMeParam, voicePlayed ->
+                                                scope.launch {
+                                                    val audioBytes =
+                                                        withContext(Dispatchers.IO) {
+                                                            fieldsJson?.let {
+                                                                com.lxmf.messenger.ui.model
+                                                                    .extractAudioBytes(it)
+                                                            }
+                                                        }
+                                                    if (audioBytes != null) {
+                                                        viewModel.playVoiceMessage(
+                                                            msgId,
+                                                            audioBytes,
+                                                            durationMs,
+                                                            isFromMeParam,
+                                                            voicePlayed,
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onVoiceStop = { viewModel.stopVoiceMessage() },
                                             onLongPress = { msgId, fromMe, failed, bitmap, x, y, width, height ->
                                                 // Dismiss keyboard before entering reaction mode
                                                 keyboardController?.hide()
@@ -1732,6 +1754,9 @@ fun MessageBubble(
     onReact: (emoji: String) -> Unit = {},
     onFetchPendingFile: (fileSizeBytes: Long) -> Unit = {},
     onImageOptionsTap: (messageId: String, isAnimated: Boolean) -> Unit = { _, _ -> },
+    voicePlayer: com.lxmf.messenger.audio.VoiceMessagePlayer? = null,
+    onVoicePlay: (messageId: String, fieldsJson: String?, durationMs: Long, isFromMe: Boolean, voicePlayed: Boolean) -> Unit = { _, _, _, _, _ -> },
+    onVoiceStop: () -> Unit = {},
     onLongPress: (
         messageId: String,
         isFromMe: Boolean,
@@ -2119,12 +2144,23 @@ fun MessageBubble(
                         }
 
                         // Display voice message if present (LXMF field 7 = AUDIO)
-                        if (message.hasAudioAttachment) {
+                        if (message.hasAudioAttachment && voicePlayer != null) {
                             VoiceMessageBubble(
                                 durationMs = message.audioDurationMs ?: 0L,
                                 waveformPeaks = message.audioWaveform,
                                 isFromMe = isFromMe,
-                                fieldsJson = message.fieldsJson,
+                                voicePlayed = message.voicePlayed,
+                                player = voicePlayer,
+                                onPlay = {
+                                    onVoicePlay(
+                                        message.id,
+                                        message.fieldsJson,
+                                        message.audioDurationMs ?: 0L,
+                                        isFromMe,
+                                        message.voicePlayed,
+                                    )
+                                },
+                                onStop = onVoiceStop,
                                 messageId = message.id,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -2824,36 +2860,37 @@ fun WaveformBar(
 /**
  * Voice message bubble shown inside [MessageBubble] for messages with audio attachments.
  * Displays a play/pause button, duration, and waveform visualization.
+ *
+ * Uses a shared [player] owned by the ViewModel so only one message plays at a time and
+ * audio continues uninterrupted when the message scrolls off-screen.
+ *
+ * @param voicePlayed Whether this message has already been played (controls unplayed dot indicator)
+ * @param player Shared [com.lxmf.messenger.audio.VoiceMessagePlayer] from the ViewModel
+ * @param onPlay Called when the user taps play; caller should decode audio and call player.play()
+ * @param onStop Called when the user taps pause/stop
  */
 @Composable
 fun VoiceMessageBubble(
     durationMs: Long,
     waveformPeaks: List<Float>?,
     isFromMe: Boolean,
-    fieldsJson: String? = null,
+    voicePlayed: Boolean = true,
+    player: com.lxmf.messenger.audio.VoiceMessagePlayer,
+    onPlay: () -> Unit,
+    onStop: () -> Unit,
     messageId: String = "",
 ) {
-    val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val player =
-        remember {
-            com.lxmf.messenger.audio
-                .VoiceMessagePlayer(context)
-        }
     val playbackState by player.state.collectAsState()
 
-    // Extract audio bytes lazily on first play
-    val audioBytes =
-        remember(fieldsJson) {
-            fieldsJson?.let {
-                com.lxmf.messenger.ui.model
-                    .extractAudioBytes(it)
-            }
+    // This bubble is "active" when the shared player is playing this specific message
+    val isThisMessagePlaying = playbackState.isPlaying && playbackState.currentMessageId == messageId
+    val progress =
+        if (isThisMessagePlaying) {
+            playbackState.progressFraction
+        } else {
+            // Show saved position if we have one (message was paused mid-way)
+            playbackState.savedPositions[messageId] ?: 0f
         }
-
-    DisposableEffect(Unit) {
-        onDispose { player.stop() }
-    }
 
     val seconds = (durationMs / 1000).toInt()
     val barColor =
@@ -2863,29 +2900,47 @@ fun VoiceMessageBubble(
             MaterialTheme.colorScheme.onSurfaceVariant
         }
 
+    // Waveform inactive color: accent for unplayed received messages, muted for played/sent
+    val inactiveBarColor =
+        if (!isFromMe && !voicePlayed) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        } else {
+            barColor.copy(alpha = 0.3f)
+        }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.widthIn(min = 180.dp),
     ) {
+        // Unplayed indicator dot (blue dot for unplayed received messages)
+        if (!isFromMe && !voicePlayed) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape,
+                        ),
+            )
+        }
+
         // Play/pause button
         IconButton(
             onClick = {
-                if (playbackState.isPlaying) {
-                    player.stop()
+                if (isThisMessagePlaying) {
+                    onStop()
                 } else {
-                    audioBytes?.let { bytes ->
-                        scope.launch { player.play(messageId, bytes, durationMs) }
-                    }
+                    onPlay()
                 }
             },
-            enabled = audioBytes != null,
             modifier = Modifier.size(32.dp),
         ) {
             Icon(
                 imageVector =
-                    if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                    if (isThisMessagePlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (isThisMessagePlaying) "Pause" else "Play",
                 modifier = Modifier.size(22.dp),
                 tint = barColor,
             )
@@ -2896,8 +2951,8 @@ fun VoiceMessageBubble(
             WaveformBar(
                 peaks = waveformPeaks,
                 activeColor = if (isFromMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
-                inactiveColor = barColor.copy(alpha = 0.3f),
-                progress = playbackState.progressFraction,
+                inactiveColor = inactiveBarColor,
+                progress = progress,
                 modifier =
                     Modifier
                         .weight(1f)

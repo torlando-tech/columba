@@ -114,7 +114,7 @@ data class SettingsState(
     val lastSyncTimestamp: Long? = null,
     val isSyncing: Boolean = false,
     // Transport node state
-    val transportNodeEnabled: Boolean = true,
+    val transportNodeEnabled: Boolean = false,
     // Location sharing state
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),

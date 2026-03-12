@@ -50,7 +50,7 @@ fun NetworkCard(
     onManageInterfaces: () -> Unit,
     isSharedInstance: Boolean = false,
     sharedInstanceOnline: Boolean = true,
-    transportNodeEnabled: Boolean = true,
+    transportNodeEnabled: Boolean = false,
     onTransportNodeToggle: (Boolean) -> Unit = {},
 ) {
     // Interface management is only disabled when actively using a shared instance

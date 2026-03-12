@@ -160,13 +160,19 @@ class ChaquopyRnsLink(
     }
 
     override fun setClosedCallback(callback: ((RnsLink) -> Unit)?) {
-        // TODO: Bridge Python callback to Kotlin in Phase 4
-        api.callAttr("link_set_closed_callback", pyLink, null as Any?)?.close()
+        if (callback != null) {
+            // TODO: Phase 4 — bridge Kotlin callback to Python-callable proxy.
+        } else {
+            api.callAttr("link_set_closed_callback", pyLink, null as Any?)?.close()
+        }
     }
 
     override fun setPacketCallback(callback: ((ByteArray, RnsLink) -> Unit)?) {
-        // TODO: Bridge Python callback to Kotlin in Phase 4
-        api.callAttr("link_set_packet_callback", pyLink, null as Any?)?.close()
+        if (callback != null) {
+            // TODO: Phase 4 — bridge Kotlin callback to Python-callable proxy.
+        } else {
+            api.callAttr("link_set_packet_callback", pyLink, null as Any?)?.close()
+        }
     }
 
     override fun close() {

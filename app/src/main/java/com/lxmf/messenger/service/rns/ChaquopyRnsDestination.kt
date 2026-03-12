@@ -80,14 +80,9 @@ class ChaquopyRnsDestination(
         path: String,
         responseGenerator: (path: String, data: ByteArray?, requestId: ByteArray) -> ByteArray?,
     ) {
-        // TODO: Bridge Python request handler callback to Kotlin lambda
-        api
-            .callAttr(
-                "destination_register_request_handler",
-                pyDestination,
-                path,
-                null as Any?, // Will wire callback in Phase 4
-            )?.close()
+        // TODO: Phase 4 — bridge Kotlin responseGenerator lambda to Python callable.
+        // Cannot register yet; RNS validates that response_generator is callable
+        // and raises ValueError for None.
     }
 
     override fun deregisterRequestHandler(path: String) {

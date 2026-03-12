@@ -89,6 +89,7 @@ class MessagingViewModel
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
+        private val identityResolutionManager: com.lxmf.messenger.service.IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"

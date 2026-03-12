@@ -1452,6 +1452,7 @@ class ServiceReticulumProtocol(
                     is DestinationType.SINGLE -> "SINGLE"
                     is DestinationType.GROUP -> "GROUP"
                     is DestinationType.PLAIN -> "PLAIN"
+                    is DestinationType.LINK -> "LINK"
                 }
 
             val resultJson =

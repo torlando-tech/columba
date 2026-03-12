@@ -1119,11 +1119,6 @@ fun MessagingScreen(
                                 // All items are message bubbles
                                 contentType = { "message" },
                             ) { index ->
-                                // Snapshot dependency: when timestampTick increments, visible
-                                // items recompose and formatTimestamp() re-evaluates
-                                @Suppress("UNUSED_VARIABLE")
-                                val tick = timestampTick
-
                                 val message = pagingItems[index]
                                 if (message != null) {
                                     // Track message position for jump-to-original
@@ -1203,6 +1198,7 @@ fun MessagingScreen(
                                             syncProgress = syncProgress,
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
+                                            timestampTick = timestampTick,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1677,6 +1673,7 @@ fun MessageBubble(
     syncProgress: SyncProgress = SyncProgress.Idle,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
+    timestampTick: Long = 0L,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },

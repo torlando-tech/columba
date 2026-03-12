@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Reliable off-grid messaging with a polished, responsive user experience.
-**Current focus:** v0.10.0 Voice Messages -- Phase 9: Playback Polish (COMPLETE)
+**Current focus:** v0.10.0 Voice Messages -- Phase 10: UI Polish + Edge Cases (in progress)
 
 ## Current Position
 
-Phase: 9 of 10 (Playback Polish) -- COMPLETE
-Plan: 3 of 3 in phase (09-01, 09-02, 09-03 complete)
-Status: Phase complete
-Last activity: 2026-03-12 -- Completed 09-03: Unplayed dot, shared player, off-screen audio continuity
+Phase: 10 of 10 (UI Polish + Edge Cases) -- In progress
+Plan: 1 of 2 in phase (10-01 complete)
+Status: In progress
+Last activity: 2026-03-12 -- Completed 10-01: Slide-to-cancel gesture, animated mic/send swap
 
-Progress: [██████████░░] ~75% -- Phase 9 complete (8/8 voice message plans done, Phase 10 pending)
+Progress: [███████████░] ~85% -- Phase 10 started (10-01 complete, 10-02 pending)
 
 ## Milestone Summary
 
@@ -25,7 +25,7 @@ Progress: [██████████░░] ~75% -- Phase 9 complete (8/8 v
 | 7. Protocol Foundation | Audio round-trips through LXMF pipeline | PROTO-01..05 | **COMPLETE** |
 | 8. Recording + Send + Playback | Record, preview, send, and play voice messages | REC-01,04..07,09 PLAY-01..04 EDGE-01,06,07 | **COMPLETE** |
 | 9. Playback Polish | Unplayed indicator, single-playback, Oboe output | PLAY-05..07 EDGE-02 | **COMPLETE** |
-| 10. UI Polish + Edge Cases | Slide-to-cancel, mic/send swap, interruptions | REC-02,03 EDGE-03..05 | Not started |
+| 10. UI Polish + Edge Cases | Slide-to-cancel, mic/send swap, interruptions | REC-02,03 EDGE-03..05 | In progress (10-01 done) |
 
 ## Accumulated Context
 
@@ -107,6 +107,15 @@ Progress: [██████████░░] ~75% -- Phase 9 complete (8/8 v
 | voicePlayer nullable in MessageBubble (default null) | Allows MessageBubble usage in previews/tests without real player; voice bubble only renders when player non-null | 9-03 |
 | onVoicePlay accepts fieldsJson (not audioBytes) | Deferred IO extraction in scope.launch+withContext(IO) inside MessagingScreen; keeps MessageBubble coroutine-free | 9-03 |
 
+### Phase 10 Decisions
+
+| Decision | Rationale | Phase |
+|----------|-----------|-------|
+| AnimatedVisibility wraps send button only; mic stays in plain if | Mic button hosts tryAwaitRelease() — must remain in composition tree during recording gesture | 10-01 |
+| Slide gesture on recording indicator Box, not mic button Box | Mic button uses detectTapGestures; separate sibling element avoids gesture conflict | 10-01 |
+| spring(DampingRatioMediumBouncy) for slide snap-back | Natural bouncy feel when finger releases without crossing cancel threshold | 10-01 |
+| cancelThresholdPx = screenWidthDp / 3 | Standard ratio for slide-to-cancel in messaging UIs | 10-01 |
+
 ### Blockers/Concerns
 
 None.
@@ -114,6 +123,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 09-03-PLAN.md (Phase 9 complete)
+Stopped at: Completed 10-01: Slide-to-cancel + animated mic/send swap
 Resume file: None
-Next: Phase 10 -- UI Polish + Edge Cases (slide-to-cancel, mic/send swap, interruptions)
+Next: Phase 10 plan 02 -- Recording interruptions (phone calls, app backgrounding)

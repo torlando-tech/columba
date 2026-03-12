@@ -151,6 +151,9 @@ class SettingsRepository
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
+
+            // Auto-start on boot preference
+            val AUTO_START_ON_BOOT = booleanPreferencesKey("auto_start_on_boot")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1919,5 +1922,34 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SORT_MESSAGES_BY_SENT_TIME] = enabled
             }
+        }
+
+        /**
+         * Flow of auto-start on boot preference.
+         * Default is false (do not auto-start).
+         */
+        val autoStartOnBootFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTO_START_ON_BOOT] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Save auto-start on boot preference.
+         * Also writes to a dedicated SharedPreferences file so the BootCompletedReceiver
+         * can read the value without initializing DataStore.
+         */
+        suspend fun setAutoStartOnBoot(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTO_START_ON_BOOT] = enabled
+            }
+            // Mirror to SharedPreferences for the boot receiver
+            context.getSharedPreferences(
+                com.lxmf.messenger.receiver.BootCompletedReceiver.PREFS_NAME,
+                Context.MODE_PRIVATE,
+            ).edit().putBoolean(
+                com.lxmf.messenger.receiver.BootCompletedReceiver.KEY_AUTO_START_ON_BOOT,
+                enabled,
+            ).apply()
         }
     }

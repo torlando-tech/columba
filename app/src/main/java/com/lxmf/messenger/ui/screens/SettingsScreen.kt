@@ -56,6 +56,7 @@ import com.lxmf.messenger.ui.components.BackgroundLocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
+import com.lxmf.messenger.ui.screens.settings.cards.AutoStartCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
 import com.lxmf.messenger.ui.screens.settings.cards.DataMigrationCard
 import com.lxmf.messenger.ui.screens.settings.cards.IdentityCard
@@ -482,6 +483,13 @@ fun SettingsScreen(
                 BatteryOptimizationCard(
                     isExpanded = state.cardExpansionStates[SettingsCardId.BATTERY.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BATTERY, it) },
+                )
+
+                AutoStartCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.AUTO_START.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.AUTO_START, it) },
+                    autoStartOnBoot = state.autoStartOnBoot,
+                    onAutoStartOnBootChange = { viewModel.setAutoStartOnBoot(it) },
                 )
 
                 DataMigrationCard(

@@ -54,6 +54,7 @@ enum class SettingsCardId {
     IMAGE_COMPRESSION,
     THEME,
     BATTERY,
+    AUTO_START,
     DATA_MIGRATION,
     RNODE_FLASHER,
     SHARE_COLUMBA,
@@ -165,6 +166,8 @@ data class SettingsState(
     val includePrereleaseUpdates: Boolean = false,
     // Message sort order: false = received time (default), true = sent time
     val sortMessagesBySentTime: Boolean = false,
+    // Auto-start on boot
+    val autoStartOnBoot: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -1575,6 +1578,11 @@ class SettingsViewModel
                     _state.update { it.copy(sortMessagesBySentTime = sortBySent) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.autoStartOnBootFlow.collect { autoStart ->
+                    _state.update { it.copy(autoStartOnBoot = autoStart) }
+                }
+            }
         }
 
         /**
@@ -1679,6 +1687,13 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.setSortMessagesBySentTime(enabled)
                 Log.d(TAG, "Sort messages by sent time: $enabled")
+            }
+        }
+
+        fun setAutoStartOnBoot(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setAutoStartOnBoot(enabled)
+                Log.d(TAG, "Auto-start on boot: $enabled")
             }
         }
 

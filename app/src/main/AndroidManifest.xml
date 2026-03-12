@@ -19,6 +19,9 @@
     <!-- Required to prevent Android from killing service during Deep Doze mode -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Auto-start service after device boot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Bluetooth permissions for BLE interface -->
     <!-- Legacy Bluetooth permissions (Android 11 and below) -->
     <uses-permission android:name="android.permission.BLUETOOTH"
@@ -209,6 +212,17 @@
         <receiver
             android:name=".notifications.CallActionReceiver"
             android:exported="false" />
+
+        <!-- Boot completed receiver for auto-start -->
+        <receiver
+            android:name=".receiver.BootCompletedReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

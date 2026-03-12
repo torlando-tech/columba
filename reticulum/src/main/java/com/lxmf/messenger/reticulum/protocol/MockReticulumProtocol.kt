@@ -212,6 +212,8 @@ class MockReticulumProtocol : ReticulumProtocol {
 
     override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> = Result.success(Unit)
 
+    override suspend fun persistTransportData() = Unit
+
     override fun getHopCount(destinationHash: ByteArray): Int = 3
 
     override suspend fun getPathTableHashes(): List<String> = emptyList()

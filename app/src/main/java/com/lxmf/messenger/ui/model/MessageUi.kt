@@ -84,6 +84,12 @@ data class MessageUi(
      */
     val hasAudioAttachment: Boolean = false,
     /**
+     * Whether this voice message has been played by the user.
+     * Persisted to DB so the unplayed indicator survives app restarts.
+     * Always false for non-voice messages and sent messages (indicator only shown for received).
+     */
+    val voicePlayed: Boolean = false,
+    /**
      * Duration of the audio message in milliseconds.
      * Extracted from the audio wire format header (2-byte big-endian duration_ms).
      * Null if not yet parsed or if the audio format doesn't include duration.

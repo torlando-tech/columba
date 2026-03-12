@@ -70,6 +70,7 @@ fun Message.toMessageUi(): MessageUi {
         fileAttachments = fileAttachmentsList,
         hasFileAttachments = hasFiles,
         hasAudioAttachment = hasAudio,
+        voicePlayed = voicePlayed,
         audioDurationMs = audioMeta?.durationMs,
         audioCodecId = audioMeta?.codecId,
         audioWaveform = audioMeta?.waveform,

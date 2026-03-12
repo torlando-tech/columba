@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.lxmf.messenger.audio.VoiceMessagePlayer
 import com.lxmf.messenger.audio.VoiceRecording
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
@@ -2303,6 +2304,61 @@ class MessagingViewModel
                 CodecProfile.DEFAULT
             }
 
+        /**
+         * Shared voice message player owned by the ViewModel.
+         *
+         * Using a single shared player ensures only one voice message plays at a time
+         * (single-playback enforcement). The player internally saves/restores positions
+         * so tapping a paused message resumes from where it stopped.
+         *
+         * Lifecycle: created lazily, stopped in [onCleared] to release audio focus and
+         * the native Oboe engine before the ViewModel is destroyed.
+         */
+        val voicePlayer: VoiceMessagePlayer by lazy {
+            VoiceMessagePlayer(applicationContext)
+        }
+
+        /**
+         * Play a voice message. Marks it as played in the database on first play for
+         * received messages (unplayed dot indicator clears immediately).
+         *
+         * Single-playback is enforced by the shared [voicePlayer] — starting a new
+         * message automatically stops the previously playing one.
+         *
+         * @param messageId Unique message ID (used for position tracking and mark-played)
+         * @param audioBytes Raw Opus-encoded audio bytes
+         * @param durationMs Total audio duration for display
+         * @param isFromMe Whether the message was sent by the current user
+         * @param voicePlayed Whether this message has already been marked as played
+         */
+        fun playVoiceMessage(
+            messageId: String,
+            audioBytes: ByteArray,
+            durationMs: Long,
+            isFromMe: Boolean,
+            voicePlayed: Boolean,
+        ) {
+            viewModelScope.launch {
+                // Mark as played on first play of a received message
+                if (!isFromMe && !voicePlayed) {
+                    try {
+                        conversationRepository.markVoicePlayed(messageId)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to mark voice message $messageId as played", e)
+                    }
+                }
+                voicePlayer.play(messageId, audioBytes, durationMs)
+            }
+        }
+
+        /**
+         * Stop voice playback. The current position is saved so the message can
+         * resume from the same point when tapped again.
+         */
+        fun stopVoiceMessage() {
+            voicePlayer.stop()
+        }
+
         override fun onCleared() {
             super.onCleared()
 
@@ -2315,6 +2371,9 @@ class MessagingViewModel
             // all cases. Any unsaved text from the final <500ms window is at most a few
             // characters. This avoids runBlocking per the threading policy.
             draftSaveJob?.cancel()
+
+            // Stop voice playback and release audio focus + native engine
+            voicePlayer.stop()
 
             // Links are left open to naturally close via Reticulum's stale timeout (~12 min)
             // rather than explicitly closing - this allows link reuse if user returns quickly

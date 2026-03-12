@@ -1,8 +1,11 @@
 package com.lxmf.messenger.ui.screens
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
 import android.util.Patterns
@@ -166,6 +169,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -559,6 +563,31 @@ fun MessagingScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Pause voice message playback when headphones are disconnected
+    DisposableEffect(Unit) {
+        val noisyReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    ctx: android.content.Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                        viewModel.stopVoiceMessage()
+                    }
+                }
+            }
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        ContextCompat.registerReceiver(
+            context,
+            noisyReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        onDispose {
+            context.unregisterReceiver(noisyReceiver)
         }
     }
 
@@ -2793,6 +2822,31 @@ fun VoicePreviewBar(
 
     DisposableEffect(Unit) {
         onDispose { player.stop() }
+    }
+
+    // Pause preview playback on headphone disconnect
+    DisposableEffect(Unit) {
+        val noisyReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    ctx: android.content.Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                        player.stop()
+                    }
+                }
+            }
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        ContextCompat.registerReceiver(
+            context,
+            noisyReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        onDispose {
+            context.unregisterReceiver(noisyReceiver)
+        }
     }
 
     Box(

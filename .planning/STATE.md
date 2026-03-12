@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-23)
 ## Current Position
 
 Phase: 9 of 10 (Playback Polish) -- In Progress
-Plan: 1 of 3 in phase (09-01 complete)
+Plan: 2 of 3 in phase (09-01, 09-02 complete)
 Status: In progress
-Last activity: 2026-03-12 -- Completed 09-01: voicePlayed persistence layer (Room v43)
+Last activity: 2026-03-12 -- Completed 09-02: Oboe player rewrite, duration extraction, audio focus
 
-Progress: [███████░░░░░] ~55% -- Phase 9 plan 1/3 complete (6/8 voice message plans done)
+Progress: [████████░░░░] ~60% -- Phase 9 plan 2/3 complete (7/8 voice message plans done)
 
 ## Milestone Summary
 
@@ -86,9 +86,10 @@ Progress: [███████░░░░░] ~55% -- Phase 9 plan 1/3 comple
 - **Make discovered interfaces page event-driven** (ui)
 - **Refactor PropagationNodeManager to extract components** (architecture)
 
-### Phase 9 Plan 01 Delivered
+### Phase 9 Delivered
 
 - **09-01:** voicePlayed persistence layer -- Room schema v43, MessageEntity column, domain Message field, MessageDao.markVoicePlayed(), ConversationRepository.markVoicePlayed()
+- **09-02:** VoiceMessagePlayer rewrite -- NativePlaybackEngine (Oboe) replaces AudioTrack; messageId tracking; savedPositions for resume; AUDIOFOCUS_GAIN_TRANSIENT; countOpusFrames() duration extraction in MessageMapper; VoiceMessageBubble now shows correct duration without playback
 
 ### Decisions (Phase 9)
 
@@ -97,6 +98,10 @@ Progress: [███████░░░░░] ~55% -- Phase 9 plan 1/3 comple
 | @ColumnInfo(defaultValue = "0") on voicePlayed entity field | Must match INTEGER NOT NULL DEFAULT 0 in migration SQL for Room schema validation | 9-01 |
 | No DEFAULT NULL in voicePlayed migration | Follows project Room gotcha: DEFAULT NULL creates schema mismatch with Kotlin nullable field defaultValue annotation | 9-01 |
 | voicePlayed defaults false for all messages | Non-voice messages are never "played" so indicator never shows; voice messages start unplayed until explicitly marked | 9-01 |
+| List<FloatArray> (per-frame) instead of flat FloatArray for decoded frames | Required for position-indexed playback starting from saved frame index | 9-02 |
+| getCallbackFrameCount() for progress (not getBufferedFrameCount) | Callback count reflects frames actually rendered to speaker; buffered count is ring buffer backlog | 9-02 |
+| AudioTrack MODE_STATIC replaced by NativePlaybackEngine (Oboe) | Low-latency SPSC ring buffer; consistent with telephony infrastructure; required by PLAY-07 | 9-02 |
+| countOpusFrames() walks hex wire format directly | No ByteArray allocation needed for a counting operation; fast enough for toMessageUi() call path | 9-02 |
 
 ### Blockers/Concerns
 
@@ -105,6 +110,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 09-01-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
-Next: Phase 9 plans 02 and 03 -- single-playback enforcement and Oboe output (02), unplayed indicator UI (03)
+Next: Phase 9 plan 03 -- unplayed indicator UI (dot badge, mark-played on first full listen)

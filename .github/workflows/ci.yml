@@ -537,7 +537,7 @@ jobs:
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.36.0
         with:
           api-level: 34
           arch: x86_64
@@ -553,7 +553,7 @@ jobs:
             echo "Emulator ready, generating snapshot for caching."
 
       - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.36.0
         with:
           api-level: 34
           arch: x86_64
@@ -592,9 +592,11 @@ jobs:
 
       - name: Capture logcat on failure
         if: failure()
+        timeout-minutes: 1
+        continue-on-error: true
         run: |
           mkdir -p artifacts
-          adb logcat -d > artifacts/logcat.log || true
+          timeout 30 adb logcat -d > artifacts/logcat.log || true
 
       - name: Upload logcat output
         if: failure()

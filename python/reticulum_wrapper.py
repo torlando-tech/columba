@@ -1211,8 +1211,6 @@ class ReticulumWrapper:
             if not hasattr(RNS.Transport, 'path_table') or not RNS.Transport.path_table:
                 return
 
-            current_time = time.time()
-            stale_threshold = 60  # Paths older than 60 seconds are considered stale
             stale_paths = []
 
             # Scan for stale BLE paths
@@ -1223,11 +1221,10 @@ class ReticulumWrapper:
 
                     # Check if this is a BLE path
                     if receiving_interface and "BLE" in str(type(receiving_interface).__name__):
-                        # Check for timestamp=0 bug or very old timestamps
+                        # Only clear paths with timestamp=0 (the actual Reticulum bug)
+                        # Paths with valid timestamps from prior sessions should be preserved
                         if timestamp == 0:
                             stale_paths.append((dest_hash, timestamp, "timestamp=0 (Unix epoch bug)"))
-                        elif (current_time - timestamp) > stale_threshold:
-                            stale_paths.append((dest_hash, timestamp, f"age={(current_time - timestamp):.0f}s (stale from previous session)"))
                 except (IndexError, TypeError) as e:
                     # Malformed path entry
                     log_debug("ReticulumWrapper", "_clear_stale_ble_paths", f"Skipping malformed path table entry: {e}")
@@ -2501,6 +2498,15 @@ class ReticulumWrapper:
                             log_warning("ReticulumWrapper", "shutdown", f"Warning - couldn't detach interface {iface}: {e}")
                 except Exception as e:
                     log_error("ReticulumWrapper", "shutdown", f"Warning - error detaching interfaces: {e}")
+
+            # Step 3.5: Persist transport data before clearing (paths, destinations)
+            if RETICULUM_AVAILABLE:
+                try:
+                    log_debug("ReticulumWrapper", "shutdown", "Persisting transport data before cleanup")
+                    RNS.Transport.persist_data()
+                    log_debug("ReticulumWrapper", "shutdown", "Transport data persisted")
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "shutdown", f"Warning - couldn't persist transport data: {e}")
 
             # Step 4: Clear RNS singleton instance and Transport global state (critical!)
             # RNS uses class variables for singletons and global state tracking
@@ -6287,6 +6293,17 @@ class ReticulumWrapper:
             RNS.Transport.request_path(dest_hash)
             return {"success": True}
         except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def persist_transport_data(self) -> Dict:
+        """Persist Reticulum's transport data (path table, destinations) to disk."""
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return {"success": False, "error": "Reticulum not available"}
+        try:
+            RNS.Transport.persist_data()
+            return {"success": True}
+        except Exception as e:
+            log_warning("ReticulumWrapper", "persist_transport_data", f"Error: {e}")
             return {"success": False, "error": str(e)}
 
     def get_hop_count(self, dest_hash: bytes) -> Optional[int]:

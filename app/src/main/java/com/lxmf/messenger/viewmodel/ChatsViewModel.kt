@@ -5,14 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.data.repository.BlockedPeerRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,6 +45,7 @@ class ChatsViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
+        private val identityResolutionManager: IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "ChatsViewModel"
@@ -157,6 +160,10 @@ class ChatsViewModel
                         publicKey = publicKey,
                     )
                     Log.d(TAG, "Saved ${conversation.peerHash.take(16)} to contacts")
+                    // Request path for the newly saved contact
+                    viewModelScope.launch(Dispatchers.IO) {
+                        identityResolutionManager.requestPathForContact(conversation.peerHash)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving to contacts", e)
                 }
@@ -237,6 +244,5 @@ class ChatsViewModel
          * Get the latest known, non-expired location for a peer.
          * Returns a Pair(latitude, longitude) or null if no valid location is known.
          */
-        suspend fun getContactLocation(peerHash: String): Pair<Double, Double>? =
-            receivedLocationRepository.getContactLocation(peerHash)
+        suspend fun getContactLocation(peerHash: String): Pair<Double, Double>? = receivedLocationRepository.getContactLocation(peerHash)
     }

@@ -89,6 +89,7 @@ class MessagingViewModel
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
+        private val identityResolutionManager: com.lxmf.messenger.service.IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -1021,6 +1022,11 @@ class MessagingViewModel
 
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
+
+            // Request path for this conversation peer if we don't have one
+            viewModelScope.launch(Dispatchers.IO) {
+                identityResolutionManager.requestPathForContact(destinationHash)
+            }
 
             // Mark conversation as read when opening
             viewModelScope.launch {

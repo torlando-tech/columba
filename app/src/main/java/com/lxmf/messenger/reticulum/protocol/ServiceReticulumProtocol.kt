@@ -1563,6 +1563,14 @@ class ServiceReticulumProtocol(
             }
         }
 
+    override suspend fun persistTransportData() {
+        try {
+            service?.persistTransportData()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting transport data", e)
+        }
+    }
+
     override fun getHopCount(destinationHash: ByteArray): Int? =
         try {
             val count = service?.getHopCount(destinationHash) ?: -1

@@ -19,6 +19,7 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.ui.model.ImageCache
@@ -107,6 +108,10 @@ class MessagingViewModelImageLoadingTest {
                     conversationLinkManager = conversationLinkManager,
                     receivedLocationRepository = receivedLocationRepository,
                     blockedPeerRepository = mockk(),
+                    identityResolutionManager =
+                        mockk<IdentityResolutionManager>().also {
+                            coEvery { it.requestPathForContact(any()) } just Runs
+                        },
                 )
             advanceUntilIdle()
             testBody()

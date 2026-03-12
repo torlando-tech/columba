@@ -10,6 +10,7 @@ import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,7 @@ class ChatsViewModelTest {
         )
 
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var identityResolutionManager: IdentityResolutionManager
 
     @Before
     fun setup() {
@@ -95,6 +97,8 @@ class ChatsViewModelTest {
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
         receivedLocationRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
@@ -115,6 +119,7 @@ class ChatsViewModelTest {
                 reticulumProtocol,
                 propagationNodeManager,
                 receivedLocationRepository,
+                identityResolutionManager,
             )
     }
 
@@ -145,7 +150,15 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.chatsState.test {
@@ -176,7 +189,15 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -246,7 +267,15 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             newViewModel.chatsState.test {
@@ -286,7 +315,15 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -316,7 +353,15 @@ class ChatsViewModelTest {
 
             // NOW create ViewModel
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -346,7 +391,15 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // When: chatsState is collected
             newViewModel.chatsState.test {
@@ -377,7 +430,15 @@ class ChatsViewModelTest {
                 )
 
             val newViewModel =
-                ChatsViewModel(repository, mockk(), blockedPeerRepository, reticulumProtocol, propagationNodeManager, receivedLocationRepository)
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // When: Search query is set
             newViewModel.searchQuery.value = "alice"

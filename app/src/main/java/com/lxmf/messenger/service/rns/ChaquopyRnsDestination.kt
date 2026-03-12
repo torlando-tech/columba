@@ -113,6 +113,7 @@ class ChaquopyRnsDestination(
      * Create a Python-callable wrapper that converts a raw Python Link to [RnsLink]
      * before forwarding to the Kotlin callback.
      */
+    @Suppress("UnusedParameter") // callback wired in Phase 4
     private fun createLinkCallback(callback: (RnsLink) -> Unit): PyObject {
         // Use Chaquopy's proxy mechanism — the Python side receives a Java lambda
         // that wraps the incoming PyObject Link in ChaquopyRnsLink

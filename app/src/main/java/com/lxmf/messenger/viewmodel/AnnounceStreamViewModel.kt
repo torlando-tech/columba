@@ -15,6 +15,7 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -46,6 +47,7 @@ class AnnounceStreamViewModel
         private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val identityRepository: IdentityRepository,
+        private val identityResolutionManager: IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
@@ -346,6 +348,10 @@ class AnnounceStreamViewModel
                             )
                             announceRepository.setFavorite(destinationHash, true)
                             Log.d(TAG, "Added contact from announce: $destinationHash")
+                            // Request path for the newly added contact (with hasPath guard)
+                            viewModelScope.launch(Dispatchers.IO) {
+                                identityResolutionManager.requestPathForContact(destinationHash)
+                            }
                         } else {
                             Log.e(TAG, "Cannot add contact: announce not found for $destinationHash")
                         }

@@ -429,6 +429,8 @@ class ReticulumServiceBinder(
 
     override fun requestPath(destHash: ByteArray): String = routingManager.requestPath(destHash)
 
+    override fun persistTransportData() = routingManager.persistTransportData()
+
     override fun getHopCount(destHash: ByteArray): Int = routingManager.getHopCount(destHash)
 
     override fun getPathTableHashes(): String = routingManager.getPathTableHashes()

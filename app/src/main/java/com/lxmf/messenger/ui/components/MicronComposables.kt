@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lxmf.messenger.micron.MicronAlignment
@@ -52,6 +55,7 @@ fun MicronPageContent(
     onLinkClick: (destination: String, fieldNames: List<String>) -> Unit,
     onFieldUpdate: (name: String, value: String) -> Unit,
     modifier: Modifier = Modifier,
+    minLineWidth: Dp = Dp.Unspecified,
 ) {
     val defaultFg = MaterialTheme.colorScheme.onSurface
     val pageBg = document.pageBackground?.toArgb()?.let { Color(it) }
@@ -66,6 +70,7 @@ fun MicronPageContent(
                 renderingMode = renderingMode,
                 onLinkClick = onLinkClick,
                 onFieldUpdate = onFieldUpdate,
+                minLineWidth = minLineWidth,
             )
         }
     }
@@ -79,6 +84,7 @@ private fun MicronLineComposable(
     renderingMode: RenderingMode,
     onLinkClick: (destination: String, fieldNames: List<String>) -> Unit,
     onFieldUpdate: (name: String, value: String) -> Unit,
+    minLineWidth: Dp = Dp.Unspecified,
 ) {
     // Check if line is a line break
     if (line.elements.size == 1 && line.elements[0] is MicronElement.LineBreak) {
@@ -120,6 +126,19 @@ private fun MicronLineComposable(
 
     val indentPadding = (line.indentLevel * INDENT_DP).dp
 
+    // For centered/right-aligned lines, use exact viewport width so text wraps
+    // within the viewport (matching NomadNet terminal behavior). For left-aligned
+    // lines, use min width so they can extend beyond the viewport for scrolling.
+    val widthModifier =
+        if (minLineWidth != Dp.Unspecified) {
+            when (line.alignment) {
+                MicronAlignment.CENTER, MicronAlignment.RIGHT -> Modifier.width(minLineWidth)
+                MicronAlignment.LEFT -> Modifier.widthIn(min = minLineWidth)
+            }
+        } else {
+            Modifier
+        }
+
     // Check if this line contains any form fields
     val hasFormElements =
         line.elements.any {
@@ -130,7 +149,7 @@ private fun MicronLineComposable(
         // Render form elements in a Column (fields need more vertical space)
         Column(
             modifier =
-                Modifier
+                widthModifier
                     .fillMaxWidth()
                     .padding(start = indentPadding),
         ) {
@@ -238,7 +257,7 @@ private fun MicronLineComposable(
         }
 
     val lineModifier =
-        Modifier
+        widthModifier
             .fillMaxWidth()
             .padding(start = indentPadding)
             .then(if (headingBg != null) Modifier.background(headingBg) else Modifier)

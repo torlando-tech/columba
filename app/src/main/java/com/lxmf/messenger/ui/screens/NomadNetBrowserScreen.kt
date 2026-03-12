@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -215,9 +216,9 @@ fun NomadNetBrowserScreen(
                             .padding(paddingValues),
                 ) {
                     if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
-                        // Outer Box intercepts pinch-to-zoom (2+ fingers),
-                        // single-finger drags pass through to scroll modifiers
-                        Box(
+                        // BoxWithConstraints captures viewport width before
+                        // horizontalScroll unbounds it — needed for text centering
+                        BoxWithConstraints(
                             modifier =
                                 Modifier
                                     .fillMaxSize()
@@ -238,6 +239,8 @@ fun NomadNetBrowserScreen(
                                         }
                                     },
                         ) {
+                            // Subtract horizontal padding (8.dp * 2) so lines fill viewport
+                            val viewportLineWidth = maxWidth - 16.dp
                             Column(
                                 modifier =
                                     Modifier
@@ -267,6 +270,7 @@ fun NomadNetBrowserScreen(
                                     onFieldUpdate = { name, value ->
                                         viewModel.updateField(name, value)
                                     },
+                                    minLineWidth = viewportLineWidth,
                                 )
                             }
                         }

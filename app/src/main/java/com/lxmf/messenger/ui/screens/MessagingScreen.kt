@@ -1119,11 +1119,10 @@ fun MessagingScreen(
                                 // All items are message bubbles
                                 contentType = { "message" },
                             ) { index ->
-                                // Read timestampTick to create a Compose snapshot dependency —
-                                // when it increments, visible items recompose and formatTimestamp()
-                                // re-evaluates with fresh System.currentTimeMillis()
-                                @Suppress("UNUSED_EXPRESSION")
-                                timestampTick
+                                // Snapshot dependency: when timestampTick increments, visible
+                                // items recompose and formatTimestamp() re-evaluates
+                                @Suppress("UNUSED_VARIABLE")
+                                val tick = timestampTick
 
                                 val message = pagingItems[index]
                                 if (message != null) {

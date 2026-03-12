@@ -287,6 +287,16 @@ fun extractAudioMetadata(fieldsJson: String?): AudioMetadata? {
                 val codecId = field7.optString(0, "")
                 if (codecId.isEmpty()) return null
 
+                // Extract duration from Opus frame count.
+                // Wire format: 2-byte big-endian length-prefixed frames; each frame = 20ms at 24kHz/480samples.
+                val hexData = field7.optString(1, "")
+                val durationMs =
+                    if (hexData.isNotEmpty()) {
+                        countOpusFrames(hexData) * 20L
+                    } else {
+                        null
+                    }
+
                 // Extract waveform from third element if present
                 val waveform =
                     if (field7.length() >= 3) {
@@ -300,11 +310,9 @@ fun extractAudioMetadata(fieldsJson: String?): AudioMetadata? {
                         null
                     }
 
-                // Duration will be extracted from the audio header bytes in Phase 9
-                // For now, return null -- the UI will show "0:00" until playback starts
                 AudioMetadata(
                     codecId = codecId,
-                    durationMs = null,
+                    durationMs = durationMs,
                     waveform = waveform,
                 )
             }
@@ -892,6 +900,34 @@ private fun isWebP(bytes: ByteArray): Boolean =
         bytes[9] == 0x45.toByte() &&
         bytes[10] == 0x42.toByte() &&
         bytes[11] == 0x50.toByte()
+
+/**
+ * Count the number of Opus frames in a hex-encoded, 2-byte big-endian length-prefixed byte stream.
+ *
+ * Wire format: `[2-byte-len][opus-bytes][2-byte-len][opus-bytes]...` where each length is hex-encoded
+ * (so 4 hex chars = 2 bytes = the frame length in bytes, and the following frame is `frameLen * 2`
+ * hex chars).
+ *
+ * Each Opus frame at 24kHz with FRAME_SIZE=480 samples represents exactly 20ms of audio.
+ * Duration = countOpusFrames(hexData) * 20L (milliseconds).
+ *
+ * @param hexData Hex-encoded audio data (the wire payload, not the raw bytes)
+ * @return Number of complete Opus frames found
+ */
+private fun countOpusFrames(hexData: String): Int {
+    var count = 0
+    var pos = 0
+    while (pos + 4 <= hexData.length) {
+        val lenHigh = hexData.substring(pos, pos + 2).toIntOrNull(16) ?: break
+        val lenLow = hexData.substring(pos + 2, pos + 4).toIntOrNull(16) ?: break
+        val frameLen = (lenHigh shl 8) or lenLow
+        if (frameLen <= 0) break
+        pos += 4 + frameLen * 2
+        if (pos > hexData.length) break
+        count++
+    }
+    return count
+}
 
 /**
  * Efficiently convert a hex string to byte array.

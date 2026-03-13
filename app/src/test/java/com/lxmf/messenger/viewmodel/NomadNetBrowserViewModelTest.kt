@@ -622,4 +622,100 @@ class NomadNetBrowserViewModelTest {
             assertEquals(nodeHash, state.nodeHash)
             assertEquals("/page/test.mu", state.path)
         }
+
+    @Test
+    fun `navigateToUrl pushes current page to history`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+
+            // Load initial page
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            assertFalse(viewModel.canGoBack.value)
+
+            // Navigate via URL bar to a different page
+            val otherNode = "1234567890abcdef1234567890abcdef"
+            viewModel.navigateToUrl("$otherNode:/page/other.mu")
+            advanceUntilIdle()
+
+            // Should be able to go back to the first page
+            assertTrue(viewModel.canGoBack.value)
+            viewModel.goBack()
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals(nodeHash, state.nodeHash)
+            assertEquals("/page/index.mu", state.path)
+        }
+
+    // ── retry ──
+
+    @Test
+    fun `retry after failed page load retries the same page`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.failure(RuntimeException("Connection timed out"))
+
+            viewModel.loadPage(nodeHash, "/page/about.mu")
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Error)
+
+            // Now make the retry succeed
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/about.mu"))
+
+            viewModel.retry()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertEquals("/page/about.mu", state.path)
+        }
+
+    @Test
+    fun `retry after failed form submission resubmits form data`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.failure(RuntimeException("Connection failed"))
+
+            // Load a page first
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // Fill in form and submit (will fail)
+            viewModel.updateField("username", "alice")
+            viewModel.navigateToLink("/page/login.mu", listOf("username"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Error)
+
+            // Retry should resubmit the form data
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/login.mu"))
+
+            viewModel.retry()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // Verify form data was resubmitted (non-null formDataJson containing "alice")
+            coVerify {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/login.mu",
+                    match { it != null && it.contains("alice") },
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `retry with no previous fetch is no-op`() =
+        runTest(testDispatcher) {
+            viewModel.retry()
+            advanceUntilIdle()
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial)
+        }
 }

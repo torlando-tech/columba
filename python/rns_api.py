@@ -219,8 +219,14 @@ class RnsApi:
             if not RNS.Transport.has_path(node_dest.hash):
                 return {"success": False, "error": "No path to node"}
         else:
-            # Already have a path; give 2s for a potentially fresher one
-            time.sleep(min(2.0, max(deadline - time.time() - 20, 0.5)))
+            # Already have a path; give up to 2s for a potentially fresher one,
+            # polling cancel flag every 0.25s
+            fresh_wait = min(2.0, max(deadline - time.time() - 20, 0.5))
+            fresh_deadline = time.time() + fresh_wait
+            while time.time() < fresh_deadline:
+                if self._cancel_flag:
+                    return {"success": False, "error": "Cancelled"}
+                time.sleep(0.25)
 
         hops = RNS.Transport.hops_to(node_dest.hash)
         log_info("RnsApi", "request_nomadnet_page",

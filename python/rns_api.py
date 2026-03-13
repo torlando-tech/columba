@@ -226,63 +226,91 @@ class RnsApi:
             log_warning("RnsApi", "request_nomadnet_page",
                        f"Destination hash mismatch! passed={dest_hash_hex} computed={node_dest.hash.hex()}")
 
-        # ── Phase 4: Establish link ──
-        log_info("RnsApi", "request_nomadnet_page",
-                 f"Creating link to {dest_hash_hex[:16]} (hops={hops})")
+        # ── Phase 4: Establish link with retry ──
+        # RNS sends ONE link request packet with no retry.  At high hop
+        # counts the packet (or its proof) can be lost, leaving the link
+        # stuck at PENDING until establishment_timeout (~6s × hops).
+        # Retry up to MAX_LINK_ATTEMPTS times, tearing down the stale
+        # link before each retry so RNS allocates a fresh request.
+        MAX_LINK_ATTEMPTS = 3
+        # Per-attempt timeout: use the RNS establishment_timeout for the
+        # hop count, but cap so we leave time for the page request itself.
+        per_attempt_base = RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT * max(1, hops) + 6
+        last_reason = None
+        last_status = None
 
-        link_established = threading.Event()
-        link_closed_reason = [None]
+        for attempt in range(1, MAX_LINK_ATTEMPTS + 1):
+            if self._cancel_flag:
+                return {"success": False, "error": "Cancelled"}
 
-        def on_link_established(established_link):
-            log_info("RnsApi", "request_nomadnet_page",
-                     f"Link established to {dest_hash_hex[:16]} (RTT={established_link.rtt})")
-            link_established.set()
+            remaining = deadline - time.time()
+            if remaining < 5:
+                break
 
-        def on_link_closed(closed_link):
-            reason = getattr(closed_link, 'teardown_reason', None)
-            reason_str = {0x01: "TIMEOUT", 0x02: "INITIATOR_CLOSED", 0x03: "DESTINATION_CLOSED"}.get(reason, str(reason))
-            log_warning("RnsApi", "request_nomadnet_page",
-                       f"Link to {dest_hash_hex[:16]} closed during establishment (reason={reason_str}, status={closed_link.status})")
-            link_closed_reason[0] = reason
-            link_established.set()
-
-        link = RNS.Link(node_dest,
-                        established_callback=on_link_established,
-                        closed_callback=on_link_closed)
-
-        est_timeout = getattr(link, 'establishment_timeout', None)
-        log_info("RnsApi", "request_nomadnet_page",
-                 f"Link establishment_timeout={est_timeout:.1f}s" if est_timeout else "Link establishment_timeout=unknown")
-
-        link_wait = max(deadline - time.time() - 10, 5.0)
-        log_debug("RnsApi", "request_nomadnet_page",
-                 f"Waiting up to {link_wait:.0f}s for link to {dest_hash_hex[:16]}")
-        link_established.wait(timeout=link_wait)
-
-        if self._cancel_flag:
-            try:
-                link.teardown()
-            except Exception:
-                pass
-            return {"success": False, "error": "Cancelled"}
-
-        if link_closed_reason[0] is not None or link.status != RNS.Link.ACTIVE:
-            status_str = str(link.status) if link else "unknown"
-            reason = link_closed_reason[0]
-            log_warning("RnsApi", "request_nomadnet_page",
-                       f"Link to {dest_hash_hex[:16]} failed (status={status_str}, teardown_reason={reason})")
-            try:
-                link.teardown()
-            except Exception:
-                pass
-            if reason == 0x03:
-                return {"success": False, "error": "Connection closed by node"}
-            elif reason == 0x01 or link.status == RNS.Link.PENDING:
-                return {"success": False, "error": f"Connection timed out ({hops} hops). Node may be offline or unreachable."}
+            if attempt > 1:
+                log_info("RnsApi", "request_nomadnet_page",
+                         f"Link attempt #{attempt} to {dest_hash_hex[:16]}")
             else:
-                return {"success": False, "error": f"Connection failed (status={status_str})"}
+                log_info("RnsApi", "request_nomadnet_page",
+                         f"Creating link to {dest_hash_hex[:16]} (hops={hops})")
 
-        return link
+            link_established = threading.Event()
+            link_closed_reason = [None]
+
+            def on_link_established(established_link):
+                log_info("RnsApi", "request_nomadnet_page",
+                         f"Link established to {dest_hash_hex[:16]} (RTT={established_link.rtt})")
+                link_established.set()
+
+            def on_link_closed(closed_link):
+                reason = getattr(closed_link, 'teardown_reason', None)
+                reason_str = {0x01: "TIMEOUT", 0x02: "INITIATOR_CLOSED",
+                              0x03: "DESTINATION_CLOSED"}.get(reason, str(reason))
+                log_warning("RnsApi", "request_nomadnet_page",
+                           f"Link to {dest_hash_hex[:16]} closed during establishment "
+                           f"(reason={reason_str}, status={closed_link.status})")
+                link_closed_reason[0] = reason
+                link_established.set()
+
+            link = RNS.Link(node_dest,
+                            established_callback=on_link_established,
+                            closed_callback=on_link_closed)
+
+            # Wait up to per_attempt_base, but never exceed remaining - 5s
+            # (reserve 5s for the page request on the last attempt).
+            attempt_wait = min(per_attempt_base, remaining - 5)
+            log_debug("RnsApi", "request_nomadnet_page",
+                     f"Waiting up to {attempt_wait:.0f}s for link to {dest_hash_hex[:16]}")
+            link_established.wait(timeout=max(attempt_wait, 5.0))
+
+            if self._cancel_flag:
+                try:
+                    link.teardown()
+                except Exception:
+                    pass
+                return {"success": False, "error": "Cancelled"}
+
+            if link.status == RNS.Link.ACTIVE:
+                return link
+
+            # Link didn't establish — record reason and tear down
+            last_reason = link_closed_reason[0]
+            last_status = str(link.status)
+            try:
+                link.teardown()
+            except Exception:
+                pass
+
+            # If destination explicitly rejected, don't retry
+            if last_reason == 0x03:
+                return {"success": False, "error": "Connection closed by node"}
+
+        # All attempts exhausted
+        log_warning("RnsApi", "request_nomadnet_page",
+                   f"Link to {dest_hash_hex[:16]} failed after {MAX_LINK_ATTEMPTS} attempts "
+                   f"(last_status={last_status}, last_reason={last_reason})")
+        return {"success": False,
+                "error": f"Connection timed out ({hops} hops). Node may be offline or unreachable."}
 
     def _send_page_request(self, link, path, request_data, dest_hash_hex, deadline):
         """Send a page request over an established link.

@@ -103,6 +103,7 @@ fun NomadNetBrowserScreen(
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
+    val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var showIdentifyConfirm by remember { mutableStateOf(false) }
@@ -431,7 +432,7 @@ fun NomadNetBrowserScreen(
                 }
 
                 PullToRefreshBox(
-                    isRefreshing = browserState is NomadNetBrowserViewModel.BrowserState.Loading,
+                    isRefreshing = isPullRefreshing,
                     onRefresh = { viewModel.refresh() },
                     modifier =
                         Modifier

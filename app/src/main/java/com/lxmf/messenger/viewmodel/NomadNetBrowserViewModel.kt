@@ -93,6 +93,9 @@ class NomadNetBrowserViewModel
         private val _identifyError = MutableStateFlow<String?>(null)
         val identifyError: StateFlow<String?> = _identifyError.asStateFlow()
 
+        private val _isPullRefreshing = MutableStateFlow(false)
+        val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
+
         private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
         val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent
 
@@ -107,6 +110,7 @@ class NomadNetBrowserViewModel
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
         private var lastFetchFormDataJson: String? = null
+        private var fetchEpoch = 0
 
         private val partialManager: PartialManager? by lazy {
             (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
@@ -261,6 +265,7 @@ class NomadNetBrowserViewModel
             path: String,
             formDataJson: String,
         ) {
+            fetchEpoch++
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
@@ -317,6 +322,7 @@ class NomadNetBrowserViewModel
         fun refresh() {
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
+                _isPullRefreshing.value = true
                 partialManager?.clear()
                 // Bypass cache read, but still cache the fresh response
                 fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
@@ -336,14 +342,19 @@ class NomadNetBrowserViewModel
         }
 
         fun cancelLoading() {
+            val epoch = ++fetchEpoch
+            _browserState.value = BrowserState.Error("Cancelled")
+            _isPullRefreshing.value = false
             viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    (reticulumProtocol as? ServiceReticulumProtocol)?.cancelNomadnetPageRequest()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error cancelling", e)
+                // Only send cancel if no new fetch has started since we were called
+                if (fetchEpoch == epoch) {
+                    try {
+                        (reticulumProtocol as? ServiceReticulumProtocol)?.cancelNomadnetPageRequest()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error cancelling", e)
+                    }
                 }
             }
-            _browserState.value = BrowserState.Error("Cancelled")
         }
 
         fun updateField(
@@ -426,6 +437,7 @@ class NomadNetBrowserViewModel
             path: String,
             nodeHash: String,
         ) {
+            _isPullRefreshing.value = false
             _browserState.value =
                 BrowserState.PageLoaded(
                     document = document,
@@ -443,6 +455,7 @@ class NomadNetBrowserViewModel
             path: String,
             cacheResponse: Boolean,
         ) {
+            fetchEpoch++
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
@@ -452,6 +465,7 @@ class NomadNetBrowserViewModel
                 try {
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
+                        _isPullRefreshing.value = false
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
                     }
@@ -475,6 +489,7 @@ class NomadNetBrowserViewModel
                             emitPageLoaded(document, pageResult.path, nodeHash)
                         },
                         onFailure = { error ->
+                            _isPullRefreshing.value = false
                             _browserState.value =
                                 BrowserState.Error(
                                     error.message ?: "Unknown error",
@@ -482,6 +497,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
+                    _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
                 }

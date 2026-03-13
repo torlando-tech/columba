@@ -11,6 +11,8 @@ from logging_utils import log_debug, log_info, log_warning, log_error
 
 
 class RnsApi:
+    MAX_IDENTIFIED_LINKS = 200
+
     def __init__(self):
         self._cancel_flag = False
         self._identified_links = set()
@@ -368,5 +370,7 @@ class RnsApi:
         link.identify(wrapper.router.identity)
 
         if link_id_hex:
+            if len(self._identified_links) >= self.MAX_IDENTIFIED_LINKS:
+                self._identified_links.clear()
             self._identified_links.add(link_id_hex)
         return {"success": True, "already_identified": False}

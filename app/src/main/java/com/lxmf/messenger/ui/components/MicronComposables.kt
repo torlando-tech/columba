@@ -83,19 +83,17 @@ fun MicronPageContent(
     // fills the full line height — critical for pixel art top-pixel rendering.
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
-    val squareLineHeightSp =
-        if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
-            remember(density) {
-                val result =
-                    textMeasurer.measure(
-                        AnnotatedString("A"),
-                        TextStyle(fontFamily = JetBrainsMonoFamily, fontSize = 14.sp),
-                    )
-                with(density) { (result.size.width * 2).toDp().toSp() }
-            }
-        } else {
-            TextUnit.Unspecified
+    val measuredLineHeightSp =
+        remember(density) {
+            val result =
+                textMeasurer.measure(
+                    AnnotatedString("A"),
+                    TextStyle(fontFamily = JetBrainsMonoFamily, fontSize = 14.sp),
+                )
+            with(density) { (result.size.width * 2).toDp().toSp() }
         }
+    val squareLineHeightSp =
+        if (renderingMode == RenderingMode.MONOSPACE_SCROLL) measuredLineHeightSp else TextUnit.Unspecified
 
     Column(modifier = containerModifier) {
         for ((lineIndex, line) in document.lines.withIndex()) {

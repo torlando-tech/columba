@@ -281,6 +281,125 @@ class MicronParserTest {
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), color)
     }
 
+    // ==================== True Color ====================
+
+    @Test
+    fun `foreground true color FT with 6 hex chars`() {
+        val doc = MicronParser.parse("`FTff8800Orange text")
+        val text =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Orange text" }
+        assertEquals(MicronColor.Hex(0xFF, 0x88, 0x00), text.style.foreground)
+    }
+
+    @Test
+    fun `background true color BT with 6 hex chars`() {
+        val doc = MicronParser.parse("`BT1a2b3cColored bg")
+        val text =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Colored bg" }
+        assertEquals(MicronColor.Hex(0x1A, 0x2B, 0x3C), text.style.background)
+    }
+
+    @Test
+    fun `true color FT 000000 is black`() {
+        val doc = MicronParser.parse("`FT000000Black")
+        val text =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Black" }
+        assertEquals(MicronColor.Hex(0x00, 0x00, 0x00), text.style.foreground)
+    }
+
+    @Test
+    fun `true color FT ffffff is white`() {
+        val doc = MicronParser.parse("`FTffffffWhite")
+        val text =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "White" }
+        assertEquals(MicronColor.Hex(0xFF, 0xFF, 0xFF), text.style.foreground)
+    }
+
+    @Test
+    fun `true color persists across lines`() {
+        val doc = MicronParser.parse("`FTff8800orange\nstill orange")
+        val line2 = doc.lines[1].elements[0] as MicronElement.Text
+        assertEquals(MicronColor.Hex(0xFF, 0x88, 0x00), line2.style.foreground)
+    }
+
+    @Test
+    fun `true color reset with lowercase f`() {
+        val doc = MicronParser.parse("`FTff8800Orange`fDefault")
+        val defaultText =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Default" }
+        assertEquals(MicronColor.Default, defaultText.style.foreground)
+    }
+
+    @Test
+    fun `true color BT reset with lowercase b`() {
+        val doc = MicronParser.parse("`BT1a2b3cColored`bDefault")
+        val defaultText =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Default" }
+        assertEquals(MicronColor.Default, defaultText.style.background)
+    }
+
+    @Test
+    fun `true color mixed with 3-char color`() {
+        val doc = MicronParser.parse("`FTff8800Orange`Ff00Red")
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        val orange = texts.first { it.content == "Orange" }
+        assertEquals(MicronColor.Hex(0xFF, 0x88, 0x00), orange.style.foreground)
+        val red = texts.first { it.content == "Red" }
+        assertEquals(MicronColor.Hex(0xFF, 0x00, 0x00), red.style.foreground)
+    }
+
+    @Test
+    fun `3-char color still works after adding true color support`() {
+        val doc = MicronParser.parse("`Ff00Red text")
+        val text =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "Red text" }
+        assertEquals(MicronColor.Hex(0xFF, 0x00, 0x00), text.style.foreground)
+    }
+
+    @Test
+    fun `parseTrueColor with valid 6 hex chars`() {
+        val color = MicronColor.parseTrueColor("aabbcc")
+        assertEquals(MicronColor.Hex(0xAA, 0xBB, 0xCC), color)
+    }
+
+    @Test
+    fun `parseTrueColor with invalid chars returns null`() {
+        assertNull(MicronColor.parseTrueColor("gghhii"))
+    }
+
+    @Test
+    fun `parseTrueColor too short returns null`() {
+        assertNull(MicronColor.parseTrueColor("aabb"))
+    }
+
+    @Test
+    fun `page directive bg with true color not supported stays 3-char`() {
+        // Page directives still use 3-char format via MicronColor.parse
+        val doc = MicronParser.parse("#!bg=f00\ntext")
+        assertEquals(MicronColor.Hex(0xFF, 0x00, 0x00), doc.pageBackground)
+    }
+
     // ==================== Alignment ====================
 
     @Test

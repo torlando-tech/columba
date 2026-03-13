@@ -109,6 +109,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -541,28 +542,30 @@ fun MessagingScreen(
         }
     }
 
-    // Refresh timestamps when returning from background
-    // This ensures relative times like "Just now" update correctly after the app was paused
+    // Compose-level clock for refreshing relative timestamps ("Just now" → "5 min ago").
+    // Reading this state in the item composable triggers recomposition of visible items only —
+    // unlike the old _messagesRefreshTrigger approach, this does NOT recreate PagingData,
+    // so scroll position is preserved.
+    var timestampTick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            timestampTick++
+        }
+    }
+
+    // Also bump the tick when returning from background so timestamps catch up immediately
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    viewModel.refreshTimestamps()
+                    timestampTick++
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    // Periodically refresh timestamps while the conversation is open
-    // This ensures relative times like "Just now" update to "1 min ago" etc.
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000L) // Refresh every 30 seconds
-            viewModel.refreshTimestamps()
         }
     }
 
@@ -1221,6 +1224,7 @@ fun MessagingScreen(
                                             syncProgress = syncProgress,
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
+                                            timestampTick = timestampTick,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1695,6 +1699,7 @@ fun MessageBubble(
     syncProgress: SyncProgress = SyncProgress.Idle,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
+    timestampTick: Long = 0L,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },

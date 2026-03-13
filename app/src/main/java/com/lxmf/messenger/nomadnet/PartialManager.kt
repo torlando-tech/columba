@@ -113,7 +113,7 @@ class PartialManager(
     private val _states = MutableStateFlow<Map<String, PartialState>>(emptyMap())
     val states: StateFlow<Map<String, PartialState>> = _states.asStateFlow()
 
-    private val jobs = mutableMapOf<String, Job>()
+    private val jobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val fetchSemaphore = Semaphore(MAX_CONCURRENT_FETCHES)
 
     /**

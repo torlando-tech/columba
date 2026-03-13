@@ -106,7 +106,10 @@ fun NomadNetBrowserScreen(
     val canGoBack by viewModel.canGoBack.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var showIdentifyConfirm by remember { mutableStateOf(false) }
-    var zoomScale by remember { mutableFloatStateOf(1f) }
+    val currentPage =
+        (browserState as? NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            ?.let { "${it.nodeHash}:${it.path}" }
+    var zoomScale by remember(currentPage) { mutableFloatStateOf(1f) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
@@ -428,7 +431,7 @@ fun NomadNetBrowserScreen(
                 }
 
                 PullToRefreshBox(
-                    isRefreshing = false,
+                    isRefreshing = browserState is NomadNetBrowserViewModel.BrowserState.Loading,
                     onRefresh = { viewModel.refresh() },
                     modifier =
                         Modifier

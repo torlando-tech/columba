@@ -369,9 +369,9 @@ class NomadNetBrowserViewModel
                         reticulumProtocol as? ServiceReticulumProtocol
                             ?: error("Service not available")
                     protocol.identifyNomadnetLink(nodeHash).fold(
-                        onSuccess = {
+                        onSuccess = { alreadyIdentified ->
                             _isIdentified.value = true
-                            refresh()
+                            if (!alreadyIdentified) refresh()
                         },
                         onFailure = { _identifyError.value = it.message ?: "Unknown error" },
                     )

@@ -3,6 +3,7 @@
 # Strangler Fig Phase 0: This is the seed file for migrating away from
 # reticulum_wrapper.py. All new Python-facing functionality goes here
 # as thin pass-throughs. Business logic goes in Kotlin.
+from collections import deque
 import threading
 import time
 
@@ -15,7 +16,7 @@ class RnsApi:
 
     def __init__(self):
         self._cancel_flag = False
-        self._identified_links = set()
+        self._identified_links = deque(maxlen=self.MAX_IDENTIFIED_LINKS)
 
     def get_next_hop_interface_name(self, dest_hash):
         """Return formatted interface name for next hop to destination, or None."""
@@ -370,7 +371,5 @@ class RnsApi:
         link.identify(wrapper.router.identity)
 
         if link_id_hex:
-            if len(self._identified_links) >= self.MAX_IDENTIFIED_LINKS:
-                self._identified_links.clear()
-            self._identified_links.add(link_id_hex)
+            self._identified_links.append(link_id_hex)
         return {"success": True, "already_identified": False}

@@ -306,7 +306,7 @@ class NomadNetBrowserViewModel
             if (history.isEmpty()) return false
 
             partialManager?.clear()
-            val entry = history.removeLast()
+            val entry = history.removeAt(history.lastIndex)
             _canGoBack.value = history.isNotEmpty()
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields

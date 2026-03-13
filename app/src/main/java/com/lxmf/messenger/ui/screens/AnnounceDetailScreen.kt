@@ -77,6 +77,7 @@ fun AnnounceDetailScreen(
     onBackClick: () -> Unit,
     onStartChat: (destinationHash: String, peerName: String) -> Unit,
     onViewAnnounce: (destinationHash: String) -> Unit,
+    onBrowseNode: (destinationHash: String) -> Unit = {},
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -357,6 +358,36 @@ fun AnnounceDetailScreen(
                     }
                 }
 
+                // Show "Browse Node" button for NomadNet content nodes
+                if (announceNonNull.aspect == "nomadnetwork.node") {
+                    Button(
+                        onClick = {
+                            onBrowseNode(announceNonNull.destinationHash)
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                            ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Browse Node",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
                 // Block button
                 androidx.compose.material3.OutlinedButton(
                     onClick = { showBlockDialog = true },
@@ -383,7 +414,6 @@ fun AnnounceDetailScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-
                 // Information cards
                 InfoCard(
                     icon = Icons.Default.Fingerprint,

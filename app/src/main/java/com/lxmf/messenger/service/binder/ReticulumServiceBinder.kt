@@ -1248,6 +1248,26 @@ class ReticulumServiceBinder(
         }
 
     // ===========================================
+    // NomadNet Page Browser
+    // ===========================================
+
+    override fun requestNomadnetPage(
+        destHash: ByteArray,
+        path: String,
+        formDataJson: String?,
+        timeoutSeconds: Float,
+    ): String {
+        Log.d(TAG, "Requesting NomadNet page: $path from ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
+        return wrapperManager.requestNomadnetPage(destHash, path, formDataJson, timeoutSeconds)
+    }
+
+    override fun cancelNomadnetPageRequest() {
+        wrapperManager.cancelNomadnetPageRequest()
+    }
+
+    override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)
+
+    // ===========================================
     // Event Broadcasting Helpers
     // ===========================================
 

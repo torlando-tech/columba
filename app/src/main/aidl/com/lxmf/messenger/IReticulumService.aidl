@@ -657,4 +657,31 @@ interface IReticulumService {
      * @return JSON string with call state: {"status": "idle/connecting/ringing/active/ended", "remote_identity": "...", "is_muted": false}
      */
     String getCallState();
+
+    // ==================== NOMADNET PAGE BROWSER ====================
+
+    /**
+     * Request a page from a NomadNet node.
+     * Establishes a link to the nomadnetwork.node destination and fetches the page.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param path Page path (e.g., "/page/index.mu")
+     * @param formDataJson Optional JSON string of form field name/value pairs
+     * @param timeoutSeconds Total timeout for the operation
+     * @return JSON string with result: {"success": true, "content": "...", "path": "..."} or error
+     */
+    String requestNomadnetPage(in byte[] destHash, String path, String formDataJson, float timeoutSeconds);
+
+    /**
+     * Cancel any in-progress NomadNet page request.
+     * Fire-and-forget (oneway) since cancellation is best-effort.
+     */
+    oneway void cancelNomadnetPageRequest();
+
+    /**
+     * Identify ourselves on an existing NomadNet link (Strangler Fig -> rns_api.py).
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string: {"success": true, "already_identified": false} or error
+     */
+    String identifyNomadnetLink(in byte[] destHash);
 }

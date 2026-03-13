@@ -2815,6 +2815,85 @@ class ServiceReticulumProtocol(
             }
         }
 
+    // NomadNet page browser
+
+    /**
+     * Request a page from a NomadNet node.
+     *
+     * @param destinationHash Destination hash as hex string (32 chars)
+     * @param path Page path (e.g., "/page/index.mu")
+     * @param formDataJson Optional JSON string of form field values
+     * @param timeoutSeconds Total timeout for the operation
+     * @return Result with content and path, or failure
+     */
+    suspend fun requestNomadnetPage(
+        destinationHash: String,
+        path: String = "/page/index.mu",
+        formDataJson: String? = null,
+        timeoutSeconds: Float = 45f,
+    ): Result<NomadnetPageResult> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val destHashBytes = destinationHash.hexToByteArray()
+                val resultJson =
+                    service.requestNomadnetPage(
+                        destHashBytes,
+                        path,
+                        formDataJson,
+                        timeoutSeconds,
+                    )
+
+                val result = org.json.JSONObject(resultJson)
+                if (result.optBoolean("success", false)) {
+                    NomadnetPageResult(
+                        content = result.getString("content"),
+                        path = result.getString("path"),
+                    )
+                } else {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    suspend fun cancelNomadnetPageRequest() {
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                this@ServiceReticulumProtocol.service?.cancelNomadnetPageRequest()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cancelling NomadNet page request", e)
+            }
+        }
+    }
+
+    /**
+     * Identify ourselves on an existing NomadNet link.
+     * @return Result<Boolean> where Boolean = alreadyIdentified
+     */
+    suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+                val resultJson = service.identifyNomadnetLink(destinationHash.hexToByteArray())
+                val result = org.json.JSONObject(resultJson)
+                if (result.optBoolean("success", false)) {
+                    result.optBoolean("already_identified", false)
+                } else {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    data class NomadnetPageResult(
+        val content: String,
+        val path: String,
+    )
+
     // Helper extension functions
 
     /**

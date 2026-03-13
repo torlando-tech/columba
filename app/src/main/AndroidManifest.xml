@@ -140,6 +140,14 @@
                 <data android:scheme="lxma" />
             </intent-filter>
 
+            <!-- Deep link handler for nomadnetwork:// URIs (NomadNet page links) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nomadnetwork" />
+            </intent-filter>
+
             <!-- USB device attached handler for RNode and compatible serial devices -->
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />

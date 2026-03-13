@@ -392,7 +392,7 @@ jobs:
           retention-days: 7
 
   module-tests:
-    name: Module Tests (reticulum + data)
+    name: Module Tests (reticulum + data + micron)
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -445,8 +445,8 @@ jobs:
             robolectric-4.16-
             robolectric-
 
-      - name: Run reticulum and data module tests
-        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
+      - name: Run reticulum, data, and micron module tests
+        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()

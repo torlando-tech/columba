@@ -2380,7 +2380,7 @@ class ReticulumWrapper:
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
-                'identity_hash': destination_hash,  # For single destinations
+                'identity_hash': announced_identity.hash if announced_identity else destination_hash,
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
                 'display_name': display_name,  # Pre-parsed by LXMF (may be None)

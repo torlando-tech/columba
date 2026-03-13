@@ -128,28 +128,28 @@ class PartialManager(
             // Reserve the slot atomically before launching, so clear() can never
             // miss a job that's already running but not yet in the map.
             val placeholder = Job()
-            if (jobs.putIfAbsent(key, placeholder) != null) continue
+            if (jobs.putIfAbsent(key, placeholder) == null) {
+                _states.update {
+                    it + (
+                        key to
+                            PartialState(
+                                url = partial.url,
+                                partialId = partial.partialId,
+                                status = PartialState.Status.LOADING,
+                                document = null,
+                                refreshInterval = partial.refreshInterval,
+                            )
+                    )
+                }
 
-            _states.update {
-                it + (
-                    key to
-                        PartialState(
-                            url = partial.url,
-                            partialId = partial.partialId,
-                            status = PartialState.Status.LOADING,
-                            document = null,
-                            refreshInterval = partial.refreshInterval,
-                        )
-                )
+                val realJob = scope.launch(Dispatchers.IO) { loadPartial(key, partial) }
+                // Replace placeholder with real job; if clear() already removed it,
+                // cancel the real job since the partial is no longer needed.
+                if (!jobs.replace(key, placeholder, realJob)) {
+                    realJob.cancel()
+                }
+                placeholder.complete()
             }
-
-            val realJob = scope.launch(Dispatchers.IO) { loadPartial(key, partial) }
-            // Replace placeholder with real job; if clear() already removed it,
-            // cancel the real job since the partial is no longer needed.
-            if (!jobs.replace(key, placeholder, realJob)) {
-                realJob.cancel()
-            }
-            placeholder.complete()
         }
     }
 

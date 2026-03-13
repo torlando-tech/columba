@@ -125,29 +125,31 @@ class PartialManager(
             val partial = line.elements.firstOrNull() as? MicronElement.Partial ?: continue
             val key = partial.partialId?.let { "pid:$it" } ?: "pos:$lineIndex"
 
-            // Atomically check-and-set to prevent duplicate launches
-            val job =
-                scope.launch(Dispatchers.IO) {
-                    loadPartial(key, partial)
-                }
-            val existing = jobs.putIfAbsent(key, job)
-            if (existing != null) {
-                // Another thread already launched this partial
-                job.cancel()
-            } else {
-                _states.update {
-                    it + (
-                        key to
-                            PartialState(
-                                url = partial.url,
-                                partialId = partial.partialId,
-                                status = PartialState.Status.LOADING,
-                                document = null,
-                                refreshInterval = partial.refreshInterval,
-                            )
-                    )
-                }
+            // Reserve the slot atomically before launching, so clear() can never
+            // miss a job that's already running but not yet in the map.
+            val placeholder = Job()
+            if (jobs.putIfAbsent(key, placeholder) != null) continue
+
+            _states.update {
+                it + (
+                    key to
+                        PartialState(
+                            url = partial.url,
+                            partialId = partial.partialId,
+                            status = PartialState.Status.LOADING,
+                            document = null,
+                            refreshInterval = partial.refreshInterval,
+                        )
+                )
             }
+
+            val realJob = scope.launch(Dispatchers.IO) { loadPartial(key, partial) }
+            // Replace placeholder with real job; if clear() already removed it,
+            // cancel the real job since the partial is no longer needed.
+            if (!jobs.replace(key, placeholder, realJob)) {
+                realJob.cancel()
+            }
+            placeholder.complete()
         }
     }
 

@@ -76,6 +76,7 @@ class ContactsViewModelTest {
         mockkStatic(Log::class)
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0
+        every { Log.e(any(), any(), any()) } returns 0
         every { Log.i(any(), any()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
 
@@ -794,9 +795,10 @@ class ContactsViewModelTest {
             advanceUntilIdle()
 
             // Then: Verify attempt was made and error was logged (covers else branch)
+            // Use timeout because retryIdentityResolution launches on Dispatchers.IO
             assertTrue("retryIdentityResolution should handle failure gracefully", result.isSuccess)
-            coVerify { contactRepository.resetContactForRetry(testDestHash) }
-            verify { Log.e(any(), match { it.contains("Failed to reset contact") }) }
+            coVerify(timeout = 1000) { contactRepository.resetContactForRetry(testDestHash) }
+            verify(timeout = 1000) { Log.e(any(), match { it.contains("Failed to reset contact") }) }
         }
 
     @Test
@@ -811,9 +813,10 @@ class ContactsViewModelTest {
             advanceUntilIdle()
 
             // Then: Verify attempt was made and exception was logged (covers catch block)
+            // Use timeout because retryIdentityResolution launches on Dispatchers.IO
             assertTrue("retryIdentityResolution should handle exception gracefully", result.isSuccess)
-            coVerify { contactRepository.resetContactForRetry(testDestHash) }
-            verify { Log.e(any(), match { it.contains("Error retrying identity") }, any<Throwable>()) }
+            coVerify(timeout = 1000) { contactRepository.resetContactForRetry(testDestHash) }
+            verify(timeout = 1000) { Log.e(any(), match { it.contains("Error retrying identity") }, any<Throwable>()) }
         }
 
     // ========== Contact Count Tests ==========

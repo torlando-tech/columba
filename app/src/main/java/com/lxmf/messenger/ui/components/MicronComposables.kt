@@ -207,20 +207,21 @@ private fun MicronLineComposable(
 
     val indentPadding = (line.indentLevel * INDENT_DP).dp
 
-    // In scroll mode (MONOSPACE_SCROLL), use min-width for ALL alignments so wide
-    // lines (e.g. ASCII art) can extend beyond the viewport and scroll horizontally.
-    // In other modes, centered/right-aligned lines use exact viewport width so text
-    // wraps within the viewport (matching NomadNet terminal behavior).
+    // In scroll mode, left-aligned lines use min-width so wide content (ASCII art)
+    // can extend beyond the viewport and scroll horizontally.  Centered/right-aligned
+    // lines use exact viewport width so text wraps and TextAlign actually centers.
     val isScrollMode = renderingMode == RenderingMode.MONOSPACE_SCROLL
+    val scrollAligned = isScrollMode && line.alignment != MicronAlignment.LEFT
     val widthModifier =
         if (minLineWidth != Dp.Unspecified) {
-            if (isScrollMode) {
-                Modifier.widthIn(min = minLineWidth)
-            } else {
-                when (line.alignment) {
-                    MicronAlignment.CENTER, MicronAlignment.RIGHT -> Modifier.width(minLineWidth)
-                    MicronAlignment.LEFT -> Modifier.widthIn(min = minLineWidth)
-                }
+            when {
+                scrollAligned -> Modifier.width(minLineWidth)
+                isScrollMode -> Modifier.widthIn(min = minLineWidth)
+                else ->
+                    when (line.alignment) {
+                        MicronAlignment.CENTER, MicronAlignment.RIGHT -> Modifier.width(minLineWidth)
+                        MicronAlignment.LEFT -> Modifier.widthIn(min = minLineWidth)
+                    }
             }
         } else {
             Modifier
@@ -347,11 +348,11 @@ private fun MicronLineComposable(
 
     val lineModifier =
         widthModifier
-            .then(if (isScrollMode) Modifier else Modifier.fillMaxWidth())
+            .then(if (isScrollMode && !scrollAligned) Modifier else Modifier.fillMaxWidth())
             .padding(start = indentPadding)
             .then(if (headingBg != null) Modifier.background(headingBg) else Modifier)
             .then(
-                if (hasLinks && !isScrollMode) {
+                if (hasLinks && (!isScrollMode || scrollAligned)) {
                     Modifier.defaultMinSize(minHeight = MIN_LINK_HEIGHT_DP.dp)
                 } else {
                     Modifier
@@ -386,11 +387,13 @@ private fun MicronLineComposable(
             )
         }
 
+    val softWrap = !isScrollMode || scrollAligned
+
     if (hasLinks) {
         ClickableText(
             text = annotatedString,
             modifier = lineModifier,
-            softWrap = !isScrollMode,
+            softWrap = softWrap,
             style = textStyle,
             onClick = { offset ->
                 annotatedString
@@ -409,7 +412,7 @@ private fun MicronLineComposable(
         Text(
             text = annotatedString,
             modifier = lineModifier,
-            softWrap = !isScrollMode,
+            softWrap = softWrap,
             style = textStyle,
         )
     }

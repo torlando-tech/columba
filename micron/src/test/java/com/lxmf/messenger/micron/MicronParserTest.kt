@@ -726,18 +726,20 @@ class MicronParserTest {
 
     @Test
     fun `backtick before link with formatting`() {
-        // Real-world pattern: `c`F0ad`_`[label`dest]`_`f
-        val doc = MicronParser.parse("`c`F0ad`_`[\"Hoard's Heart\"`/page/hoardsheart.mu]`_`f")
+        // Real-world line from a NomadNet node index page
+        val doc = MicronParser.parse("`c`F0ad`_`[\"Hoard's Heart\" by CupsofJade`:/page/hoardsheart.mu]`_`f - Reticulumified!")
         assertEquals(MicronAlignment.CENTER, doc.lines[0].alignment)
         val link =
             doc.lines[0]
                 .elements
                 .filterIsInstance<MicronElement.Link>()
                 .first()
-        assertEquals("\"Hoard's Heart\"", link.label)
-        assertEquals("/page/hoardsheart.mu", link.destination)
-        // No stray backtick in any text element
+        assertEquals("\"Hoard's Heart\" by CupsofJade", link.label)
+        assertEquals(":/page/hoardsheart.mu", link.destination)
+        // Trailing text after the link
         val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.any { it.content.contains("Reticulumified!") })
+        // No stray backtick in any text element
         assertTrue(texts.none { it.content.contains("`") })
     }
 

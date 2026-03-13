@@ -82,9 +82,9 @@ fun MicronPageContent(
     // Using TextStyle.lineHeight (not Modifier.layout) ensures SpanStyle.background
     // fills the full line height — critical for pixel art top-pixel rendering.
     val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
     val squareLineHeightSp =
         if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
-            val textMeasurer = rememberTextMeasurer()
             remember(density) {
                 val result =
                     textMeasurer.measure(

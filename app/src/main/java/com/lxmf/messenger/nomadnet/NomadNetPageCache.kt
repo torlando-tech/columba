@@ -36,7 +36,8 @@ class NomadNetPageCache
         private val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
 
         init {
-            cleanExpired()
+            // Clean expired entries off the main thread to avoid blocking UI
+            Thread { cleanExpired() }.start()
         }
 
         /**

@@ -132,7 +132,15 @@ class RnsApi:
                 if isinstance(link, dict):
                     return link  # Error dict
 
-                # Cache the link
+                # Cache the link, evicting oldest if at capacity
+                if len(wrapper._nomadnet_links) >= self.MAX_IDENTIFIED_LINKS:
+                    oldest_key = next(iter(wrapper._nomadnet_links))
+                    old_link = wrapper._nomadnet_links.pop(oldest_key, None)
+                    if old_link is not None:
+                        try:
+                            old_link.teardown()
+                        except Exception:
+                            pass
                 wrapper._nomadnet_links[dest_hash_hex] = link
 
             # Make page request over the link

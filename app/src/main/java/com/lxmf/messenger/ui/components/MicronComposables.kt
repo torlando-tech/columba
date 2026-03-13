@@ -265,7 +265,9 @@ private fun MicronLineComposable(
                     }
                     is MicronElement.Checkbox -> {
                         val isChecked =
-                            formFields[element.name]?.contains(element.value) == true ||
+                            formFields[element.name]
+                                ?.split(",")
+                                ?.contains(element.value) == true ||
                                 (formFields[element.name] == null && element.prechecked)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

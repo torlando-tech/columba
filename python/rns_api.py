@@ -316,12 +316,11 @@ class RnsApi:
             failed_callback=request_failed
         )
 
-        # Wait for response — use all remaining time
-        response_wait = max(deadline - time.time(), 5.0)
-        response_event.wait(timeout=response_wait)
-
-        if self._cancel_flag:
-            return {"success": False, "error": "Cancelled"}
+        # Wait for response, polling cancel flag every 0.5s
+        while not response_event.is_set() and time.time() < deadline:
+            if self._cancel_flag:
+                return {"success": False, "error": "Cancelled"}
+            response_event.wait(timeout=0.5)
 
         if response_error[0]:
             return {"success": False, "error": response_error[0]}

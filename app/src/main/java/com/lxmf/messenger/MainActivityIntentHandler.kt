@@ -64,7 +64,7 @@ class MainActivityIntentHandler(
                 if (raw.startsWith("lxmf@")) {
                     val hash = raw.removePrefix("lxmf@")
                     Log.d(logTag, "Opening conversation from nomadnetwork lxmf@ link: ${hash.take(16)}...")
-                    pendingNavigation.value = PendingNavigation.AddContact(hash)
+                    pendingNavigation.value = PendingNavigation.Conversation(hash, hash.take(12))
                 } else {
                     val colonIdx = raw.indexOf(':')
                     val (nodeHash, path) =

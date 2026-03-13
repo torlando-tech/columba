@@ -207,7 +207,7 @@ private const val URL_ANNOTATION_TAG = "url"
 /** Matches nomadnetwork:// and lxma:// URIs (not caught by Patterns.WEB_URL). */
 private val CUSTOM_SCHEME_URL =
     java.util.regex.Pattern.compile(
-        """(?:nomadnetwork|lxma)://\S+""",
+        """(?:nomadnetwork|lxma)://[^\s.,;:!?)\]]+""",
         java.util.regex.Pattern.CASE_INSENSITIVE,
     )
 

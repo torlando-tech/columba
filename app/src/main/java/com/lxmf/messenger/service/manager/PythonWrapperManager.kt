@@ -37,7 +37,7 @@ import tech.torlando.lxst.telephone.Telephone
  * IMPORTANT: Python's signal module requires the main thread for handler registration.
  * All initialization calls go through Dispatchers.Main.immediate.
  */
-@Suppress("TooManyFunctions") // Manager class wrapping Python API methods
+@Suppress("TooManyFunctions", "LargeClass") // Manager class wrapping Python API methods
 class PythonWrapperManager(
     private val state: ServiceState,
     private val context: Context,

@@ -115,8 +115,11 @@ class NomadNetBrowserViewModel
             }
         }
 
+        private val emptyPartialStates: StateFlow<Map<String, PartialManager.PartialState>> =
+            MutableStateFlow(emptyMap())
+
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
-            get() = partialManager?.states ?: MutableStateFlow(emptyMap())
+            get() = partialManager?.states ?: emptyPartialStates
 
         /** Returns "nodeHash:/path" format for display in the URL bar. */
         fun getCurrentUrl(): String? {
@@ -369,10 +372,10 @@ class NomadNetBrowserViewModel
                             _isIdentified.value = true
                             refresh()
                         },
-                        onFailure = { _identifyError.value = it.message },
+                        onFailure = { _identifyError.value = it.message ?: "Unknown error" },
                     )
                 } catch (e: Exception) {
-                    _identifyError.value = e.message
+                    _identifyError.value = e.message ?: "Unknown error"
                 } finally {
                     _identifyInProgress.value = false
                 }

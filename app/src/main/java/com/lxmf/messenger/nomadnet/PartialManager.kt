@@ -79,7 +79,7 @@ class PartialManager(
             val afterAt = destination.substringAfter("@")
             val colonIdx = afterAt.indexOf(':')
             return if (colonIdx >= 32) {
-                afterAt.substring(0, 32) to afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
+                afterAt.substring(0, 32).lowercase() to afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
             } else if (afterAt.length >= 32) {
                 val hashPart = afterAt.take(32)
                 val pathPart = afterAt.drop(32)
@@ -89,7 +89,7 @@ class PartialManager(
                     } else {
                         pathPart.ifEmpty { DEFAULT_PATH }
                     }
-                hashPart to path
+                hashPart.lowercase() to path
             } else {
                 currentNodeHash to destination
             }

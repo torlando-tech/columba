@@ -512,7 +512,11 @@ fun NomadNetBrowserScreen(
                                 MicronPageContent(
                                     document =
                                         com.lxmf.messenger.micron
-                                            .MicronDocument(listOf(lines[index])),
+                                            .MicronDocument(
+                                                lines = listOf(lines[index]),
+                                                pageBackground = state.document.pageBackground,
+                                                pageForeground = state.document.pageForeground,
+                                            ),
                                     formFields = formFields,
                                     renderingMode = renderingMode,
                                     onLinkClick = { destination, fieldNames ->

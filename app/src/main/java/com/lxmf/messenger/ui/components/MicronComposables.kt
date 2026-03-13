@@ -397,8 +397,8 @@ private fun MicronLineComposable(
                     .getStringAnnotations("link", offset, offset)
                     .firstOrNull()
                     ?.let { annotation ->
-                        // Parse annotation: "destination|field1|field2"
-                        val parts = annotation.item.split("|")
+                        // Parse annotation: "destination\u001Ffield1\u001Ffield2"
+                        val parts = annotation.item.split("\u001F")
                         val destination = parts[0]
                         val fieldNames = parts.drop(1)
                         onLinkClick(destination, fieldNames)
@@ -441,7 +441,7 @@ private fun buildMicronAnnotatedString(
                         if (element.fieldNames.isEmpty()) {
                             element.destination
                         } else {
-                            element.destination + "|" + element.fieldNames.joinToString("|")
+                            element.destination + "\u001F" + element.fieldNames.joinToString("\u001F")
                         }
                     pushStringAnnotation("link", annotation)
                     withStyle(spanStyle) {

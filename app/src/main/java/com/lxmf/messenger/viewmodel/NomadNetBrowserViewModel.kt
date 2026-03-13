@@ -10,7 +10,9 @@ import com.lxmf.messenger.nomadnet.PartialManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -33,6 +35,7 @@ class NomadNetBrowserViewModel
             private const val TAG = "NomadNetBrowserVM"
             private const val DEFAULT_PATH = "/page/index.mu"
             private const val PAGE_TIMEOUT_SECONDS = 60f
+            private const val MAX_HISTORY_SIZE = 50
         }
 
         sealed class BrowserState {
@@ -380,10 +383,29 @@ class NomadNetBrowserViewModel
             }
         }
 
+        override fun onCleared() {
+            super.onCleared()
+            // Cancel any in-flight Python page request so the IO thread isn't blocked
+            // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
+            // Use NonCancellable because viewModelScope is already cancelled at this point.
+            val protocol = reticulumProtocol as? ServiceReticulumProtocol ?: return
+            CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+                try {
+                    protocol.cancelNomadnetPageRequest()
+                } catch (_: Exception) {
+                    // Best-effort cancellation — service may already be unbound
+                }
+            }
+        }
+
         /** Push the current page onto the history stack for back-navigation. */
         private fun pushCurrentPageToHistory() {
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
+                // Evict oldest entry if at capacity to bound memory usage
+                if (history.size >= MAX_HISTORY_SIZE) {
+                    history.removeAt(0)
+                }
                 history.add(
                     HistoryEntry(
                         nodeHash = currentState.nodeHash,

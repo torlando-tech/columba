@@ -103,6 +103,7 @@ class NomadNetBrowserViewModel
         private var currentNodeHash = ""
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
+        private var lastFetchFormDataJson: String? = null
 
         private val partialManager: PartialManager? by lazy {
             (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
@@ -164,6 +165,8 @@ class NomadNetBrowserViewModel
                     raw to DEFAULT_PATH
                 }
 
+            // Push current page to history so back button works after URL bar navigation
+            pushCurrentPageToHistory()
             loadPage(nodeHash.lowercase(), path)
         }
 
@@ -208,18 +211,7 @@ class NomadNetBrowserViewModel
             }
 
             // Save current page to history (with document for instant back-nav)
-            val currentState = _browserState.value
-            if (currentState is BrowserState.PageLoaded) {
-                history.add(
-                    HistoryEntry(
-                        nodeHash = currentState.nodeHash,
-                        path = currentState.path,
-                        formFields = _formFields.value.toMap(),
-                        document = currentState.document,
-                    ),
-                )
-                _canGoBack.value = true
-            }
+            pushCurrentPageToHistory()
 
             partialManager?.clear()
 
@@ -268,6 +260,7 @@ class NomadNetBrowserViewModel
         ) {
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
+            lastFetchFormDataJson = formDataJson
             _browserState.value = BrowserState.Loading("Requesting page...")
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -327,10 +320,15 @@ class NomadNetBrowserViewModel
             }
         }
 
-        /** Retry the last failed network fetch. */
+        /** Retry the last failed network fetch, preserving form data if applicable. */
         fun retry() {
             if (lastFetchNodeHash.isNotEmpty()) {
-                loadPage(lastFetchNodeHash, lastFetchPath)
+                val formData = lastFetchFormDataJson
+                if (formData != null) {
+                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData)
+                } else {
+                    loadPage(lastFetchNodeHash, lastFetchPath)
+                }
             }
         }
 
@@ -382,6 +380,22 @@ class NomadNetBrowserViewModel
             }
         }
 
+        /** Push the current page onto the history stack for back-navigation. */
+        private fun pushCurrentPageToHistory() {
+            val currentState = _browserState.value
+            if (currentState is BrowserState.PageLoaded) {
+                history.add(
+                    HistoryEntry(
+                        nodeHash = currentState.nodeHash,
+                        path = currentState.path,
+                        formFields = _formFields.value.toMap(),
+                        document = currentState.document,
+                    ),
+                )
+                _canGoBack.value = true
+            }
+        }
+
         /**
          * Emit a [BrowserState.PageLoaded] and trigger partial detection.
          */
@@ -409,6 +423,7 @@ class NomadNetBrowserViewModel
         ) {
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
+            lastFetchFormDataJson = null
             _browserState.value = BrowserState.Loading("Requesting page...")
 
             viewModelScope.launch(Dispatchers.IO) {

@@ -5,6 +5,7 @@ import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronElement
 import com.lxmf.messenger.micron.MicronParser
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -54,43 +56,57 @@ class PartialManager(
             currentNodeHash: String,
         ): Pair<String, String> {
             if (destination.contains("@")) {
-                val afterAt = destination.substringAfter("@")
-                val colonIdx = afterAt.indexOf(':')
-                return if (colonIdx >= 32) {
-                    afterAt.substring(0, 32) to afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
-                } else if (afterAt.length >= 32) {
-                    val hashPart = afterAt.take(32)
-                    val pathPart = afterAt.drop(32)
-                    val path = if (pathPart.startsWith(":")) pathPart.drop(1).ifEmpty { DEFAULT_PATH } else pathPart.ifEmpty { DEFAULT_PATH }
-                    hashPart to path
-                } else {
+                return resolveAtSyntax(destination, currentNodeHash)
+            }
+            return when {
+                destination.startsWith(":") ->
+                    currentNodeHash to destination.drop(1).ifEmpty { DEFAULT_PATH }
+                destination.startsWith("/") ->
                     currentNodeHash to destination
-                }
+                destination.contains(":") ->
+                    resolveColonSyntax(destination, currentNodeHash)
+                DestinationHashValidator.isValid(destination) ->
+                    destination.lowercase() to DEFAULT_PATH
+                else ->
+                    currentNodeHash to destination
             }
+        }
 
-            if (destination.startsWith(":")) {
-                return currentNodeHash to destination.drop(1).ifEmpty { DEFAULT_PATH }
+        private fun resolveAtSyntax(
+            destination: String,
+            currentNodeHash: String,
+        ): Pair<String, String> {
+            val afterAt = destination.substringAfter("@")
+            val colonIdx = afterAt.indexOf(':')
+            return if (colonIdx >= 32) {
+                afterAt.substring(0, 32) to afterAt.substring(colonIdx + 1).ifEmpty { DEFAULT_PATH }
+            } else if (afterAt.length >= 32) {
+                val hashPart = afterAt.take(32)
+                val pathPart = afterAt.drop(32)
+                val path =
+                    if (pathPart.startsWith(":")) {
+                        pathPart.drop(1).ifEmpty { DEFAULT_PATH }
+                    } else {
+                        pathPart.ifEmpty { DEFAULT_PATH }
+                    }
+                hashPart to path
+            } else {
+                currentNodeHash to destination
             }
+        }
 
-            if (destination.startsWith("/")) {
-                return currentNodeHash to destination
+        private fun resolveColonSyntax(
+            destination: String,
+            currentNodeHash: String,
+        ): Pair<String, String> {
+            val colonIdx = destination.indexOf(':')
+            val hashPart = destination.substring(0, colonIdx)
+            val pathPart = destination.substring(colonIdx + 1)
+            return if (DestinationHashValidator.isValid(hashPart)) {
+                hashPart.lowercase() to pathPart.ifEmpty { DEFAULT_PATH }
+            } else {
+                currentNodeHash to destination
             }
-
-            if (destination.contains(":")) {
-                val colonIdx = destination.indexOf(':')
-                val hashPart = destination.substring(0, colonIdx)
-                val pathPart = destination.substring(colonIdx + 1)
-                if (hashPart.length == 32 && hashPart.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                    return hashPart.lowercase() to pathPart.ifEmpty { DEFAULT_PATH }
-                }
-                return currentNodeHash to destination
-            }
-
-            if (destination.length == 32 && destination.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                return destination.lowercase() to DEFAULT_PATH
-            }
-
-            return currentNodeHash to destination
         }
     }
 
@@ -109,23 +125,25 @@ class PartialManager(
             val key = partial.partialId?.let { "pid:$it" } ?: "pos:$lineIndex"
 
             // Don't re-launch if already tracked
-            if (jobs.containsKey(key)) continue
-
-            _states.value = _states.value + (
-                key to
-                    PartialState(
-                        url = partial.url,
-                        partialId = partial.partialId,
-                        status = PartialState.Status.LOADING,
-                        document = null,
-                        refreshInterval = partial.refreshInterval,
+            if (!jobs.containsKey(key)) {
+                _states.update {
+                    it + (
+                        key to
+                            PartialState(
+                                url = partial.url,
+                                partialId = partial.partialId,
+                                status = PartialState.Status.LOADING,
+                                document = null,
+                                refreshInterval = partial.refreshInterval,
+                            )
                     )
-            )
-
-            jobs[key] =
-                scope.launch(Dispatchers.IO) {
-                    loadPartial(key, partial)
                 }
+
+                jobs[key] =
+                    scope.launch(Dispatchers.IO) {
+                        loadPartial(key, partial)
+                    }
+            }
         }
     }
 
@@ -139,12 +157,14 @@ class PartialManager(
         // Cancel existing job if running
         jobs[key]?.cancel()
 
-        _states.value = _states.value + (
-            key to
-                existing.copy(
-                    status = PartialState.Status.LOADING,
-                )
-        )
+        _states.update {
+            it + (
+                key to
+                    existing.copy(
+                        status = PartialState.Status.LOADING,
+                    )
+            )
+        }
 
         jobs[key] =
             scope.launch(Dispatchers.IO) {
@@ -191,29 +211,33 @@ class PartialManager(
                     result.fold(
                         onSuccess = { pageResult ->
                             val doc = MicronParser.parse(pageResult.content)
-                            _states.value = _states.value + (
-                                key to
-                                    PartialState(
-                                        url = url,
-                                        partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
-                                        status = PartialState.Status.LOADED,
-                                        document = doc,
-                                        refreshInterval = refreshInterval,
-                                    )
-                            )
+                            _states.update {
+                                it + (
+                                    key to
+                                        PartialState(
+                                            url = url,
+                                            partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
+                                            status = PartialState.Status.LOADED,
+                                            document = doc,
+                                            refreshInterval = refreshInterval,
+                                        )
+                                )
+                            }
                         },
                         onFailure = { error ->
                             Log.w(TAG, "Partial fetch failed for $url: ${error.message}")
-                            _states.value = _states.value + (
-                                key to
-                                    PartialState(
-                                        url = url,
-                                        partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
-                                        status = PartialState.Status.ERROR,
-                                        document = null,
-                                        refreshInterval = refreshInterval,
-                                    )
-                            )
+                            _states.update {
+                                it + (
+                                    key to
+                                        PartialState(
+                                            url = url,
+                                            partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
+                                            status = PartialState.Status.ERROR,
+                                            document = null,
+                                            refreshInterval = refreshInterval,
+                                        )
+                                )
+                            }
                         },
                     )
                 }
@@ -226,16 +250,18 @@ class PartialManager(
             // Normal cancellation from clear() or navigation
         } catch (e: Exception) {
             Log.e(TAG, "Partial load error for $url", e)
-            _states.value = _states.value + (
-                key to
-                    PartialState(
-                        url = url,
-                        partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
-                        status = PartialState.Status.ERROR,
-                        document = null,
-                        refreshInterval = refreshInterval,
-                    )
-            )
+            _states.update {
+                it + (
+                    key to
+                        PartialState(
+                            url = url,
+                            partialId = if (key.startsWith("pid:")) key.substringAfter("pid:") else null,
+                            status = PartialState.Status.ERROR,
+                            document = null,
+                            refreshInterval = refreshInterval,
+                        )
+                )
+            }
         }
     }
 

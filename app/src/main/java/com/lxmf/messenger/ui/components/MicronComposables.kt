@@ -66,7 +66,6 @@ fun MicronPageContent(
     document: MicronDocument,
     formFields: Map<String, String>,
     renderingMode: RenderingMode,
-    isDark: Boolean,
     onLinkClick: (destination: String, fieldNames: List<String>) -> Unit,
     onFieldUpdate: (name: String, value: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -116,6 +115,7 @@ fun MicronPageContent(
     }
 }
 
+@Suppress("ReturnCount")
 @Composable
 private fun MicronLineComposable(
     line: MicronLine,
@@ -167,7 +167,6 @@ private fun MicronLineComposable(
                         document = doc,
                         formFields = formFields,
                         renderingMode = renderingMode,
-                        isDark = true,
                         onLinkClick = onLinkClick,
                         onFieldUpdate = onFieldUpdate,
                         partialStates = emptyMap(),
@@ -332,7 +331,7 @@ private fun MicronLineComposable(
 
     // Build AnnotatedString for text-only lines (with links)
     val hasLinks = line.elements.any { it is MicronElement.Link }
-    val annotatedString = buildMicronAnnotatedString(line.elements, defaultFg, fontFamily)
+    val annotatedString = buildMicronAnnotatedString(line.elements, defaultFg)
 
     val headingBg =
         if (line.isHeading) {
@@ -419,7 +418,6 @@ private fun MicronLineComposable(
 private fun buildMicronAnnotatedString(
     elements: List<MicronElement>,
     defaultFg: Color,
-    fontFamily: FontFamily,
 ): AnnotatedString =
     buildAnnotatedString {
         for (element in elements) {

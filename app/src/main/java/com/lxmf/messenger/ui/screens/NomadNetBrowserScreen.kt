@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -105,7 +104,6 @@ fun NomadNetBrowserScreen(
     val identifyError by viewModel.identifyError.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
-    val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
     var showIdentifyConfirm by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
@@ -485,7 +483,6 @@ fun NomadNetBrowserScreen(
                                     document = state.document,
                                     formFields = formFields,
                                     renderingMode = renderingMode,
-                                    isDark = isDark,
                                     onLinkClick = { destination, fieldNames ->
                                         viewModel.navigateToLink(destination, fieldNames)
                                     },
@@ -514,7 +511,6 @@ fun NomadNetBrowserScreen(
                                             .MicronDocument(listOf(lines[index])),
                                     formFields = formFields,
                                     renderingMode = renderingMode,
-                                    isDark = isDark,
                                     onLinkClick = { destination, fieldNames ->
                                         viewModel.navigateToLink(destination, fieldNames)
                                     },
@@ -552,7 +548,7 @@ fun NomadNetBrowserScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { viewModel.loadPage(destinationHash) }) {
+                    Button(onClick = { viewModel.retry() }) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Retry")

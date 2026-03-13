@@ -47,27 +47,26 @@ class NomadNetPageCache
             nodeHash: String,
             path: String,
         ): String? {
-            val key = cacheKey(nodeHash, path)
             val dir = cacheDir
             if (!dir.exists()) return null
 
-            val prefix = "${key}_"
+            val key = cacheKey(nodeHash, path)
             val matchingFile =
-                dir.listFiles()?.firstOrNull { it.name.startsWith(prefix) }
+                dir.listFiles()?.firstOrNull { it.name.startsWith("${key}_") }
                     ?: return null
 
-            val expiresMs = extractExpiryMs(matchingFile.name) ?: return null
-            if (System.currentTimeMillis() > expiresMs) {
-                matchingFile.delete()
-                return null
-            }
-
-            return try {
-                matchingFile.readText()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to read cache file", e)
+            val expiresMs = extractExpiryMs(matchingFile.name)
+            return if (expiresMs == null || System.currentTimeMillis() > expiresMs) {
                 matchingFile.delete()
                 null
+            } else {
+                try {
+                    matchingFile.readText()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to read cache file", e)
+                    matchingFile.delete()
+                    null
+                }
             }
         }
 

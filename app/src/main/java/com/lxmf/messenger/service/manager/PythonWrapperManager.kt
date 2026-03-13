@@ -828,7 +828,7 @@ class PythonWrapperManager(
             api.callAttr("identify_nomadnet_link", destHash).toString()
         } catch (e: Exception) {
             Log.e(TAG, "Error identifying on NomadNet link", e)
-            """{"success": false, "error": "${e.message}"}"""
+            """{"success": false, "error": ${org.json.JSONObject.quote(e.message ?: "Unknown error")}}"""
         }
     }
 

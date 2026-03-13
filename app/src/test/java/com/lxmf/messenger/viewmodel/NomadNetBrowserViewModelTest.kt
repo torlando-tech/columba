@@ -6,10 +6,12 @@ package com.lxmf.messenger.viewmodel
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.lxmf.messenger.nomadnet.NomadNetPageCache
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -50,8 +52,10 @@ class NomadNetBrowserViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        protocol = mockk(relaxed = true)
-        pageCache = mockk(relaxed = true)
+        protocol = mockk()
+        pageCache = mockk()
+        every { pageCache.put(any(), any(), any(), any()) } just Runs
+        coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         viewModel = NomadNetBrowserViewModel(protocol, pageCache)
     }
 
@@ -213,6 +217,8 @@ class NomadNetBrowserViewModelTest {
                     any(),
                 )
             }
+            Thread.sleep(100) // Wait for Dispatchers.IO coroutine
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded)
         }
 
     @Test
@@ -330,6 +336,7 @@ class NomadNetBrowserViewModelTest {
 
             // requestNomadnetPage called for the refresh (cache bypassed)
             coVerify(atLeast = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", null, any()) }
+            assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded)
         }
 
     @Test
@@ -443,6 +450,7 @@ class NomadNetBrowserViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { protocol.identifyNomadnetLink(any()) }
+            assertTrue(viewModel.isIdentified.value)
         }
 
     @Test

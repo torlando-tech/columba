@@ -1272,7 +1272,7 @@ class ReticulumServiceBinder(
             } ?: """{"success": false, "error": "Wrapper not available"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error requesting NomadNet page", e)
-            """{"success": false, "error": "${e.message}"}"""
+            """{"success": false, "error": ${org.json.JSONObject.quote(e.message ?: "Unknown error")}}"""
         }
 
     override fun cancelNomadnetPageRequest() {

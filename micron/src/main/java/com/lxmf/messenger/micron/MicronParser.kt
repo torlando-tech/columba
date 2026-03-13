@@ -25,6 +25,7 @@ object MicronParser {
     private const val MAX_FIELD_WIDTH = 256
     private const val MAX_HEADING_LEVEL = 3
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LoopWithTooManyJumpStatements")
     fun parse(
         markup: String,
         isDark: Boolean = true,
@@ -195,6 +196,7 @@ object MicronParser {
      * Returns a triple of (elements, updated style, updated alignment).
      * Style and alignment persist across lines (formatting doesn't reset at newlines).
      */
+    @Suppress("CyclomaticComplexMethod", "LoopWithTooManyJumpStatements")
     private fun parseInline(
         line: String,
         initialStyle: MicronStyle,
@@ -317,7 +319,7 @@ object MicronParser {
         val nextIndex: Int,
     )
 
-    @Suppress("CyclomaticComplexity")
+    @Suppress("CyclomaticComplexMethod")
     private fun processFormatCommand(
         cmd: Char,
         line: String,

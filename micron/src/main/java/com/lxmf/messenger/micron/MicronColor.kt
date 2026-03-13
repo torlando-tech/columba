@@ -46,6 +46,7 @@ sealed class MicronColor {
          * - "ddd" → Hex(0xDD, 0xDD, 0xDD)
          * - "g50" → Grayscale(50)
          */
+        @Suppress("ReturnCount")
         fun parse(colorStr: String): MicronColor? {
             if (colorStr.length < 3) return null
 

@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import javax.inject.Inject
 
+@Suppress("TooManyFunctions") // ViewModel has 15 UI-interaction methods at the threshold
 @HiltViewModel
 class NomadNetBrowserViewModel
     @Inject
@@ -100,6 +101,8 @@ class NomadNetBrowserViewModel
         private val _canGoBack = MutableStateFlow(false)
         val canGoBack: StateFlow<Boolean> = _canGoBack.asStateFlow()
         private var currentNodeHash = ""
+        private var lastFetchNodeHash = ""
+        private var lastFetchPath = DEFAULT_PATH
 
         private val partialManager: PartialManager? by lazy {
             (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
@@ -241,55 +244,62 @@ class NomadNetBrowserViewModel
 
             // Form submissions always fetch fresh (response depends on submitted data)
             if (isFormSubmission) {
-                _browserState.value = BrowserState.Loading("Requesting page...")
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                        if (protocol == null) {
-                            _browserState.value = BrowserState.Error("Service not available")
-                            return@launch
-                        }
-
-                        val result =
-                            protocol.requestNomadnetPage(
-                                destinationHash = nodeHash,
-                                path = path,
-                                formDataJson = formDataJson,
-                                timeoutSeconds = PAGE_TIMEOUT_SECONDS,
-                            )
-
-                        result.fold(
-                            onSuccess = { pageResult ->
-                                currentNodeHash = nodeHash
-                                val document = MicronParser.parse(pageResult.content)
-                                // Don't cache form responses
-                                emitPageLoaded(document, pageResult.path, nodeHash)
-                            },
-                            onFailure = { error ->
-                                _browserState.value =
-                                    BrowserState.Error(
-                                        error.message ?: "Unknown error",
-                                    )
-                            },
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error navigating", e)
-                        _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
-                    }
+                submitFormAndNavigate(nodeHash, path, formDataJson!!)
+            } else {
+                // Non-form link: check cache first
+                val cached = pageCache.get(nodeHash, path)
+                if (cached != null) {
+                    currentNodeHash = nodeHash
+                    val document = MicronParser.parse(cached)
+                    emitPageLoaded(document, path, nodeHash)
+                } else {
+                    fetchPage(nodeHash, path, cacheResponse = true)
                 }
-                return
             }
+        }
 
-            // Non-form link: check cache first
-            val cached = pageCache.get(nodeHash, path)
-            if (cached != null) {
-                currentNodeHash = nodeHash
-                val document = MicronParser.parse(cached)
-                emitPageLoaded(document, path, nodeHash)
-                return
+        private fun submitFormAndNavigate(
+            nodeHash: String,
+            path: String,
+            formDataJson: String,
+        ) {
+            lastFetchNodeHash = nodeHash
+            lastFetchPath = path
+            _browserState.value = BrowserState.Loading("Requesting page...")
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
+                    if (protocol == null) {
+                        _browserState.value = BrowserState.Error("Service not available")
+                        return@launch
+                    }
+
+                    val result =
+                        protocol.requestNomadnetPage(
+                            destinationHash = nodeHash,
+                            path = path,
+                            formDataJson = formDataJson,
+                            timeoutSeconds = PAGE_TIMEOUT_SECONDS,
+                        )
+
+                    result.fold(
+                        onSuccess = { pageResult ->
+                            currentNodeHash = nodeHash
+                            val document = MicronParser.parse(pageResult.content)
+                            emitPageLoaded(document, pageResult.path, nodeHash)
+                        },
+                        onFailure = { error ->
+                            _browserState.value =
+                                BrowserState.Error(
+                                    error.message ?: "Unknown error",
+                                )
+                        },
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error navigating", e)
+                    _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
+                }
             }
-
-            fetchPage(nodeHash, path, cacheResponse = true)
         }
 
         fun goBack(): Boolean {
@@ -311,6 +321,13 @@ class NomadNetBrowserViewModel
                 partialManager?.clear()
                 // Bypass cache read, but still cache the fresh response
                 fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+            }
+        }
+
+        /** Retry the last failed network fetch. */
+        fun retry() {
+            if (lastFetchNodeHash.isNotEmpty()) {
+                loadPage(lastFetchNodeHash, lastFetchPath)
             }
         }
 
@@ -346,7 +363,7 @@ class NomadNetBrowserViewModel
                 try {
                     val protocol =
                         reticulumProtocol as? ServiceReticulumProtocol
-                            ?: throw IllegalStateException("Service not available")
+                            ?: error("Service not available")
                     protocol.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = {
                             _isIdentified.value = true
@@ -387,6 +404,8 @@ class NomadNetBrowserViewModel
             path: String,
             cacheResponse: Boolean,
         ) {
+            lastFetchNodeHash = nodeHash
+            lastFetchPath = path
             _browserState.value = BrowserState.Loading("Requesting page...")
 
             viewModelScope.launch(Dispatchers.IO) {

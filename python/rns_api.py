@@ -156,35 +156,64 @@ class RnsApi:
     def _establish_link(self, wrapper, dest_hash, dest_hash_hex, deadline):
         """Establish a new RNS link to a NomadNet node.
 
+        Matches NomadNet TUI's proven sequence (Browser.py __load):
+        path first → identity recall → destination → link.
+        Always uses the original destination hash from the caller,
+        never a recomputed one.
+
         Returns an active RNS.Link on success, or an error dict on failure.
         """
         import RNS
 
-        # Recall identity — only needed when establishing a new link
+        # ── Phase 1: Ensure path ──
+        # Match NomadNet TUI: check has_path FIRST, request only if missing.
+        # The path response is a cached announce that populates BOTH the
+        # path table AND known_destinations, so identity recall after this
+        # is guaranteed to succeed.
+        if not RNS.Transport.has_path(dest_hash):
+            log_info("RnsApi", "request_nomadnet_page",
+                     f"No path to {dest_hash_hex[:16]}, requesting...")
+            # Reserve 10s for link establishment + page request.
+            # RNS await_path sends request_path ONCE with no retry.
+            # If the packet or response is lost, the path never arrives.
+            # Retry request_path every few seconds to work around this.
+            path_deadline = time.time() + max(deadline - time.time() - 10, 10)
+            PATH_RETRY_INTERVAL = 5
+            attempt = 1
+            while not RNS.Transport.has_path(dest_hash) and time.time() < path_deadline:
+                if attempt > 1:
+                    log_info("RnsApi", "request_nomadnet_page",
+                             f"Path retry #{attempt} for {dest_hash_hex[:16]}")
+                RNS.Transport.request_path(dest_hash)
+                # Wait up to PATH_RETRY_INTERVAL for path to arrive
+                wait_until = min(time.time() + PATH_RETRY_INTERVAL, path_deadline)
+                while not RNS.Transport.has_path(dest_hash) and time.time() < wait_until:
+                    if self._cancel_flag:
+                        return {"success": False, "error": "Cancelled"}
+                    time.sleep(0.25)
+                attempt += 1
+
+            if not RNS.Transport.has_path(dest_hash):
+                return {"success": False, "error": "No path to node. It may be offline or unreachable."}
+
+        hops = RNS.Transport.hops_to(dest_hash)
+        log_info("RnsApi", "request_nomadnet_page",
+                 f"Path to {dest_hash_hex[:16]} available (hops={hops})")
+
+        # ── Phase 2: Recall identity ──
+        # After path arrival the identity is in known_destinations.
+        # Fallbacks mirror the old code for edge cases (identity hash
+        # lookup, wrapper cache).
         recipient_identity = RNS.Identity.recall(dest_hash)
         if not recipient_identity:
             recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
         if not recipient_identity and dest_hash_hex in wrapper.identities:
             recipient_identity = wrapper.identities[dest_hash_hex]
 
-        # If identity not known, request path — the node's announce
-        # response will populate the identity in known_destinations
         if not recipient_identity:
-            log_info("RnsApi", "request_nomadnet_page",
-                     f"Identity not cached, requesting path to discover {dest_hash_hex[:16]}...")
-            RNS.Transport.request_path(dest_hash)
-            while time.time() < deadline - 15:  # Reserve 15s for link + request
-                if self._cancel_flag:
-                    return {"success": False, "error": "Cancelled"}
-                recipient_identity = RNS.Identity.recall(dest_hash)
-                if recipient_identity:
-                    break
-                time.sleep(0.25)
+            return {"success": False, "error": "Path available but identity unknown. The node may use a different address format."}
 
-        if not recipient_identity:
-            return {"success": False, "error": "Could not discover identity for this node. The node may be offline."}
-
-        # Create NomadNet node destination (different aspect than lxmf.delivery)
+        # ── Phase 3: Create destination and verify hash ──
         node_dest = RNS.Destination(
             recipient_identity,
             RNS.Destination.OUT,
@@ -193,46 +222,14 @@ class RnsApi:
             "node"
         )
 
-        # Verify destination hash matches what we expect
-        node_dest_hex = node_dest.hash.hex()
         if node_dest.hash != dest_hash:
             log_warning("RnsApi", "request_nomadnet_page",
-                       f"Destination hash mismatch! passed={dest_hash_hex} computed={node_dest_hex}")
+                       f"Destination hash mismatch! passed={dest_hash_hex} computed={node_dest.hash.hex()}")
 
-        hops = RNS.Transport.hops_to(node_dest.hash)
-        has_existing_path = RNS.Transport.has_path(node_dest.hash)
+        # ── Phase 4: Establish link ──
         log_info("RnsApi", "request_nomadnet_page",
-                 f"Node {node_dest_hex[:16]}: hops={hops}, has_path={has_existing_path}")
+                 f"Creating link to {dest_hash_hex[:16]} (hops={hops})")
 
-        # Always request a fresh path to ensure routing info is current,
-        # even if we already have one cached from an older announce
-        RNS.Transport.request_path(node_dest.hash)
-
-        if not has_existing_path:
-            # No path at all — wait for one
-            while time.time() < deadline - 10:  # Reserve 10s for link + request
-                if self._cancel_flag:
-                    return {"success": False, "error": "Cancelled"}
-                if RNS.Transport.has_path(node_dest.hash):
-                    break
-                time.sleep(0.25)
-            if not RNS.Transport.has_path(node_dest.hash):
-                return {"success": False, "error": "No path to node"}
-        else:
-            # Already have a path; give up to 2s for a potentially fresher one,
-            # polling cancel flag every 0.25s
-            fresh_wait = min(2.0, max(deadline - time.time() - 20, 0.5))
-            fresh_deadline = time.time() + fresh_wait
-            while time.time() < fresh_deadline:
-                if self._cancel_flag:
-                    return {"success": False, "error": "Cancelled"}
-                time.sleep(0.25)
-
-        hops = RNS.Transport.hops_to(node_dest.hash)
-        log_info("RnsApi", "request_nomadnet_page",
-                 f"Creating link to {node_dest_hex[:16]} (hops={hops})")
-
-        # Establish link — gets all remaining time minus 10s for the page request
         link_established = threading.Event()
         link_closed_reason = [None]
 
@@ -257,7 +254,6 @@ class RnsApi:
         log_info("RnsApi", "request_nomadnet_page",
                  f"Link establishment_timeout={est_timeout:.1f}s" if est_timeout else "Link establishment_timeout=unknown")
 
-        # Wait for link establishment
         link_wait = max(deadline - time.time() - 10, 5.0)
         log_debug("RnsApi", "request_nomadnet_page",
                  f"Waiting up to {link_wait:.0f}s for link to {dest_hash_hex[:16]}")

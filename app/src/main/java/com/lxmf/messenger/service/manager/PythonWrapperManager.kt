@@ -832,6 +832,55 @@ class PythonWrapperManager(
         }
     }
 
+    /**
+     * Request a page from a NomadNet node.
+     * Uses rns_api.py (Strangler Fig) to establish/reuse links and fetch pages.
+     *
+     * @param destHash 16-byte destination hash
+     * @param path Page path (e.g., "/page/index.mu")
+     * @param formDataJson Optional JSON string of form field values
+     * @param timeoutSeconds Total timeout for the operation
+     * @return JSON string: {"success": true, "content": "...", "path": "..."} or error
+     */
+    fun requestNomadnetPage(
+        destHash: ByteArray,
+        path: String,
+        formDataJson: String?,
+        timeoutSeconds: Float,
+    ): String {
+        if (state.isPythonShutdownStarted.get()) {
+            return """{"success": false, "error": "Service shutting down"}"""
+        }
+        val api = rnsApi ?: return """{"success": false, "error": "RnsApi not initialized"}"""
+        return try {
+            val result =
+                api.callAttr(
+                    "request_nomadnet_page",
+                    destHash,
+                    path,
+                    formDataJson,
+                    timeoutSeconds,
+                )
+            result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting NomadNet page", e)
+            """{"success": false, "error": ${org.json.JSONObject.quote(e.message ?: "Unknown error")}}"""
+        }
+    }
+
+    /**
+     * Cancel any in-progress NomadNet page request.
+     * Uses rns_api.py (Strangler Fig).
+     */
+    fun cancelNomadnetPageRequest() {
+        val api = rnsApi ?: return
+        try {
+            api.callAttr("cancel_nomadnet_page_request")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling NomadNet page request", e)
+        }
+    }
+
     // ============================================================================
     // RMSP (Reticulum Map Service Protocol) Methods
     // ============================================================================

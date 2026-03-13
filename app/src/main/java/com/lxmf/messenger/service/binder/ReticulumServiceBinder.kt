@@ -1256,33 +1256,13 @@ class ReticulumServiceBinder(
         path: String,
         formDataJson: String?,
         timeoutSeconds: Float,
-    ): String =
-        try {
-            Log.d(TAG, "Requesting NomadNet page: $path from ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
-            wrapperManager.withWrapper { wrapper ->
-                val result =
-                    wrapper.callAttr(
-                        "request_nomadnet_page",
-                        destHash,
-                        path,
-                        formDataJson,
-                        timeoutSeconds,
-                    )
-                result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
-            } ?: """{"success": false, "error": "Wrapper not available"}"""
-        } catch (e: Exception) {
-            Log.e(TAG, "Error requesting NomadNet page", e)
-            """{"success": false, "error": ${org.json.JSONObject.quote(e.message ?: "Unknown error")}}"""
-        }
+    ): String {
+        Log.d(TAG, "Requesting NomadNet page: $path from ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
+        return wrapperManager.requestNomadnetPage(destHash, path, formDataJson, timeoutSeconds)
+    }
 
     override fun cancelNomadnetPageRequest() {
-        try {
-            wrapperManager.withWrapper { wrapper ->
-                wrapper.callAttr("cancel_nomadnet_page_request")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error cancelling NomadNet page request", e)
-        }
+        wrapperManager.cancelNomadnetPageRequest()
     }
 
     override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)

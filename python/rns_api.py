@@ -13,6 +13,7 @@ from logging_utils import log_debug, log_info, log_warning, log_error
 
 class RnsApi:
     MAX_IDENTIFIED_LINKS = 200
+    MAX_CACHED_LINKS = 8  # Live RNS.Link objects hold buffers; keep this small
 
     def __init__(self):
         self._cancel_flag = False
@@ -133,7 +134,7 @@ class RnsApi:
                     return link  # Error dict
 
                 # Cache the link, evicting oldest if at capacity
-                if len(wrapper._nomadnet_links) >= self.MAX_IDENTIFIED_LINKS:
+                if len(wrapper._nomadnet_links) >= self.MAX_CACHED_LINKS:
                     oldest_key = next(iter(wrapper._nomadnet_links))
                     old_link = wrapper._nomadnet_links.pop(oldest_key, None)
                     if old_link is not None:

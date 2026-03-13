@@ -231,6 +231,7 @@ class PartialManager(
                                             status = PartialState.Status.LOADED,
                                             document = doc,
                                             refreshInterval = refreshInterval,
+                                            fieldNames = allowedFields,
                                         )
                                 )
                             }
@@ -247,6 +248,7 @@ class PartialManager(
                                             status = PartialState.Status.ERROR,
                                             document = null,
                                             refreshInterval = refreshInterval,
+                                            fieldNames = allowedFields,
                                         )
                                 )
                             }
@@ -288,14 +290,11 @@ class PartialManager(
         if (fields.isEmpty()) return null
         // Match NomadNet TUI: only forward fields declared by the partial.
         // "*" means all fields; empty list means no fields.
-        val allFields = "*" in allowedFields
         val filtered =
-            if (allFields) {
-                fields
-            } else if (allowedFields.isEmpty()) {
-                return null
-            } else {
-                fields.filterKeys { it in allowedFields }
+            when {
+                "*" in allowedFields -> fields
+                allowedFields.isEmpty() -> emptyMap()
+                else -> fields.filterKeys { it in allowedFields }
             }
         if (filtered.isEmpty()) return null
         val json = JSONObject()

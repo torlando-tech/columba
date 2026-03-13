@@ -257,20 +257,23 @@ class RnsApi:
             link_established = threading.Event()
             link_closed_reason = [None]
 
-            def on_link_established(established_link):
+            # Capture loop variables via default args to avoid late-binding
+            # closure bug: stale callbacks from a prior iteration could
+            # otherwise set the new iteration's Event or reason list.
+            def on_link_established(established_link, _evt=link_established):
                 log_info("RnsApi", "request_nomadnet_page",
                          f"Link established to {dest_hash_hex[:16]} (RTT={established_link.rtt})")
-                link_established.set()
+                _evt.set()
 
-            def on_link_closed(closed_link):
+            def on_link_closed(closed_link, _evt=link_established, _reason=link_closed_reason):
                 reason = getattr(closed_link, 'teardown_reason', None)
                 reason_str = {0x01: "TIMEOUT", 0x02: "INITIATOR_CLOSED",
                               0x03: "DESTINATION_CLOSED"}.get(reason, str(reason))
                 log_warning("RnsApi", "request_nomadnet_page",
                            f"Link to {dest_hash_hex[:16]} closed during establishment "
                            f"(reason={reason_str}, status={closed_link.status})")
-                link_closed_reason[0] = reason
-                link_established.set()
+                _reason[0] = reason
+                _evt.set()
 
             link = RNS.Link(node_dest,
                             established_callback=on_link_established,

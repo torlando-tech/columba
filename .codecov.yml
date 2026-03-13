@@ -19,6 +19,7 @@ flags:
     paths:
       - "app/"
       - "core/"
+      - "micron/"
     carryforward: true
   python:
     paths:

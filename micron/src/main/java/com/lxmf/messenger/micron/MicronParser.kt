@@ -347,34 +347,14 @@ object MicronParser {
             // Reset background color
             'b' -> FormatResult(style.copy(background = MicronColor.Default), alignment, afterCmd)
 
-            // Foreground color: Fxxx (3 chars)
+            // Foreground color: Fxxx (3 chars) or FTxxxxxx (true color, 6 chars)
             'F' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
-                    if (color != null) {
-                        FormatResult(style.copy(foreground = color), alignment, afterCmd + 3)
-                    } else {
-                        null
-                    }
-                } else {
-                    null
-                }
+                parseForegroundOrBackground(line, afterCmd, style, alignment, isForeground = true)
             }
 
-            // Background color: Bxxx (3 chars)
+            // Background color: Bxxx (3 chars) or BTxxxxxx (true color, 6 chars)
             'B' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
-                    if (color != null) {
-                        FormatResult(style.copy(background = color), alignment, afterCmd + 3)
-                    } else {
-                        null
-                    }
-                } else {
-                    null
-                }
+                parseForegroundOrBackground(line, afterCmd, style, alignment, isForeground = false)
             }
 
             // Alignment
@@ -388,6 +368,49 @@ object MicronParser {
 
             else -> null
         }
+    }
+
+    private const val TRUE_COLOR_LEN = 6
+    private const val SHORT_COLOR_LEN = 3
+
+    /**
+     * Parse a foreground or background color command.
+     * Supports both 3-char shorthand (`Fxxx` / `Bxxx`) and true color (`FTxxxxxx` / `BTxxxxxx`).
+     */
+    @Suppress("ReturnCount")
+    private fun parseForegroundOrBackground(
+        line: String,
+        afterCmd: Int,
+        currentStyle: MicronStyle,
+        alignment: MicronAlignment,
+        isForeground: Boolean,
+    ): FormatResult? {
+        // True color: next char is 'T' followed by 6 hex chars
+        if (afterCmd < line.length && line[afterCmd] == 'T') {
+            val colorStart = afterCmd + 1
+            if (colorStart + TRUE_COLOR_LEN <= line.length) {
+                val colorStr = line.substring(colorStart, colorStart + TRUE_COLOR_LEN)
+                val color = MicronColor.parseTrueColor(colorStr)
+                if (color != null) {
+                    val newStyle =
+                        if (isForeground) currentStyle.copy(foreground = color) else currentStyle.copy(background = color)
+                    return FormatResult(newStyle, alignment, colorStart + TRUE_COLOR_LEN)
+                }
+            }
+        }
+
+        // Standard 3-char color
+        if (afterCmd + SHORT_COLOR_LEN <= line.length) {
+            val colorStr = line.substring(afterCmd, afterCmd + SHORT_COLOR_LEN)
+            val color = MicronColor.parse(colorStr)
+            if (color != null) {
+                val newStyle =
+                    if (isForeground) currentStyle.copy(foreground = color) else currentStyle.copy(background = color)
+                return FormatResult(newStyle, alignment, afterCmd + SHORT_COLOR_LEN)
+            }
+        }
+
+        return null
     }
 
     /**

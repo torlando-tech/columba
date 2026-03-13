@@ -3,8 +3,9 @@ package com.lxmf.messenger.micron
 /**
  * Represents a color in Micron markup.
  *
- * Micron supports three color formats:
+ * Micron supports four color formats:
  * - 3-char hex: each digit is doubled (e.g., "ddd" → 0xDD, 0xDD, 0xDD)
+ * - 6-char true color hex: full 24-bit RGB (e.g., "ff8800" → 0xFF, 0x88, 0x00)
  * - Grayscale: "gNN" where NN is 0-99 (0 = black, 99 = white)
  * - Default: inherit from theme
  */
@@ -40,6 +41,7 @@ sealed class MicronColor {
         private const val HEX_RADIX = 16
         private const val HEX_DOUBLER = 0x11
         private const val MAX_GRAYSCALE = 99
+        private const val TRUE_COLOR_LEN = 6
 
         /**
          * Parse a Micron color string (3 chars after F/B command).
@@ -62,6 +64,28 @@ sealed class MicronColor {
             val b = colorStr[2].digitToIntOrNull(HEX_RADIX) ?: return null
 
             return Hex(r * HEX_DOUBLER, g * HEX_DOUBLER, b * HEX_DOUBLER)
+        }
+
+        /**
+         * Parse a 6-char true color hex string (after FT/BT command).
+         * - "ff8800" → Hex(0xFF, 0x88, 0x00)
+         */
+        @Suppress("ReturnCount")
+        fun parseTrueColor(colorStr: String): MicronColor? {
+            if (colorStr.length < TRUE_COLOR_LEN) return null
+
+            val rHi = colorStr[0].digitToIntOrNull(HEX_RADIX) ?: return null
+            val rLo = colorStr[1].digitToIntOrNull(HEX_RADIX) ?: return null
+            val gHi = colorStr[2].digitToIntOrNull(HEX_RADIX) ?: return null
+            val gLo = colorStr[3].digitToIntOrNull(HEX_RADIX) ?: return null
+            val bHi = colorStr[4].digitToIntOrNull(HEX_RADIX) ?: return null
+            val bLo = colorStr[5].digitToIntOrNull(HEX_RADIX) ?: return null
+
+            return Hex(
+                (rHi shl 4) or rLo,
+                (gHi shl 4) or gLo,
+                (bHi shl 4) or bLo,
+            )
         }
     }
 }

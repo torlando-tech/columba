@@ -106,6 +106,8 @@ class NomadNetBrowserViewModel
         private val history = mutableListOf<HistoryEntry>()
         private val _canGoBack = MutableStateFlow(false)
         val canGoBack: StateFlow<Boolean> = _canGoBack.asStateFlow()
+
+        @Volatile
         private var currentNodeHash = ""
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH

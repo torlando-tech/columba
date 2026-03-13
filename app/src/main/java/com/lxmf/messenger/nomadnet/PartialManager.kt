@@ -45,6 +45,7 @@ class PartialManager(
         private const val TAG = "PartialManager"
         private const val PARTIAL_TIMEOUT_SECONDS = 30f
         private const val MAX_CONCURRENT_FETCHES = 2
+        private const val MAX_CONSECUTIVE_ERRORS = 3
         private const val DEFAULT_PATH = "/page/index.mu"
 
         /**
@@ -124,8 +125,16 @@ class PartialManager(
             val partial = line.elements.firstOrNull() as? MicronElement.Partial ?: continue
             val key = partial.partialId?.let { "pid:$it" } ?: "pos:$lineIndex"
 
-            // Don't re-launch if already tracked
-            if (!jobs.containsKey(key)) {
+            // Atomically check-and-set to prevent duplicate launches
+            val job =
+                scope.launch(Dispatchers.IO) {
+                    loadPartial(key, partial)
+                }
+            val existing = jobs.putIfAbsent(key, job)
+            if (existing != null) {
+                // Another thread already launched this partial
+                job.cancel()
+            } else {
                 _states.update {
                     it + (
                         key to
@@ -138,11 +147,6 @@ class PartialManager(
                             )
                     )
                 }
-
-                jobs[key] =
-                    scope.launch(Dispatchers.IO) {
-                        loadPartial(key, partial)
-                    }
             }
         }
     }
@@ -193,6 +197,7 @@ class PartialManager(
         url: String,
         refreshInterval: Int?,
     ) {
+        var consecutiveErrors = 0
         try {
             while (true) {
                 fetchSemaphore.withPermit {
@@ -210,6 +215,7 @@ class PartialManager(
 
                     result.fold(
                         onSuccess = { pageResult ->
+                            consecutiveErrors = 0
                             val doc = MicronParser.parse(pageResult.content)
                             _states.update {
                                 it + (
@@ -225,6 +231,7 @@ class PartialManager(
                             }
                         },
                         onFailure = { error ->
+                            consecutiveErrors++
                             Log.w(TAG, "Partial fetch failed for $url: ${error.message}")
                             _states.update {
                                 it + (
@@ -244,6 +251,11 @@ class PartialManager(
 
                 // If no refresh interval, we're done
                 if (refreshInterval == null) return
+                // Stop retrying after too many consecutive failures
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    Log.w(TAG, "Partial $url: $consecutiveErrors consecutive errors, stopping refresh")
+                    return
+                }
                 delay(refreshInterval * 1000L)
             }
         } catch (_: kotlinx.coroutines.CancellationException) {

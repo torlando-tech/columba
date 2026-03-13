@@ -112,6 +112,8 @@ class NomadNetBrowserViewModel
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
         private var lastFetchFormDataJson: String? = null
+
+        @Volatile
         private var fetchEpoch = 0
 
         private val partialManager: PartialManager? by lazy {

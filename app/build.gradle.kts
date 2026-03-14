@@ -78,12 +78,12 @@ val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
     namespace = "com.lxmf.messenger"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lxmf.messenger"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = versionCodeValue
         versionName = versionNameValue
 

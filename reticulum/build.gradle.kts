@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "tech.torlando.columba.reticulum"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24

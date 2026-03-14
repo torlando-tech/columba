@@ -44,7 +44,7 @@ object MicronParser {
         val inputLines = markup.lines()
 
         for (rawLine in inputLines) {
-            val line = rawLine.trimEnd()
+            val line = rawLine
 
             // Empty lines → line break
             if (line.isEmpty()) {
@@ -58,8 +58,8 @@ object MicronParser {
                 continue
             }
 
-            // Literal mode toggle: `=
-            if (line.trimStart() == "`=") {
+            // Literal mode toggle: `= (exact match, no leading whitespace)
+            if (line == "`=") {
                 literalMode = !literalMode
                 continue
             }
@@ -96,13 +96,44 @@ object MicronParser {
                 continue
             }
 
-            // Section depth reset
-            if (line == "<") {
+            // Section depth reset: < resets depth then re-parses remainder
+            if (line.startsWith("<")) {
                 sectionDepth = 0
+                val remainder = line.drop(1)
+                if (remainder.isEmpty()) continue
+                // Re-parse the remainder as a regular content line
+                val (elements, updatedStyle, updatedAlignment) =
+                    parseInline(remainder, currentStyle, currentAlignment)
+                currentStyle = updatedStyle
+                currentAlignment = updatedAlignment
+                outputLines.add(
+                    MicronLine(
+                        elements = elements,
+                        alignment = currentAlignment,
+                        indentLevel = sectionDepth,
+                    ),
+                )
                 continue
             }
 
             // Headings: >, >>, >>>
+            // D7: If line starts with > but contains `<, strip leading > chars
+            // to prevent heading formatting from interfering with field rendering
+            if (line.startsWith(">") && "`<" in line) {
+                val stripped = line.trimStart('>')
+                val (elements, updatedStyle, updatedAlignment) =
+                    parseInline(stripped, currentStyle, currentAlignment)
+                currentStyle = updatedStyle
+                currentAlignment = updatedAlignment
+                outputLines.add(
+                    MicronLine(
+                        elements = elements,
+                        alignment = currentAlignment,
+                        indentLevel = sectionDepth,
+                    ),
+                )
+                continue
+            }
             if (line.startsWith(">")) {
                 val headingLevel = line.takeWhile { it == '>' }.length.coerceAtMost(MAX_HEADING_LEVEL)
                 sectionDepth = headingLevel
@@ -134,7 +165,9 @@ object MicronParser {
 
             // Dividers
             if (line.startsWith("-")) {
-                val dividerChar = if (line.length >= 2) line[1] else '\u2500' // ─
+                var dividerChar = if (line.length == 2) line[1] else '\u2500' // ─
+                // D8: Replace control characters (ord < 32) with default
+                if (dividerChar.code < 32) dividerChar = '\u2500'
                 outputLines.add(
                     MicronLine(
                         elements = listOf(MicronElement.Divider(dividerChar)),
@@ -225,43 +258,7 @@ object MicronParser {
                 continue
             }
 
-            // Field: <flags|name`value>
-            if (c == '<') {
-                val fieldEnd = line.indexOf('>', i + 1)
-                if (fieldEnd == -1) {
-                    textBuffer.append(c)
-                    i++
-                    continue
-                }
-                val fieldElement = parseField(line.substring(i + 1, fieldEnd), style)
-                if (fieldElement != null) {
-                    flushText()
-                    elements.add(fieldElement)
-                    i = fieldEnd + 1
-                    continue
-                }
-                // Not a valid field — treat '<' as literal text
-                textBuffer.append(c)
-                i++
-                continue
-            }
-
-            // Link: [label`destination`fields]
-            if (c == '[') {
-                val linkEnd = line.indexOf(']', i + 1)
-                if (linkEnd == -1) {
-                    textBuffer.append(c)
-                    i++
-                    continue
-                }
-                flushText()
-                val linkData = line.substring(i + 1, linkEnd)
-                elements.add(parseLink(linkData, style))
-                i = linkEnd + 1
-                continue
-            }
-
-            // Backtick formatting command
+            // Backtick formatting command (also entry point for links/fields)
             if (c == '`') {
                 if (i + 1 >= line.length) {
                     // Trailing backtick — reset all formatting
@@ -281,12 +278,39 @@ object MicronParser {
                     continue
                 }
 
-                // Backtick before link `[...] or field `<...> — consume the
-                // backtick (formatting-mode entry) and let the next character be
-                // processed as a link/field opener on the next iteration.
-                if (cmd == '[' || cmd == '<') {
-                    flushText()
-                    i++ // skip the backtick only; '[' or '<' handled next iteration
+                // Backtick before link `[...] — parse link inline
+                if (cmd == '[') {
+                    val linkStart = i + 2 // after `[
+                    val linkEnd = line.indexOf(']', linkStart)
+                    if (linkEnd != -1) {
+                        flushText()
+                        val linkData = line.substring(linkStart, linkEnd)
+                        elements.add(parseLink(linkData, style))
+                        i = linkEnd + 1
+                        continue
+                    }
+                    // No closing ] — treat backtick as formatting entry, [ as literal
+                    textBuffer.append('[')
+                    i += 2
+                    continue
+                }
+
+                // Backtick before field `<...> — parse field inline
+                if (cmd == '<') {
+                    val fieldStart = i + 2 // after `<
+                    val fieldEnd = line.indexOf('>', fieldStart)
+                    if (fieldEnd != -1) {
+                        val fieldElement = parseField(line.substring(fieldStart, fieldEnd), style)
+                        if (fieldElement != null) {
+                            flushText()
+                            elements.add(fieldElement)
+                            i = fieldEnd + 1
+                            continue
+                        }
+                    }
+                    // Not a valid field — treat `< as literal
+                    textBuffer.append('<')
+                    i += 2
                     continue
                 }
 

@@ -299,14 +299,12 @@ object MicronParser {
                 if (cmd == '<') {
                     val fieldStart = i + 2 // after `<
                     val fieldEnd = line.indexOf('>', fieldStart)
-                    if (fieldEnd != -1) {
-                        val fieldElement = parseField(line.substring(fieldStart, fieldEnd), style)
-                        if (fieldElement != null) {
-                            flushText()
-                            elements.add(fieldElement)
-                            i = fieldEnd + 1
-                            continue
-                        }
+                    val fieldElement = if (fieldEnd != -1) parseField(line.substring(fieldStart, fieldEnd), style) else null
+                    if (fieldElement != null) {
+                        flushText()
+                        elements.add(fieldElement)
+                        i = fieldEnd + 1
+                        continue
                     }
                     // Not a valid field — treat `< as literal
                     textBuffer.append('<')

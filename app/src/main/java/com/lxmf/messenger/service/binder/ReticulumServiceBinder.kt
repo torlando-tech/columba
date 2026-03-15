@@ -829,6 +829,9 @@ class ReticulumServiceBinder(
         imageData: ByteArray?,
         imageFormat: String?,
         imageDataPath: String?,
+        audioData: ByteArray?,
+        audioCodecId: String?,
+        audioDataPath: String?,
         fileAttachments: Map<*, *>?,
         fileAttachmentPaths: Map<*, *>?,
         replyToMessageId: String?,
@@ -868,6 +871,9 @@ class ReticulumServiceBinder(
                         iconName,
                         iconFgColor,
                         iconBgColor,
+                        audioData,
+                        audioCodecId,
+                        audioDataPath,
                     )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)

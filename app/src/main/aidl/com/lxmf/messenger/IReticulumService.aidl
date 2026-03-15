@@ -409,7 +409,7 @@ interface IReticulumService {
      * @param iconBgColor Optional icon background color hex string (3 bytes RGB, e.g., "1E88E5")
      * @return JSON string with result: {"success": true, "message_hash": "...", "delivery_method": "..."}
      */
-    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, String imageDataPath, in Map fileAttachments, in Map fileAttachmentPaths, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
+    String sendLxmfMessageWithMethod(in byte[] destHash, String content, in byte[] sourceIdentityPrivateKey, String deliveryMethod, boolean tryPropagationOnFail, in byte[] imageData, String imageFormat, String imageDataPath, in byte[] audioData, String audioCodecId, String audioDataPath, in Map fileAttachments, in Map fileAttachmentPaths, String replyToMessageId, String iconName, String iconFgColor, String iconBgColor);
 
     /**
      * Provide an alternative relay for message retry.

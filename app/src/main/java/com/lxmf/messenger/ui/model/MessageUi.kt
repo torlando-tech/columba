@@ -77,6 +77,32 @@ data class MessageUi(
      */
     val hasFileAttachments: Boolean = false,
     /**
+     * Indicates whether this message has an audio attachment (LXMF field 7, FIELD_AUDIO).
+     * When true, the UI should render a voice message bubble instead of a text bubble.
+     * Distinct from legacy location data which also uses field 7 -- audio is detected
+     * by the array format ["codec_id", "hex_audio_data"].
+     */
+    val hasAudioAttachment: Boolean = false,
+    /**
+     * Duration of the audio message in milliseconds.
+     * Extracted from the audio wire format header (2-byte big-endian duration_ms).
+     * Null if not yet parsed or if the audio format doesn't include duration.
+     */
+    val audioDurationMs: Long? = null,
+    /**
+     * Codec identifier string for the audio data (e.g., "opus_vm").
+     * Used to select the correct decoder for playback.
+     * Null if no audio attachment.
+     */
+    val audioCodecId: String? = null,
+    /**
+     * Pre-computed waveform amplitude peaks for rendering without re-decoding.
+     * Normalized floats [0.0, 1.0] representing amplitude at regular intervals.
+     * Stored as the third element in the FIELD_AUDIO array (codec_id, hex, peaks).
+     * Null if waveform not available (will be computed lazily on first view).
+     */
+    val audioWaveform: List<Float>? = null,
+    /**
      * ID of the message this is replying to, if any.
      * Extracted from LXMF field 16 {"reply_to": "message_id"}.
      */

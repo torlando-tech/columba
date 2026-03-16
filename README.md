@@ -15,6 +15,7 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 - **Stay private** - End-to-end encryption with no accounts, no tracking, and no central servers
 - **Share location** - Share your location securely with others, viewable from a dedicated map
 - **Download maps for offline use** - Download or import map files. Supports vector and raster, in MBTiles format
+- **Browse NomadNetwork** - Access nomadnet pages over Reticulum networks
 - **Build your network** - Help relay traffic for others and expand the mesh
 - **Keep your identity** - Generate your messaging identity right on your device
 - **Manage multiple identities** - Easily swap between multiple identities

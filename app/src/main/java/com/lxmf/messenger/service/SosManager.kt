@@ -475,7 +475,7 @@ class SosManager
             location: Location?,
             batteryLevel: Int?,
         ): String? {
-            if (location == null && batteryLevel == null) return null
+            if (location == null) return null // Don't emit telemetry without a real position (avoids Null Island 0,0)
             return JSONObject().apply {
                 if (location != null) {
                     put("lat", location.latitude)

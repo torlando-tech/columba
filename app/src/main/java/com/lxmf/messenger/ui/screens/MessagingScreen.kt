@@ -136,7 +136,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -199,7 +198,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -218,16 +217,16 @@ private fun LinkifiedMessageText(
     isFromMe: Boolean,
     modifier: Modifier = Modifier,
     fontScale: Float = 1.0f,
-                                },
-                                text = {
-                                    Text(
-                                        if (isSyncing) {
-                                            stringResource(R.string.messaging_syncing)
-                                        } else {
-                                            stringResource(R.string.messaging_sync_messages)
-                                        },
-                                    )
-                                },
+) {
+    val context = LocalContext.current
+    val viewConfiguration = LocalViewConfiguration.current
+
+    val textColor =
+        if (isFromMe) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
     val linkColor = MaterialTheme.colorScheme.primary
 
     var annotatedText by remember(text, linkColor) {
@@ -275,7 +274,32 @@ private fun LinkifiedMessageText(
                                 SpanStyle(
                                     color = linkColor,
                                     textDecoration = TextDecoration.Underline,
+                                ),
+                            start = linkStart,
+                            end = linkEnd,
+                        )
+                        addStringAnnotation(
+                            tag = URL_ANNOTATION_TAG,
+                            annotation = urlText,
+                            start = linkStart,
+                            end = linkEnd,
+                        )
+                        currentIndex = end
+                    }
 
+                    if (currentIndex < text.length) {
+                        append(text.substring(currentIndex))
+                    }
+                }
+            }
+        annotatedText = result
+    }
+
+    var layoutResult: TextLayoutResult? by remember { mutableStateOf(null) }
+
+    val scaledFontSize = MaterialTheme.typography.bodyLarge.fontSize * fontScale
+
+    Text(
         text = annotatedText,
         style = MaterialTheme.typography.bodyLarge.copy(fontSize = scaledFontSize),
         color = textColor,
@@ -308,11 +332,7 @@ private fun LinkifiedMessageText(
                         context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(url)))
                     } catch (e: Exception) {
                         Log.w("MessagingScreen", "Unable to open link: $url", e)
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.messaging_unable_to_open_link),
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
                     }
                 }
             },
@@ -330,6 +350,16 @@ fun MessagingScreen(
     onVoiceCall: (profileCode: Int) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
+) {
+    val pagingItems = viewModel.messages.collectAsLazyPagingItems()
+    val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
+    val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+
+    var messageText by remember { mutableStateOf("") }
+    // Track whether the initial draft has been restored to avoid overwriting user typing
+    // Keyed to destinationHash so it resets when switching between conversations
+    var draftRestored by remember(destinationHash) { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -472,17 +502,13 @@ fun MessagingScreen(
                 when (result) {
                     is SyncResult.Success ->
                         if (result.messagesReceived > 0) {
-                            context.resources.getQuantityString(
-                                R.plurals.messaging_sync_complete_new_messages,
-                                result.messagesReceived,
-                                result.messagesReceived,
-                            )
+                            "Sync complete: ${result.messagesReceived} new messages"
                         } else {
-                            context.getString(R.string.messaging_sync_complete)
+                            "Sync complete"
                         }
-                    is SyncResult.Error -> context.getString(R.string.messaging_sync_failed, result.message)
-                    is SyncResult.NoRelay -> context.getString(R.string.messaging_no_relay)
-                    is SyncResult.Timeout -> context.getString(R.string.messaging_sync_timed_out)
+                    is SyncResult.Error -> "Sync failed: ${result.message}"
+                    is SyncResult.NoRelay -> "No relay configured"
+                    is SyncResult.Timeout -> "Sync timed out"
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -493,8 +519,8 @@ fun MessagingScreen(
         viewModel.contactToggleResult.collect { result ->
             val message =
                 when (result) {
-                    is ContactToggleResult.Added -> context.getString(R.string.messaging_contact_added, peerName)
-                    is ContactToggleResult.Removed -> context.getString(R.string.messaging_contact_removed, peerName)
+                    is ContactToggleResult.Added -> "Saved $peerName to Contacts"
+                    is ContactToggleResult.Removed -> "Removed $peerName from Contacts"
                     is ContactToggleResult.Error -> result.message
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -570,11 +596,7 @@ fun MessagingScreen(
                                 Toast
                                     .makeText(
                                         context,
-                                        context.getString(
-                                            R.string.messaging_file_too_large,
-                                            actualSizeKb,
-                                            maxSizeKb,
-                                        ),
+                                        "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
                                         Toast.LENGTH_LONG,
                                     ).show()
                             }
@@ -582,7 +604,7 @@ fun MessagingScreen(
                                 Toast
                                     .makeText(
                                         context,
-                                        context.getString(R.string.messaging_failed_to_attach_file, result.message),
+                                        "Failed to attach file: ${result.message}",
                                         Toast.LENGTH_SHORT,
                                     ).show()
                             }
@@ -616,12 +638,7 @@ fun MessagingScreen(
                                 destinationUri,
                             )
                         withContext(Dispatchers.Main) {
-                            val message =
-                                if (success) {
-                                    context.getString(R.string.messaging_file_saved)
-                                } else {
-                                    context.getString(R.string.messaging_failed_to_save_file)
-                                }
+                            val message = if (success) "File saved" else "Failed to save file"
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -648,12 +665,7 @@ fun MessagingScreen(
                     scope.launch(Dispatchers.IO) {
                         val success = viewModel.saveImage(context, messageId, destinationUri)
                         withContext(Dispatchers.Main) {
-                            val message =
-                                if (success) {
-                                    context.getString(R.string.messaging_image_saved)
-                                } else {
-                                    context.getString(R.string.messaging_failed_to_save_image)
-                                }
+                            val message = if (success) "Image saved" else "Failed to save image"
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -776,6 +788,12 @@ fun MessagingScreen(
                 } else {
                     // Only scroll for received messages if already at bottom
                     isAtBottom
+                }
+
+            if (shouldScroll) {
+                listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
+            }
+        }
     }
 
     // Auto-scroll to bottom when keyboard appears - only if user is at bottom
@@ -878,9 +896,9 @@ fun MessagingScreen(
                                 // Status text
                                 val statusText =
                                     when {
-                                        isEstablishing -> stringResource(R.string.messaging_connecting)
-                                        hasActiveLink -> stringResource(R.string.messaging_online)
-                                        hasRecentActivity -> stringResource(R.string.messaging_online)
+                                        isEstablishing -> "Connecting..."
+                                        hasActiveLink -> "Online"
+                                        hasRecentActivity -> "Online"
                                         lastActivity > 0 -> formatRelativeTime(lastActivity)
                                         else -> ""
                                     }
@@ -894,7 +912,7 @@ fun MessagingScreen(
                                 if (hasActiveLink) {
                                     Icon(
                                         imageVector = Icons.Default.Link,
-                                        contentDescription = stringResource(R.string.messaging_active_link),
+                                        contentDescription = "Active link",
                                         tint = MeshConnected,
                                         modifier = Modifier.size(12.dp),
                                     )
@@ -907,7 +925,7 @@ fun MessagingScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
+                            contentDescription = "Back",
                         )
                     }
                 },
@@ -932,7 +950,7 @@ fun MessagingScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Call,
-                                contentDescription = stringResource(R.string.messaging_voice_call),
+                                contentDescription = "Voice call",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -963,7 +981,7 @@ fun MessagingScreen(
                                 } else {
                                     Icons.Outlined.LocationOn
                                 },
-                            contentDescription = stringResource(R.string.messaging_share_location),
+                            contentDescription = "Share location",
                             tint =
                                 if (locationSharingState != LocationSharingState.NONE) {
                                     MaterialTheme.colorScheme.primary
@@ -998,7 +1016,7 @@ fun MessagingScreen(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = stringResource(R.string.messaging_more_options),
+                                contentDescription = "More options",
                                 tint =
                                     if (isSyncing) {
                                         MaterialTheme.colorScheme.primary
@@ -1026,13 +1044,7 @@ fun MessagingScreen(
                                         )
                                     }
                                 },
-                                        Text(
-                                            if (isSyncing) {
-                                                stringResource(R.string.messaging_syncing)
-                                            } else {
-                                                stringResource(R.string.messaging_sync_messages)
-                                            },
-                                        )
+                                text = {
                                     Text(if (isSyncing) "Syncing\u2026" else "Sync messages")
                                 },
                                 onClick = {
@@ -1051,7 +1063,7 @@ fun MessagingScreen(
                                         contentDescription = null,
                                     )
                                 },
-                                text = { Text(stringResource(R.string.messaging_text_size)) },
+                                text = { Text("Text size") },
                                 onClick = {
                                     showOverflowMenu = false
                                     showTextSizeDialog = true
@@ -1068,7 +1080,7 @@ fun MessagingScreen(
                                 },
                                 text = {
                                     Text(
-                                        stringResource(R.string.messaging_block_user),
+                                        "Block User",
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 },
@@ -1359,8 +1371,8 @@ fun MessagingScreen(
                             showDeleteConfirmation = false
                             viewModel.exitReactionMode()
                         },
-                        title = { Text(stringResource(R.string.messaging_delete_message_title)) },
-                        text = { Text(stringResource(R.string.messaging_delete_message_text)) },
+                        title = { Text("Delete message") },
+                        text = { Text("This message will be permanently deleted from this device.") },
                         confirmButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = {
@@ -1369,10 +1381,7 @@ fun MessagingScreen(
                                     viewModel.exitReactionMode()
                                 },
                             ) {
-                                Text(
-                                    stringResource(R.string.messaging_delete),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
+                                Text("Delete", color = MaterialTheme.colorScheme.error)
                             }
                         },
                         dismissButton = {
@@ -1382,7 +1391,7 @@ fun MessagingScreen(
                                     viewModel.exitReactionMode()
                                 },
                             ) {
-                                Text(stringResource(R.string.messaging_cancel))
+                                Text("Cancel")
                             }
                         },
                     )
@@ -1472,20 +1481,12 @@ fun MessagingScreen(
                             context.startActivity(Intent.createChooser(intent, null))
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.messaging_no_app_open_file),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+                                Toast.makeText(context, "No app found to open this file", Toast.LENGTH_SHORT).show()
                             }
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.messaging_failed_to_load_file),
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Toast.makeText(context, "Failed to load file", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -1528,28 +1529,15 @@ fun MessagingScreen(
                             }
                         @Suppress("SwallowedException") // User is notified via Toast
                         try {
-                            context.startActivity(
-                                Intent.createChooser(
-                                    intent,
-                                    context.getString(R.string.messaging_share_image),
-                                ),
-                            )
+                            context.startActivity(Intent.createChooser(intent, "Share image"))
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.messaging_no_app_share),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+                                Toast.makeText(context, "No app found to share", Toast.LENGTH_SHORT).show()
                             }
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.messaging_failed_to_load_image),
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -1572,7 +1560,7 @@ fun MessagingScreen(
                 )
             },
             sheetState = locationPermissionSheetState,
-            primaryActionLabel = stringResource(R.string.messaging_allow_location),
+            primaryActionLabel = "Allow Location",
         )
     }
 
@@ -1600,8 +1588,8 @@ fun MessagingScreen(
                     tint = MaterialTheme.colorScheme.error,
                 )
             },
-            title = { Text(stringResource(R.string.messaging_stop_sharing_location_title)) },
-            text = { Text(stringResource(R.string.messaging_stop_sharing_location_message, peerName)) },
+            title = { Text("Stop Sharing Location?") },
+            text = { Text("Stop sharing your location with $peerName?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1613,12 +1601,12 @@ fun MessagingScreen(
                             containerColor = MaterialTheme.colorScheme.error,
                         ),
                 ) {
-                    Text(stringResource(R.string.messaging_stop_sharing))
+                    Text("Stop Sharing")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showStopSharingDialog = false }) {
-                    Text(stringResource(R.string.messaging_cancel))
+                    Text("Cancel")
                 }
             },
         )
@@ -1687,11 +1675,7 @@ fun MessagingScreen(
                 showBlockDialog = false
                 onBackClick()
                 android.widget.Toast
-                    .makeText(
-                        context,
-                        context.getString(R.string.messaging_blocked_user, peerName),
-                        android.widget.Toast.LENGTH_SHORT,
-                    )
+                    .makeText(context, "Blocked $peerName", android.widget.Toast.LENGTH_SHORT)
                     .show()
             },
             onDismiss = { showBlockDialog = false },
@@ -1849,7 +1833,7 @@ fun MessageBubble(
                             .crossfade(true)
                             .build(),
                     imageLoader = AnimatedImageLoader.getInstance(context),
-                    contentDescription = stringResource(R.string.messaging_animated_gif),
+                    contentDescription = "Animated GIF",
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -1988,7 +1972,7 @@ fun MessageBubble(
                                         .crossfade(true)
                                         .build(),
                                 imageLoader = AnimatedImageLoader.getInstance(context),
-                                contentDescription = stringResource(R.string.messaging_animated_image_attachment),
+                                contentDescription = "Animated image attachment",
                                 modifier =
                                     Modifier
                                         .widthIn(max = 268.dp)
@@ -2001,7 +1985,7 @@ fun MessageBubble(
                             // Static image - use pre-decoded bitmap for efficiency
                             Image(
                                 bitmap = imageBitmap,
-                                contentDescription = stringResource(R.string.messaging_image_attachment),
+                                contentDescription = "Image attachment",
                                 modifier =
                                     Modifier
                                         .widthIn(max = 268.dp)
@@ -2040,13 +2024,13 @@ fun MessageBubble(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         imageVector = Icons.Default.BrokenImage,
-                                        contentDescription = stringResource(R.string.messaging_image_unavailable),
+                                        contentDescription = "Image unavailable",
                                         modifier = Modifier.size(32.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        stringResource(R.string.messaging_not_available),
+                                        "Not available",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     )
@@ -2065,13 +2049,16 @@ fun MessageBubble(
                                         contentDescription = null,
                                     )
                                 },
-                                title = { Text(stringResource(R.string.messaging_image_not_available_title)) },
+                                title = { Text("Image Not Available") },
                                 text = {
-                                    Text(stringResource(R.string.messaging_image_not_available_text))
+                                    Text(
+                                        "The original image could not be found. This can happen when " +
+                                            "importing data without attachments included.",
+                                    )
                                 },
                                 confirmButton = {
                                     TextButton(onClick = { showMissingImageInfo = false }) {
-                                        Text(stringResource(R.string.messaging_ok))
+                                        Text("OK")
                                     }
                                 },
                             )
@@ -2192,7 +2179,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text(stringResource(R.string.messaging_retry)) },
+                text = { Text("Retry") },
                 onClick = onRetry,
             )
         }
@@ -2206,7 +2193,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text(stringResource(R.string.messaging_reply)) },
+                text = { Text("Reply") },
                 onClick = onReply,
             )
         }
@@ -2218,7 +2205,7 @@ fun MessageContextMenu(
                     contentDescription = null,
                 )
             },
-            text = { Text(stringResource(R.string.common_copy)) },
+            text = { Text("Copy") },
             onClick = onCopy,
         )
 
@@ -2231,7 +2218,7 @@ fun MessageContextMenu(
                         contentDescription = null,
                     )
                 },
-                text = { Text(stringResource(R.string.messaging_view_details)) },
+                text = { Text("View Details") },
                 onClick = onViewDetails,
             )
         }
@@ -2311,7 +2298,7 @@ fun MessageInputBar(
                                     .crossfade(true)
                                     .build(),
                             imageLoader = AnimatedImageLoader.getInstance(context),
-                            contentDescription = stringResource(R.string.messaging_selected_animated_image),
+                            contentDescription = "Selected animated image",
                             modifier =
                                 Modifier
                                     .size(80.dp)
@@ -2329,7 +2316,7 @@ fun MessageInputBar(
                         bitmap?.let { imageBitmap ->
                             Image(
                                 bitmap = imageBitmap,
-                                contentDescription = stringResource(R.string.messaging_selected_image),
+                                contentDescription = "Selected image",
                                 modifier =
                                     Modifier
                                         .size(80.dp)
@@ -2342,9 +2329,9 @@ fun MessageInputBar(
                     Text(
                         text =
                             if (selectedImageIsAnimated) {
-                                stringResource(R.string.messaging_gif_attached, selectedImageData.size / 1024)
+                                "GIF attached (${selectedImageData.size / 1024} KB)"
                             } else {
-                                stringResource(R.string.messaging_image_attached, selectedImageData.size / 1024)
+                                "Image attached (${selectedImageData.size / 1024} KB)"
                             },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
@@ -2353,7 +2340,7 @@ fun MessageInputBar(
                     IconButton(onClick = onClearImage) {
                         Icon(
                             imageVector = androidx.compose.material.icons.Icons.Default.Close,
-                            contentDescription = stringResource(R.string.messaging_remove_image),
+                            contentDescription = "Remove image",
                         )
                     }
                 }
@@ -2363,7 +2350,7 @@ fun MessageInputBar(
             val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
             if (remaining < 100) {
                 Text(
-                    text = stringResource(R.string.messaging_characters_remaining, remaining),
+                    text = "$remaining characters remaining",
                     style = MaterialTheme.typography.bodySmall,
                     color =
                         if (remaining < 20) {
@@ -2453,7 +2440,7 @@ fun MessageInputBar(
                             Box {
                                 if (textFieldState.text.isEmpty()) {
                                     Text(
-                                        text = stringResource(R.string.messaging_type_message),
+                                        text = "Type a message...",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -2474,12 +2461,7 @@ fun MessageInputBar(
                 ) {
                     Icon(
                         imageVector = if (isAttachmentPanelActive) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription =
-                            if (isAttachmentPanelActive) {
-                                stringResource(R.string.messaging_close_attachments)
-                            } else {
-                                stringResource(R.string.messaging_attach)
-                            },
+                        contentDescription = if (isAttachmentPanelActive) "Close attachments" else "Attach",
                         modifier = Modifier.size(24.dp),
                     )
                 }
@@ -2506,7 +2488,7 @@ fun MessageInputBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.messaging_send_message),
+                            contentDescription = "Send message",
                         )
                     }
                 }
@@ -2532,12 +2514,12 @@ fun EmptyMessagesState() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
             )
             Text(
-                text = stringResource(R.string.messaging_empty_title),
+                text = "No messages yet",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = stringResource(R.string.messaging_empty_subtitle),
+                text = "Send a message to start the conversation",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
@@ -2547,24 +2529,21 @@ fun EmptyMessagesState() {
 
 private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
 
-@Composable
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
-    val timeFormatter = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
-    val dateTimeFormatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
 
     return when {
-        diff < 60_000 -> stringResource(R.string.messaging_just_now)
+        diff < 60_000 -> "Just now"
         diff < 3600_000 -> {
             val minutes = (diff / 60_000).toInt()
-            stringResource(R.string.messaging_minutes_ago, minutes)
+            "$minutes min ago"
         }
         diff < 86400_000 -> {
-            timeFormatter.format(Date(timestamp))
+            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
         else -> {
-            dateTimeFormatter.format(Date(timestamp))
+            SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
     }
 }
@@ -2607,7 +2586,7 @@ private fun FullscreenImageDialog(
         ) {
             Image(
                 bitmap = bitmap,
-                contentDescription = stringResource(R.string.messaging_fullscreen_image),
+                contentDescription = "Fullscreen image",
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -2635,7 +2614,7 @@ private fun FullscreenImageDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.messaging_more_options),
+                    contentDescription = "More options",
                 )
             }
         }
@@ -2687,7 +2666,7 @@ private fun FullscreenAnimatedImageDialog(
                         .crossfade(true)
                         .build(),
                 imageLoader = AnimatedImageLoader.getInstance(context),
-                contentDescription = stringResource(R.string.messaging_fullscreen_animated_image),
+                contentDescription = "Fullscreen animated image",
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -2715,7 +2694,7 @@ private fun FullscreenAnimatedImageDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.messaging_more_options),
+                    contentDescription = "More options",
                 )
             }
         }
@@ -2743,7 +2722,6 @@ fun PendingFileNotificationBubble(
     modifier: Modifier = Modifier,
 ) {
     val isSyncing = syncProgress !is SyncProgress.Idle
-    val syncStatusText = getSyncStatusText(syncProgress)
 
     Box(
         modifier =
@@ -2782,12 +2760,7 @@ fun PendingFileNotificationBubble(
                     }
                     Column {
                         Text(
-                            text =
-                                if (isSyncing) {
-                                    stringResource(R.string.messaging_fetching_file)
-                                } else {
-                                    stringResource(R.string.messaging_peer_sent_large_file, peerName)
-                                },
+                            text = if (isSyncing) "Fetching file..." else "$peerName sent a large file",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium,
                         )
@@ -2798,19 +2771,14 @@ fun PendingFileNotificationBubble(
                         )
                         if (!isSyncing && pendingFileInfo.fileCount > 1) {
                             Text(
-                                text =
-                                    pluralStringResource(
-                                        R.plurals.messaging_more_files,
-                                        pendingFileInfo.fileCount - 1,
-                                        pendingFileInfo.fileCount - 1,
-                                    ),
+                                text = "+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount > 2) "s" else ""}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = syncStatusText,
+                            text = getSyncStatusText(syncProgress),
                             style = MaterialTheme.typography.labelSmall,
                             color =
                                 if (isSyncing) {
@@ -2837,26 +2805,25 @@ fun PendingFileNotificationBubble(
 /**
  * Get status text for pending file notification based on sync progress.
  */
-@Composable
 private fun getSyncStatusText(syncProgress: SyncProgress): String =
     when (syncProgress) {
-        is SyncProgress.Idle -> stringResource(R.string.messaging_fetch_from_relay)
-        is SyncProgress.Starting -> stringResource(R.string.messaging_connecting_to_relay)
+        is SyncProgress.Idle -> "Tap to fetch from relay"
+        is SyncProgress.Starting -> "Connecting to relay..."
         is SyncProgress.InProgress ->
             when (syncProgress.stateName.lowercase()) {
-                "path_requested" -> stringResource(R.string.messaging_discovering_network_path)
-                "link_establishing" -> stringResource(R.string.messaging_establishing_connection)
-                "link_established" -> stringResource(R.string.messaging_connected_preparing)
-                "request_sent" -> stringResource(R.string.messaging_requesting_messages)
+                "path_requested" -> "Discovering network path..."
+                "link_establishing" -> "Establishing connection..."
+                "link_established" -> "Connected, preparing..."
+                "request_sent" -> "Requesting messages..."
                 "receiving", "downloading" ->
                     if (syncProgress.progress > 0f) {
-                        stringResource(R.string.messaging_downloading_progress, (syncProgress.progress * 100).toInt())
+                        "Downloading: ${(syncProgress.progress * 100).toInt()}%"
                     } else {
-                        stringResource(R.string.messaging_downloading)
+                        "Downloading..."
                     }
-                else -> stringResource(R.string.messaging_processing)
+                else -> "Processing..."
             }
-        is SyncProgress.Complete -> stringResource(R.string.messaging_download_complete)
+        is SyncProgress.Complete -> "Download complete"
     }
 
 /**
@@ -2906,12 +2873,12 @@ private fun TextSizeDialog(
                 contentDescription = null,
             )
         },
-        title = { Text(stringResource(R.string.messaging_text_size)) },
+        title = { Text("Text size") },
         text = {
             Column {
                 // Preview text
                 Text(
-                    text = stringResource(R.string.messaging_preview_message_text),
+                    text = "Preview message text",
                     style =
                         MaterialTheme.typography.bodyLarge.copy(
                             fontSize = MaterialTheme.typography.bodyLarge.fontSize * sliderValue,
@@ -2957,12 +2924,12 @@ private fun TextSizeDialog(
                 onScaleChange(sliderValue)
                 onDismiss()
             }) {
-                Text(stringResource(R.string.messaging_ok))
+                Text("OK")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.messaging_cancel))
+                Text("Cancel")
             }
         },
     )

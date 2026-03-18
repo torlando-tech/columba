@@ -50,6 +50,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -73,6 +74,9 @@
     <!-- and app is closed (Android 10+ background activity launch restriction) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Auto-start after device boot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Companion Device Manager (Android 12+) for RNode association -->
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
@@ -157,6 +161,19 @@
                 android:resource="@xml/usb_device_filter" />
         </activity>
 
+        <!-- SOS Trigger Detection Service -->
+        <!-- Foreground service that keeps the process alive for accelerometer-based -->
+        <!-- SOS gesture detection (shake/tap) when the app is in the background -->
+        <service
+            android:name=".service.SosTriggerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Emergency SOS gesture detection via accelerometer" />
+        </service>
+
         <!-- Reticulum Background Service -->
         <!-- Runs in separate process to allow clean restarts when applying config changes -->
         <!-- BLE functionality is now integrated via KotlinBLEBridge (no separate service needed) -->
@@ -179,6 +196,16 @@
                 <action android:name="android.companion.CompanionDeviceService" />
             </intent-filter>
         </service>
+
+        <!-- Auto-start services after device boot -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider for sharing identity files -->
         <provider

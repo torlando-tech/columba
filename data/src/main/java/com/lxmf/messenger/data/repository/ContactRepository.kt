@@ -1,5 +1,6 @@
 package com.lxmf.messenger.data.repository
 
+import android.util.Log
 import com.lxmf.messenger.data.db.dao.AnnounceDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
@@ -8,8 +9,10 @@ import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.util.HashUtils.computeIdentityHash
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -102,6 +105,14 @@ class ContactRepository
                 } else {
                     contactDao.contactExistsFlow(destinationHash, identity.identityHash)
                 }
+            }
+
+        /**
+         * Check if a contact is tagged as SOS as Flow for the active identity.
+         */
+        fun isSosContactFlow(destinationHash: String): Flow<Boolean> =
+            getContactFlow(destinationHash).map { contact ->
+                contact?.tags?.contains("sos") == true
             }
 
         /**
@@ -657,4 +668,61 @@ class ContactRepository
          * Used during initialization before active identity is available.
          */
         suspend fun getAnyRelay(): ContactEntity? = contactDao.getAnyMyRelay()
+
+        // ========== SOS EMERGENCY CONTACTS ==========
+
+        /**
+         * Get all contacts tagged as SOS emergency contacts for the active identity.
+         */
+        suspend fun getSosContacts(): List<EnrichedContact> {
+            return getEnrichedContacts().first().filter { it.isSosContact }
+        }
+
+        /**
+         * Get SOS contacts as a Flow for observing changes.
+         */
+        fun getSosContactsFlow(): Flow<List<EnrichedContact>> =
+            getEnrichedContacts().flatMapLatest { contacts ->
+                flowOf(contacts.filter { it.isSosContact })
+            }
+
+        /**
+         * Toggle the "sos" tag on a contact.
+         */
+        suspend fun toggleSosTag(destinationHash: String) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            val contact = contactDao.getContact(destinationHash, activeIdentity.identityHash) ?: return
+            val currentTags = contact.tags
+            val tagsList =
+                if (currentTags.isNullOrBlank()) {
+                    mutableListOf()
+                } else {
+                    try {
+                        currentTags.trim()
+                            .removePrefix("[")
+                            .removeSuffix("]")
+                            .split(",")
+                            .map { it.trim().removeSurrounding("\"") }
+                            .filter { it.isNotEmpty() }
+                            .toMutableList()
+                    } catch (e: Exception) {
+                        Log.w("ContactRepository", "Failed to parse tags: $currentTags", e)
+                        mutableListOf()
+                    }
+                }
+
+            if (tagsList.contains("sos")) {
+                tagsList.remove("sos")
+            } else {
+                tagsList.add("sos")
+            }
+
+            val newTags =
+                if (tagsList.isEmpty()) {
+                    null
+                } else {
+                    "[${tagsList.joinToString(",") { "\"$it\"" }}]"
+                }
+            contactDao.updateTags(destinationHash, activeIdentity.identityHash, newTags)
+        }
     }

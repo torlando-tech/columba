@@ -468,12 +468,13 @@ class TelemetryCollectorManagerTest {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
                 every { LocationCompat.getCurrentLocation(any(), any()) } answers {
                     val callback = secondArg<(Location?) -> Unit>()
-                    val location = Location("test").apply {
-                        latitude = 48.8566
-                        longitude = 2.3522
-                        accuracy = 5f
-                        time = System.currentTimeMillis()
-                    }
+                    val location =
+                        Location("test").apply {
+                            latitude = 48.8566
+                            longitude = 2.3522
+                            accuracy = 5f
+                            time = System.currentTimeMillis()
+                        }
                     callback(location)
                 }
 
@@ -521,12 +522,13 @@ class TelemetryCollectorManagerTest {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
                 every { LocationCompat.getCurrentLocation(any(), any()) } answers {
                     val callback = secondArg<(Location?) -> Unit>()
-                    val location = Location("test").apply {
-                        latitude = 48.8566
-                        longitude = 2.3522
-                        accuracy = 5f
-                        time = System.currentTimeMillis()
-                    }
+                    val location =
+                        Location("test").apply {
+                            latitude = 48.8566
+                            longitude = 2.3522
+                            accuracy = 5f
+                            time = System.currentTimeMillis()
+                        }
                     callback(location)
                 }
 

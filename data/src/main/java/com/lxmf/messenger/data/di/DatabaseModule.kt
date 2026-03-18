@@ -81,6 +81,7 @@ object DatabaseModule {
             MIGRATION_40_41,
             MIGRATION_41_42,
             MIGRATION_42_43,
+            MIGRATION_43_44,
         )
     }
 
@@ -1684,6 +1685,16 @@ object DatabaseModule {
         object : Migration(42, 43) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE messages ADD COLUMN sentInterface TEXT")
+            }
+        }
+
+    // Migration 43→44: Add source column to received_locations table
+    private val MIGRATION_43_44 =
+        object : Migration(43, 44) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE received_locations ADD COLUMN source TEXT NOT NULL DEFAULT 'location_sharing'",
+                )
             }
         }
 

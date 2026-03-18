@@ -3,7 +3,6 @@ package com.lxmf.messenger.migration
 import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
-import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString

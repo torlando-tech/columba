@@ -65,6 +65,11 @@ data class EnrichedContact(
         }
     }
 
+    /**
+     * Whether this contact is tagged as an SOS emergency contact
+     */
+    val isSosContact: Boolean get() = getTagsList().contains("sos")
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

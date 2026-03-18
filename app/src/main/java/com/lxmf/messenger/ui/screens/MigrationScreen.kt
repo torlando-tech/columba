@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -56,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -239,8 +239,9 @@ fun MigrationScreen(
     if (showExportPasswordDialog) {
         PasswordDialog(
             title = "Encrypt Export",
-            description = "Choose a password to protect your export file. " +
-                "You will need this password to import the data on another device.",
+            description =
+                "Choose a password to protect your export file. " +
+                    "You will need this password to import the data on another device.",
             isConfirmMode = true,
             isWrongPassword = false,
             onConfirm = { password ->
@@ -256,16 +257,18 @@ fun MigrationScreen(
     // Import Password Dialog (encrypted file detected)
     val currentState = uiState
     if (currentState is MigrationUiState.PasswordRequired || currentState is MigrationUiState.WrongPassword) {
-        val fileUri = when (currentState) {
-            is MigrationUiState.PasswordRequired -> currentState.fileUri
-            is MigrationUiState.WrongPassword -> currentState.fileUri
-            else -> null
-        }
+        val fileUri =
+            when (currentState) {
+                is MigrationUiState.PasswordRequired -> currentState.fileUri
+                is MigrationUiState.WrongPassword -> currentState.fileUri
+                else -> null
+            }
         if (fileUri != null) {
             PasswordDialog(
                 title = "Encrypted Backup",
-                description = "This backup file is encrypted. " +
-                    "Enter the password that was used during export.",
+                description =
+                    "This backup file is encrypted. " +
+                        "Enter the password that was used during export.",
                 isConfirmMode = false,
                 isWrongPassword = currentState is MigrationUiState.WrongPassword,
                 onConfirm = { password ->
@@ -860,8 +863,11 @@ internal fun PasswordDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     visualTransformation =
-                        if (passwordVisible) VisualTransformation.None
-                        else PasswordVisualTransformation(),
+                        if (passwordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                     trailingIcon = {
                         TextButton(onClick = { passwordVisible = !passwordVisible }) {
                             Text(if (passwordVisible) "Hide" else "Show")
@@ -882,8 +888,11 @@ internal fun PasswordDialog(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         visualTransformation =
-                            if (passwordVisible) VisualTransformation.None
-                            else PasswordVisualTransformation(),
+                            if (passwordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
                         isError = errorMessage != null,
                         modifier = Modifier.fillMaxWidth(),
                     )

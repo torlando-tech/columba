@@ -69,6 +69,7 @@ import com.lxmf.messenger.ui.screens.settings.cards.PrivacyCard
 import com.lxmf.messenger.ui.screens.settings.cards.RNodeFlasherCard
 import com.lxmf.messenger.ui.screens.settings.cards.ShareColumbaCard
 import com.lxmf.messenger.ui.screens.settings.cards.SharedInstanceBannerCard
+import com.lxmf.messenger.ui.screens.settings.cards.SosEmergencyCard
 import com.lxmf.messenger.ui.screens.settings.cards.ThemeSelectionCard
 import com.lxmf.messenger.ui.screens.settings.cards.VoiceCallPermissionsCard
 import com.lxmf.messenger.ui.screens.settings.cards.shouldShowSharedInstanceBanner
@@ -408,6 +409,40 @@ fun SettingsScreen(
                             showTelemetryPermissionSheet = true
                         }
                     },
+                )
+
+                SosEmergencyCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.SOS_EMERGENCY.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.SOS_EMERGENCY, it) },
+                    sosEnabled = state.sosEnabled,
+                    onSosEnabledChange = { viewModel.setSosEnabled(it) },
+                    sosMessageTemplate = state.sosMessageTemplate,
+                    onSosMessageTemplateChange = { viewModel.setSosMessageTemplate(it) },
+                    sosCountdownSeconds = state.sosCountdownSeconds,
+                    onSosCountdownSecondsChange = { viewModel.setSosCountdownSeconds(it) },
+                    sosIncludeLocation = state.sosIncludeLocation,
+                    onSosIncludeLocationChange = { viewModel.setSosIncludeLocation(it) },
+                    sosSilentAutoAnswer = state.sosSilentAutoAnswer,
+                    onSosSilentAutoAnswerChange = { viewModel.setSosSilentAutoAnswer(it) },
+                    sosShowFloatingButton = state.sosShowFloatingButton,
+                    onSosShowFloatingButtonChange = { viewModel.setSosShowFloatingButton(it) },
+                    sosDeactivationPin = state.sosDeactivationPin,
+                    onSosDeactivationPinChange = { viewModel.setSosDeactivationPin(it) },
+                    sosPeriodicUpdates = state.sosPeriodicUpdates,
+                    onSosPeriodicUpdatesChange = { viewModel.setSosPeriodicUpdates(it) },
+                    sosUpdateIntervalSeconds = state.sosUpdateIntervalSeconds,
+                    onSosUpdateIntervalSecondsChange = { viewModel.setSosUpdateIntervalSeconds(it) },
+                    sosContactCount = state.sosContactCount,
+                    sosTriggerModes = state.sosTriggerModes,
+                    onSosTriggerModeToggle = { viewModel.toggleSosTriggerMode(it) },
+                    sosShakeSensitivity = state.sosShakeSensitivity,
+                    onSosShakeSensitivityChange = { viewModel.setSosShakeSensitivity(it) },
+                    sosTapCount = state.sosTapCount,
+                    onSosTapCountChange = { viewModel.setSosTapCount(it) },
+                    sosAudioEnabled = state.sosAudioEnabled,
+                    onSosAudioEnabledChange = { viewModel.setSosAudioEnabled(it) },
+                    sosAudioDurationSeconds = state.sosAudioDurationSeconds,
+                    onSosAudioDurationSecondsChange = { viewModel.setSosAudioDurationSeconds(it) },
                 )
 
                 MapSourcesCard(

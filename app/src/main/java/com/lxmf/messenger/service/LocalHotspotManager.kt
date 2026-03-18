@@ -63,9 +63,13 @@ class LocalHotspotManager(private val context: Context) {
         callback: (Result<HotspotInfo>) -> Unit,
     ) {
         if (!isSupported()) {
-            callback(Result.failure(UnsupportedOperationException(
-                "Local-only hotspot requires Android 8.0 or higher"
-            )))
+            callback(
+                Result.failure(
+                    UnsupportedOperationException(
+                        "Local-only hotspot requires Android 8.0 or higher",
+                    ),
+                ),
+            )
             return
         }
 
@@ -79,8 +83,9 @@ class LocalHotspotManager(private val context: Context) {
 
         onSystemStoppedListener = onSystemStopped
 
-        val wifiManager = context.applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiManager =
+            context.applicationContext
+                .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
         try {
             wifiManager.startLocalOnlyHotspot(
@@ -101,18 +106,19 @@ class LocalHotspotManager(private val context: Context) {
                     override fun onFailed(reason: Int) {
                         Log.e(TAG, "Local hotspot failed with reason: $reason")
                         reservation = null
-                        val message = when (reason) {
-                            ERROR_TETHERING_DISALLOWED ->
-                                "Hotspot is not allowed by device policy"
-                            ERROR_INCOMPATIBLE_MODE ->
-                                "WiFi is in a mode that prevents hotspot creation"
-                            ERROR_NO_CHANNEL ->
-                                "No WiFi channel available for hotspot"
-                            ERROR_GENERIC ->
-                                "Could not start hotspot"
-                            else ->
-                                "Hotspot failed (error $reason)"
-                        }
+                        val message =
+                            when (reason) {
+                                ERROR_TETHERING_DISALLOWED ->
+                                    "Hotspot is not allowed by device policy"
+                                ERROR_INCOMPATIBLE_MODE ->
+                                    "WiFi is in a mode that prevents hotspot creation"
+                                ERROR_NO_CHANNEL ->
+                                    "No WiFi channel available for hotspot"
+                                ERROR_GENERIC ->
+                                    "Could not start hotspot"
+                                else ->
+                                    "Hotspot failed (error $reason)"
+                            }
                         callback(Result.failure(HotspotException(message, reason)))
                     }
                 },
@@ -143,9 +149,7 @@ class LocalHotspotManager(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
-    private fun extractHotspotInfo(
-        reservation: WifiManager.LocalOnlyHotspotReservation,
-    ): HotspotInfo {
+    private fun extractHotspotInfo(reservation: WifiManager.LocalOnlyHotspotReservation): HotspotInfo {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // API 33+: Use SoftApConfiguration with getWifiSsid()
             val config = reservation.softApConfiguration

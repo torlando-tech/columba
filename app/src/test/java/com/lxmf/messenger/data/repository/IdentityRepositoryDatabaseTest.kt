@@ -5,8 +5,6 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import app.cash.turbine.test
 import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
-import com.lxmf.messenger.data.crypto.IdentityKeyMigrator
-import com.lxmf.messenger.data.crypto.IdentityKeyProvider
 import com.lxmf.messenger.test.DatabaseTest
 import io.mockk.clearAllMocks
 import io.mockk.every

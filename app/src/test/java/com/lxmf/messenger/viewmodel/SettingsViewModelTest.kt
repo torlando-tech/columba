@@ -177,6 +177,22 @@ class SettingsViewModelTest {
         every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
         every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
+        // SOS settings flows
+        every { settingsRepository.sosEnabled } returns flowOf(false)
+        every { settingsRepository.sosMessageTemplate } returns flowOf("SOS! I need help. This is an emergency.")
+        every { settingsRepository.sosCountdownSeconds } returns flowOf(5)
+        every { settingsRepository.sosIncludeLocation } returns flowOf(true)
+        every { settingsRepository.sosSilentAutoAnswer } returns flowOf(false)
+        every { settingsRepository.sosShowFloatingButton } returns flowOf(false)
+        every { settingsRepository.sosDeactivationPin } returns flowOf(null)
+        every { settingsRepository.sosPeriodicUpdates } returns flowOf(false)
+        every { settingsRepository.sosUpdateIntervalSeconds } returns flowOf(120)
+        every { settingsRepository.sosTriggerModes } returns flowOf(emptySet())
+        every { settingsRepository.sosShakeSensitivity } returns flowOf(2.5f)
+        every { settingsRepository.sosTapCount } returns flowOf(3)
+        every { settingsRepository.sosAudioEnabled } returns flowOf(false)
+        every { settingsRepository.sosAudioDurationSeconds } returns flowOf(30)
+        every { contactRepository.getSosContactsFlow() } returns flowOf(emptyList())
         coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Stub settings save methods

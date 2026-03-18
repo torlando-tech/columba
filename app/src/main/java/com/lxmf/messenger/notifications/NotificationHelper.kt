@@ -510,7 +510,7 @@ class NotificationHelper
             }
 
             val notification = builder.build()
-            val notificationId = NOTIFICATION_ID_SOS + destinationHash.hashCode()
+            val notificationId = NOTIFICATION_ID_SOS + (destinationHash.hashCode() and 0x7FFFFFFF)
             try {
                 notificationManager.notify(notificationId, notification)
             } catch (e: SecurityException) {
@@ -622,6 +622,7 @@ class NotificationHelper
 /**
  * Check if a message is an SOS cancellation. Top-level to avoid TooManyFunctions in NotificationHelper.
  */
+
 /**
  * Check if a message is an SOS periodic update. Top-level to avoid TooManyFunctions in NotificationHelper.
  */

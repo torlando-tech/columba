@@ -159,7 +159,7 @@ class MessageCollector
                             if (isSosCancelledMessage(receivedMessage.content)) {
                                 SosActiveTracker.removeSender(sourceHash)
                                 notificationHelper.cancelNotification(
-                                    NotificationHelper.NOTIFICATION_ID_SOS + sourceHash.hashCode(),
+                                    NotificationHelper.NOTIFICATION_ID_SOS + (sourceHash.hashCode() and 0x7FFFFFFF),
                                 )
                                 Log.d(TAG, "Cleared SOS active and notification for ${sourceHash.take(16)} (already-persisted)")
                             } else if (notificationHelper.isSosMessage(receivedMessage.content)) {
@@ -338,7 +338,7 @@ class MessageCollector
                                 if (isSosCancelledMessage(receivedMessage.content)) {
                                     SosActiveTracker.removeSender(sourceHash)
                                     notificationHelper.cancelNotification(
-                                        NotificationHelper.NOTIFICATION_ID_SOS + sourceHash.hashCode(),
+                                        NotificationHelper.NOTIFICATION_ID_SOS + (sourceHash.hashCode() and 0x7FFFFFFF),
                                     )
                                     Log.d(TAG, "Cleared SOS active and notification for ${sourceHash.take(16)}")
                                 } else if (notificationHelper.isSosMessage(receivedMessage.content)) {

@@ -1247,6 +1247,18 @@ internal fun InterfaceTypeIcon(
 /**
  * Format interface type for display.
  */
+internal fun formatInterfaceType(type: String): String =
+    when (type) {
+        "TCPServerInterface" -> "TCP Server"
+        "TCPClientInterface" -> "TCP Client"
+        "BackboneInterface" -> "Backbone (TCP)"
+        "I2PInterface" -> "I2P"
+        "RNodeInterface" -> "RNode (LoRa)"
+        "WeaveInterface" -> "Weave (LoRa)"
+        "KISSInterface" -> "KISS"
+        else -> type
+    }
+
 @Composable
 internal fun formatInterfaceTypeLabel(type: String): String =
     when (type) {
@@ -1274,11 +1286,11 @@ internal fun formatDiscoveredStatusLabel(status: String): String =
  */
 internal fun formatLastHeard(
     timestamp: Long,
-    neverLabel: String,
-    justNowLabel: String,
-    minAgoFormat: String,
-    hoursAgoFormat: String,
-    daysAgoFormat: String,
+    neverLabel: String = "Never",
+    justNowLabel: String = "just now",
+    minAgoFormat: String = "%d min ago",
+    hoursAgoFormat: String = "%d hours ago",
+    daysAgoFormat: String = "%d days ago",
 ): String {
     if (timestamp == 0L) return neverLabel
 
@@ -1333,3 +1345,18 @@ internal fun formatLoraParamsForClipboard(
             appendLine("${labels.modulation} $mod")
         }
     }.trim()
+
+internal fun formatLoraParamsForClipboard(iface: DiscoveredInterface): String =
+    formatLoraParamsForClipboard(
+        iface = iface,
+        labels =
+            LoraClipboardLabels(
+                title = "LoRa Parameters from: ${iface.name}",
+                separator = "---",
+                frequency = "Frequency:",
+                bandwidth = "Bandwidth:",
+                spreadingFactor = "Spreading Factor:",
+                codingRate = "Coding Rate:",
+                modulation = "Modulation:",
+            ),
+    )

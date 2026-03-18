@@ -972,7 +972,7 @@ internal fun formatAddressWithPort(
     ip: String?,
     port: Int,
     isIpv6: Boolean,
-    noNetworkLabel: String,
+    noNetworkLabel: String = "no network",
 ): String {
     return when {
         ip == null -> "$noNetworkLabel:$port"

@@ -757,15 +757,17 @@ private fun formatFullTimestamp(timestamp: Long): String {
 }
 
 @Suppress("MagicNumber")
+@Composable
 private fun formatSizeLimit(sizeKb: Int): String =
     when {
+        sizeKb >= 131072 -> stringResource(R.string.message_delivery_unlimited_128mb)
         sizeKb >= 1024 -> {
             val sizeMb = sizeKb / 1024.0
             if (sizeMb == sizeMb.toLong().toDouble()) {
-                "${sizeMb.toLong()} MB"
+                stringResource(R.string.message_delivery_size_mb, sizeMb.toInt())
             } else {
-                "%.1f MB".format(sizeMb)
+                stringResource(R.string.message_delivery_size_mb_decimal, sizeMb)
             }
         }
-        else -> "$sizeKb KB"
+        else -> stringResource(R.string.message_delivery_size_kb, sizeKb)
     }

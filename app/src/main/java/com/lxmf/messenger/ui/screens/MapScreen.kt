@@ -1170,8 +1170,8 @@ fun MapScreen(
                 return@LaunchedEffect
             }
 
-            run {
-                val style = map.style ?: return@run
+            try {
+                val style = map.style ?: return@LaunchedEffect
 
                 val sortedLocations = locations.sortedBy { it.timestamp }
                 val points = sortedLocations.map { Point.fromLngLat(it.longitude, it.latitude) }
@@ -1224,6 +1224,8 @@ fun MapScreen(
                 }
 
                 Log.d("MapScreen", "Updated SOS trail: ${locations.size} points for ${sosTrailSenderHash.take(8)}")
+            } catch (e: Exception) {
+                Log.e("MapScreen", "Failed to update SOS trail layers", e)
             }
         }
 

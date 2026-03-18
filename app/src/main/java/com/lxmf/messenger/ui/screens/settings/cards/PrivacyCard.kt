@@ -18,7 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 @Composable
@@ -31,7 +33,7 @@ fun PrivacyCard(
     onNavigateToBlockedUsers: () -> Unit = {},
 ) {
     CollapsibleSettingsCard(
-        title = "Privacy",
+        title = stringResource(R.string.privacy_card_title),
         icon = Icons.Default.Security,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -46,9 +48,9 @@ fun PrivacyCard(
         Text(
             text =
                 if (blockUnknownSenders) {
-                    "Only contacts can message you. Messages from unknown senders are silently discarded."
+                    stringResource(R.string.privacy_card_block_unknown_enabled)
                 } else {
-                    "Anyone can send you messages, including unknown senders."
+                    stringResource(R.string.privacy_card_block_unknown_disabled)
                 },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -71,7 +73,7 @@ fun PrivacyCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Blocked Users",
+                text = stringResource(R.string.blocked_users_title),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier =
                     Modifier

@@ -163,7 +163,11 @@ fun ChatsScreen(
         topBar = {
             SearchableTopAppBar(
                 title = stringResource(R.string.chats_title),
-                subtitle = if (chatsState.conversations.size == 1) stringResource(R.string.chats_subtitle_singular, chatsState.conversations.size) else stringResource(R.string.chats_subtitle_plural, chatsState.conversations.size),
+                subtitle = 
+                    if (chatsState.conversations.size == 1) 
+                        stringResource(R.string.chats_subtitle_singular, chatsState.conversations.size) 
+                    else 
+                        stringResource(R.string.chats_subtitle_plural, chatsState.conversations.size),
                 isSearching = isSearching,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery.value = it },

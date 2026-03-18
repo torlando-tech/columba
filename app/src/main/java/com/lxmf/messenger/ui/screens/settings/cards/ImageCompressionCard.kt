@@ -20,7 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
@@ -47,16 +49,14 @@ fun ImageCompressionCard(
 ) {
     android.util.Log.d("ImageCompressionCard", "Rendering: selected=$selectedPreset, detected=$detectedPreset, hasSlowInterface=$hasSlowInterface")
     CollapsibleSettingsCard(
-        title = "Image Compression",
+        title = stringResource(R.string.image_compression_title),
         icon = Icons.Default.Image,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         // Description
         Text(
-            text =
-                "Select compression level for image attachments. " +
-                    "Auto mode detects your network type and selects the optimal preset.",
+            text = stringResource(R.string.image_compression_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -69,7 +69,7 @@ fun ImageCompressionCard(
         ) {
             ImageCompressionPreset.entries.forEach { preset ->
                 val isSelected = selectedPreset == preset
-                val label = buildPresetLabel(preset, detectedPreset, isSelected)
+                val label = resolvedPresetLabel(preset, detectedPreset, isSelected)
 
                 FilterChip(
                     selected = isSelected,
@@ -98,22 +98,6 @@ fun ImageCompressionCard(
 }
 
 /**
- * Build the label for a preset chip.
- */
-private fun buildPresetLabel(
-    preset: ImageCompressionPreset,
-    detectedPreset: ImageCompressionPreset?,
-    isSelected: Boolean,
-): String {
-    return when {
-        preset == ImageCompressionPreset.AUTO && isSelected && detectedPreset != null -> {
-            "Auto (${detectedPreset.displayName})"
-        }
-        else -> preset.displayName
-    }
-}
-
-/**
  * Description of the selected preset.
  */
 @Composable
@@ -127,6 +111,8 @@ private fun PresetDescription(
         } else {
             preset
         }
+    val presetDescription = localizedPresetDescription(displayPreset)
+    val presetMetrics = stringResource(R.string.image_compression_metrics, formatDimension(displayPreset.maxDimensionPx), formatBytes(displayPreset.targetSizeBytes))
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -141,16 +127,14 @@ private fun PresetDescription(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = displayPreset.description,
+                text = presetDescription,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (displayPreset != ImageCompressionPreset.AUTO) {
                 Text(
-                    text =
-                        "Max: ${formatDimension(displayPreset.maxDimensionPx)}px, " +
-                            "${formatBytes(displayPreset.targetSizeBytes)}",
+                    text = presetMetrics,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -179,13 +163,11 @@ private fun SlowInterfaceWarning() {
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
-                contentDescription = "Warning",
+                contentDescription = stringResource(R.string.image_compression_warning_content_description),
                 tint = MaterialTheme.colorScheme.onErrorContainer,
             )
             Text(
-                text =
-                    "Slow interfaces (LoRa/BLE) are enabled. " +
-                        "Sending large images may take a very long time or fail.",
+                text = stringResource(R.string.image_compression_slow_interface_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -193,20 +175,52 @@ private fun SlowInterfaceWarning() {
     }
 }
 
+@Composable
+private fun localizedPresetLabel(preset: ImageCompressionPreset): String =
+    when (preset) {
+        ImageCompressionPreset.LOW -> stringResource(R.string.image_compression_preset_low)
+        ImageCompressionPreset.MEDIUM -> stringResource(R.string.image_compression_preset_medium)
+        ImageCompressionPreset.HIGH -> stringResource(R.string.image_compression_preset_high)
+        ImageCompressionPreset.ORIGINAL -> stringResource(R.string.image_compression_preset_original)
+        ImageCompressionPreset.AUTO -> stringResource(R.string.image_compression_preset_auto)
+    }
+
+@Composable
+private fun localizedPresetDescription(preset: ImageCompressionPreset): String =
+    when (preset) {
+        ImageCompressionPreset.LOW -> stringResource(R.string.image_compression_description_low)
+        ImageCompressionPreset.MEDIUM -> stringResource(R.string.image_compression_description_medium)
+        ImageCompressionPreset.HIGH -> stringResource(R.string.image_compression_description_high)
+        ImageCompressionPreset.ORIGINAL -> stringResource(R.string.image_compression_description_original)
+        ImageCompressionPreset.AUTO -> stringResource(R.string.image_compression_description_auto)
+    }
+
+@Composable
+private fun resolvedPresetLabel(
+    preset: ImageCompressionPreset,
+    detectedPreset: ImageCompressionPreset?,
+    isSelected: Boolean,
+): String =
+    when {
+        preset == ImageCompressionPreset.AUTO && isSelected && detectedPreset != null -> {
+            stringResource(R.string.image_compression_auto_dynamic, localizedPresetLabel(detectedPreset))
+        }
+        else -> localizedPresetLabel(preset)
+    }
+
 /**
  * Format dimension for display.
  */
-private fun formatDimension(px: Int): String {
-    return if (px == Int.MAX_VALUE) "unlimited" else px.toString()
-}
+@Composable
+private fun formatDimension(px: Int): String = if (px == Int.MAX_VALUE) stringResource(R.string.image_compression_unlimited) else px.toString()
 
 /**
  * Format bytes into a human-readable string.
  */
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "${bytes / (1024 * 1024)} MB"
+@Composable
+private fun formatBytes(bytes: Long): String =
+    when {
+        bytes < 1024 -> stringResource(R.string.image_compression_bytes_b, bytes)
+        bytes < 1024 * 1024 -> stringResource(R.string.image_compression_bytes_kb, bytes / 1024)
+        else -> stringResource(R.string.image_compression_bytes_mb, bytes / (1024 * 1024))
     }
-}

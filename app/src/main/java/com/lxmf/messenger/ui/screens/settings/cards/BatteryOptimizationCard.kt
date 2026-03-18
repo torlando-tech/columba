@@ -39,8 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.util.BatteryOptimizationManager
 import kotlinx.coroutines.delay
 
@@ -116,7 +118,7 @@ fun BatteryOptimizationCard(
                         tint = contentColor,
                     )
                     Text(
-                        text = "Background Service Protection",
+                        text = stringResource(R.string.battery_optimization_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = contentColor,
@@ -131,7 +133,7 @@ fun BatteryOptimizationCard(
                         } else {
                             Icons.Default.KeyboardArrowDown
                         },
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    contentDescription = if (isExpanded) stringResource(R.string.action_collapse) else stringResource(R.string.action_expand),
                     tint = contentColor,
                 )
             }
@@ -149,7 +151,7 @@ fun BatteryOptimizationCard(
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (isExempted) {
                         Text(
-                            text = "Battery optimization exemption granted. Columba can run reliably in the background.",
+                            text = stringResource(R.string.battery_optimization_exempted_message),
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -163,13 +165,11 @@ fun BatteryOptimizationCard(
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("View Battery Settings")
+                            Text(stringResource(R.string.battery_optimization_view_settings))
                         }
                     } else {
                         Text(
-                            text =
-                                "Battery optimization is enabled. Android may kill the background " +
-                                    "service during Deep Doze mode, causing gaps in message delivery.",
+                            text = stringResource(R.string.battery_optimization_not_exempted_message),
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -188,7 +188,7 @@ fun BatteryOptimizationCard(
                                     containerColor = MaterialTheme.colorScheme.error,
                                 ),
                         ) {
-                            Text("Request Exemption")
+                            Text(stringResource(R.string.battery_optimization_request_exemption))
                         }
 
                         TextButton(
@@ -198,7 +198,7 @@ fun BatteryOptimizationCard(
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Open Battery Settings Manually")
+                            Text(stringResource(R.string.battery_optimization_open_settings_manually))
                         }
                     }
                 }

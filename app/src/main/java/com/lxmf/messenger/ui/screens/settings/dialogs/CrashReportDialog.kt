@@ -19,8 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.util.CrashReport
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,7 +58,7 @@ fun CrashReportDialog(
         },
         title = {
             Text(
-                text = "App Crashed",
+                text = stringResource(R.string.crash_report_title),
                 textAlign = TextAlign.Center,
             )
         },
@@ -67,7 +69,7 @@ fun CrashReportDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "The app crashed unexpectedly. Would you like to report this issue?",
+                    text = stringResource(R.string.crash_report_message),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
@@ -76,7 +78,7 @@ fun CrashReportDialog(
 
                 // Crash details
                 Text(
-                    text = "Exception: $exceptionName",
+                    text = stringResource(R.string.crash_report_exception, exceptionName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -91,7 +93,7 @@ fun CrashReportDialog(
                     )
                 }
                 Text(
-                    text = "Time: $crashTime",
+                    text = stringResource(R.string.crash_report_time, crashTime),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -99,9 +101,7 @@ fun CrashReportDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text =
-                        "Your bug report will include system info and recent logs. " +
-                            "Sensitive data like identity hashes and IP addresses are automatically redacted.",
+                    text = stringResource(R.string.crash_report_privacy_note),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -116,12 +116,12 @@ fun CrashReportDialog(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Report Bug")
+                Text(stringResource(R.string.crash_report_report_bug))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("Dismiss")
+                Text(stringResource(R.string.identity_screen_dismiss))
             }
         },
     )

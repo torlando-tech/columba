@@ -1002,6 +1002,91 @@
     <string name="data_migration_title">Миграция данных</string>
     <string name="data_migration_description">Экспортируйте данные, такие как личности, сообщения и контакты, чтобы перенести их на другое устройство или импортировать из предыдущей резервной копии.</string>
     <string name="data_migration_action">Экспорт / импорт данных</string>
+    <string name="migration_navigate_back">Назад</string>
+    <string name="migration_export_saved_successfully">Экспорт успешно сохранён</string>
+    <string name="migration_encrypt_export_title">Зашифровать экспорт</string>
+    <string name="migration_encrypt_export_description">Выберите пароль для защиты файла экспорта. Этот пароль понадобится для импорта данных на другое устройство.</string>
+    <string name="migration_encrypted_backup_title">Зашифрованная резервная копия</string>
+    <string name="migration_encrypted_backup_description">Этот файл резервной копии зашифрован. Введите пароль, который использовался при экспорте.</string>
+    <string name="migration_export_section_title">Экспорт данных</string>
+    <string name="migration_export_section_description">Экспортируйте все данные, включая личности, сообщения, контакты и настройки, в файл, который можно импортировать в новую установку приложения.</string>
+    <string name="migration_data_to_export">Данные для экспорта:</string>
+    <string name="migration_preview_load_error">Не удалось загрузить предпросмотр: %1$s</string>
+    <string name="migration_export_complete_save_dialog_opened">Экспорт завершён. Открыт диалог сохранения.</string>
+    <string name="migration_include_attachments">Включить вложения файлов</string>
+    <string name="migration_exclude_attachments_hint">Изображения и файлы не будут включены в экспорт</string>
+    <string name="migration_export_all_data">Экспортировать все данные</string>
+    <string name="migration_export_action">Экспорт</string>
+    <string name="migration_import_section_title">Импорт данных</string>
+    <string name="migration_import_section_description">Импортируйте данные из предыдущего экспорта. Это добавит личности, сообщения и контакты из файла резервной копии.</string>
+    <string name="migration_importing_progress">Импорт... %1$d%%</string>
+    <string name="migration_import_complete_title">Импорт завершён!</string>
+    <string name="migration_select_migration_file">Выбрать файл миграции</string>
+    <string name="migration_import_confirm_title">Импортировать данные?</string>
+    <string name="migration_backup_created_on">Эта резервная копия была создана:</string>
+    <string name="migration_data_to_import">Данные для импорта:</string>
+    <string name="migration_existing_identities_skipped">Существующие личности с таким же ID будут пропущены.</string>
+    <string name="migration_import_action">Импорт</string>
+    <string name="migration_cancel">Отмена</string>
+    <string name="migration_restarting_service_title">Перезапуск службы</string>
+    <string name="migration_restarting_service_message">Перезапуск сетевой службы...</string>
+    <string name="migration_restarting_service_hint">Это может занять несколько секунд</string>
+    <string name="migration_enable_notifications_title">Включить уведомления?</string>
+    <string name="migration_enable_notifications_message">Данные резервной копии восстановлены, включая ваши настройки уведомлений.</string>
+    <string name="migration_enable_notifications_hint">Чтобы получать уведомления о новых сообщениях, нужно выдать разрешение на уведомления.</string>
+    <string name="migration_enable">Включить</string>
+    <string name="migration_not_now">Не сейчас</string>
+    <string name="migration_password_error_incorrect">Неверный пароль</string>
+    <string name="migration_password_error_min_length">Пароль должен содержать не менее %1$d символов</string>
+    <string name="migration_password_error_mismatch">Пароли не совпадают</string>
+    <string name="migration_password_label">Пароль</string>
+    <string name="migration_confirm_password_label">Подтвердите пароль</string>
+    <string name="migration_hide">Скрыть</string>
+    <string name="migration_show">Показать</string>
+    <string name="migration_unlock">Разблокировать</string>
+
+    <plurals name="migration_identities">
+        <item quantity="one">%1$d личность</item>
+        <item quantity="few">%1$d личности</item>
+        <item quantity="many">%1$d личностей</item>
+        <item quantity="other">%1$d личности</item>
+    </plurals>
+    <plurals name="migration_messages">
+        <item quantity="one">%1$d сообщение</item>
+        <item quantity="few">%1$d сообщения</item>
+        <item quantity="many">%1$d сообщений</item>
+        <item quantity="other">%1$d сообщения</item>
+    </plurals>
+    <plurals name="migration_contacts">
+        <item quantity="one">%1$d контакт</item>
+        <item quantity="few">%1$d контакта</item>
+        <item quantity="many">%1$d контактов</item>
+        <item quantity="other">%1$d контакта</item>
+    </plurals>
+    <plurals name="migration_announces">
+        <item quantity="one">%1$d анонс</item>
+        <item quantity="few">%1$d анонса</item>
+        <item quantity="many">%1$d анонсов</item>
+        <item quantity="other">%1$d анонса</item>
+    </plurals>
+    <plurals name="migration_interfaces">
+        <item quantity="one">%1$d интерфейс</item>
+        <item quantity="few">%1$d интерфейса</item>
+        <item quantity="many">%1$d интерфейсов</item>
+        <item quantity="other">%1$d интерфейса</item>
+    </plurals>
+    <plurals name="migration_custom_themes">
+        <item quantity="one">%1$d пользовательская тема</item>
+        <item quantity="few">%1$d пользовательские темы</item>
+        <item quantity="many">%1$d пользовательских тем</item>
+        <item quantity="other">%1$d пользовательские темы</item>
+    </plurals>
+    <plurals name="migration_conversations">
+        <item quantity="one">%1$d диалог</item>
+        <item quantity="few">%1$d диалога</item>
+        <item quantity="many">%1$d диалогов</item>
+        <item quantity="other">%1$d диалога</item>
+    </plurals>
 
     <!-- Notification Settings Card -->
     <string name="notification_settings_title">Уведомления</string>
@@ -1077,4 +1162,124 @@
     <string name="shared_instance_rpc_key_title">RPC-ключ из Sideband Connectivity</string>
     <string name="shared_instance_rpc_key_placeholder">Вставьте конфиг или ключ...</string>
     <string name="shared_instance_rpc_key_hint">Вставьте полный конфиг или только hex-ключ</string>
+
+    <!-- Location Sharing Card -->
+    <string name="location_sharing_title">Обмен местоположением</string>
+    <string name="location_sharing_description">Делитесь своим местоположением в реальном времени с контактами. При отключении все активные сеансы обмена будут остановлены.</string>
+    <string name="location_sharing_myself">Я</string>
+    <string name="location_sharing_background_location_always">Фоновое местоположение: всегда</string>
+    <string name="location_sharing_background_location_while_using">Фоновое местоположение: только при использовании</string>
+    <string name="location_sharing_background_location_not_granted">Фоновое местоположение: не выдано</string>
+    <string name="location_sharing_background_location_change_hint">Нажмите, чтобы изменить (Разрешения > Местоположение)</string>
+    <string name="location_sharing_background_location_enable_hint">Нажмите, чтобы включить фоновое местоположение</string>
+    <string name="location_sharing_background_location_grant_hint">Нажмите, чтобы выдать разрешение на местоположение</string>
+    <string name="location_sharing_change_content_description">Изменить</string>
+    <string name="location_sharing_default_duration_label">Длительность по умолчанию</string>
+    <string name="location_sharing_precision_label">Точность местоположения</string>
+    <string name="location_sharing_active_sessions_title">Сейчас делитесь с:</string>
+    <string name="location_sharing_stop_all">Остановить все сеансы</string>
+    <string name="location_sharing_stop">Остановить</string>
+    <string name="location_sharing_select_content_description">Выбрать</string>
+    <string name="location_sharing_default_duration_dialog_title">Длительность по умолчанию</string>
+    <string name="location_sharing_default_duration_dialog_description">Выберите длительность по умолчанию для новых сеансов обмена местоположением:</string>
+    <string name="location_sharing_done">Готово</string>
+    <string name="location_sharing_cancel">Отмена</string>
+    <string name="location_sharing_precision_dialog_title">Точность местоположения</string>
+    <string name="location_sharing_precision_dialog_description">Выберите, насколько точно будет передаваться ваше местоположение:</string>
+    <string name="location_sharing_precision_precise">Точно</string>
+    <string name="location_sharing_precision_precise_description">Точные GPS-координаты</string>
+    <string name="location_sharing_precision_neighborhood">Район</string>
+    <string name="location_sharing_precision_neighborhood_description">Радиус около 100 м</string>
+    <string name="location_sharing_precision_city">Город</string>
+    <string name="location_sharing_precision_city_description">Радиус около 1 км</string>
+    <string name="location_sharing_precision_region">Регион</string>
+    <string name="location_sharing_precision_region_description">Радиус около 10 км</string>
+    <string name="location_sharing_precision_neighborhood_summary">Район (около 100 м)</string>
+    <string name="location_sharing_precision_city_summary">Город (около 1 км)</string>
+    <string name="location_sharing_precision_region_summary">Регион (около 10 км)</string>
+    <string name="location_sharing_until_stopped">Пока не остановите</string>
+    <string name="location_sharing_expiring">Скоро истечёт...</string>
+    <string name="location_sharing_time_remaining_hours_minutes">Осталось %1$d ч %2$d мин</string>
+    <string name="location_sharing_time_remaining_minutes">Осталось %1$d мин</string>
+    <string name="location_sharing_duration_fifteen_minutes">15 мин</string>
+    <string name="location_sharing_duration_one_hour">1 час</string>
+    <string name="location_sharing_duration_four_hours">4 часа</string>
+    <string name="location_sharing_duration_until_midnight">До полуночи</string>
+    <string name="location_sharing_duration_until_i_stop">Пока я не остановлю</string>
+    <string name="location_sharing_distance_kilometers">%1$d км</string>
+    <string name="location_sharing_distance_meters">%1$d м</string>
+    <string name="location_sharing_group_tracker_title">Групповой трекер</string>
+    <string name="location_sharing_group_tracker_description">Делитесь своим местоположением с группой и смотрите, где находятся все участники.</string>
+    <string name="location_sharing_share_with_group">Делиться с группой</string>
+    <string name="location_sharing_share_with_group_description">Автоматически отправлять своё местоположение</string>
+    <string name="location_sharing_group_host_label">Хост группы</string>
+    <string name="location_sharing_local_display_name_self">%1$s (я)</string>
+    <string name="location_sharing_select_from_contacts">Выберите из контактов...</string>
+    <string name="location_sharing_send_every">Отправлять каждые: %1$s</string>
+    <string name="location_sharing_interval_chip_5_min">5 мин</string>
+    <string name="location_sharing_interval_chip_15_min">15 мин</string>
+    <string name="location_sharing_interval_chip_30_min">30 мин</string>
+    <string name="location_sharing_interval_chip_1_hour">1 ч</string>
+    <string name="location_sharing_sending">Отправка...</string>
+    <string name="location_sharing_send_now">Отправить сейчас</string>
+    <string name="location_sharing_last_sent">Последняя отправка: %1$s</string>
+    <string name="location_sharing_receive_locations_title">Получать местоположения группы</string>
+    <string name="location_sharing_receive_locations_description">Периодически получать местоположение всех участников</string>
+    <string name="location_sharing_request_every">Запрашивать каждые: %1$s</string>
+    <string name="location_sharing_requesting">Запрос...</string>
+    <string name="location_sharing_request_now">Запросить сейчас</string>
+    <string name="location_sharing_last_received">Последнее получение: %1$s</string>
+    <string name="location_sharing_host_group_title">Раздавать группе</string>
+    <string name="location_sharing_host_group_description">Позвольте другим использовать вас как групповой трекер</string>
+    <string name="location_sharing_allowed_requesters_title">Разрешённые запрашивающие</string>
+    <string name="location_sharing_edit_allowed_requesters">Изменить список разрешённых</string>
+    <string name="location_sharing_no_contacts_selected">Контакты не выбраны - все запросы будут заблокированы</string>
+    <string name="location_sharing_selected_contacts_more">%1$s и ещё %2$d</string>
+    <string name="location_sharing_only_selected_contacts">Только выбранные контакты могут запрашивать местоположения вашей группы</string>
+    <string name="location_sharing_select_allowed_requesters_title">Выберите разрешённых запрашивающих</string>
+    <string name="location_sharing_allowed_requesters_dialog_description">Только выбранные контакты могут запрашивать данные о местоположении вашей группы. Если контакты не выбраны, все запросы будут заблокированы.</string>
+    <string name="location_sharing_search_contacts">Поиск контактов</string>
+    <string name="location_sharing_just_now">Только что</string>
+    <string name="location_sharing_one_minute_ago">1 минуту назад</string>
+    <string name="location_sharing_one_hour_ago">1 час назад</string>
+    <string name="location_sharing_interval_seconds">%1$dс</string>
+    <string name="location_sharing_interval_hours_short">%1$dч</string>
+    <string name="location_sharing_interval_hours_minutes_short">%1$dч %2$dм</string>
+    <string name="location_sharing_interval_minutes_short">%1$dмин</string>
+    <string name="location_sharing_interval_minutes_seconds_short">%1$dм %2$dс</string>
+    <string name="location_sharing_select_group_host_title">Выберите хост группы</string>
+    <string name="location_sharing_select_group_host_description">Выберите себя, чтобы быть хостом группы, или выберите контакт, которому отправлять своё местоположение.</string>
+    <string name="location_sharing_no_contacts_available">Нет доступных контактов. Сначала добавьте контакты.</string>
+    <string name="location_sharing_none">Нет</string>
+
+    <plurals name="location_sharing_contacts_selected">
+        <item quantity="one">Выбран %1$d контакт</item>
+        <item quantity="few">Выбрано %1$d контакта</item>
+        <item quantity="many">Выбрано %1$d контактов</item>
+        <item quantity="other">Выбрано %1$d контакта</item>
+    </plurals>
+    <plurals name="location_sharing_seconds_ago">
+        <item quantity="one">%1$d секунду назад</item>
+        <item quantity="few">%1$d секунды назад</item>
+        <item quantity="many">%1$d секунд назад</item>
+        <item quantity="other">%1$d секунды назад</item>
+    </plurals>
+    <plurals name="location_sharing_minutes_ago">
+        <item quantity="one">%1$d минуту назад</item>
+        <item quantity="few">%1$d минуты назад</item>
+        <item quantity="many">%1$d минут назад</item>
+        <item quantity="other">%1$d минуты назад</item>
+    </plurals>
+    <plurals name="location_sharing_hours_ago">
+        <item quantity="one">%1$d час назад</item>
+        <item quantity="few">%1$d часа назад</item>
+        <item quantity="many">%1$d часов назад</item>
+        <item quantity="other">%1$d часа назад</item>
+    </plurals>
+    <plurals name="location_sharing_days_ago">
+        <item quantity="one">%1$d день назад</item>
+        <item quantity="few">%1$d дня назад</item>
+        <item quantity="many">%1$d дней назад</item>
+        <item quantity="other">%1$d дня назад</item>
+    </plurals>
 </resources>

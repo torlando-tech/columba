@@ -1002,6 +1002,77 @@
     <string name="data_migration_title">Data Migration</string>
     <string name="data_migration_description">Export your data such as identities, messages, and contacts to transfer to another device or import from a previous backup.</string>
     <string name="data_migration_action">Export / Import Data</string>
+    <string name="migration_navigate_back">Navigate back</string>
+    <string name="migration_export_saved_successfully">Export saved successfully</string>
+    <string name="migration_encrypt_export_title">Encrypt Export</string>
+    <string name="migration_encrypt_export_description">Choose a password to protect your export file. You will need this password to import the data on another device.</string>
+    <string name="migration_encrypted_backup_title">Encrypted Backup</string>
+    <string name="migration_encrypted_backup_description">This backup file is encrypted. Enter the password that was used during export.</string>
+    <string name="migration_export_section_title">Export Data</string>
+    <string name="migration_export_section_description">Export all your data, including identities, messages, contacts, and settings, to a file that can be imported into a new installation.</string>
+    <string name="migration_data_to_export">Data to export:</string>
+    <string name="migration_preview_load_error">Could not load preview: %1$s</string>
+    <string name="migration_export_complete_save_dialog_opened">Export complete! Save dialog opened.</string>
+    <string name="migration_include_attachments">Include file attachments</string>
+    <string name="migration_exclude_attachments_hint">Images and files will not be included in the export</string>
+    <string name="migration_export_all_data">Export All Data</string>
+    <string name="migration_export_action">Export</string>
+    <string name="migration_import_section_title">Import Data</string>
+    <string name="migration_import_section_description">Import data from a previous export. This will add identities, messages, and contacts from the backup file.</string>
+    <string name="migration_importing_progress">Importing... %1$d%%</string>
+    <string name="migration_import_complete_title">Import complete!</string>
+    <string name="migration_select_migration_file">Select Migration File</string>
+    <string name="migration_import_confirm_title">Import Data?</string>
+    <string name="migration_backup_created_on">This backup was created on:</string>
+    <string name="migration_data_to_import">Data to import:</string>
+    <string name="migration_existing_identities_skipped">Existing identities with the same ID will be skipped.</string>
+    <string name="migration_import_action">Import</string>
+    <string name="migration_cancel">Cancel</string>
+    <string name="migration_restarting_service_title">Restarting Service</string>
+    <string name="migration_restarting_service_message">Restarting network service...</string>
+    <string name="migration_restarting_service_hint">This may take a few seconds</string>
+    <string name="migration_enable_notifications_title">Enable Notifications?</string>
+    <string name="migration_enable_notifications_message">Your backup data has been restored, including your notification preferences.</string>
+    <string name="migration_enable_notifications_hint">To receive notifications for new messages, you will need to grant notification permission.</string>
+    <string name="migration_enable">Enable</string>
+    <string name="migration_not_now">Not Now</string>
+    <string name="migration_password_error_incorrect">Incorrect password</string>
+    <string name="migration_password_error_min_length">Password must be at least %1$d characters</string>
+    <string name="migration_password_error_mismatch">Passwords do not match</string>
+    <string name="migration_password_label">Password</string>
+    <string name="migration_confirm_password_label">Confirm password</string>
+    <string name="migration_hide">Hide</string>
+    <string name="migration_show">Show</string>
+    <string name="migration_unlock">Unlock</string>
+
+    <plurals name="migration_identities">
+        <item quantity="one">%1$d identity</item>
+        <item quantity="other">%1$d identities</item>
+    </plurals>
+    <plurals name="migration_messages">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
+    <plurals name="migration_contacts">
+        <item quantity="one">%1$d contact</item>
+        <item quantity="other">%1$d contacts</item>
+    </plurals>
+    <plurals name="migration_announces">
+        <item quantity="one">%1$d announce</item>
+        <item quantity="other">%1$d announces</item>
+    </plurals>
+    <plurals name="migration_interfaces">
+        <item quantity="one">%1$d interface</item>
+        <item quantity="other">%1$d interfaces</item>
+    </plurals>
+    <plurals name="migration_custom_themes">
+        <item quantity="one">%1$d custom theme</item>
+        <item quantity="other">%1$d custom themes</item>
+    </plurals>
+    <plurals name="migration_conversations">
+        <item quantity="one">%1$d conversation</item>
+        <item quantity="other">%1$d conversations</item>
+    </plurals>
 
     <!-- Notification Settings Card -->
     <string name="notification_settings_title">Notifications</string>
@@ -1077,4 +1148,114 @@
     <string name="shared_instance_rpc_key_title">RPC Key from Sideband Connectivity</string>
     <string name="shared_instance_rpc_key_placeholder">Paste config or key...</string>
     <string name="shared_instance_rpc_key_hint">Paste the full config or just the hex key</string>
+
+    <!-- Location Sharing Card -->
+    <string name="location_sharing_title">Location Sharing</string>
+    <string name="location_sharing_description">Share your real-time location with contacts. When disabled, all active sharing sessions will be stopped.</string>
+    <string name="location_sharing_myself">Myself</string>
+    <string name="location_sharing_background_location_always">Background location: Always</string>
+    <string name="location_sharing_background_location_while_using">Background location: While using</string>
+    <string name="location_sharing_background_location_not_granted">Background location: Not granted</string>
+    <string name="location_sharing_background_location_change_hint">Tap to change (Permissions > Location)</string>
+    <string name="location_sharing_background_location_enable_hint">Tap to enable background location</string>
+    <string name="location_sharing_background_location_grant_hint">Tap to grant location permission</string>
+    <string name="location_sharing_change_content_description">Change</string>
+    <string name="location_sharing_default_duration_label">Default duration</string>
+    <string name="location_sharing_precision_label">Location precision</string>
+    <string name="location_sharing_active_sessions_title">Currently sharing with:</string>
+    <string name="location_sharing_stop_all">Stop All Sharing</string>
+    <string name="location_sharing_stop">Stop</string>
+    <string name="location_sharing_select_content_description">Select</string>
+    <string name="location_sharing_default_duration_dialog_title">Default Duration</string>
+    <string name="location_sharing_default_duration_dialog_description">Select the default duration for new location sharing sessions:</string>
+    <string name="location_sharing_done">Done</string>
+    <string name="location_sharing_cancel">Cancel</string>
+    <string name="location_sharing_precision_dialog_title">Location Precision</string>
+    <string name="location_sharing_precision_dialog_description">Choose how precisely your location is shared:</string>
+    <string name="location_sharing_precision_precise">Precise</string>
+    <string name="location_sharing_precision_precise_description">Exact GPS location</string>
+    <string name="location_sharing_precision_neighborhood">Neighborhood</string>
+    <string name="location_sharing_precision_neighborhood_description">~100 m radius</string>
+    <string name="location_sharing_precision_city">City</string>
+    <string name="location_sharing_precision_city_description">~1 km radius</string>
+    <string name="location_sharing_precision_region">Region</string>
+    <string name="location_sharing_precision_region_description">~10 km radius</string>
+    <string name="location_sharing_precision_neighborhood_summary">Neighborhood (~100 m)</string>
+    <string name="location_sharing_precision_city_summary">City (~1 km)</string>
+    <string name="location_sharing_precision_region_summary">Region (~10 km)</string>
+    <string name="location_sharing_until_stopped">Until stopped</string>
+    <string name="location_sharing_expiring">Expiring...</string>
+    <string name="location_sharing_time_remaining_hours_minutes">%1$dh %2$dm remaining</string>
+    <string name="location_sharing_time_remaining_minutes">%1$dm remaining</string>
+    <string name="location_sharing_duration_fifteen_minutes">15 min</string>
+    <string name="location_sharing_duration_one_hour">1 hour</string>
+    <string name="location_sharing_duration_four_hours">4 hours</string>
+    <string name="location_sharing_duration_until_midnight">Until midnight</string>
+    <string name="location_sharing_duration_until_i_stop">Until I stop</string>
+    <string name="location_sharing_distance_kilometers">%1$d km</string>
+    <string name="location_sharing_distance_meters">%1$d m</string>
+    <string name="location_sharing_group_tracker_title">Group Tracker</string>
+    <string name="location_sharing_group_tracker_description">Share your location with a group and see where everyone is.</string>
+    <string name="location_sharing_share_with_group">Share with group</string>
+    <string name="location_sharing_share_with_group_description">Automatically share your location</string>
+    <string name="location_sharing_group_host_label">Group Host</string>
+    <string name="location_sharing_local_display_name_self">%1$s (myself)</string>
+    <string name="location_sharing_select_from_contacts">Select from contacts...</string>
+    <string name="location_sharing_send_every">Send every: %1$s</string>
+    <string name="location_sharing_interval_chip_5_min">5 min</string>
+    <string name="location_sharing_interval_chip_15_min">15 min</string>
+    <string name="location_sharing_interval_chip_30_min">30 min</string>
+    <string name="location_sharing_interval_chip_1_hour">1 hr</string>
+    <string name="location_sharing_sending">Sending...</string>
+    <string name="location_sharing_send_now">Send Now</string>
+    <string name="location_sharing_last_sent">Last sent: %1$s</string>
+    <string name="location_sharing_receive_locations_title">Receive locations from group</string>
+    <string name="location_sharing_receive_locations_description">Get locations for everyone in the group periodically</string>
+    <string name="location_sharing_request_every">Request every: %1$s</string>
+    <string name="location_sharing_requesting">Requesting...</string>
+    <string name="location_sharing_request_now">Request Now</string>
+    <string name="location_sharing_last_received">Last received: %1$s</string>
+    <string name="location_sharing_host_group_title">Host Group</string>
+    <string name="location_sharing_host_group_description">Let others use you as their group tracker</string>
+    <string name="location_sharing_allowed_requesters_title">Allowed Requesters</string>
+    <string name="location_sharing_edit_allowed_requesters">Edit allowed requesters</string>
+    <string name="location_sharing_no_contacts_selected">No contacts selected - all requests blocked</string>
+    <string name="location_sharing_selected_contacts_more">%1$s +%2$d more</string>
+    <string name="location_sharing_only_selected_contacts">Only selected contacts can request locations for your group</string>
+    <string name="location_sharing_select_allowed_requesters_title">Select Allowed Requesters</string>
+    <string name="location_sharing_allowed_requesters_dialog_description">Only selected contacts can request location data for your group. If no contacts are selected, all requests will be blocked.</string>
+    <string name="location_sharing_search_contacts">Search contacts</string>
+    <string name="location_sharing_just_now">Just now</string>
+    <string name="location_sharing_one_minute_ago">1 minute ago</string>
+    <string name="location_sharing_one_hour_ago">1 hour ago</string>
+    <string name="location_sharing_interval_seconds">%1$ds</string>
+    <string name="location_sharing_interval_hours_short">%1$dhr</string>
+    <string name="location_sharing_interval_hours_minutes_short">%1$dh %2$dm</string>
+    <string name="location_sharing_interval_minutes_short">%1$dmin</string>
+    <string name="location_sharing_interval_minutes_seconds_short">%1$dm %2$ds</string>
+    <string name="location_sharing_select_group_host_title">Select Group Host</string>
+    <string name="location_sharing_select_group_host_description">Select yourself to host the group, or choose a contact to send your location to.</string>
+    <string name="location_sharing_no_contacts_available">No contacts available. Add contacts first.</string>
+    <string name="location_sharing_none">None</string>
+
+    <plurals name="location_sharing_contacts_selected">
+        <item quantity="one">%1$d contact selected</item>
+        <item quantity="other">%1$d contacts selected</item>
+    </plurals>
+    <plurals name="location_sharing_seconds_ago">
+        <item quantity="one">%1$d second ago</item>
+        <item quantity="other">%1$d seconds ago</item>
+    </plurals>
+    <plurals name="location_sharing_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="location_sharing_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="location_sharing_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
 </resources>

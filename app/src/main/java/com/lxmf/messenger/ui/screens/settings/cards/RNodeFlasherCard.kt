@@ -12,7 +12,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 /**
@@ -34,21 +36,21 @@ fun RNodeFlasherCard(
     onOpenFlasher: () -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "RNode Flasher",
+        title = stringResource(R.string.rnode_flasher_card_title),
         icon = Icons.Default.Memory,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         // Description
         Text(
-            text = "Flash or update firmware on RNode devices connected via USB.",
+            text = stringResource(R.string.rnode_flasher_card_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Supported devices info
         Text(
-            text = "Supported: RAK4631, Heltec LoRa32, T-Beam, T-Deck, and more.",
+            text = stringResource(R.string.rnode_flasher_card_supported_devices),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -64,7 +66,7 @@ fun RNodeFlasherCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Open Flasher")
+            Text(stringResource(R.string.rnode_flasher_card_action))
         }
     }
 }

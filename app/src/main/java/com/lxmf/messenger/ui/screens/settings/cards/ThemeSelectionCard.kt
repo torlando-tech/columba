@@ -26,10 +26,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.ui.theme.AppTheme
+import com.lxmf.messenger.ui.theme.CustomTheme
 import com.lxmf.messenger.ui.theme.PresetTheme
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -43,7 +46,7 @@ fun ThemeSelectionCard(
     onNavigateToCustomThemes: () -> Unit = {},
 ) {
     CollapsibleSettingsCard(
-        title = "Theme",
+        title = stringResource(R.string.theme_selection_title),
         icon = Icons.Default.Palette,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
@@ -55,20 +58,20 @@ fun ThemeSelectionCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Custom Themes")
+                Text(stringResource(R.string.theme_selection_custom_themes))
             }
         },
     ) {
         // Description
         Text(
-            text = "Choose your preferred color theme. Dark and light modes adapt automatically based on your system settings.",
+            text = stringResource(R.string.theme_selection_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Built-in themes section
         Text(
-            text = "Built-in Themes",
+            text = stringResource(R.string.theme_selection_built_in_themes),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -83,13 +86,13 @@ fun ThemeSelectionCard(
                 FilterChip(
                     selected = selectedTheme == theme,
                     onClick = { onThemeChange(theme) },
-                    label = { Text(theme.displayName) },
+                    label = { Text(localizedThemeDisplayName(theme)) },
                     leadingIcon =
                         if (selectedTheme == theme) {
                             {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(R.string.status_selected),
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
@@ -103,7 +106,7 @@ fun ThemeSelectionCard(
         // Custom themes section (only show if there are custom themes)
         if (customThemes.isNotEmpty()) {
             Text(
-                text = "Custom Themes",
+                text = stringResource(R.string.theme_selection_custom_themes),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
@@ -124,7 +127,7 @@ fun ThemeSelectionCard(
                                 {
                                     Icon(
                                         imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
+                                        contentDescription = stringResource(R.string.status_selected),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -138,7 +141,7 @@ fun ThemeSelectionCard(
 
         // Description of selected theme
         Text(
-            text = selectedTheme.description,
+            text = localizedThemeDescription(selectedTheme),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium,
@@ -163,7 +166,7 @@ fun ThemeColorPreview(theme: AppTheme) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Preview:",
+            text = stringResource(R.string.theme_selection_preview),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -192,9 +195,37 @@ fun ThemeColorPreview(theme: AppTheme) {
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = if (isDarkTheme) "Dark mode" else "Light mode",
+            text = if (isDarkTheme) stringResource(R.string.theme_selection_dark_mode) else stringResource(R.string.theme_selection_light_mode),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
+
+@Composable
+private fun localizedThemeDisplayName(theme: AppTheme): String =
+    when (theme) {
+        is CustomTheme -> theme.displayName
+        PresetTheme.VIBRANT -> stringResource(R.string.theme_preset_vibrant)
+        PresetTheme.DYNAMIC -> stringResource(R.string.theme_preset_dynamic)
+        PresetTheme.OCEAN -> stringResource(R.string.theme_preset_ocean)
+        PresetTheme.FOREST -> stringResource(R.string.theme_preset_forest)
+        PresetTheme.SUNSET -> stringResource(R.string.theme_preset_sunset)
+        PresetTheme.MONOCHROME -> stringResource(R.string.theme_preset_monochrome)
+        PresetTheme.OLED_BLACK -> stringResource(R.string.theme_preset_oled_black)
+        PresetTheme.EXPRESSIVE -> stringResource(R.string.theme_preset_expressive)
+    }
+
+@Composable
+private fun localizedThemeDescription(theme: AppTheme): String =
+    when (theme) {
+        is CustomTheme -> theme.description
+        PresetTheme.VIBRANT -> stringResource(R.string.theme_preset_vibrant_description)
+        PresetTheme.DYNAMIC -> stringResource(R.string.theme_preset_dynamic_description)
+        PresetTheme.OCEAN -> stringResource(R.string.theme_preset_ocean_description)
+        PresetTheme.FOREST -> stringResource(R.string.theme_preset_forest_description)
+        PresetTheme.SUNSET -> stringResource(R.string.theme_preset_sunset_description)
+        PresetTheme.MONOCHROME -> stringResource(R.string.theme_preset_monochrome_description)
+        PresetTheme.OLED_BLACK -> stringResource(R.string.theme_preset_oled_black_description)
+        PresetTheme.EXPRESSIVE -> stringResource(R.string.theme_preset_expressive_description)
+    }

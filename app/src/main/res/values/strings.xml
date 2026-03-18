@@ -990,4 +990,91 @@
     <string name="map_sources_warning_content_description">Warning</string>
     <string name="map_sources_no_sources_warning">No map tiles will load until a source is enabled or offline maps are downloaded</string>
     <string name="map_sources_offline_maps_available">Offline maps available - they will be used when location is covered</string>
+
+    <!-- Identity Card -->
+    <string name="identity_card_title">Identity</string>
+    <string name="identity_card_view_description">View and share your identity, edit your display name, and manage QR codes for contact sharing.</string>
+    <string name="identity_card_manage_description">Create and manage multiple identities for different contexts such as work, personal, or anonymous use.</string>
+    <string name="identity_card_view_my_identity">View My Identity</string>
+    <string name="identity_card_manage_identities">Manage Identities</string>
+
+    <!-- Data Migration Card -->
+    <string name="data_migration_title">Data Migration</string>
+    <string name="data_migration_description">Export your data such as identities, messages, and contacts to transfer to another device or import from a previous backup.</string>
+    <string name="data_migration_action">Export / Import Data</string>
+
+    <!-- Notification Settings Card -->
+    <string name="notification_settings_title">Notifications</string>
+    <string name="notification_settings_enabled_description">Manage notification preferences for messages, announces, and Bluetooth events.</string>
+    <string name="notification_settings_disabled_description">All notifications are disabled. Enable notifications to receive alerts for messages and events.</string>
+    <string name="notification_settings_manage_action">Manage Notifications</string>
+
+    <!-- Share Columba Card -->
+    <string name="share_columba_title">Share Columba</string>
+    <string name="share_columba_description">Share the Columba app with someone nearby. The other person scans a QR code to download and install the app directly from your phone.</string>
+    <string name="share_columba_action">Share Columba APK</string>
+
+    <!-- RNode Flasher Card -->
+    <string name="rnode_flasher_card_title">RNode Flasher</string>
+    <string name="rnode_flasher_card_description">Flash or update firmware on RNode devices connected via USB.</string>
+    <string name="rnode_flasher_card_supported_devices">Supported: RAK4631, Heltec LoRa32, T-Beam, T-Deck, and more.</string>
+    <string name="rnode_flasher_card_action">Open Flasher</string>
+
+    <!-- Theme Selection Card -->
+    <string name="theme_selection_title">Theme</string>
+    <string name="theme_selection_custom_themes">Custom Themes</string>
+    <string name="theme_selection_description">Choose your preferred color theme. Dark and light modes adapt automatically based on your system settings.</string>
+    <string name="theme_selection_built_in_themes">Built-in Themes</string>
+    <string name="theme_selection_preview">Preview:</string>
+    <string name="theme_selection_dark_mode">Dark mode</string>
+    <string name="theme_selection_light_mode">Light mode</string>
+    <string name="theme_preset_vibrant">Vibrant</string>
+    <string name="theme_preset_vibrant_description">Purple-pink gradient matching the app icon</string>
+    <string name="theme_preset_dynamic">Dynamic</string>
+    <string name="theme_preset_dynamic_description">Extract colors from your device wallpaper</string>
+    <string name="theme_preset_ocean">Ocean</string>
+    <string name="theme_preset_ocean_description">Cool blue tones for clarity and focus</string>
+    <string name="theme_preset_forest">Forest</string>
+    <string name="theme_preset_forest_description">Natural green tones, easy on the eyes</string>
+    <string name="theme_preset_sunset">Sunset</string>
+    <string name="theme_preset_sunset_description">Warm orange-red tones for energy</string>
+    <string name="theme_preset_monochrome">Monochrome</string>
+    <string name="theme_preset_monochrome_description">Grayscale minimalism for professionals</string>
+    <string name="theme_preset_oled_black">OLED Black</string>
+    <string name="theme_preset_oled_black_description">True black for OLED screens with maximum battery savings</string>
+    <string name="theme_preset_expressive">Expressive</string>
+    <string name="theme_preset_expressive_description">Purple and lavender palette with sage and mint green accents</string>
+
+    <!-- Voice Call Permissions Card -->
+    <string name="voice_call_permissions_title">Voice Call Permissions</string>
+    <string name="voice_call_permissions_all_granted">All permissions granted. Incoming voice calls will show a full-screen call screen.</string>
+    <string name="voice_call_permissions_missing">Some permissions are missing. Without them, voice calls may not work correctly.</string>
+    <string name="voice_call_permissions_microphone">Microphone</string>
+    <string name="voice_call_permissions_microphone_description">Required to capture audio during voice calls.</string>
+    <string name="voice_call_permissions_overlay">Display over other apps</string>
+    <string name="voice_call_permissions_overlay_description">Required to show the call screen when the app is in the background.</string>
+    <string name="voice_call_permissions_full_screen">Full-screen notifications</string>
+    <string name="voice_call_permissions_full_screen_description">Required on Android 14 and above to launch the call screen from a notification.</string>
+    <string name="voice_call_permissions_open_settings">Open Settings</string>
+    <string name="voice_call_permissions_granted">Granted</string>
+    <string name="voice_call_permissions_not_granted">Not granted</string>
+
+    <!-- Shared Instance Banner Card -->
+    <string name="shared_instance_mode_content_description">Instance mode</string>
+    <string name="shared_instance_offline_title">Shared Instance No Longer Available</string>
+    <string name="shared_instance_connected_title">Connected to Shared Instance</string>
+    <string name="shared_instance_own_title">Using the Columba Own Instance</string>
+    <string name="shared_instance_offline_message">The shared Reticulum instance, such as Sideband, is no longer available. Columba has automatically restarted with its own network interfaces.</string>
+    <string name="shared_instance_offline_hint">Your messages will continue to be sent and received. If the shared instance becomes available again, you can switch back to it from Settings.</string>
+    <string name="shared_instance_using_shared_message">Another app, such as Sideband, is managing the Reticulum network on this device. Columba is using that connection.</string>
+    <string name="shared_instance_using_own_message">Columba is running its own Reticulum instance. Turn this off to use a shared instance if one is available.</string>
+    <string name="shared_instance_bullet_network_interfaces">• Network interfaces are managed by the other app</string>
+    <string name="shared_instance_bullet_privacy">• Your identities and messages remain private to Columba</string>
+    <string name="shared_instance_bullet_ble">• BLE connections to other Columba users require the Columba own instance</string>
+    <string name="shared_instance_use_own_instance">Use the Columba own instance</string>
+    <string name="shared_instance_unavailable">No shared instance available</string>
+    <string name="shared_instance_restart_hint">Service will restart automatically</string>
+    <string name="shared_instance_rpc_key_title">RPC Key from Sideband Connectivity</string>
+    <string name="shared_instance_rpc_key_placeholder">Paste config or key...</string>
+    <string name="shared_instance_rpc_key_hint">Paste the full config or just the hex key</string>
 </resources>

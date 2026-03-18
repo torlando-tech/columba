@@ -990,4 +990,91 @@
     <string name="map_sources_warning_content_description">Предупреждение</string>
     <string name="map_sources_no_sources_warning">Тайлы карты не будут загружаться, пока не будет включён источник или не будут скачаны офлайн-карты</string>
     <string name="map_sources_offline_maps_available">Офлайн-карты доступны - они будут использоваться, когда местоположение покрыто</string>
+
+    <!-- Identity Card -->
+    <string name="identity_card_title">Личность</string>
+    <string name="identity_card_view_description">Просматривайте и делитесь своей личностью, меняйте отображаемое имя и управляйте QR-кодами для обмена контактами.</string>
+    <string name="identity_card_manage_description">Создавайте и управляйте несколькими личностями для разных сценариев: работа, личное использование или анонимность.</string>
+    <string name="identity_card_view_my_identity">Открыть мою личность</string>
+    <string name="identity_card_manage_identities">Управлять личностями</string>
+
+    <!-- Data Migration Card -->
+    <string name="data_migration_title">Миграция данных</string>
+    <string name="data_migration_description">Экспортируйте данные, такие как личности, сообщения и контакты, чтобы перенести их на другое устройство или импортировать из предыдущей резервной копии.</string>
+    <string name="data_migration_action">Экспорт / импорт данных</string>
+
+    <!-- Notification Settings Card -->
+    <string name="notification_settings_title">Уведомления</string>
+    <string name="notification_settings_enabled_description">Управляйте параметрами уведомлений для сообщений, анонсов и Bluetooth-событий.</string>
+    <string name="notification_settings_disabled_description">Все уведомления отключены. Включите их, чтобы получать оповещения о сообщениях и событиях.</string>
+    <string name="notification_settings_manage_action">Настроить уведомления</string>
+
+    <!-- Share Columba Card -->
+    <string name="share_columba_title">Поделиться Columba</string>
+    <string name="share_columba_description">Поделитесь приложением Columba с человеком рядом. Другой человек отсканирует QR-код, чтобы скачать и установить приложение прямо с вашего телефона.</string>
+    <string name="share_columba_action">Поделиться APK Columba</string>
+
+    <!-- RNode Flasher Card -->
+    <string name="rnode_flasher_card_title">Прошивка RNode</string>
+    <string name="rnode_flasher_card_description">Прошивайте или обновляйте firmware устройств RNode, подключённых по USB.</string>
+    <string name="rnode_flasher_card_supported_devices">Поддерживаются: RAK4631, Heltec LoRa32, T-Beam, T-Deck и другие.</string>
+    <string name="rnode_flasher_card_action">Открыть прошивальщик</string>
+
+    <!-- Theme Selection Card -->
+    <string name="theme_selection_title">Тема</string>
+    <string name="theme_selection_custom_themes">Пользовательские темы</string>
+    <string name="theme_selection_description">Выберите предпочитаемую цветовую тему. Тёмный и светлый режимы автоматически подстраиваются под системные настройки.</string>
+    <string name="theme_selection_built_in_themes">Встроенные темы</string>
+    <string name="theme_selection_preview">Предпросмотр:</string>
+    <string name="theme_selection_dark_mode">Тёмный режим</string>
+    <string name="theme_selection_light_mode">Светлый режим</string>
+    <string name="theme_preset_vibrant">Яркая</string>
+    <string name="theme_preset_vibrant_description">Пурпурно-розовый градиент, совпадающий с иконкой приложения</string>
+    <string name="theme_preset_dynamic">Динамическая</string>
+    <string name="theme_preset_dynamic_description">Извлекает цвета из обоев вашего устройства</string>
+    <string name="theme_preset_ocean">Океан</string>
+    <string name="theme_preset_ocean_description">Холодные синие тона для ясности и концентрации</string>
+    <string name="theme_preset_forest">Лес</string>
+    <string name="theme_preset_forest_description">Естественные зелёные тона, комфортные для глаз</string>
+    <string name="theme_preset_sunset">Закат</string>
+    <string name="theme_preset_sunset_description">Тёплые оранжево-красные тона для энергии</string>
+    <string name="theme_preset_monochrome">Монохром</string>
+    <string name="theme_preset_monochrome_description">Серые минималистичные оттенки для делового стиля</string>
+    <string name="theme_preset_oled_black">OLED Black</string>
+    <string name="theme_preset_oled_black_description">Настоящий чёрный для OLED-экранов с максимальной экономией батареи</string>
+    <string name="theme_preset_expressive">Экспрессивная</string>
+    <string name="theme_preset_expressive_description">Палитра фиолетовых и лавандовых оттенков с акцентами шалфея и мяты</string>
+
+    <!-- Voice Call Permissions Card -->
+    <string name="voice_call_permissions_title">Разрешения для голосовых вызовов</string>
+    <string name="voice_call_permissions_all_granted">Все разрешения выданы. Входящие голосовые вызовы будут показывать полноэкранный экран звонка.</string>
+    <string name="voice_call_permissions_missing">Некоторые разрешения отсутствуют. Без них голосовые вызовы могут работать некорректно.</string>
+    <string name="voice_call_permissions_microphone">Микрофон</string>
+    <string name="voice_call_permissions_microphone_description">Требуется для захвата звука во время голосовых вызовов.</string>
+    <string name="voice_call_permissions_overlay">Показывать поверх других приложений</string>
+    <string name="voice_call_permissions_overlay_description">Требуется, чтобы показать экран звонка, когда приложение находится в фоне.</string>
+    <string name="voice_call_permissions_full_screen">Полноэкранные уведомления</string>
+    <string name="voice_call_permissions_full_screen_description">Требуется на Android 14 и выше, чтобы запускать экран звонка из уведомления.</string>
+    <string name="voice_call_permissions_open_settings">Открыть настройки</string>
+    <string name="voice_call_permissions_granted">Разрешено</string>
+    <string name="voice_call_permissions_not_granted">Не разрешено</string>
+
+    <!-- Shared Instance Banner Card -->
+    <string name="shared_instance_mode_content_description">Режим экземпляра</string>
+    <string name="shared_instance_offline_title">Общий экземпляр больше недоступен</string>
+    <string name="shared_instance_connected_title">Подключено к общему экземпляру</string>
+    <string name="shared_instance_own_title">Используется собственный экземпляр Columba</string>
+    <string name="shared_instance_offline_message">Общий экземпляр Reticulum, например Sideband, больше недоступен. Columba автоматически перезапустилась со своими сетевыми интерфейсами.</string>
+    <string name="shared_instance_offline_hint">Ваши сообщения продолжат отправляться и приниматься. Если общий экземпляр снова станет доступен, вы сможете переключиться обратно в настройках.</string>
+    <string name="shared_instance_using_shared_message">Другое приложение, например Sideband, управляет сетью Reticulum на этом устройстве. Columba использует это подключение.</string>
+    <string name="shared_instance_using_own_message">Columba использует собственный экземпляр Reticulum. Отключите это, чтобы использовать общий экземпляр, если он доступен.</string>
+    <string name="shared_instance_bullet_network_interfaces">• Сетевыми интерфейсами управляет другое приложение</string>
+    <string name="shared_instance_bullet_privacy">• Ваши личности и сообщения остаются приватными внутри Columba</string>
+    <string name="shared_instance_bullet_ble">• Для BLE-подключений к другим пользователям Columba нужен собственный экземпляр Columba</string>
+    <string name="shared_instance_use_own_instance">Использовать собственный экземпляр Columba</string>
+    <string name="shared_instance_unavailable">Общий экземпляр недоступен</string>
+    <string name="shared_instance_restart_hint">Служба будет перезапущена автоматически</string>
+    <string name="shared_instance_rpc_key_title">RPC-ключ из Sideband Connectivity</string>
+    <string name="shared_instance_rpc_key_placeholder">Вставьте конфиг или ключ...</string>
+    <string name="shared_instance_rpc_key_hint">Вставьте полный конфиг или только hex-ключ</string>
 </resources>

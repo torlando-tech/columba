@@ -16,7 +16,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 @Composable
@@ -27,21 +29,21 @@ fun IdentityCard(
     onManageIdentities: () -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "Identity",
+        title = stringResource(R.string.identity_card_title),
         icon = Icons.Default.Person,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         // Description for "My Identity"
         Text(
-            text = "View and share your identity, edit your display name, and manage QR codes for contact sharing.",
+            text = stringResource(R.string.identity_card_view_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Description for "Identity Management"
         Text(
-            text = "Create and manage multiple identities for different contexts (work, personal, anonymous).",
+            text = stringResource(R.string.identity_card_manage_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -61,7 +63,7 @@ fun IdentityCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("View My Identity")
+            Text(stringResource(R.string.identity_card_view_my_identity))
         }
 
         // Secondary action - Manage Identities
@@ -75,7 +77,7 @@ fun IdentityCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Manage Identities")
+            Text(stringResource(R.string.identity_card_manage_identities))
         }
     }
 }

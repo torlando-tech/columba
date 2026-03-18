@@ -12,7 +12,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 
 @Composable
@@ -22,16 +24,14 @@ fun DataMigrationCard(
     onNavigateToMigration: () -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "Data Migration",
+        title = stringResource(R.string.data_migration_title),
         icon = Icons.Default.ImportExport,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         // Description
         Text(
-            text =
-                "Export your data (identities, messages, contacts) to transfer to " +
-                    "another device or import from a previous backup.",
+            text = stringResource(R.string.data_migration_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -47,7 +47,7 @@ fun DataMigrationCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Export / Import Data")
+            Text(stringResource(R.string.data_migration_action))
         }
     }
 }

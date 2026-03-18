@@ -430,7 +430,12 @@ fun AnnounceDetailScreen(
                 InfoCard(
                     icon = Icons.Default.Router,
                     title = stringResource(R.string.announce_network_distance),
-                    content = if (announceNonNull.hops == 1) stringResource(R.string.announce_hop_singular, announceNonNull.hops) else stringResource(R.string.announce_hop_plural, announceNonNull.hops),
+                    content =
+                        if (announceNonNull.hops == 1) {
+                            stringResource(R.string.announce_hop_singular, announceNonNull.hops)
+                        } else {
+                            stringResource(R.string.announce_hop_plural, announceNonNull.hops)
+                        },
                     subtitle =
                         when {
                             announceNonNull.hops <= 1 -> stringResource(R.string.announce_signal_excellent)

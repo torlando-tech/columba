@@ -567,7 +567,13 @@ internal fun getPrecisionRadiusDisplayText(radiusMeters: Int): String =
         100 -> stringResource(R.string.location_sharing_precision_neighborhood_summary)
         1000 -> stringResource(R.string.location_sharing_precision_city_summary)
         10000 -> stringResource(R.string.location_sharing_precision_region_summary)
-        else -> if (radiusMeters >= 1000) stringResource(R.string.location_sharing_distance_kilometers, radiusMeters / 1000) else stringResource(R.string.location_sharing_distance_meters, radiusMeters)
+        else -> {
+            if (radiusMeters >= 1000) {
+                stringResource(R.string.location_sharing_distance_kilometers, radiusMeters / 1000)
+            } else {
+                stringResource(R.string.location_sharing_distance_meters, radiusMeters)
+            }
+        }
     }
 
 // =============================================================================

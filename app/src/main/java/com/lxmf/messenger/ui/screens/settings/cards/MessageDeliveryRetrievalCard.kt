@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // Composable settings card file with multiple small helpers
+
 package com.lxmf.messenger.ui.screens.settings.cards
 
 import androidx.compose.foundation.background

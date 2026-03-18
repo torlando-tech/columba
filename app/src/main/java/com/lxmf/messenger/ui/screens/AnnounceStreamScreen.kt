@@ -166,7 +166,12 @@ fun AnnounceStreamScreen(
         topBar = {
             SearchableTopAppBar(
                 title = stringResource(R.string.announce_stream_title),
-                subtitle = if (reachableCount == 1) stringResource(R.string.announce_stream_subtitle_singular, reachableCount) else stringResource(R.string.announce_stream_subtitle_plural, reachableCount),
+                subtitle =
+                    if (reachableCount == 1) {
+                        stringResource(R.string.announce_stream_subtitle_singular, reachableCount)
+                    } else {
+                        stringResource(R.string.announce_stream_subtitle_plural, reachableCount)
+                    },
                 isSearching = isSearching,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery.value = it },

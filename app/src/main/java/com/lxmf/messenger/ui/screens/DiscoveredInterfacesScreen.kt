@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // Composable UI file with multiple focused helpers
+
 package com.lxmf.messenger.ui.screens
 
 import android.widget.Toast
@@ -284,13 +286,16 @@ fun DiscoveredInterfacesScreen(
                                         val params =
                                             formatLoraParamsForClipboard(
                                                 iface = iface,
-                                                titleLabel = context.getString(R.string.discovered_interfaces_lora_params_from, iface.name),
-                                                separator = context.getString(R.string.discovered_interfaces_clipboard_separator),
-                                                frequencyLabel = context.getString(R.string.discovered_interfaces_frequency_label),
-                                                bandwidthLabel = context.getString(R.string.discovered_interfaces_bandwidth_label),
-                                                spreadingFactorLabel = context.getString(R.string.discovered_interfaces_spreading_factor_label),
-                                                codingRateLabel = context.getString(R.string.discovered_interfaces_coding_rate_label),
-                                                modulationLabel = context.getString(R.string.discovered_interfaces_modulation_label),
+                                                labels =
+                                                    LoraClipboardLabels(
+                                                        title = context.getString(R.string.discovered_interfaces_lora_params_from, iface.name),
+                                                        separator = context.getString(R.string.discovered_interfaces_clipboard_separator),
+                                                        frequency = context.getString(R.string.discovered_interfaces_frequency_label),
+                                                        bandwidth = context.getString(R.string.discovered_interfaces_bandwidth_label),
+                                                        spreadingFactor = context.getString(R.string.discovered_interfaces_spreading_factor_label),
+                                                        codingRate = context.getString(R.string.discovered_interfaces_coding_rate_label),
+                                                        modulation = context.getString(R.string.discovered_interfaces_modulation_label),
+                                                    ),
                                             )
                                         clipboardManager.setText(AnnotatedString(params))
                                         Toast
@@ -1295,32 +1300,36 @@ internal fun formatLastHeard(
 /**
  * Format LoRa parameters for clipboard.
  */
+internal data class LoraClipboardLabels(
+    val title: String,
+    val separator: String,
+    val frequency: String,
+    val bandwidth: String,
+    val spreadingFactor: String,
+    val codingRate: String,
+    val modulation: String,
+)
+
 internal fun formatLoraParamsForClipboard(
     iface: DiscoveredInterface,
-    titleLabel: String,
-    separator: String,
-    frequencyLabel: String,
-    bandwidthLabel: String,
-    spreadingFactorLabel: String,
-    codingRateLabel: String,
-    modulationLabel: String,
+    labels: LoraClipboardLabels,
 ): String =
     buildString {
-        appendLine(titleLabel)
-        appendLine(separator)
+        appendLine(labels.title)
+        appendLine(labels.separator)
         iface.frequency?.let { freq ->
-            appendLine("$frequencyLabel ${freq / 1_000_000.0} MHz")
+            appendLine("${labels.frequency} ${freq / 1_000_000.0} MHz")
         }
         iface.bandwidth?.let { bw ->
-            appendLine("$bandwidthLabel ${bw / 1000} kHz")
+            appendLine("${labels.bandwidth} ${bw / 1000} kHz")
         }
         iface.spreadingFactor?.let { sf ->
-            appendLine("$spreadingFactorLabel SF$sf")
+            appendLine("${labels.spreadingFactor} SF$sf")
         }
         iface.codingRate?.let { cr ->
-            appendLine("$codingRateLabel 4/$cr")
+            appendLine("${labels.codingRate} 4/$cr")
         }
         iface.modulation?.let { mod ->
-            appendLine("$modulationLabel $mod")
+            appendLine("${labels.modulation} $mod")
         }
     }.trim()

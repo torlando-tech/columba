@@ -40,10 +40,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.util.InterfaceFormattingUtils
 import com.lxmf.messenger.viewmodel.InterfaceStatsViewModel
 import java.util.Locale
@@ -67,10 +69,10 @@ fun InterfaceStatsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.interfaceEntity?.name ?: "Interface Stats") },
+                title = { Text(state.interfaceEntity?.name ?: stringResource(R.string.interface_stats_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.interface_stats_back))
                     }
                 },
                 colors =
@@ -137,7 +139,7 @@ private fun ErrorContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onBack) {
-            Text("Go Back")
+            Text(stringResource(R.string.interface_stats_go_back))
         }
     }
 }
@@ -213,7 +215,7 @@ private fun StatsContent(
             ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Edit Configuration")
+                Text(stringResource(R.string.interface_stats_edit_configuration))
             }
         }
     }
@@ -253,7 +255,7 @@ private fun StatusCard(
             ) {
                 Column {
                     Text(
-                        text = "Status",
+                        text = stringResource(R.string.interface_stats_status),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -263,18 +265,18 @@ private fun StatusCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         StatusBadge(
-                            text = if (isEnabled) "ENABLED" else "DISABLED",
+                            text = if (isEnabled) stringResource(R.string.interface_stats_enabled) else stringResource(R.string.interface_stats_disabled),
                             isPositive = isEnabled,
                         )
                         if (isEnabled) {
                             StatusBadge(
                                 text =
                                     if (isOnline) {
-                                        "ONLINE"
+                                        stringResource(R.string.interface_stats_online)
                                     } else if (isConnecting) {
-                                        "CONNECTING"
+                                        stringResource(R.string.interface_stats_connecting)
                                     } else {
-                                        "OFFLINE"
+                                        stringResource(R.string.interface_stats_offline)
                                     },
                                 isPositive = isOnline,
                                 showSpinner = isConnecting && !isOnline,
@@ -302,14 +304,14 @@ private fun StatusCard(
                                 .padding(12.dp),
                     ) {
                         Text(
-                            text = "USB permission required",
+                            text = stringResource(R.string.interface_stats_usb_permission_required),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Grant permission to connect to the USB device",
+                            text = stringResource(R.string.interface_stats_usb_permission_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                         )
@@ -324,7 +326,7 @@ private fun StatusCard(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Grant USB Permission")
+                            Text(stringResource(R.string.interface_stats_grant_usb_permission))
                         }
                     }
                 }
@@ -390,7 +392,7 @@ private fun ConnectionCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Connection",
+                text = stringResource(R.string.interface_stats_connection),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -400,7 +402,7 @@ private fun ConnectionCard(
             val (icon, typeLabel) = InterfaceFormattingUtils.getConnectionIcon(interfaceType, connectionMode)
             StatsInfoRow(
                 icon = icon,
-                label = "Type",
+                label = stringResource(R.string.interface_stats_type),
                 value = typeLabel,
             )
 
@@ -408,31 +410,31 @@ private fun ConnectionCard(
             when {
                 connectionMode == "tcp" && tcpHost != null -> {
                     StatsInfoRow(
-                        label = "Host",
+                        label = stringResource(R.string.interface_stats_host),
                         value = "$tcpHost:${tcpPort ?: 7633}",
                     )
                 }
                 connectionMode == "usb" && usbDeviceId != null -> {
                     StatsInfoRow(
-                        label = "USB Device",
-                        value = "ID: $usbDeviceId",
+                        label = stringResource(R.string.interface_stats_usb_device),
+                        value = stringResource(R.string.interface_stats_usb_device_id, usbDeviceId),
                     )
                 }
                 targetDeviceName != null && targetDeviceName.isNotBlank() -> {
                     StatsInfoRow(
-                        label = "Device",
+                        label = stringResource(R.string.interface_stats_device),
                         value = targetDeviceName,
                     )
                 }
                 interfaceType == "TCPClient" && tcpHost != null -> {
                     StatsInfoRow(
-                        label = "Server",
+                        label = stringResource(R.string.interface_stats_server),
                         value = "$tcpHost:${tcpPort ?: 4242}",
                     )
                 }
                 interfaceType == "TCPServer" && tcpPort != null -> {
                     StatsInfoRow(
-                        label = "Listen Port",
+                        label = stringResource(R.string.interface_stats_listen_port),
                         value = tcpPort.toString(),
                     )
                 }
@@ -458,29 +460,29 @@ private fun RNodeSettingsCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Radio Settings",
+                text = stringResource(R.string.interface_stats_radio_settings),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             frequency?.let {
-                StatsInfoRow(label = "Frequency", value = InterfaceFormattingUtils.formatFrequency(it))
+                StatsInfoRow(label = stringResource(R.string.interface_stats_frequency), value = InterfaceFormattingUtils.formatFrequency(it))
             }
             bandwidth?.let {
-                StatsInfoRow(label = "Bandwidth", value = InterfaceFormattingUtils.formatBandwidth(it))
+                StatsInfoRow(label = stringResource(R.string.interface_stats_bandwidth), value = InterfaceFormattingUtils.formatBandwidth(it))
             }
             spreadingFactor?.let {
-                StatsInfoRow(label = "Spreading Factor", value = "SF$it")
+                StatsInfoRow(label = stringResource(R.string.interface_stats_spreading_factor), value = stringResource(R.string.interface_stats_spreading_factor_value, it))
             }
             codingRate?.let {
-                StatsInfoRow(label = "Coding Rate", value = "4/$it")
+                StatsInfoRow(label = stringResource(R.string.interface_stats_coding_rate), value = stringResource(R.string.interface_stats_coding_rate_value, it))
             }
             txPower?.let {
-                StatsInfoRow(label = "TX Power", value = "$it dBm")
+                StatsInfoRow(label = stringResource(R.string.interface_stats_tx_power), value = stringResource(R.string.interface_stats_dbm_value, it))
             }
             interfaceMode?.let {
-                StatsInfoRow(label = "Mode", value = it.replaceFirstChar { c -> c.uppercase() })
+                StatsInfoRow(label = stringResource(R.string.interface_stats_mode), value = it.replaceFirstChar { c -> c.uppercase() })
             }
         }
     }
@@ -501,7 +503,7 @@ private fun TrafficStatsCard(
                     .padding(16.dp),
         ) {
             Text(
-                text = "Traffic Statistics",
+                text = stringResource(R.string.interface_stats_traffic_statistics),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -512,11 +514,11 @@ private fun TrafficStatsCard(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 StatBox(
-                    label = "Received",
+                    label = stringResource(R.string.interface_stats_received),
                     value = InterfaceFormattingUtils.formatBytes(rxBytes),
                 )
                 StatBox(
-                    label = "Transmitted",
+                    label = stringResource(R.string.interface_stats_transmitted),
                     value = InterfaceFormattingUtils.formatBytes(txBytes),
                 )
             }
@@ -529,14 +531,14 @@ private fun TrafficStatsCard(
                 ) {
                     rssi?.let {
                         StatBox(
-                            label = "RSSI",
-                            value = "$it dBm",
+                            label = stringResource(R.string.interface_stats_rssi),
+                            value = stringResource(R.string.interface_stats_dbm_value, it),
                         )
                     }
                     snr?.let {
                         StatBox(
-                            label = "SNR",
-                            value = String.format(Locale.US, "%.1f dB", it),
+                            label = stringResource(R.string.interface_stats_snr),
+                            value = String.format(Locale.getDefault(), stringResource(R.string.interface_stats_snr_value), it),
                         )
                     }
                 }

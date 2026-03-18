@@ -51,11 +51,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.NotificationSettingsViewModel
 
 /**
@@ -103,10 +105,10 @@ fun NotificationSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notification Settings") },
+                title = { Text(stringResource(R.string.notification_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.notification_settings_back))
                     }
                 },
                 colors =
@@ -214,11 +216,11 @@ fun MasterNotificationToggleCard(
                 ) {
                     Icon(
                         imageVector = if (enabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
-                        contentDescription = "Notifications",
+                        contentDescription = stringResource(R.string.notification_settings_icon_description),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = "Enable Notifications",
+                        text = stringResource(R.string.notification_settings_enable_notifications),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -226,9 +228,9 @@ fun MasterNotificationToggleCard(
                 Text(
                     text =
                         if (enabled) {
-                            "You will receive notifications based on your preferences below"
+                            stringResource(R.string.notification_settings_enabled_summary)
                         } else {
-                            "All notifications are disabled"
+                            stringResource(R.string.notification_settings_disabled_summary)
                         },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -278,13 +280,13 @@ fun NotificationTypesCard(
         ) {
             // Header
             Text(
-                text = "Notification Types",
+                text = stringResource(R.string.notification_settings_types_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
 
             Text(
-                text = "Select which events you want to be notified about",
+                text = stringResource(R.string.notification_settings_types_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -294,8 +296,8 @@ fun NotificationTypesCard(
             // Individual notification type switches
             NotificationTypeItem(
                 icon = Icons.Default.Mail,
-                title = "Received Message",
-                description = "Notify when you receive a new message",
+                title = stringResource(R.string.notification_settings_received_message),
+                description = stringResource(R.string.notification_settings_received_message_description),
                 enabled = masterEnabled,
                 checked = receivedMessage,
                 onCheckedChange = onReceivedMessageToggle,
@@ -303,8 +305,8 @@ fun NotificationTypesCard(
 
             NotificationTypeItem(
                 icon = Icons.Default.Star,
-                title = "Message from Saved Peer",
-                description = "Notify when you receive a message from a saved peer",
+                title = stringResource(R.string.notification_settings_message_from_saved_peer),
+                description = stringResource(R.string.notification_settings_message_from_saved_peer_description),
                 enabled = masterEnabled,
                 checked = receivedMessageFavorite,
                 onCheckedChange = onReceivedMessageFavoriteToggle,
@@ -312,8 +314,8 @@ fun NotificationTypesCard(
 
             NotificationTypeItem(
                 icon = Icons.Default.Sensors,
-                title = "Heard Announce",
-                description = "Notify when you hear a new announce from a peer",
+                title = stringResource(R.string.notification_settings_heard_announce),
+                description = stringResource(R.string.notification_settings_heard_announce_description),
                 enabled = masterEnabled,
                 checked = heardAnnounce,
                 onCheckedChange = onHeardAnnounceToggle,
@@ -323,8 +325,8 @@ fun NotificationTypesCard(
             if (heardAnnounce) {
                 NotificationTypeItem(
                     icon = Icons.Default.NearMe,
-                    title = "Direct Only",
-                    description = "Only notify for direct (1-hop) announces from nearby peers",
+                    title = stringResource(R.string.notification_settings_direct_only),
+                    description = stringResource(R.string.notification_settings_direct_only_description),
                     enabled = masterEnabled,
                     checked = announceDirectOnly,
                     onCheckedChange = onAnnounceDirectOnlyToggle,
@@ -333,8 +335,8 @@ fun NotificationTypesCard(
 
                 NotificationTypeItem(
                     icon = Icons.Default.WifiOff,
-                    title = "Exclude TCP",
-                    description = "Skip announces received via TCP interfaces",
+                    title = stringResource(R.string.notification_settings_exclude_tcp),
+                    description = stringResource(R.string.notification_settings_exclude_tcp_description),
                     enabled = masterEnabled,
                     checked = announceExcludeTcp,
                     onCheckedChange = onAnnounceExcludeTcpToggle,
@@ -344,8 +346,8 @@ fun NotificationTypesCard(
 
             NotificationTypeItem(
                 icon = Icons.Default.Bluetooth,
-                title = "BLE Peer Connected",
-                description = "Notify when a Bluetooth LE peer connects",
+                title = stringResource(R.string.notification_settings_ble_connected),
+                description = stringResource(R.string.notification_settings_ble_connected_description),
                 enabled = masterEnabled,
                 checked = bleConnected,
                 onCheckedChange = onBleConnectedToggle,
@@ -353,8 +355,8 @@ fun NotificationTypesCard(
 
             NotificationTypeItem(
                 icon = Icons.Default.BluetoothDisabled,
-                title = "BLE Peer Disconnected",
-                description = "Notify when a Bluetooth LE peer disconnects",
+                title = stringResource(R.string.notification_settings_ble_disconnected),
+                description = stringResource(R.string.notification_settings_ble_disconnected_description),
                 enabled = masterEnabled,
                 checked = bleDisconnected,
                 onCheckedChange = onBleDisconnectedToggle,

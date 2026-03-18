@@ -36,9 +36,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 
 /**
  * Screen shown when a USB device is connected that isn't already configured.
@@ -64,11 +66,10 @@ fun UsbDeviceActionScreen(
     if (showDisableConfirmation) {
         AlertDialog(
             onDismissRequest = { showDisableConfirmation = false },
-            title = { Text("Disable Transport Mode?") },
+            title = { Text(stringResource(R.string.usb_device_action_disable_transport_confirm_title)) },
             text = {
                 Text(
-                    "This will clear the saved radio configuration and reset the device. " +
-                        "It will return to normal host-controlled mode.",
+                    stringResource(R.string.usb_device_action_disable_transport_confirm_message),
                 )
             },
             confirmButton = {
@@ -78,12 +79,12 @@ fun UsbDeviceActionScreen(
                         onDisableTransport()
                     },
                 ) {
-                    Text("Disable")
+                        Text(stringResource(R.string.usb_device_action_disable))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDisableConfirmation = false }) {
-                    Text("Cancel")
+                        Text(stringResource(R.string.usb_device_action_cancel))
                 }
             },
         )
@@ -93,14 +94,14 @@ fun UsbDeviceActionScreen(
     if (isDisablingTransport) {
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("Disabling Transport") },
+            title = { Text(stringResource(R.string.usb_device_action_disabling_transport_title)) },
             text = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Text("Clearing configuration and resetting device...")
+                    Text(stringResource(R.string.usb_device_action_disabling_transport_message))
                 }
             },
             confirmButton = {},
@@ -111,19 +112,19 @@ fun UsbDeviceActionScreen(
     if (disableTransportResult != null) {
         AlertDialog(
             onDismissRequest = onDismissDisableResult,
-            title = { Text(if (disableTransportResult) "Transport Disabled" else "Error") },
+            title = { Text(if (disableTransportResult) stringResource(R.string.usb_device_action_transport_disabled_title) else stringResource(R.string.usb_device_action_error_title)) },
             text = {
                 Text(
                     if (disableTransportResult) {
-                        "Transport mode has been disabled. The device will restart in normal mode."
+                        stringResource(R.string.usb_device_action_transport_disabled_message)
                     } else {
-                        "Failed to disable transport mode. Make sure the device is connected and try again."
+                        stringResource(R.string.usb_device_action_transport_disabled_error)
                     },
                 )
             },
             confirmButton = {
                 TextButton(onClick = onDismissDisableResult) {
-                    Text("OK")
+                    Text(stringResource(R.string.usb_device_action_ok))
                 }
             },
         )
@@ -132,12 +133,12 @@ fun UsbDeviceActionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("USB Device Connected") },
+                title = { Text(stringResource(R.string.usb_device_action_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.usb_device_action_back),
                         )
                     }
                 },
@@ -174,7 +175,7 @@ fun UsbDeviceActionScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "What would you like to do?",
+                text = stringResource(R.string.usb_device_action_prompt),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -185,8 +186,8 @@ fun UsbDeviceActionScreen(
             // Flash Firmware option
             ActionCard(
                 icon = Icons.Default.Memory,
-                title = "Flash Firmware",
-                description = "Update or install RNode firmware on this device",
+                title = stringResource(R.string.usb_device_action_flash_firmware_title),
+                description = stringResource(R.string.usb_device_action_flash_firmware_description),
                 onClick = onFlashFirmware,
             )
 
@@ -195,8 +196,8 @@ fun UsbDeviceActionScreen(
             // Configure RNode option
             ActionCard(
                 icon = Icons.Default.Settings,
-                title = "Configure RNode",
-                description = "Set up this device as a Reticulum interface",
+                title = stringResource(R.string.usb_device_action_configure_rnode_title),
+                description = stringResource(R.string.usb_device_action_configure_rnode_description),
                 onClick = onConfigureRNode,
             )
 
@@ -205,8 +206,8 @@ fun UsbDeviceActionScreen(
             // Configure Transport option (standalone TNC config)
             ActionCard(
                 icon = Icons.Default.Router,
-                title = "Configure Transport",
-                description = "Set radio parameters for standalone transport mode",
+                title = stringResource(R.string.usb_device_action_configure_transport_title),
+                description = stringResource(R.string.usb_device_action_configure_transport_description),
                 onClick = onConfigureTransport,
             )
 
@@ -215,8 +216,8 @@ fun UsbDeviceActionScreen(
             // Disable Transport option
             ActionCard(
                 icon = Icons.Default.SettingsInputAntenna,
-                title = "Disable Transport",
-                description = "Clear saved config and return to normal mode",
+                title = stringResource(R.string.usb_device_action_disable_transport_title),
+                description = stringResource(R.string.usb_device_action_disable_transport_description),
                 onClick = { showDisableConfirmation = true },
             )
         }

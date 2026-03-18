@@ -59,11 +59,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.util.getInterfaceInfo
@@ -109,7 +111,7 @@ fun AnnounceDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Node Details",
+                        text = stringResource(R.string.announce_detail_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -118,7 +120,7 @@ fun AnnounceDetailScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -142,7 +144,7 @@ fun AnnounceDetailScreen(
                         ) {
                             Icon(
                                 imageVector = if (isContact) Icons.Default.Star else Icons.Default.StarBorder,
-                                contentDescription = if (isContact) "Remove from saved" else "Save peer",
+                                    contentDescription = if (isContact) stringResource(R.string.announce_remove_from_saved) else stringResource(R.string.announce_save_peer),
                                 tint =
                                     if (isContact) {
                                         MaterialTheme.colorScheme.primary
@@ -177,12 +179,12 @@ fun AnnounceDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Text(
-                        text = "Node not found",
+                        text = stringResource(R.string.announce_node_not_found),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(onClick = onBackClick) {
-                        Text("Go Back")
+                        Text(stringResource(R.string.announce_go_back))
                     }
                 }
             }
@@ -249,7 +251,7 @@ fun AnnounceDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Start Chat",
+                            text = stringResource(R.string.announce_start_chat),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -287,7 +289,7 @@ fun AnnounceDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isCurrentRelay) "Current Relay" else "Set as My Relay",
+                            text = if (isCurrentRelay) stringResource(R.string.announce_current_relay) else stringResource(R.string.announce_set_as_my_relay),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -319,7 +321,7 @@ fun AnnounceDetailScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "View messaging destination",
+                                        text = stringResource(R.string.announce_view_messaging_destination),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
@@ -348,7 +350,7 @@ fun AnnounceDetailScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "View telephony destination",
+                                        text = stringResource(R.string.announce_view_telephony_destination),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
@@ -381,7 +383,7 @@ fun AnnounceDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Browse Node",
+                            text = stringResource(R.string.announce_browse_node),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -409,7 +411,7 @@ fun AnnounceDetailScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Block",
+                        text = stringResource(R.string.announce_block),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -417,7 +419,7 @@ fun AnnounceDetailScreen(
                 // Information cards
                 InfoCard(
                     icon = Icons.Default.Fingerprint,
-                    title = "Destination Hash",
+                    title = stringResource(R.string.announce_destination_hash),
                     content = announceNonNull.destinationHash,
                     isMonospace = true,
                     onLongClick = {
@@ -427,13 +429,13 @@ fun AnnounceDetailScreen(
 
                 InfoCard(
                     icon = Icons.Default.Router,
-                    title = "Network Distance",
-                    content = "${announceNonNull.hops} ${if (announceNonNull.hops == 1) "hop" else "hops"}",
+                    title = stringResource(R.string.announce_network_distance),
+                    content = if (announceNonNull.hops == 1) stringResource(R.string.announce_hop_singular, announceNonNull.hops) else stringResource(R.string.announce_hop_plural, announceNonNull.hops),
                     subtitle =
                         when {
-                            announceNonNull.hops <= 1 -> "Excellent signal strength"
-                            announceNonNull.hops <= 3 -> "Good signal strength"
-                            else -> "Weak signal strength"
+                            announceNonNull.hops <= 1 -> stringResource(R.string.announce_signal_excellent)
+                            announceNonNull.hops <= 3 -> stringResource(R.string.announce_signal_good)
+                            else -> stringResource(R.string.announce_signal_weak)
                         },
                 )
 
@@ -442,9 +444,9 @@ fun AnnounceDetailScreen(
                 if (announceNonNull.nodeType == "PROPAGATION_NODE" && transferLimit != null) {
                     InfoCard(
                         icon = Icons.Default.Storage,
-                        title = "Transfer Size Limit",
+                        title = stringResource(R.string.announce_transfer_size_limit),
                         content = formatSizeLimit(transferLimit),
-                        subtitle = "Maximum message size accepted by this relay",
+                        subtitle = stringResource(R.string.announce_transfer_size_limit_subtitle),
                     )
                 }
 
@@ -456,7 +458,7 @@ fun AnnounceDetailScreen(
                     val interfaceInfo = getInterfaceInfo(interfaceName)
                     InfoCard(
                         icon = interfaceInfo.icon,
-                        title = "Received Via",
+                        title = stringResource(R.string.announce_received_via),
                         content = interfaceInfo.text,
                         subtitle = interfaceInfo.subtitle,
                     )
@@ -465,23 +467,23 @@ fun AnnounceDetailScreen(
                 // Show aspect information
                 InfoCard(
                     icon = Icons.Default.Label,
-                    title = "Destination Aspect",
-                    content = announceNonNull.aspect ?: "unknown",
+                    title = stringResource(R.string.announce_destination_aspect),
+                    content = announceNonNull.aspect ?: stringResource(R.string.announce_unknown),
                     subtitle =
                         when (announceNonNull.aspect) {
-                            "lxmf.delivery" -> "LXMF messaging peer"
-                            "lxst.telephony" -> "LXST telephony destination"
-                            "lxmf.propagation" -> "Message relay/propagation node"
-                            "nomadnetwork.node" -> "NomadNet content node"
-                            null -> "No aspect information available"
-                            else -> "Unknown service type"
+                            "lxmf.delivery" -> stringResource(R.string.announce_aspect_lxmf_delivery)
+                            "lxst.telephony" -> stringResource(R.string.announce_aspect_lxst_telephony)
+                            "lxmf.propagation" -> stringResource(R.string.announce_aspect_lxmf_propagation)
+                            "nomadnetwork.node" -> stringResource(R.string.announce_aspect_nomadnet)
+                            null -> stringResource(R.string.announce_aspect_none)
+                            else -> stringResource(R.string.announce_aspect_unknown)
                         },
                     isMonospace = true,
                 )
 
                 InfoCard(
                     icon = Icons.Default.AccessTime,
-                    title = "Last Seen",
+                    title = stringResource(R.string.announce_last_seen),
                     content = formatTimeSince(announceNonNull.lastSeenTimestamp),
                     subtitle = formatFullTimestamp(announceNonNull.lastSeenTimestamp),
                 )
@@ -489,20 +491,20 @@ fun AnnounceDetailScreen(
                 // Display stamp cost for propagation nodes (with flexibility)
                 if (announceNonNull.nodeType == "PROPAGATION_NODE") {
                     announceNonNull.stampCost?.let { cost ->
-                        val flexText = announceNonNull.stampCostFlexibility?.let { " (\u00B1$it)" }.orEmpty()
+                        val flexText = announceNonNull.stampCostFlexibility?.let { stringResource(R.string.announce_stamp_cost_flexibility, it) }.orEmpty()
                         InfoCard(
                             icon = Icons.Default.Lock,
-                            title = "Stamp Cost",
+                            title = stringResource(R.string.announce_stamp_cost),
                             content = "$cost$flexText",
-                            subtitle = "Required proof-of-work difficulty",
+                            subtitle = stringResource(R.string.announce_stamp_cost_subtitle),
                         )
                     }
                     announceNonNull.peeringCost?.let { cost ->
                         InfoCard(
                             icon = Icons.Default.Share,
-                            title = "Peering Cost",
+                            title = stringResource(R.string.announce_peering_cost),
                             content = cost.toString(),
-                            subtitle = "Cost for node peering",
+                            subtitle = stringResource(R.string.announce_peering_cost_subtitle),
                         )
                     }
                 } else {
@@ -510,9 +512,9 @@ fun AnnounceDetailScreen(
                     announceNonNull.stampCost?.let { cost ->
                         InfoCard(
                             icon = Icons.Default.Lock,
-                            title = "Stamp Cost",
+                            title = stringResource(R.string.announce_stamp_cost),
                             content = cost.toString(),
-                            subtitle = "Required proof-of-work difficulty",
+                            subtitle = stringResource(R.string.announce_stamp_cost_subtitle),
                         )
                     }
                 }
@@ -523,7 +525,7 @@ fun AnnounceDetailScreen(
     // Show remove confirmation dialog
     if (showRemoveDialog) {
         RemoveContactConfirmationDialog(
-            contactName = announce?.peerName ?: "this contact",
+            contactName = announce?.peerName ?: stringResource(R.string.announce_this_contact),
             onConfirm = {
                 viewModel.toggleContact(destinationHash)
                 showRemoveDialog = false
@@ -537,7 +539,7 @@ fun AnnounceDetailScreen(
     // Block user dialog
     if (showBlockDialog) {
         BlockUserDialog(
-            peerName = announce?.peerName ?: "this peer",
+            peerName = announce?.peerName ?: stringResource(R.string.announce_this_peer),
             isTransportEnabled = isTransportEnabled,
             onConfirm = { deleteMessages, blackholeEnabled ->
                 val ann = announce
@@ -559,7 +561,7 @@ fun AnnounceDetailScreen(
     // Show unset relay confirmation dialog
     if (showUnsetRelayDialog) {
         UnsetRelayConfirmationDialog(
-            relayName = announce?.peerName ?: "this relay",
+            relayName = announce?.peerName ?: stringResource(R.string.announce_this_relay),
             onAutoSelect = {
                 viewModel.unsetRelayAndDelete(destinationHash, autoSelectNew = true)
                 showUnsetRelayDialog = false
@@ -591,10 +593,10 @@ private fun RemoveContactConfirmationDialog(
             )
         },
         title = {
-            Text("Remove Contact?")
+            Text(stringResource(R.string.announce_remove_contact_title))
         },
         text = {
-            Text("Remove $contactName from your contacts? You can re-add them later from the Announce Stream.")
+            Text(stringResource(R.string.announce_remove_contact_message, contactName))
         },
         confirmButton = {
             Button(
@@ -604,12 +606,12 @@ private fun RemoveContactConfirmationDialog(
                         containerColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Remove")
+                Text(stringResource(R.string.announce_remove))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -632,10 +634,10 @@ private fun UnsetRelayConfirmationDialog(
             )
         },
         title = {
-            Text("Unset as Your Relay?")
+            Text(stringResource(R.string.announce_unset_relay_title))
         },
         text = {
-            Text("\"$relayName\" will be removed from contacts.")
+            Text(stringResource(R.string.announce_unset_relay_message, relayName))
         },
         confirmButton = {
             Column(
@@ -643,13 +645,13 @@ private fun UnsetRelayConfirmationDialog(
                 horizontalAlignment = Alignment.End,
             ) {
                 TextButton(onClick = onAutoSelect) {
-                    Text("Remove & Auto-Select New")
+                    Text(stringResource(R.string.announce_remove_and_auto_select_new))
                 }
                 TextButton(onClick = onRemoveOnly) {
-                    Text("Remove Only")
+                    Text(stringResource(R.string.announce_remove_only))
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         },
@@ -745,7 +747,7 @@ private fun InfoCard(
 
 private fun formatFullTimestamp(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    val format = java.text.SimpleDateFormat("MMM dd, yyyy 'at' HH:mm:ss", java.util.Locale.getDefault())
+    val format = java.text.SimpleDateFormat("MMM dd, yyyy HH:mm:ss", java.util.Locale.getDefault())
     return format.format(date)
 }
 

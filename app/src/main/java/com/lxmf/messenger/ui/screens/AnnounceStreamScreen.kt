@@ -62,10 +62,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.R
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
@@ -151,25 +153,25 @@ fun AnnounceStreamScreen(
     // Show toast for announce success/error
     LaunchedEffect(announceSuccess) {
         if (announceSuccess) {
-            Toast.makeText(context, "Announce sent!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.announce_sent), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(announceError) {
         announceError?.let { error ->
-            Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.announce_error_with_message, error), Toast.LENGTH_LONG).show()
         }
     }
 
     Scaffold(
         topBar = {
             SearchableTopAppBar(
-                title = "Discovered Nodes",
-                subtitle = "$reachableCount nodes in range (active paths)",
+                title = stringResource(R.string.announce_stream_title),
+                subtitle = if (reachableCount == 1) stringResource(R.string.announce_stream_subtitle_singular, reachableCount) else stringResource(R.string.announce_stream_subtitle_plural, reachableCount),
                 isSearching = isSearching,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { viewModel.searchQuery.value = it },
                 onSearchToggle = { isSearching = !isSearching },
-                searchPlaceholder = "Search by name or hash...",
+                searchPlaceholder = stringResource(R.string.announce_search_placeholder),
                 additionalActions = {
                     // Announce button
                     IconButton(
@@ -185,7 +187,7 @@ fun AnnounceStreamScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Campaign,
-                                contentDescription = "Announce now",
+                                contentDescription = stringResource(R.string.announce_now),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -194,7 +196,7 @@ fun AnnounceStreamScreen(
                     IconButton(onClick = { showFilterDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter node types",
+                            contentDescription = stringResource(R.string.announce_filter_node_types),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
@@ -203,7 +205,7 @@ fun AnnounceStreamScreen(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.announce_more_options),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -221,7 +223,7 @@ fun AnnounceStreamScreen(
                                 },
                                 text = {
                                     Text(
-                                        text = "Clear All Announces",
+                                        text = stringResource(R.string.announce_clear_all_announces),
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 },
@@ -336,7 +338,7 @@ fun AnnounceStreamScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Scroll to top",
+                                contentDescription = stringResource(R.string.announce_scroll_to_top),
                             )
                             Text(
                                 text = "$newAnnouncesCount",
@@ -413,7 +415,7 @@ fun NodeTypeFilterDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Filter Announces",
+                text = stringResource(R.string.announce_filter_announces),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -424,7 +426,7 @@ fun NodeTypeFilterDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Node Types",
+                    text = stringResource(R.string.announce_node_types),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -434,9 +436,9 @@ fun NodeTypeFilterDialog(
                 NodeType.entries.filter { it != NodeType.PHONE }.forEach { nodeType ->
                     val (displayName, description) =
                         when (nodeType) {
-                            NodeType.NODE -> "Node" to "Nomadnet nodes"
-                            NodeType.PEER -> "Peer" to "Nodes you can message with"
-                            NodeType.PROPAGATION_NODE -> "Relay" to "Relay/repeater nodes for signal propagation"
+                            NodeType.NODE -> stringResource(R.string.announce_type_node) to stringResource(R.string.announce_type_node_description)
+                            NodeType.PEER -> stringResource(R.string.announce_type_peer) to stringResource(R.string.announce_type_peer_description)
+                            NodeType.PROPAGATION_NODE -> stringResource(R.string.announce_type_relay) to stringResource(R.string.announce_type_relay_description)
                             NodeType.PHONE -> error("PHONE filtered above")
                         }
 
@@ -511,13 +513,13 @@ fun NodeTypeFilterDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Audio",
+                            text = stringResource(R.string.announce_audio),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "Show audio call announces",
+                            text = stringResource(R.string.announce_audio_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -530,14 +532,14 @@ fun NodeTypeFilterDialog(
 
                 // Interface type filter section
                 Text(
-                    text = "Interface",
+                    text = stringResource(R.string.announce_interface),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 Text(
-                    text = "Filter by receiving interface (none selected = show all):",
+                    text = stringResource(R.string.announce_interface_filter_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -547,11 +549,11 @@ fun NodeTypeFilterDialog(
                 // Filterable interface types (exclude UNKNOWN for cleaner UX)
                 val interfaceTypes =
                     listOf(
-                        InterfaceType.AUTO_INTERFACE to ("Local" to "AutoInterface (IPv6 link-local)"),
-                        InterfaceType.TCP_CLIENT to ("TCP" to "TCP connections (backbone links)"),
-                        InterfaceType.ANDROID_BLE to ("Bluetooth" to "Bluetooth Low Energy"),
-                        InterfaceType.RNODE to ("RNode" to "RNode radio interface"),
-                        InterfaceType.UNKNOWN to ("Other" to "Unknown or unrecognized interfaces"),
+                        InterfaceType.AUTO_INTERFACE to (stringResource(R.string.announce_interface_local) to stringResource(R.string.announce_interface_local_description)),
+                        InterfaceType.TCP_CLIENT to (stringResource(R.string.announce_interface_tcp) to stringResource(R.string.announce_interface_tcp_description)),
+                        InterfaceType.ANDROID_BLE to (stringResource(R.string.rnode_bluetooth) to stringResource(R.string.announce_interface_bluetooth_description)),
+                        InterfaceType.RNODE to (stringResource(R.string.announce_interface_rnode) to stringResource(R.string.announce_interface_rnode_description)),
+                        InterfaceType.UNKNOWN to (stringResource(R.string.announce_interface_other) to stringResource(R.string.announce_interface_other_description)),
                     )
 
                 interfaceTypes.forEach { (interfaceType, nameDesc) ->
@@ -610,12 +612,12 @@ fun NodeTypeFilterDialog(
             TextButton(
                 onClick = { onConfirm(tempSelection, tempShowAudio, tempInterfaceSelection) },
             ) {
-                Text("Apply")
+                Text(stringResource(R.string.announce_apply))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -673,7 +675,7 @@ fun PeerContextMenu(
                 )
             },
             text = {
-                Text(if (announce.isFavorite) "Remove from Saved" else "Save Peer")
+                Text(if (announce.isFavorite) stringResource(R.string.announce_remove_from_saved_title) else stringResource(R.string.announce_save_peer_title))
             },
             onClick = {
                 onToggleFavorite()
@@ -693,7 +695,7 @@ fun PeerContextMenu(
                     )
                 },
                 text = {
-                    Text("Start Chat")
+                    Text(stringResource(R.string.announce_start_chat))
                 },
                 onClick = {
                     onStartChat()
@@ -711,7 +713,7 @@ fun PeerContextMenu(
                 )
             },
             text = {
-                Text("View Details")
+                Text(stringResource(R.string.announce_view_details))
             },
             onClick = {
                 onViewDetails()
@@ -732,7 +734,7 @@ fun PeerContextMenu(
             },
             text = {
                 Text(
-                    text = "Delete",
+                    text = stringResource(R.string.announce_delete),
                     color = MaterialTheme.colorScheme.error,
                 )
             },
@@ -917,7 +919,7 @@ fun LoadingNetworkState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Loading network...",
+            text = stringResource(R.string.announce_loading_network),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -939,13 +941,13 @@ fun EmptyAnnounceState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No nodes discovered yet",
+            text = stringResource(R.string.announce_no_nodes_discovered),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Listening for announces...",
+            text = stringResource(R.string.announce_listening_for_announces),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
@@ -975,10 +977,10 @@ fun DeleteAnnounceDialog(
             )
         },
         title = {
-            Text("Delete Announce?")
+            Text(stringResource(R.string.announce_delete_title))
         },
         text = {
-            Text("Remove $peerName from the list? They will reappear when they announce again.")
+            Text(stringResource(R.string.announce_delete_message, peerName))
         },
         confirmButton = {
             TextButton(
@@ -988,12 +990,12 @@ fun DeleteAnnounceDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Delete")
+                Text(stringResource(R.string.announce_delete))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -1014,10 +1016,10 @@ fun ClearAllAnnouncesDialog(
             )
         },
         title = {
-            Text("Clear All Announces?")
+            Text(stringResource(R.string.announce_clear_all_title))
         },
         text = {
-            Text("This will remove all discovered nodes from the list, except those saved in My Contacts. Nodes will reappear when they announce again.")
+            Text(stringResource(R.string.announce_clear_all_message))
         },
         confirmButton = {
             TextButton(
@@ -1027,12 +1029,12 @@ fun ClearAllAnnouncesDialog(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
             ) {
-                Text("Clear All")
+                Text(stringResource(R.string.announce_clear_all))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )

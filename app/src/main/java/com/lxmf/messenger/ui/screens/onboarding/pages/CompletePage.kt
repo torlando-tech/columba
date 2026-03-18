@@ -35,9 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.screens.onboarding.OnboardingInterfaceType
 import com.lxmf.messenger.ui.screens.settings.dialogs.IdentityQrCodeDialog
 
@@ -84,7 +86,7 @@ fun CompletePage(
 
         // Title
         Text(
-            text = "You're all set!",
+            text = stringResource(R.string.onboarding_complete_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -110,7 +112,7 @@ fun CompletePage(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "Summary",
+                    text = stringResource(R.string.onboarding_summary),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -121,29 +123,29 @@ fun CompletePage(
                 )
 
                 SummaryRow(
-                    label = "Identity",
-                    value = displayName.ifEmpty { "Anonymous Peer" },
+                    label = stringResource(R.string.onboarding_identity_label),
+                    value = displayName.ifEmpty { stringResource(R.string.onboarding_anonymous_peer) },
                 )
 
                 SummaryRow(
-                    label = "Networks",
+                    label = stringResource(R.string.onboarding_networks_label),
                     value =
                         if (selectedInterfaces.isEmpty()) {
-                            "None selected"
+                            stringResource(R.string.onboarding_none_selected)
                         } else {
                             selectedInterfaces.joinToString(", ") { it.displayName }
                         },
                 )
 
                 SummaryRow(
-                    label = "Notifications",
-                    value = if (notificationsEnabled) "Enabled" else "Disabled",
+                    label = stringResource(R.string.onboarding_notifications_label),
+                    value = if (notificationsEnabled) stringResource(R.string.onboarding_enabled) else stringResource(R.string.onboarding_disabled),
                     isEnabled = notificationsEnabled,
                 )
 
                 SummaryRow(
-                    label = "Battery",
-                    value = if (batteryOptimizationExempt) "Unrestricted" else "Restricted",
+                    label = stringResource(R.string.onboarding_battery_label),
+                    value = if (batteryOptimizationExempt) stringResource(R.string.onboarding_unrestricted) else stringResource(R.string.onboarding_restricted),
                     isEnabled = batteryOptimizationExempt,
                 )
             }
@@ -164,14 +166,14 @@ fun CompletePage(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Show QR Code")
+            Text(stringResource(R.string.onboarding_show_qr_code))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         // QR code hint
         Text(
-            text = "Share your identity QR code to let others add you as a contact.",
+            text = stringResource(R.string.onboarding_qr_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -197,7 +199,7 @@ fun CompletePage(
                 )
             } else {
                 Text(
-                    text = if (hasLoRaSelected) "Configure LoRa Radio" else "Start Messaging",
+                    text = if (hasLoRaSelected) stringResource(R.string.onboarding_configure_lora) else stringResource(R.string.onboarding_start_messaging),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -209,20 +211,21 @@ fun CompletePage(
     // QR Code Dialog
     if (showQrDialog && qrCodeData != null) {
         IdentityQrCodeDialog(
-            displayName = displayName.ifEmpty { "Anonymous Peer" },
+            displayName = displayName.ifEmpty { stringResource(R.string.onboarding_anonymous_peer) },
             identityHash = identityHash,
             destinationHash = destinationHash,
             qrCodeData = qrCodeData,
             onDismiss = { showQrDialog = false },
             onShareClick = {
-                val shareText = "Add me on Reticulum:\n\n${displayName.ifEmpty { "Anonymous Peer" }}\n$qrCodeData"
+                val resolvedDisplayName = displayName.ifEmpty { context.getString(R.string.onboarding_anonymous_peer) }
+                val shareText = context.getString(R.string.onboarding_share_identity_text, resolvedDisplayName, qrCodeData)
                 val sendIntent =
                     Intent().apply {
                         action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, shareText)
                         type = "text/plain"
                     }
-                context.startActivity(Intent.createChooser(sendIntent, "Share identity"))
+                context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.onboarding_share_identity)))
             },
         )
     }

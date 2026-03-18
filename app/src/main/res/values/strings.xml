@@ -19,4 +19,165 @@
     <string name="offline_banner_reconnecting">Reconnecting\u2026</string>
     <string name="offline_banner_reconnect">Reconnect</string>
     <string name="offline_banner_reconnecting_description">Reconnecting in progress</string>
+
+    <!-- Common actions -->
+    <string name="action_back">Back</string>
+    <string name="action_next">Next</string>
+    <string name="action_save">Save</string>
+    <string name="action_update">Update</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_submit">Submit</string>
+    <string name="action_grant">Grant</string>
+    <string name="action_pair">Pair</string>
+    <string name="action_scan_again">Scan Again</string>
+    <string name="action_rescan_usb_devices">Rescan USB Devices</string>
+    <string name="action_test_connection">Test Connection</string>
+    <string name="action_expand">Expand</string>
+    <string name="action_collapse">Collapse</string>
+
+    <!-- Common statuses -->
+    <string name="status_selected">Selected</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_failed">Failed</string>
+    <string name="status_paired">Paired</string>
+    <string name="status_permitted">Permitted</string>
+
+    <!-- Common dialogs -->
+    <string name="dialog_error_title">Error</string>
+
+    <!-- RNode wizard -->
+    <string name="rnode_wizard_title_configure_transport">Configure Transport</string>
+    <string name="rnode_wizard_title_change_device">Change RNode Device</string>
+    <string name="rnode_wizard_title_select_device">Select RNode Device</string>
+    <string name="rnode_wizard_title_choose_region">Choose Region</string>
+    <string name="rnode_wizard_title_select_modem_preset">Select Modem Preset</string>
+    <string name="rnode_wizard_title_select_frequency_slot">Select Frequency Slot</string>
+    <string name="rnode_wizard_title_review_transport_config">Review Transport Config</string>
+    <string name="rnode_wizard_title_review_settings">Review Settings</string>
+    <string name="rnode_wizard_enable_transport">Enable Transport</string>
+    <string name="rnode_transport_configuration_failed">Transport Configuration Failed</string>
+    <string name="rnode_recommended">Recommended</string>
+    <string name="rnode_default_label">Default</string>
+
+    <!-- RNode device discovery -->
+    <string name="rnode_connection_method">Connection Method</string>
+    <string name="rnode_connection_type">Connection Type</string>
+    <string name="rnode_bluetooth">Bluetooth</string>
+    <string name="rnode_wifi_tcp">WiFi / TCP</string>
+    <string name="rnode_usb">USB</string>
+    <string name="rnode_bluetooth_classic">Bluetooth Classic</string>
+    <string name="rnode_bluetooth_le">Bluetooth LE</string>
+    <string name="rnode_tcp_connection_description">Connect to an RNode device over WiFi/TCP (port 7633).</string>
+    <string name="rnode_ip_address_or_hostname">IP Address or Hostname</string>
+    <string name="rnode_ip_address_placeholder">e.g., 10.0.0.1 or rnode.local</string>
+    <string name="rnode_success">Success</string>
+    <string name="rnode_tcp_connection_help">The RNode must be connected to the same network and have WiFi/TCP enabled. Default port is 7633.</string>
+    <string name="rnode_scanning_for_devices">Scanning for RNode devices\u2026</string>
+    <string name="rnode_pairing">Pairing\u2026</string>
+    <string name="rnode_enter_pin_display">Enter the PIN code shown on your RNode display</string>
+    <string name="rnode_waiting_reconnect">Waiting for RNode to reconnect\u2026</string>
+    <string name="rnode_looking_for_device">Looking for: %1$s</string>
+    <string name="rnode_current_device">Current Device</string>
+    <string name="rnode_select_different_device">Or select a different device:</string>
+    <string name="rnode_enter_device_manually">Enter device manually</string>
+    <string name="rnode_device_not_listed">If your device isn\'t listed</string>
+    <string name="rnode_pairing_trouble">Having trouble pairing?</string>
+    <string name="rnode_pair_via_usb">Pair via USB</string>
+    <string name="rnode_pair_via_usb_description">Connect RNode via USB to securely configure Bluetooth pairing</string>
+    <string name="rnode_bluetooth_device_name">Bluetooth Device Name</string>
+    <string name="rnode_bluetooth_device_name_placeholder">e.g., RNode 1234</string>
+    <string name="rnode_bluetooth_type_help">ESP32-S3 and nRF52840 devices support BLE. ESP32 (original) devices support Bluetooth Classic.</string>
+    <string name="rnode_cancel_manual_entry">Cancel manual entry</string>
+    <string name="rnode_unknown_type">Unknown type</string>
+    <string name="rnode_classic">Classic</string>
+    <string name="rnode_ble">BLE</string>
+    <string name="rnode_unknown">Unknown</string>
+    <string name="rnode_select_connection_type">Select connection type:</string>
+    <string name="rnode_auto_detect_type_help">Power on device and rescan to auto-detect type.</string>
+    <string name="rnode_usb_connection_description">Connect RNode via USB cable. Supports FTDI, CP210x, CH340, and CDC-ACM devices.</string>
+    <string name="rnode_scanning_usb_devices">Scanning for USB devices\u2026</string>
+    <string name="rnode_enter_bluetooth_pairing_mode">Enter Bluetooth Pairing Mode</string>
+    <string name="rnode_pair_phone_bluetooth">Pair RNode with your phone via Bluetooth</string>
+    <string name="rnode_bluetooth_pairing_mode">Bluetooth Pairing Mode</string>
+    <string name="rnode_pin_code_label">PIN Code:</string>
+    <string name="rnode_scanning_for_pairing">Scanning for RNodes to pair\u2026</string>
+    <string name="rnode_enter_six_digit_pin">Enter the 6-digit PIN shown on your RNode\'s display:</string>
+    <string name="rnode_pin_code">PIN Code</string>
+    <string name="rnode_waiting_for_pin">Waiting for PIN from RNode\u2026</string>
+    <string name="rnode_exit_pairing_mode">Exit Pairing Mode</string>
+
+    <!-- RNode region selection -->
+    <string name="rnode_region_selection_title">Select Frequency Region</string>
+    <string name="rnode_region_selection_description">Choose your region to set the correct frequency band and power limits.</string>
+    <string name="rnode_custom_settings_title">Custom Settings</string>
+    <string name="rnode_custom_settings_description">Configure all parameters manually</string>
+    <string name="rnode_search_countries">Search countries</string>
+    <string name="rnode_back_to_countries">Back to countries</string>
+    <string name="rnode_popular_local_presets">Popular Local Presets</string>
+
+    <!-- RNode modem preset -->
+    <string name="rnode_modem_preset_description">Choose a preset that matches your range and speed needs. These are compatible with Meshtastic naming conventions.</string>
+
+    <!-- RNode frequency slot -->
+    <string name="rnode_frequency_slot_description">Choose a frequency slot within the %1$s band. Avoid Meshtastic frequencies to prevent interference.</string>
+    <string name="rnode_meshtastic_interference_title">Meshtastic Interference</string>
+    <string name="rnode_meshtastic_interference_description">Slot %1$d overlaps with Meshtastic. Choose a different slot to avoid interference.</string>
+    <string name="rnode_frequency_spectrum">Frequency Spectrum</string>
+    <string name="rnode_slot_number_title">Slot Number</string>
+    <string name="rnode_popular_frequencies_title">Popular RNode Frequencies</string>
+    <string name="rnode_popular_frequencies_description">Community-tested configurations for your region</string>
+    <string name="rnode_meshtastic_frequencies_title">Meshtastic Frequencies (Avoid)</string>
+    <string name="rnode_meshtastic_frequencies_description">These frequencies are used by Meshtastic networks</string>
+    <string name="rnode_slot_number_format">Slot %1$d</string>
+    <string name="rnode_community_preset_frequency">Community preset frequency</string>
+    <string name="rnode_available_slots_count">of %1$d available slots</string>
+    <string name="rnode_meshtastic_label">Meshtastic</string>
+    <string name="rnode_decrease_slot">Decrease slot</string>
+    <string name="rnode_increase_slot">Increase slot</string>
+    <string name="rnode_single_frequency_slot_message">Only one frequency slot available for this region/preset combination</string>
+
+    <!-- RNode review -->
+    <string name="rnode_connection">Connection</string>
+    <string name="rnode_usb_device">USB Device</string>
+    <string name="rnode_device">Device</string>
+    <string name="rnode_interface_name">Interface Name</string>
+    <string name="rnode_frequency_region">Frequency Region</string>
+    <string name="rnode_duty_cycle_limit">Duty Cycle Limit: %1$d%%</string>
+    <string name="rnode_duty_cycle_strict_description">This region has very strict limits. Airtime limits (%1$d%%) applied automatically in Advanced Settings.</string>
+    <string name="rnode_duty_cycle_description">This region requires limiting transmission time. Airtime limits (%1$d%%) applied automatically in Advanced Settings.</string>
+    <string name="rnode_modem_preset_summary">SF%1$d • %2$d kHz • 4/%3$d</string>
+    <string name="rnode_popular_preset">Popular Preset</string>
+    <string name="rnode_preset_location">%1$s - %2$s</string>
+    <string name="rnode_advanced_settings">Advanced Settings</string>
+    <string name="rnode_radio_settings">Radio Settings</string>
+    <string name="rnode_frequency_hz">Frequency (Hz)</string>
+    <string name="rnode_bandwidth_hz">Bandwidth (Hz)</string>
+    <string name="rnode_sf">SF</string>
+    <string name="rnode_cr">CR</string>
+    <string name="rnode_tx_dbm">TX (dBm)</string>
+    <string name="rnode_max_tx_power">Max: %1$d dBm</string>
+    <string name="rnode_airtime_limits">Airtime Limits</string>
+    <string name="rnode_optional">Optional</string>
+    <string name="rnode_max_percent">Max: %1$d%%</string>
+    <string name="rnode_short_term_percent">Short-term (%)</string>
+    <string name="rnode_long_term_percent">Long-term (%)</string>
+    <string name="rnode_regional_duty_cycle_limit">Regional duty cycle limit: %1$d%%. Values above this are not allowed.</string>
+    <string name="rnode_duty_cycle_help">Limits duty cycle to prevent overuse. Leave empty for no limit.</string>
+    <string name="rnode_display_logo">Display Logo on RNode</string>
+    <string name="rnode_display_logo_description">Show Columba logo on RNode\'s display when connected</string>
+    <string name="rnode_interface_mode">Interface Mode</string>
+    <string name="rnode_interface_mode_full_short">Full</string>
+    <string name="rnode_interface_mode_full">Full (all features enabled)</string>
+    <string name="rnode_interface_mode_gateway">Gateway (path discovery for others)</string>
+    <string name="rnode_interface_mode_access_point">Access Point (quiet unless active)</string>
+    <string name="rnode_interface_mode_roaming">Roaming (mobile relative to others)</string>
+    <string name="rnode_interface_mode_boundary">Boundary (network edge)</string>
+    <string name="rnode_interface_mode_full_description">Default mode with all interface features enabled.</string>
+    <string name="rnode_interface_mode_gateway_description">Enables path discovery for other devices on the network.</string>
+    <string name="rnode_interface_mode_access_point_description">Stays quiet unless a client is actively connected.</string>
+    <string name="rnode_interface_mode_roaming_description">For mobile devices moving relative to the network.</string>
+    <string name="rnode_interface_mode_boundary_description">For devices at the edge of the network.</string>
 </resources>

@@ -23,7 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.ui.components.WizardBottomBar
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 import com.lxmf.messenger.viewmodel.WizardStep
@@ -123,15 +125,19 @@ fun RNodeWizardScreen(
                         when (state.currentStep) {
                             WizardStep.DEVICE_DISCOVERY ->
                                 when {
-                                    state.transportMode -> "Configure Transport"
-                                    state.isEditMode -> "Change RNode Device"
-                                    else -> "Select RNode Device"
+                                    state.transportMode -> stringResource(R.string.rnode_wizard_title_configure_transport)
+                                    state.isEditMode -> stringResource(R.string.rnode_wizard_title_change_device)
+                                    else -> stringResource(R.string.rnode_wizard_title_select_device)
                                 }
-                            WizardStep.REGION_SELECTION -> "Choose Region"
-                            WizardStep.MODEM_PRESET -> "Select Modem Preset"
-                            WizardStep.FREQUENCY_SLOT -> "Select Frequency Slot"
+                            WizardStep.REGION_SELECTION -> stringResource(R.string.rnode_wizard_title_choose_region)
+                            WizardStep.MODEM_PRESET -> stringResource(R.string.rnode_wizard_title_select_modem_preset)
+                            WizardStep.FREQUENCY_SLOT -> stringResource(R.string.rnode_wizard_title_select_frequency_slot)
                             WizardStep.REVIEW_CONFIGURE ->
-                                if (state.transportMode) "Review Transport Config" else "Review Settings"
+                                if (state.transportMode) {
+                                    stringResource(R.string.rnode_wizard_title_review_transport_config)
+                                } else {
+                                    stringResource(R.string.rnode_wizard_title_review_settings)
+                                }
                         },
                     )
                 },
@@ -147,7 +153,7 @@ fun RNodeWizardScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -161,11 +167,11 @@ fun RNodeWizardScreen(
                     when (state.currentStep) {
                         WizardStep.REVIEW_CONFIGURE ->
                             when {
-                                state.transportMode -> "Enable Transport"
-                                state.isEditMode -> "Update"
-                                else -> "Save"
+                                state.transportMode -> stringResource(R.string.rnode_wizard_enable_transport)
+                                state.isEditMode -> stringResource(R.string.action_update)
+                                else -> stringResource(R.string.action_save)
                             }
-                        else -> "Next"
+                        else -> stringResource(R.string.action_next)
                     },
                 canProceed = viewModel.canProceed(),
                 isSaving = state.isSaving || state.transportConfiguring,
@@ -213,11 +219,11 @@ fun RNodeWizardScreen(
     state.saveError?.let { error ->
         AlertDialog(
             onDismissRequest = { viewModel.clearSaveError() },
-            title = { Text("Error") },
+            title = { Text(stringResource(R.string.dialog_error_title)) },
             text = { Text(error) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearSaveError() }) {
-                    Text("OK")
+                    Text(stringResource(R.string.action_ok))
                 }
             },
         )
@@ -227,11 +233,11 @@ fun RNodeWizardScreen(
     state.transportConfigError?.let { error ->
         AlertDialog(
             onDismissRequest = { viewModel.clearTransportConfigError() },
-            title = { Text("Transport Configuration Failed") },
+            title = { Text(stringResource(R.string.rnode_transport_configuration_failed)) },
             text = { Text(error) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearTransportConfigError() }) {
-                    Text("OK")
+                    Text(stringResource(R.string.action_ok))
                 }
             },
         )

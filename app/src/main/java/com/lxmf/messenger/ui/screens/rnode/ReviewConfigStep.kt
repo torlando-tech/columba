@@ -46,8 +46,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.data.model.FrequencySlotCalculator
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
@@ -91,9 +93,9 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 Column {
                     Text(
                         when {
-                            isTcpMode -> "Connection"
-                            isUsbMode -> "USB Device"
-                            else -> "Device"
+                            isTcpMode -> stringResource(R.string.rnode_connection)
+                            isUsbMode -> stringResource(R.string.rnode_usb_device)
+                            else -> stringResource(R.string.rnode_device)
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
@@ -119,7 +121,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
             OutlinedTextField(
                 value = state.interfaceName,
                 onValueChange = { viewModel.updateInterfaceName(it) },
-                label = { Text("Interface Name") },
+                label = { Text(stringResource(R.string.rnode_interface_name)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = state.nameError != null,
@@ -149,7 +151,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Frequency Region",
+                                stringResource(R.string.rnode_frequency_region),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -188,17 +190,15 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    "Duty Cycle Limit: ${region.dutyCycle}%",
+                                    stringResource(R.string.rnode_duty_cycle_limit, region.dutyCycle),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                 )
                                 Text(
                                     if (region.dutyCycle <= 1) {
-                                        "This region has very strict limits. Airtime limits " +
-                                            "(${region.dutyCycle}%) applied automatically in Advanced Settings."
+                                        stringResource(R.string.rnode_duty_cycle_strict_description, region.dutyCycle)
                                     } else {
-                                        "This region requires limiting transmission time. Airtime limits " +
-                                            "(${region.dutyCycle}%) applied automatically in Advanced Settings."
+                                        stringResource(R.string.rnode_duty_cycle_description, region.dutyCycle)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -231,7 +231,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Modem Preset",
+                                stringResource(R.string.rnode_wizard_title_select_modem_preset),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -240,7 +240,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                "SF${preset.spreadingFactor} • ${preset.bandwidth / 1000} kHz • 4/${preset.codingRate}",
+                                stringResource(
+                                    R.string.rnode_modem_preset_summary,
+                                    preset.spreadingFactor,
+                                    preset.bandwidth / 1000,
+                                    preset.codingRate,
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -268,12 +273,12 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Frequency Slot",
+                                stringResource(R.string.rnode_wizard_title_select_frequency_slot),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                "Slot ${state.selectedSlot}",
+                                stringResource(R.string.rnode_slot_number_format, state.selectedSlot),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
@@ -305,12 +310,16 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            "Popular Preset",
+                            stringResource(R.string.rnode_popular_preset),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "${preset.countryName} - ${preset.cityOrRegion ?: "Default"}",
+                            stringResource(
+                                R.string.rnode_preset_location,
+                                preset.countryName,
+                                preset.cityOrRegion ?: stringResource(R.string.rnode_default_label),
+                            ),
                             style = MaterialTheme.typography.titleMedium,
                         )
                     }
@@ -331,7 +340,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 contentDescription = null,
             )
             Spacer(Modifier.width(8.dp))
-            Text("Advanced Settings")
+            Text(stringResource(R.string.rnode_advanced_settings))
         }
 
         // Region limits for validation hints
@@ -343,7 +352,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
                 // Radio settings header
                 Text(
-                    "Radio Settings",
+                    stringResource(R.string.rnode_radio_settings),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -359,7 +368,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     OutlinedTextField(
                         value = state.frequency,
                         onValueChange = { viewModel.updateFrequency(it) },
-                        label = { Text("Frequency (Hz)") },
+                        label = { Text(stringResource(R.string.rnode_frequency_hz)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -384,7 +393,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     OutlinedTextField(
                         value = state.bandwidth,
                         onValueChange = { viewModel.updateBandwidth(it) },
-                        label = { Text("Bandwidth (Hz)") },
+                        label = { Text(stringResource(R.string.rnode_bandwidth_hz)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -404,7 +413,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     OutlinedTextField(
                         value = state.spreadingFactor,
                         onValueChange = { viewModel.updateSpreadingFactor(it) },
-                        label = { Text("SF") },
+                        label = { Text(stringResource(R.string.rnode_sf)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -415,7 +424,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     OutlinedTextField(
                         value = state.codingRate,
                         onValueChange = { viewModel.updateCodingRate(it) },
-                        label = { Text("CR") },
+                        label = { Text(stringResource(R.string.rnode_cr)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -426,14 +435,14 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     OutlinedTextField(
                         value = state.txPower,
                         onValueChange = { viewModel.updateTxPower(it) },
-                        label = { Text("TX (dBm)") },
+                        label = { Text(stringResource(R.string.rnode_tx_dbm)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = state.txPowerError != null,
                         supportingText = {
                             Text(
-                                state.txPowerError ?: "Max: $maxTxPower dBm",
+                                state.txPowerError ?: stringResource(R.string.rnode_max_tx_power, maxTxPower),
                                 color =
                                     if (state.txPowerError != null) {
                                         MaterialTheme.colorScheme.error
@@ -452,14 +461,14 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
                     // Airtime limits
                     Text(
-                        "Airtime Limits",
+                        stringResource(R.string.rnode_airtime_limits),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(4.dp))
 
                     val maxAirtime = regionLimits?.dutyCycle?.takeIf { it < 100 }
-                    val airtimePlaceholder = maxAirtime?.let { "Max: $it%" } ?: "Optional"
+                    val airtimePlaceholder = maxAirtime?.let { stringResource(R.string.rnode_max_percent, it) } ?: stringResource(R.string.rnode_optional)
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -467,7 +476,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         OutlinedTextField(
                             value = state.stAlock,
                             onValueChange = { viewModel.updateStAlock(it) },
-                            label = { Text("Short-term (%)") },
+                            label = { Text(stringResource(R.string.rnode_short_term_percent)) },
                             placeholder = { Text(airtimePlaceholder) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
@@ -478,7 +487,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         OutlinedTextField(
                             value = state.ltAlock,
                             onValueChange = { viewModel.updateLtAlock(it) },
-                            label = { Text("Long-term (%)") },
+                            label = { Text(stringResource(R.string.rnode_long_term_percent)) },
                             placeholder = { Text(airtimePlaceholder) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
@@ -492,9 +501,9 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
                     Text(
                         if (maxAirtime != null) {
-                            "Regional duty cycle limit: $maxAirtime%. Values above this are not allowed."
+                            stringResource(R.string.rnode_regional_duty_cycle_limit, maxAirtime)
                         } else {
-                            "Limits duty cycle to prevent overuse. Leave empty for no limit."
+                            stringResource(R.string.rnode_duty_cycle_help)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color =
@@ -523,11 +532,11 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Display Logo on RNode",
+                                stringResource(R.string.rnode_display_logo),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
-                                "Show Columba logo on RNode's display when connected",
+                                stringResource(R.string.rnode_display_logo_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -557,18 +566,18 @@ private fun InterfaceModeSelector(
 
     val modes =
         listOf(
-            "full" to "Full (all features enabled)",
-            "gateway" to "Gateway (path discovery for others)",
-            "access_point" to "Access Point (quiet unless active)",
-            "roaming" to "Roaming (mobile relative to others)",
-            "boundary" to "Boundary (network edge)",
+            "full" to stringResource(R.string.rnode_interface_mode_full),
+            "gateway" to stringResource(R.string.rnode_interface_mode_gateway),
+            "access_point" to stringResource(R.string.rnode_interface_mode_access_point),
+            "roaming" to stringResource(R.string.rnode_interface_mode_roaming),
+            "boundary" to stringResource(R.string.rnode_interface_mode_boundary),
         )
 
-    val selectedLabel = modes.find { it.first == selectedMode }?.second ?: "Full"
+    val selectedLabel = modes.find { it.first == selectedMode }?.second ?: stringResource(R.string.rnode_interface_mode_full_short)
 
     Column {
         Text(
-            "Interface Mode",
+            stringResource(R.string.rnode_interface_mode),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -609,11 +618,11 @@ private fun InterfaceModeSelector(
 
         Text(
             when (selectedMode) {
-                "full" -> "Default mode with all interface features enabled."
-                "gateway" -> "Enables path discovery for other devices on the network."
-                "access_point" -> "Stays quiet unless a client is actively connected."
-                "roaming" -> "For mobile devices moving relative to the network."
-                "boundary" -> "For devices at the edge of the network."
+                "full" -> stringResource(R.string.rnode_interface_mode_full_description)
+                "gateway" -> stringResource(R.string.rnode_interface_mode_gateway_description)
+                "access_point" -> stringResource(R.string.rnode_interface_mode_access_point_description)
+                "roaming" -> stringResource(R.string.rnode_interface_mode_roaming_description)
+                "boundary" -> stringResource(R.string.rnode_interface_mode_boundary_description)
                 else -> ""
             },
             style = MaterialTheme.typography.bodySmall,

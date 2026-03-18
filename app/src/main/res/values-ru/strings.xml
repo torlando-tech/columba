@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Columba</string>
+
+    <!-- Incoming call screen -->
+    <string name="incoming_voice_call">Входящий голосовой вызов</string>
+    <string name="call_answer">Ответить</string>
+    <string name="call_decline">Отклонить</string>
+    <string name="call_answer_content_description">Ответить на звонок</string>
+    <string name="call_decline_content_description">Отклонить звонок</string>
+    <string name="error_no_file_manager">На этом устройстве не найден файловый менеджер</string>
+
+    <!-- Locate on Map -->
+    <string name="locate_on_map">Показать на карте</string>
+
+    <!-- Offline mode banner -->
+    <string name="offline_banner_shutdown">Columba не в сети</string>
+    <string name="offline_banner_error">Ошибка соединения</string>
+    <string name="offline_banner_reconnecting">Переподключение…</string>
+    <string name="offline_banner_reconnect">Переподключиться</string>
+    <string name="offline_banner_reconnecting_description">Выполняется переподключение</string>
+
+    <!-- Common actions -->
+    <string name="action_back">Назад</string>
+    <string name="action_next">Далее</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_update">Обновить</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_retry">Повторить</string>
+    <string name="action_dismiss">Закрыть</string>
+    <string name="action_submit">Отправить</string>
+    <string name="action_grant">Разрешить</string>
+    <string name="action_pair">Сопрячь</string>
+    <string name="action_scan_again">Сканировать снова</string>
+    <string name="action_rescan_usb_devices">Повторно сканировать USB-устройства</string>
+    <string name="action_test_connection">Проверить подключение</string>
+    <string name="action_expand">Развернуть</string>
+    <string name="action_collapse">Свернуть</string>
+
+    <!-- Common statuses -->
+    <string name="status_selected">Выбрано</string>
+    <string name="status_connected">Подключено</string>
+    <string name="status_failed">Ошибка</string>
+    <string name="status_paired">Сопряжено</string>
+    <string name="status_permitted">Разрешено</string>
+
+    <!-- Common dialogs -->
+    <string name="dialog_error_title">Ошибка</string>
+
+    <!-- RNode wizard -->
+    <string name="rnode_wizard_title_configure_transport">Настроить транспорт</string>
+    <string name="rnode_wizard_title_change_device">Сменить устройство RNode</string>
+    <string name="rnode_wizard_title_select_device">Выбрать устройство RNode</string>
+    <string name="rnode_wizard_title_choose_region">Выбрать регион</string>
+    <string name="rnode_wizard_title_select_modem_preset">Выбрать пресет модема</string>
+    <string name="rnode_wizard_title_select_frequency_slot">Выбрать частотный слот</string>
+    <string name="rnode_wizard_title_review_transport_config">Проверить настройки транспорта</string>
+    <string name="rnode_wizard_title_review_settings">Проверить настройки</string>
+    <string name="rnode_wizard_enable_transport">Включить транспорт</string>
+    <string name="rnode_transport_configuration_failed">Не удалось настроить транспорт</string>
+    <string name="rnode_recommended">Рекомендуется</string>
+    <string name="rnode_default_label">По умолчанию</string>
+
+    <!-- RNode device discovery -->
+    <string name="rnode_connection_method">Способ подключения</string>
+    <string name="rnode_connection_type">Тип подключения</string>
+    <string name="rnode_bluetooth">Bluetooth</string>
+    <string name="rnode_wifi_tcp">WiFi / TCP</string>
+    <string name="rnode_usb">USB</string>
+    <string name="rnode_bluetooth_classic">Bluetooth Classic</string>
+    <string name="rnode_bluetooth_le">Bluetooth LE</string>
+    <string name="rnode_tcp_connection_description">Подключитесь к устройству RNode по WiFi/TCP (порт 7633).</string>
+    <string name="rnode_ip_address_or_hostname">IP-адрес или имя хоста</string>
+    <string name="rnode_ip_address_placeholder">например, 10.0.0.1 или rnode.local</string>
+    <string name="rnode_success">Успешно</string>
+    <string name="rnode_tcp_connection_help">RNode должен быть подключен к той же сети, и на нём должен быть включён WiFi/TCP. Порт по умолчанию: 7633.</string>
+    <string name="rnode_scanning_for_devices">Поиск устройств RNode…</string>
+    <string name="rnode_pairing">Сопряжение…</string>
+    <string name="rnode_enter_pin_display">Введите PIN-код, показанный на экране RNode</string>
+    <string name="rnode_waiting_reconnect">Ожидание повторного подключения RNode…</string>
+    <string name="rnode_looking_for_device">Поиск: %1$s</string>
+    <string name="rnode_current_device">Текущее устройство</string>
+    <string name="rnode_select_different_device">Или выберите другое устройство:</string>
+    <string name="rnode_enter_device_manually">Ввести устройство вручную</string>
+    <string name="rnode_device_not_listed">Если устройства нет в списке</string>
+    <string name="rnode_pairing_trouble">Не удаётся выполнить сопряжение?</string>
+    <string name="rnode_pair_via_usb">Сопрячь через USB</string>
+    <string name="rnode_pair_via_usb_description">Подключите RNode по USB, чтобы безопасно настроить Bluetooth-сопряжение</string>
+    <string name="rnode_bluetooth_device_name">Имя Bluetooth-устройства</string>
+    <string name="rnode_bluetooth_device_name_placeholder">например, RNode 1234</string>
+    <string name="rnode_bluetooth_type_help">Устройства ESP32-S3 и nRF52840 поддерживают BLE. Устройства ESP32 (original) поддерживают Bluetooth Classic.</string>
+    <string name="rnode_cancel_manual_entry">Отменить ручной ввод</string>
+    <string name="rnode_unknown_type">Неизвестный тип</string>
+    <string name="rnode_classic">Classic</string>
+    <string name="rnode_ble">BLE</string>
+    <string name="rnode_unknown">Неизвестно</string>
+    <string name="rnode_select_connection_type">Выберите тип подключения:</string>
+    <string name="rnode_auto_detect_type_help">Включите устройство и повторите сканирование для автоопределения типа.</string>
+    <string name="rnode_usb_connection_description">Подключите RNode по USB-кабелю. Поддерживаются устройства FTDI, CP210x, CH340 и CDC-ACM.</string>
+    <string name="rnode_scanning_usb_devices">Поиск USB-устройств…</string>
+    <string name="rnode_enter_bluetooth_pairing_mode">Включить режим Bluetooth-сопряжения</string>
+    <string name="rnode_pair_phone_bluetooth">Сопрягите RNode с телефоном по Bluetooth</string>
+    <string name="rnode_bluetooth_pairing_mode">Режим Bluetooth-сопряжения</string>
+    <string name="rnode_pin_code_label">PIN-код:</string>
+    <string name="rnode_scanning_for_pairing">Поиск RNode для сопряжения…</string>
+    <string name="rnode_enter_six_digit_pin">Введите 6-значный PIN-код, показанный на экране RNode:</string>
+    <string name="rnode_pin_code">PIN-код</string>
+    <string name="rnode_waiting_for_pin">Ожидание PIN-кода от RNode…</string>
+    <string name="rnode_exit_pairing_mode">Выйти из режима сопряжения</string>
+
+    <!-- RNode region selection -->
+    <string name="rnode_region_selection_title">Выбрать частотный регион</string>
+    <string name="rnode_region_selection_description">Выберите регион, чтобы установить корректный частотный диапазон и ограничения мощности.</string>
+    <string name="rnode_custom_settings_title">Пользовательские настройки</string>
+    <string name="rnode_custom_settings_description">Настроить все параметры вручную</string>
+    <string name="rnode_search_countries">Поиск стран</string>
+    <string name="rnode_back_to_countries">Назад к странам</string>
+    <string name="rnode_popular_local_presets">Популярные локальные пресеты</string>
+
+    <!-- RNode modem preset -->
+    <string name="rnode_modem_preset_description">Выберите пресет, который соответствует вашим требованиям к дальности и скорости. Он совместим с соглашениями именования Meshtastic.</string>
+
+    <!-- RNode frequency slot -->
+    <string name="rnode_frequency_slot_description">Выберите частотный слот в диапазоне %1$s. Избегайте частот Meshtastic, чтобы не создавать помех.</string>
+    <string name="rnode_meshtastic_interference_title">Помехи с Meshtastic</string>
+    <string name="rnode_meshtastic_interference_description">Слот %1$d пересекается с Meshtastic. Выберите другой слот, чтобы избежать помех.</string>
+    <string name="rnode_frequency_spectrum">Частотный спектр</string>
+    <string name="rnode_slot_number_title">Номер слота</string>
+    <string name="rnode_popular_frequencies_title">Популярные частоты RNode</string>
+    <string name="rnode_popular_frequencies_description">Проверенные сообществом конфигурации для вашего региона</string>
+    <string name="rnode_meshtastic_frequencies_title">Частоты Meshtastic (избегать)</string>
+    <string name="rnode_meshtastic_frequencies_description">Эти частоты используются сетями Meshtastic</string>
+    <string name="rnode_slot_number_format">Слот %1$d</string>
+    <string name="rnode_community_preset_frequency">Частота пресета сообщества</string>
+    <string name="rnode_available_slots_count">из %1$d доступных слотов</string>
+    <string name="rnode_meshtastic_label">Meshtastic</string>
+    <string name="rnode_decrease_slot">Уменьшить слот</string>
+    <string name="rnode_increase_slot">Увеличить слот</string>
+    <string name="rnode_single_frequency_slot_message">Для этой комбинации региона и пресета доступен только один частотный слот</string>
+
+    <!-- RNode review -->
+    <string name="rnode_connection">Подключение</string>
+    <string name="rnode_usb_device">USB-устройство</string>
+    <string name="rnode_device">Устройство</string>
+    <string name="rnode_interface_name">Имя интерфейса</string>
+    <string name="rnode_frequency_region">Частотный регион</string>
+    <string name="rnode_duty_cycle_limit">Предел duty cycle: %1$d%%</string>
+    <string name="rnode_duty_cycle_strict_description">Для этого региона действуют очень строгие ограничения. Ограничения эфирного времени (%1$d%%) автоматически применяются в расширенных настройках.</string>
+    <string name="rnode_duty_cycle_description">Для этого региона требуется ограничивать время передачи. Ограничения эфирного времени (%1$d%%) автоматически применяются в расширенных настройках.</string>
+    <string name="rnode_modem_preset_summary">SF%1$d • %2$d кГц • 4/%3$d</string>
+    <string name="rnode_popular_preset">Популярный пресет</string>
+    <string name="rnode_preset_location">%1$s - %2$s</string>
+    <string name="rnode_advanced_settings">Расширенные настройки</string>
+    <string name="rnode_radio_settings">Настройки радио</string>
+    <string name="rnode_frequency_hz">Частота (Гц)</string>
+    <string name="rnode_bandwidth_hz">Полоса (Гц)</string>
+    <string name="rnode_sf">SF</string>
+    <string name="rnode_cr">CR</string>
+    <string name="rnode_tx_dbm">TX (дБм)</string>
+    <string name="rnode_max_tx_power">Макс.: %1$d дБм</string>
+    <string name="rnode_airtime_limits">Ограничения эфирного времени</string>
+    <string name="rnode_optional">Необязательно</string>
+    <string name="rnode_max_percent">Макс.: %1$d%%</string>
+    <string name="rnode_short_term_percent">Краткосрочный (%)</string>
+    <string name="rnode_long_term_percent">Долгосрочный (%)</string>
+    <string name="rnode_regional_duty_cycle_limit">Региональный предел duty cycle: %1$d%%. Значения выше недопустимы.</string>
+    <string name="rnode_duty_cycle_help">Ограничивает duty cycle, чтобы предотвратить чрезмерное использование. Оставьте пустым, если ограничение не нужно.</string>
+    <string name="rnode_display_logo">Показывать логотип на RNode</string>
+    <string name="rnode_display_logo_description">Показывать логотип Columba на дисплее RNode при подключении</string>
+    <string name="rnode_interface_mode">Режим интерфейса</string>
+    <string name="rnode_interface_mode_full_short">Полный</string>
+    <string name="rnode_interface_mode_full">Полный (все функции включены)</string>
+    <string name="rnode_interface_mode_gateway">Шлюз (поиск путей для других)</string>
+    <string name="rnode_interface_mode_access_point">Точка доступа (тихий режим без активности)</string>
+    <string name="rnode_interface_mode_roaming">Роуминг (мобильное устройство относительно других)</string>
+    <string name="rnode_interface_mode_boundary">Граница (край сети)</string>
+    <string name="rnode_interface_mode_full_description">Режим по умолчанию со всеми функциями интерфейса.</string>
+    <string name="rnode_interface_mode_gateway_description">Включает поиск путей для других устройств в сети.</string>
+    <string name="rnode_interface_mode_access_point_description">Остаётся тихим, пока клиент активно не подключён.</string>
+    <string name="rnode_interface_mode_roaming_description">Для мобильных устройств, перемещающихся относительно сети.</string>
+    <string name="rnode_interface_mode_boundary_description">Для устройств на границе сети.</string>
+</resources>

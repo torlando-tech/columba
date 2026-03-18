@@ -29,8 +29,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 import com.lxmf.messenger.data.model.ModemPreset
 import com.lxmf.messenger.viewmodel.RNodeWizardViewModel
 
@@ -53,16 +55,14 @@ fun ModemPresetStep(viewModel: RNodeWizardViewModel) {
     ) {
         // Header
         Text(
-            text = "Select Modem Preset",
+            text = stringResource(R.string.rnode_wizard_title_select_modem_preset),
             style = MaterialTheme.typography.headlineSmall,
         )
 
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text =
-                "Choose a preset that matches your range and speed needs. " +
-                    "These are compatible with Meshtastic naming conventions.",
+            text = stringResource(R.string.rnode_modem_preset_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -148,7 +148,7 @@ private fun ModemPresetCard(
                             onClick = {},
                             label = {
                                 Text(
-                                    text = "Recommended",
+                                    text = stringResource(R.string.rnode_recommended),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             },
@@ -182,7 +182,7 @@ private fun ModemPresetCard(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.status_selected),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

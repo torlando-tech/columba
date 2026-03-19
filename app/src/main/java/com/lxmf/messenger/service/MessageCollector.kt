@@ -164,6 +164,12 @@ class MessageCollector
                                 notificationHelper.cancelNotification(
                                     NotificationHelper.NOTIFICATION_ID_SOS + (sourceHash.hashCode() and 0x7FFFFFFF),
                                 )
+                                notificationHelper.notifyMessageReceived(
+                                    destinationHash = sourceHash,
+                                    peerName = peerName,
+                                    messagePreview = receivedMessage.content.take(100),
+                                    isFavorite = isFavorite,
+                                )
                                 Log.d(TAG, "Cleared SOS active and notification for ${sourceHash.take(16)} (already-persisted)")
                             } else if (isSosMessageByField(receivedMessage.content, fieldsJson)) {
                                 SosActiveTracker.addSender(sourceHash)
@@ -343,6 +349,12 @@ class MessageCollector
                                     SosActiveTracker.removeSender(sourceHash)
                                     notificationHelper.cancelNotification(
                                         NotificationHelper.NOTIFICATION_ID_SOS + (sourceHash.hashCode() and 0x7FFFFFFF),
+                                    )
+                                    notificationHelper.notifyMessageReceived(
+                                        destinationHash = sourceHash,
+                                        peerName = peerName,
+                                        messagePreview = receivedMessage.content.take(100),
+                                        isFavorite = isFavorite,
                                     )
                                     Log.d(TAG, "Cleared SOS active and notification for ${sourceHash.take(16)}")
                                 } else if (isSosMessageByField(receivedMessage.content, newFieldsJson)) {

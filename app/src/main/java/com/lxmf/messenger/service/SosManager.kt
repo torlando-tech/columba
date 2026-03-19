@@ -436,7 +436,8 @@ class SosManager
                     Log.d(TAG, "SOS audio recording for ${durationSeconds}s")
                     delay(durationSeconds * 1_000L)
 
-                    val audioBytes = withContext(Dispatchers.Main) { audioRecorder.stopAndGetBytes() }
+                    withContext(Dispatchers.Main) { audioRecorder.stopRecorder() }
+                    val audioBytes = withContext(Dispatchers.IO) { audioRecorder.readAndDeleteOutputFile() }
                     if (audioBytes == null) {
                         Log.w(TAG, "Audio recording returned no data")
                         return@launch
@@ -482,15 +483,13 @@ class SosManager
         ): String? {
             if (location == null) return null // Don't emit telemetry without a real position (avoids Null Island 0,0)
             return JSONObject().apply {
-                if (location != null) {
-                    put("lat", location.latitude)
-                    put("lng", location.longitude)
-                    put("acc", location.accuracy.toDouble())
-                    put("ts", System.currentTimeMillis())
-                    if (location.hasAltitude()) put("altitude", location.altitude)
-                    if (location.hasSpeed()) put("speed", location.speed.toDouble())
-                    if (location.hasBearing()) put("bearing", location.bearing.toDouble())
-                }
+                put("lat", location.latitude)
+                put("lng", location.longitude)
+                put("acc", location.accuracy.toDouble())
+                put("ts", System.currentTimeMillis())
+                if (location.hasAltitude()) put("altitude", location.altitude)
+                if (location.hasSpeed()) put("speed", location.speed.toDouble())
+                if (location.hasBearing()) put("bearing", location.bearing.toDouble())
                 if (batteryLevel != null) {
                     put("battery_percent", batteryLevel)
                     put("battery_charging", isBatteryCharging())

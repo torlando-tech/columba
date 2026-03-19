@@ -99,28 +99,34 @@ class SosAudioRecorder
          *
          * @return audio data as ByteArray, or null on error.
          */
-        fun stopAndGetBytes(): ByteArray? =
+        /** Stop the recorder (must be called on main thread for MediaRecorder). */
+        fun stopRecorder() {
             synchronized(lock) {
-                val mr = recorder ?: return null
-
                 try {
-                    mr.stop()
-                    mr.release()
-                    recorder = null
-
-                    val file = outputFile ?: return null
-                    val bytes = file.readBytes()
-                    file.delete()
-                    outputFile = null
-
-                    Log.d(TAG, "Audio recording stopped: ${bytes.size} bytes")
-                    bytes
+                    recorder?.stop()
+                    recorder?.release()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to stop audio recording", e)
-                    cleanup()
-                    null
+                    Log.e(TAG, "Failed to stop recorder", e)
                 }
+                recorder = null
             }
+        }
+
+        /** Read and delete the output file (safe to call from IO thread). */
+        fun readAndDeleteOutputFile(): ByteArray? {
+            val file = outputFile ?: return null
+            return try {
+                val bytes = file.readBytes()
+                file.delete()
+                outputFile = null
+                Log.d(TAG, "Audio recording stopped: ${bytes.size} bytes")
+                bytes
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read audio file", e)
+                outputFile = null
+                null
+            }
+        }
 
         /**
          * Cancel recording without returning data.

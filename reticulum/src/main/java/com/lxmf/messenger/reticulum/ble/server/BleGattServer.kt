@@ -768,12 +768,18 @@ class BleGattServer(
                     }
 
                     // Send response if needed
+                    // Note: We pass 0 for offset instead of the callback-provided offset value.
+                    // On some older Android devices (e.g. Redmi Note 5A, Android 7.1.2), the BLE
+                    // stack can deliver a null-boxed Integer for offset through Parcel IPC, causing
+                    // a NullPointerException inside BluetoothGattServer.sendResponse(). Since offset
+                    // is always 0 for non-prepared characteristic writes, hardcoding 0 is safe and
+                    // avoids the crash.
                     if (responseNeeded) {
                         gattServer?.sendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
-                            offset,
+                            0,
                             value,
                         )
                     }
@@ -822,7 +828,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
-                            offset,
+                            0,
                             null,
                         )
                     }
@@ -830,6 +836,8 @@ class BleGattServer(
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission denied in handleCharacteristicWriteRequest", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in handleCharacteristicWriteRequest for ${device.address}", e)
         }
     }
 

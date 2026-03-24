@@ -406,12 +406,17 @@ class InterfaceManagementViewModel
          * Show the edit interface dialog.
          */
         fun showEditDialog(interfaceEntity: InterfaceEntity) {
-            _configState.value = entityToConfigState(interfaceEntity)
-            _state.value =
-                _state.value.copy(
-                    showAddDialog = true,
-                    editingInterface = interfaceEntity,
-                )
+            try {
+                _configState.value = entityToConfigState(interfaceEntity)
+                _state.value =
+                    _state.value.copy(
+                        showAddDialog = true,
+                        editingInterface = interfaceEntity,
+                    )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load interface config for '${interfaceEntity.name}': ${e.message}", e)
+                showError("Failed to load interface: ${e.message}")
+            }
         }
 
         /**

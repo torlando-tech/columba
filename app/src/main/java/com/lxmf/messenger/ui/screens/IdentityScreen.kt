@@ -220,7 +220,7 @@ fun IdentityScreen(
         }
     }
 
-    // (restart banner is shown inline in the LazyColumn above)
+    // (restart banner is shown inline in the Column above)
 }
 
 @Composable

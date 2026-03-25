@@ -13,7 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.lxmf.messenger.R
 
 /**
  * Non-modal inline banner shown while restarting the Reticulum service.
@@ -37,7 +39,7 @@ fun ServiceRestartBanner(modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
             )
             Text(
-                text = "Restarting Reticulum service...",
+                text = stringResource(R.string.service_restart_banner),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
             )

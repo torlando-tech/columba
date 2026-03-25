@@ -590,14 +590,6 @@ class DebugViewModel
         }
 
         /**
-         * Dismiss the restart dialog without stopping the background coroutine.
-         * The restart will either complete or hit the 60s timeout on its own.
-         */
-        fun cancelRestart() {
-            _isRestarting.value = false
-        }
-
-        /**
          * Find the database ID for an interface by its name.
          * Used to navigate to the interface stats screen from the network status page.
          *

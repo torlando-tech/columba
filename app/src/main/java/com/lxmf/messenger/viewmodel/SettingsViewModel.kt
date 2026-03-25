@@ -941,14 +941,6 @@ class SettingsViewModel
         }
 
         /**
-         * Dismiss the restart dialog without stopping the background coroutine.
-         * The restart will either complete or hit the 60s timeout on its own.
-         */
-        fun cancelRestart() {
-            _state.value = _state.value.copy(isRestarting = false)
-        }
-
-        /**
          * Restart service after shared instance went offline.
          * Called automatically when we detect shared instance is no longer available.
          * After restart, Python will detect no shared instance and use Columba's own interfaces.

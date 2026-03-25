@@ -64,6 +64,7 @@ fun AudioMessagePlayer(
             file.writeBytes(audioBytes)
             tempFile = file
             val mp = MediaPlayer()
+            var assigned = false
             try {
                 mp.setDataSource(file.absolutePath)
                 mp.prepare()
@@ -74,10 +75,14 @@ fun AudioMessagePlayer(
                         progress = 0f
                     }
                     player = mp
+                    assigned = true
                 }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Coroutine cancelled — release handled in finally
             } catch (e: Exception) {
                 Log.e("AudioMessagePlayer", "Failed to prepare player", e)
-                mp.release()
+            } finally {
+                if (!assigned) mp.release()
             }
         }
     }

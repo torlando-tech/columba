@@ -483,7 +483,7 @@ class DiscoveredInterfacesScreenTest {
         }
 
         composeTestRule.onNodeWithText("Restarting...").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Restarting Reticulum service...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Restarting Reticulum service\u2026").assertIsDisplayed()
     }
 
     @Test

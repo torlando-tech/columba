@@ -16,13 +16,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +51,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lxmf.messenger.ui.components.BackgroundLocationPermissionBottomSheet
 import com.lxmf.messenger.ui.components.LocationPermissionBottomSheet
+import com.lxmf.messenger.ui.components.ServiceRestartBanner
 import com.lxmf.messenger.ui.screens.settings.cards.AboutCard
 import com.lxmf.messenger.ui.screens.settings.cards.AutoAnnounceCard
 import com.lxmf.messenger.ui.screens.settings.cards.BatteryOptimizationCard
@@ -83,7 +81,6 @@ import com.lxmf.messenger.viewmodel.BlockedUsersViewModel
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.SettingsCardId
 import com.lxmf.messenger.viewmodel.SettingsViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -256,6 +253,10 @@ fun SettingsScreen(
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
                     )
+                }
+
+                if (state.isRestarting) {
+                    ServiceRestartBanner()
                 }
 
                 NetworkCard(
@@ -592,12 +593,7 @@ fun SettingsScreen(
             )
         }
 
-        // Service Restart Dialog
-        if (state.isRestarting) {
-            ServiceRestartDialog(
-                onCancel = { viewModel.cancelRestart() },
-            )
-        }
+        // (restart banner is shown inline in the Column above)
 
         // Crash Report Dialog
         // Only show if activity is at least STARTED to prevent BadTokenException
@@ -684,48 +680,4 @@ fun SettingsScreen(
             )
         }
     }
-}
-
-@Composable
-private fun ServiceRestartDialog(onCancel: () -> Unit) {
-    var showCancel by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(15_000)
-        showCancel = true
-    }
-
-    AlertDialog(
-        onDismissRequest = { if (showCancel) onCancel() },
-        icon = {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-            )
-        },
-        title = { Text("Restarting Service") },
-        text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "Restarting Reticulum network...",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "This may take a few seconds",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            if (showCancel) {
-                androidx.compose.material3.TextButton(onClick = onCancel) {
-                    Text("Cancel")
-                }
-            }
-        },
-    )
 }

@@ -14,7 +14,6 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
-import io.mockk.coJustRun
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -359,7 +358,10 @@ class DebugViewModelEventDrivenTest {
     fun `restartService sets isRestarting state correctly`() =
         runTest {
             // Given
-            coJustRun { mockInterfaceConfigManager.applyInterfaceChanges() }
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+                firstArg<(() -> Unit)?>()?.invoke()
+                Result.success(Unit)
+            }
 
             val viewModel =
                 DebugViewModel(
@@ -387,7 +389,7 @@ class DebugViewModelEventDrivenTest {
     fun `restartService handles exception and resets isRestarting`() =
         runTest {
             // Given - make applyInterfaceChanges throw
-            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } throws RuntimeException("Restart failed")
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } throws RuntimeException("Restart failed")
 
             val viewModel =
                 DebugViewModel(

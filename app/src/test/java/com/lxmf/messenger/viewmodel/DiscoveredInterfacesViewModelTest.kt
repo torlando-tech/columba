@@ -111,6 +111,14 @@ class DiscoveredInterfacesViewModelTest {
             interfaceConfigManager,
         )
 
+    /** Mock applyInterfaceChanges to succeed and invoke the onServiceReady callback. */
+    private fun mockApplyInterfaceChangesSuccess() {
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+            firstArg<(() -> Unit)?>()?.invoke()
+            Result.success(Unit)
+        }
+    }
+
     // ========== Initial State Tests ==========
 
     @Test
@@ -545,7 +553,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - updates state with new count`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -561,7 +569,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - clamps value to minimum of 0`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -577,7 +585,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - clamps value to maximum of 10`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -593,7 +601,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - saves to settings repository`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             coEvery { settingsRepository.saveAutoconnectDiscoveredCount(any()) } returns Unit
             viewModel = createViewModel()
             advanceUntilIdle()
@@ -611,7 +619,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - triggers service restart`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -621,14 +629,14 @@ class DiscoveredInterfacesViewModelTest {
 
             // Then: Restart completed (isRestarting cleared) AND config manager was called
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
     fun `setAutoconnectCount - clears isRestarting after completion`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -644,7 +652,7 @@ class DiscoveredInterfacesViewModelTest {
     fun `setAutoconnectCount - sets error message on failure`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.failure(RuntimeException("Restart failed"))
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Restart failed"))
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -668,7 +676,7 @@ class DiscoveredInterfacesViewModelTest {
             // Given: Discovery disabled, autoconnect never configured (-1 sentinel)
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
             coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns -1
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -692,7 +700,7 @@ class DiscoveredInterfacesViewModelTest {
             // Given: Discovery disabled, but user explicitly set autoconnect to 0 for debugging
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
             coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -716,7 +724,7 @@ class DiscoveredInterfacesViewModelTest {
             // Given: Discovery disabled, but autoconnect count was previously set to 5
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
             coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -740,7 +748,7 @@ class DiscoveredInterfacesViewModelTest {
             // Given: Discovery enabled with autoconnect at 5
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
             coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -765,7 +773,7 @@ class DiscoveredInterfacesViewModelTest {
             // Given: Discovery enabled with autoconnect at 5
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
             coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -791,7 +799,7 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -809,7 +817,7 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -819,7 +827,7 @@ class DiscoveredInterfacesViewModelTest {
 
             // Then: Restart completed (isRestarting cleared) AND config manager was called
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
@@ -827,7 +835,7 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.failure(RuntimeException("Service error"))
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Service error"))
             viewModel = createViewModel()
             advanceUntilIdle()
 

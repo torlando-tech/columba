@@ -218,12 +218,12 @@ class DiscoveredInterfacesViewModel
                     // Restart the Reticulum service to apply changes
                     Log.d(TAG, "Restarting Reticulum service to apply discovery settings...")
                     interfaceConfigManager
-                        .applyInterfaceChanges()
-                        .onSuccess {
+                        .applyInterfaceChanges(
+                            onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                        ).onSuccess {
                             Log.d(TAG, "Reticulum service restarted successfully")
                             // Reload discovered interfaces after restart
                             loadDiscoveredInterfaces()
-                            _state.update { it.copy(isRestarting = false) }
                         }.onFailure { error ->
                             Log.e(TAG, "Failed to restart Reticulum service", error)
                             _state.update {
@@ -273,12 +273,12 @@ class DiscoveredInterfacesViewModel
                     // Restart the Reticulum service to apply changes
                     Log.d(TAG, "Restarting Reticulum service to apply autoconnect count...")
                     interfaceConfigManager
-                        .applyInterfaceChanges()
-                        .onSuccess {
+                        .applyInterfaceChanges(
+                            onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                        ).onSuccess {
                             Log.d(TAG, "Reticulum service restarted successfully")
                             // Reload discovered interfaces after restart
                             loadDiscoveredInterfaces()
-                            _state.update { it.copy(isRestarting = false) }
                         }.onFailure { error ->
                             Log.e(TAG, "Failed to restart Reticulum service", error)
                             _state.update {

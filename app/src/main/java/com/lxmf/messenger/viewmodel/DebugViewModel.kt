@@ -578,10 +578,10 @@ class DebugViewModel
                     // 1. Shutdown current service
                     // 2. Restart the service process
                     // 3. Re-initialize with config from database
-                    interfaceConfigManager.applyInterfaceChanges()
+                    interfaceConfigManager.applyInterfaceChanges(
+                        onServiceReady = { _isRestarting.value = false },
+                    )
                     Log.i(TAG, "Service restart completed successfully")
-
-                    _isRestarting.value = false
                 } catch (e: Exception) {
                     Log.e(TAG, "Error restarting service", e)
                     _isRestarting.value = false

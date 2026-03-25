@@ -67,10 +67,13 @@ class InterfaceConfigManager
          * This RESTARTS THE SERVICE PROCESS to ensure clean port release.
          * The process typically takes 8-12 seconds.
          *
+         * @param onServiceReady Called after Reticulum is initialized (Step 9) but before
+         *   post-init bookkeeping (identity restore, manager restart). Callers can use this
+         *   to clear UI loading state early since the service is usable at this point.
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(): Result<Unit> =
+        suspend fun applyInterfaceChanges(onServiceReady: (() -> Unit)? = null): Result<Unit> =
             runCatching {
                 withTimeout(APPLY_CHANGES_TIMEOUT_MS) {
                     Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
@@ -291,6 +294,9 @@ class InterfaceConfigManager
                             Log.e(TAG, "Failed to initialize Reticulum", error)
                             throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                         }
+
+                    // Signal caller that service is usable (before post-init bookkeeping)
+                    onServiceReady?.invoke()
 
                     // Step 10: Restore peer identities (uses batched loading to prevent OOM)
                     Log.d(TAG, "Step 10: Batch restoring peer identities...")

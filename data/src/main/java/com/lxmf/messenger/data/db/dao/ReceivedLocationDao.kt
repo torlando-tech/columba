@@ -116,7 +116,7 @@ interface ReceivedLocationDao {
         """
         SELECT * FROM received_locations
         WHERE senderHash = :senderHash AND source = 'sos_trail'
-        ORDER BY timestamp DESC
+        ORDER BY timestamp ASC
         LIMIT :limit
         """,
     )

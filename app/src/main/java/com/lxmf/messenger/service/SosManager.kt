@@ -334,6 +334,7 @@ class SosManager
                 }
             }
 
+            kotlin.coroutines.coroutineContext.ensureActive() // honour pending cancellation before touching state
             _state.value = SosState.Active(sentCount, failedCount)
             settingsRepository.persistSosActiveState(sentCount, failedCount)
             notificationHelper.showSosActiveNotification(sentCount, failedCount)

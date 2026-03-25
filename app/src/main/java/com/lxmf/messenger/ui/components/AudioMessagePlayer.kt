@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -47,6 +49,7 @@ fun AudioMessagePlayer(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var durationMs by remember { mutableStateOf(0) }
@@ -153,21 +156,21 @@ fun AudioMessagePlayer(
         IconButton(
             onClick = {
                 val src = tempFile ?: return@IconButton
-                val shareFile = File(context.cacheDir, "sos_audio_share_${src.name}")
-                src.copyTo(shareFile, overwrite = true)
-                val uri =
-                    FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        shareFile,
+                scope.launch(Dispatchers.IO) {
+                    val shareFile = File(context.cacheDir, "sos_audio_share_${src.name}")
+                    src.copyTo(shareFile, overwrite = true)
+                    val uri = FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", shareFile,
                     )
-                val shareIntent =
-                    Intent(Intent.ACTION_SEND).apply {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "audio/mp4"
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Audio"))
+                    withContext(Dispatchers.Main) {
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Audio"))
+                    }
+                }
             },
             modifier = Modifier.size(36.dp),
         ) {

@@ -173,6 +173,8 @@ data class SettingsState(
     val sosIncludeLocation: Boolean = true,
     val sosSilentAutoAnswer: Boolean = false,
     val sosShowFloatingButton: Boolean = false,
+    val sosFabOffsetX: Float = 0f,
+    val sosFabOffsetY: Float = 0f,
     val sosDeactivationPin: String? = null,
     val sosPeriodicUpdates: Boolean = false,
     val sosUpdateIntervalSeconds: Int = 120,
@@ -2088,6 +2090,16 @@ class SettingsViewModel
                 }
             }
             viewModelScope.launch {
+                settingsRepository.sosFabOffsetX.collect { x ->
+                    _state.update { it.copy(sosFabOffsetX = x) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.sosFabOffsetY.collect { y ->
+                    _state.update { it.copy(sosFabOffsetY = y) }
+                }
+            }
+            viewModelScope.launch {
                 settingsRepository.sosDeactivationPin.collect { pin ->
                     _state.update { it.copy(sosDeactivationPin = pin) }
                 }
@@ -2156,6 +2168,10 @@ class SettingsViewModel
 
         fun setSosShowFloatingButton(show: Boolean) {
             viewModelScope.launch { settingsRepository.setSosShowFloatingButton(show) }
+        }
+
+        fun setSosFabOffset(x: Float, y: Float) {
+            viewModelScope.launch { settingsRepository.setSosFabOffset(x, y) }
         }
 
         fun setSosDeactivationPin(pin: String?) {

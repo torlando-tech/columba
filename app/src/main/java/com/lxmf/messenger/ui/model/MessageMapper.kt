@@ -43,7 +43,14 @@ fun Message.toMessageUi(): MessageUi {
         Log.d(TAG, "Message ${id.take(16)}... has field 5, hasFiles=$hasFiles, json=${fieldsJson?.take(200)}")
     }
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
-    val hasAudio = fieldsJson?.let { try { org.json.JSONObject(it).has("7") } catch (_: Exception) { false } } == true
+    val hasAudio =
+        fieldsJson?.let {
+            try {
+                org.json.JSONObject(it).has("7")
+            } catch (_: Exception) {
+                false
+            }
+        } == true
 
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)

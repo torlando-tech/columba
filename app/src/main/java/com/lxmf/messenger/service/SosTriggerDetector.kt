@@ -16,7 +16,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -107,19 +106,27 @@ class SosTriggerDetector
 
         // Shake state
         @Volatile private var shakeStartTime = 0L
+
         @Volatile private var shakeAccumulatedMs = 0L
+
         @Volatile private var lastShakeEventTime = 0L
+
         @Volatile private var lastShakeTriggerTime = 0L
 
         // Tap state
         private val tapTimestamps = java.util.Collections.synchronizedList(mutableListOf<Long>())
+
         @Volatile private var lastTapTriggerTime = 0L
+
         @Volatile private var lastTapRegisteredTime = 0L
+
         @Volatile private var inTapSpike = false
+
         @Volatile private var tapSpikeStartTime = 0L
 
         // Power button state
         private val powerPressTimestamps = java.util.Collections.synchronizedList(mutableListOf<Long>())
+
         @Volatile private var lastPowerTriggerTime = 0L
 
         private val powerButtonReceiver =

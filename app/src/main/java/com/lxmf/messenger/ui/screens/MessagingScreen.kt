@@ -2158,7 +2158,7 @@ fun MessageBubble(
 
                         // "View on Map" button for SOS messages with GPS coordinates
                         if (isSosMessage) {
-                            val sosLocation = parseSosGpsLocation(message.content)
+                            val sosLocation = parseSosGpsLocation(message.content, message.fieldsJson)
                             if (sosLocation != null) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
@@ -2621,12 +2621,30 @@ fun EmptyMessagesState() {
 
 private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
 
-private fun parseSosGpsLocation(content: String): Pair<Double, Double>? {
-    val regex = Regex("""GPS:\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)""")
+private fun parseSosGpsLocation(content: String, fieldsJson: String? = null): Pair<Double, Double>? {
+    // Primary: extract from FIELD_TELEMETRY in fieldsJson
+    if (fieldsJson != null) {
+        try {
+            val fields = org.json.JSONObject(fieldsJson)
+            // FIELD_TELEMETRY key "2" contains unpacked telemetry with lat/lng
+            val telemetry = fields.optJSONObject("2")
+            if (telemetry != null) {
+                val lat = telemetry.optDouble("lat", Double.NaN)
+                val lng = telemetry.optDouble("lng", Double.NaN)
+                if (!lat.isNaN() && !lng.isNaN() && lat in -90.0..90.0 && lng in -180.0..180.0) {
+                    return Pair(lat, lng)
+                }
+            }
+        } catch (_: Exception) {
+            // Fall through to text parsing
+        }
+    }
+    // Fallback: parse from message text (locale-independent regex)
+    val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
     val match = regex.find(content) ?: return null
     return try {
-        val lat = match.groupValues[1].toDouble()
-        val lng = match.groupValues[2].toDouble()
+        val lat = match.groupValues[1].replace(',', '.').toDouble()
+        val lng = match.groupValues[2].replace(',', '.').toDouble()
         if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
     } catch (e: NumberFormatException) {
         null

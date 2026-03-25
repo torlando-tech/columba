@@ -1,7 +1,5 @@
 package com.lxmf.messenger.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
@@ -18,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -122,45 +122,36 @@ fun SosOverlay(
         is SosState.Active -> {
             var showDeactivateDialog by remember { mutableStateOf(false) }
 
-            // Persistent active-state banner
-            Row(
-                modifier =
-                    modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.error)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            // Floating pill overlay — position controlled by parent modifier
+            Surface(
+                modifier = modifier,
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.error,
+                shadowElevation = 6.dp,
+                onClick = { showDeactivateDialog = true },
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Icon(
                         Icons.Filled.Warning,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onError,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            "SOS ACTIVE",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onError,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (state.sentCount > 0 || state.failedCount > 0) {
-                            Text(
-                                "${state.sentCount} sent · ${state.failedCount} failed",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onError.copy(alpha = 0.8f),
-                            )
-                        }
-                    }
-                }
-                TextButton(onClick = { showDeactivateDialog = true }) {
                     Text(
-                        "DEACTIVATE",
+                        "SOS ACTIVE",
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onError,
                         fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "DEACTIVATE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onError.copy(alpha = 0.8f),
                     )
                 }
             }

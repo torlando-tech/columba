@@ -22,9 +22,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
@@ -1042,12 +1051,6 @@ fun ColumbaNavigation(
             Scaffold(
                 bottomBar = {
                     Column {
-                        SosOverlay(
-                            sosState = sosState,
-                            sosDeactivationPin = settingsState.sosDeactivationPin,
-                            onCancel = { sosViewModel.cancel() },
-                            onDeactivate = { pin -> sosViewModel.deactivate(pin) },
-                        )
                         if (shouldShowBottomNav) {
                             NavigationBar {
                                 screens.forEachIndexed { index, screen ->
@@ -1071,20 +1074,7 @@ fun ColumbaNavigation(
                         }
                     }
                 },
-                floatingActionButton = {
-                    if (settingsState.sosEnabled && settingsState.sosShowFloatingButton && sosState is SosState.Idle) {
-                        FloatingActionButton(
-                            onClick = { sosViewModel.trigger() },
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ) {
-                            Icon(
-                                Icons.Filled.Warning,
-                                contentDescription = "Trigger SOS",
-                                tint = MaterialTheme.colorScheme.onError,
-                            )
-                        }
-                    }
-                },
+                floatingActionButton = {},
             ) { _ ->
                 // Inner screens have their own Scaffolds with TopAppBars that handle content padding
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -2110,6 +2100,51 @@ fun ColumbaNavigation(
                             }
                         }
                     } // end Column
+
+                    // SOS overlay — floating draggable pill above bottom nav
+                    // SOS floating elements — FAB and Active pill share the same position
+                    if (settingsState.sosEnabled) {
+                        var sosOffsetX by remember { mutableFloatStateOf(settingsState.sosFabOffsetX) }
+                        var sosOffsetY by remember { mutableFloatStateOf(settingsState.sosFabOffsetY) }
+                        val dragModifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = if (shouldShowBottomNav) 88.dp else 16.dp, end = 16.dp)
+                            .offset { IntOffset(sosOffsetX.roundToInt(), sosOffsetY.roundToInt()) }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        settingsViewModel.setSosFabOffset(sosOffsetX, sosOffsetY)
+                                    },
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    sosOffsetX += dragAmount.x
+                                    sosOffsetY += dragAmount.y
+                                }
+                            }
+
+                        SosOverlay(
+                            sosState = sosState,
+                            sosDeactivationPin = settingsState.sosDeactivationPin,
+                            onCancel = { sosViewModel.cancel() },
+                            onDeactivate = { pin -> sosViewModel.deactivate(pin) },
+                            modifier = dragModifier,
+                        )
+
+                        // Show FAB only when idle and floating button enabled
+                        if (settingsState.sosShowFloatingButton && sosState is SosState.Idle) {
+                            FloatingActionButton(
+                                onClick = { sosViewModel.trigger() },
+                                containerColor = MaterialTheme.colorScheme.error,
+                                modifier = dragModifier,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Warning,
+                                    contentDescription = "Trigger SOS",
+                                    tint = MaterialTheme.colorScheme.onError,
+                                )
+                            }
+                        }
+                    }
                 } // end Box
 
                 // Bluetooth permission bottom sheet

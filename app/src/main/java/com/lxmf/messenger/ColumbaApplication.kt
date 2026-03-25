@@ -3,7 +3,6 @@ package com.lxmf.messenger
 import android.app.Application
 import android.os.StrictMode
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.service.SosActiveTracker
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
@@ -15,6 +14,7 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SosActiveTracker
 import com.lxmf.messenger.service.SosManager
 import com.lxmf.messenger.service.SosTriggerDetector
 import com.lxmf.messenger.service.TelemetryCollectorManager
@@ -156,9 +156,10 @@ class ColumbaApplication : Application() {
         // Restore SOS active tracker from recent trail data (receiver side)
         applicationScope.launch {
             try {
-                val recentSenders = receivedLocationDao.getRecentSosTrailSenders(
-                    sinceTimestamp = System.currentTimeMillis() - 24 * 3600_000L,
-                )
+                val recentSenders =
+                    receivedLocationDao.getRecentSosTrailSenders(
+                        sinceTimestamp = System.currentTimeMillis() - 24 * 3600_000L,
+                    )
                 if (recentSenders.isNotEmpty()) {
                     SosActiveTracker.restoreFromSenders(recentSenders.toSet())
                     android.util.Log.d("ColumbaApplication", "Restored ${recentSenders.size} SOS active senders")

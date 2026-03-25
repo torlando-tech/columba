@@ -607,11 +607,11 @@ class NotificationHelper
          * Parse GPS coordinates from an SOS message.
          */
         fun parseSosLocation(content: String): Pair<Double, Double>? {
-            val regex = Regex("""GPS:\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)""")
+            val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
             val match = regex.find(content) ?: return null
             return try {
-                val lat = match.groupValues[1].toDouble()
-                val lng = match.groupValues[2].toDouble()
+                val lat = match.groupValues[1].replace(',', '.').toDouble()
+                val lng = match.groupValues[2].replace(',', '.').toDouble()
                 if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
             } catch (e: NumberFormatException) {
                 null

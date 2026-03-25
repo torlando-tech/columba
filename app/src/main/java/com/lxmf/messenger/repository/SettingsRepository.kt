@@ -163,6 +163,12 @@ class SettingsRepository
             val SOS_PERIODIC_UPDATES = booleanPreferencesKey("sos_periodic_updates")
             val SOS_UPDATE_INTERVAL_SECONDS = intPreferencesKey("sos_update_interval_seconds")
 
+            // SOS floating element positions (persisted across recompositions)
+            val SOS_FAB_OFFSET_X = floatPreferencesKey("sos_fab_offset_x")
+            val SOS_FAB_OFFSET_Y = floatPreferencesKey("sos_fab_offset_y")
+            val SOS_PILL_OFFSET_X = floatPreferencesKey("sos_pill_offset_x")
+            val SOS_PILL_OFFSET_Y = floatPreferencesKey("sos_pill_offset_y")
+
             // SOS state persistence (survives app/phone restart)
             val SOS_ACTIVE = booleanPreferencesKey("sos_active")
             val SOS_ACTIVE_SENT_COUNT = intPreferencesKey("sos_active_sent_count")
@@ -2172,6 +2178,32 @@ class SettingsRepository
         suspend fun setSosAudioDurationSeconds(seconds: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SOS_AUDIO_DURATION_SECONDS] = seconds.coerceIn(15, 60)
+            }
+        }
+
+        val sosFabOffsetX: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_FAB_OFFSET_X] ?: 0f }.distinctUntilChanged()
+
+        val sosFabOffsetY: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_FAB_OFFSET_Y] ?: 0f }.distinctUntilChanged()
+
+        val sosPillOffsetX: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_PILL_OFFSET_X] ?: 0f }.distinctUntilChanged()
+
+        val sosPillOffsetY: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_PILL_OFFSET_Y] ?: 0f }.distinctUntilChanged()
+
+        suspend fun setSosFabOffset(x: Float, y: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_FAB_OFFSET_X] = x
+                preferences[PreferencesKeys.SOS_FAB_OFFSET_Y] = y
+            }
+        }
+
+        suspend fun setSosPillOffset(x: Float, y: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_PILL_OFFSET_X] = x
+                preferences[PreferencesKeys.SOS_PILL_OFFSET_Y] = y
             }
         }
     }

@@ -403,6 +403,7 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
+                            tryPropagationOnFail = _state.value.tryPropagationOnFail,
                             // Sync state from flows (included in combine to avoid race conditions)
                             autoRetrieveEnabled = autoRetrieveEnabled,
                             retrievalIntervalSeconds = retrievalIntervalSeconds,
@@ -438,6 +439,12 @@ class SettingsViewModel
                             contacts = _state.value.contacts,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
+                            // Preserve privacy state from loadPrivacySettings()
+                            blockUnknownSenders = _state.value.blockUnknownSenders,
+                            // Preserve message size limit from loadLocationSharingSettings()
+                            incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
+                            // Preserve message sorting from loadLocationSharingSettings()
+                            sortMessagesBySentTime = _state.value.sortMessagesBySentTime,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
@@ -1564,6 +1571,11 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.sortMessagesBySentTime.collect { sortBySent ->
                     _state.update { it.copy(sortMessagesBySentTime = sortBySent) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.tryPropagationOnFailFlow.collect { enabled ->
+                    _state.update { it.copy(tryPropagationOnFail = enabled) }
                 }
             }
         }

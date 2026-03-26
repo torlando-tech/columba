@@ -607,11 +607,13 @@ fun MapScreen(
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
             isInitialPositionSet = true
+            hasInitiallyCentered = true
             viewModel.consumePendingFocus()
         } ?: run {
             // Markers loaded but contact not found — stop waiting to avoid stale focus
             if (state.contactMarkers.isNotEmpty() || !state.isLoading) {
                 isInitialPositionSet = true
+                hasInitiallyCentered = true
                 viewModel.consumePendingFocus()
             }
         }

@@ -1573,6 +1573,11 @@ class SettingsViewModel
                     _state.update { it.copy(sortMessagesBySentTime = sortBySent) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.tryPropagationOnFailFlow.collect { enabled ->
+                    _state.update { it.copy(tryPropagationOnFail = enabled) }
+                }
+            }
         }
 
         /**

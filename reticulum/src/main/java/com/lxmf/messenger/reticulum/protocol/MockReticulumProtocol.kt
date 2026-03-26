@@ -212,7 +212,11 @@ class MockReticulumProtocol : ReticulumProtocol {
 
     override suspend fun requestPath(destinationHash: ByteArray): Result<Unit> = Result.success(Unit)
 
+    override suspend fun persistTransportData() = Unit
+
     override fun getHopCount(destinationHash: ByteArray): Int = 3
+
+    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = null
 
     override suspend fun getPathTableHashes(): List<String> = emptyList()
 
@@ -452,6 +456,16 @@ class MockReticulumProtocol : ReticulumProtocol {
     }
 
     // Voice Call Methods (Mock)
+    override suspend fun blockDestination(destinationHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun isTransportEnabled(): Boolean = false
+
     override suspend fun initiateCall(
         destinationHash: String,
         profileCode: Int?,

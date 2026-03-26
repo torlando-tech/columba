@@ -1413,6 +1413,71 @@ class TestOnLXMFDelivery(unittest.TestCase):
         self.assertEqual(event['destination_hash'], mock_message.destination_hash.hex())
 
 
+    def test_on_lxmf_delivery_removes_from_pending_inbound_after_callback(self):
+        """Test that message is removed from pending_inbound after successful Kotlin callback"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        wrapper.router = mock_router
+
+        mock_kotlin_callback = Mock()
+        wrapper.kotlin_message_received_callback = mock_kotlin_callback
+
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test message'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+        # Prevent MagicMock auto-creating signal attributes as MagicMock objects
+        mock_message._columba_rssi = None
+        mock_message._columba_snr = None
+
+        # Pre-populate pending_inbound as the LXMF router would before the callback fires
+        mock_router.pending_inbound = [mock_message]
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Kotlin callback should be invoked
+        mock_kotlin_callback.assert_called_once()
+
+        # Message should be REMOVED from pending_inbound after successful callback
+        self.assertEqual(len(mock_router.pending_inbound), 0)
+
+    def test_on_lxmf_delivery_keeps_in_pending_inbound_on_callback_failure(self):
+        """Test that message stays in pending_inbound if Kotlin callback fails"""
+        wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+
+        mock_router = Mock()
+        wrapper.router = mock_router
+
+        mock_kotlin_callback = Mock(side_effect=Exception("Callback failed"))
+        wrapper.kotlin_message_received_callback = mock_kotlin_callback
+
+        mock_message = MagicMock()
+        mock_message.source_hash = b'source123source1'  # 16 bytes
+        mock_message.destination_hash = b'dest456dest45678'  # 16 bytes
+        mock_message.content = b'Test message'
+        mock_message.timestamp = 1234567890
+        mock_message.fields = None
+        mock_message.hash = b'msghash123456789'
+        # Prevent MagicMock auto-creating signal attributes as MagicMock objects
+        mock_message._columba_rssi = None
+        mock_message._columba_snr = None
+
+        # Pre-populate pending_inbound as the LXMF router would before the callback fires
+        mock_router.pending_inbound = [mock_message]
+
+        wrapper._on_lxmf_delivery(mock_message)
+
+        # Kotlin callback was attempted
+        mock_kotlin_callback.assert_called_once()
+
+        # Message should REMAIN in pending_inbound for polling fallback
+        self.assertEqual(len(mock_router.pending_inbound), 1)
+
+
 class TestPollReceivedMessages(unittest.TestCase):
     """Test poll_received_messages - message polling"""
 
@@ -1843,8 +1908,8 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify interface was captured from LXMF directly (AutoInterfacePeer -> AutoInterface)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        # Verify interface was captured from LXMF directly using format_interface_name
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
@@ -1879,9 +1944,9 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         wrapper._on_lxmf_delivery(mock_message)
 
-        # Verify both hop count and interface were captured (AutoInterfacePeer -> AutoInterface)
+        # Verify both hop count and interface were captured via format_interface_name
         self.assertEqual(mock_message._columba_hops, 0)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')
@@ -1902,7 +1967,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
         mock_message.receiving_interface = None  # Force path_table lookup
         mock_message.receiving_hops = None
 
-        # Create interface with proper class name (we use type().__name__ now)
+        # Create interface with proper class name
         class AutoInterfacePeer:
             pass
         mock_interface = AutoInterfacePeer()
@@ -1918,7 +1983,7 @@ class TestOnLxmfDeliveryHopCapture(unittest.TestCase):
 
         # Verify both hop count and interface captured for multi-hop
         self.assertEqual(mock_message._columba_hops, 3)
-        self.assertEqual(mock_message._columba_interface, "AutoInterface")
+        self.assertEqual(mock_message._columba_interface, "AutoInterfacePeer")
 
     @patch('reticulum_wrapper.LXMF')
     @patch('reticulum_wrapper.RNS')

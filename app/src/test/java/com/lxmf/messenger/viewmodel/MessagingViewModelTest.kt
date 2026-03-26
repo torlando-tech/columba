@@ -9,11 +9,11 @@ import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
 import com.lxmf.messenger.data.db.entity.MessageEntity
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.ReplyPreview
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
@@ -22,6 +22,7 @@ import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.util.FileAttachment
@@ -87,6 +88,8 @@ class MessagingViewModelTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
+    private lateinit var blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository
+    private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -117,6 +120,9 @@ class MessagingViewModelTest {
         identityRepository = mockk()
         conversationLinkManager = mockk()
         receivedLocationRepository = mockk()
+        blockedPeerRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
@@ -129,6 +135,7 @@ class MessagingViewModelTest {
         coEvery { settingsRepository.getTryPropagationOnFail() } returns true
         coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
         every { settingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
@@ -220,6 +227,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
             testBody()
@@ -243,6 +252,8 @@ class MessagingViewModelTest {
             identityRepository,
             conversationLinkManager,
             receivedLocationRepository,
+            blockedPeerRepository,
+            identityResolutionManager,
         )
 
     @Test
@@ -538,6 +549,7 @@ class MessagingViewModelTest {
             coEvery { failingSettingsRepository.getTryPropagationOnFail() } returns true
             coEvery { failingSettingsRepository.getIncomingMessageSizeLimitKb() } returns 500
             every { failingSettingsRepository.messageFontScaleFlow } returns flowOf(1.0f)
+            every { failingSettingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
             val failingPropagationNodeManager: PropagationNodeManager = mockk()
             every { failingPropagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -569,6 +581,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     failingConversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
 
             // Attempt to send message
@@ -1020,6 +1034,8 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
             )
             advanceUntilIdle()
 
@@ -1090,6 +1106,8 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
             )
             advanceUntilIdle()
 
@@ -1158,6 +1176,8 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
             )
             advanceUntilIdle()
 
@@ -1214,6 +1234,8 @@ class MessagingViewModelTest {
                 identityRepository,
                 conversationLinkManager,
                 receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
             )
             advanceUntilIdle()
 
@@ -1284,6 +1306,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1347,6 +1371,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1410,6 +1436,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1473,6 +1501,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1536,6 +1566,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1598,6 +1630,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1655,6 +1689,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -1712,6 +1748,8 @@ class MessagingViewModelTest {
                     identityRepository,
                     conversationLinkManager,
                     receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
                 )
             advanceUntilIdle()
 
@@ -4819,14 +4857,15 @@ class MessagingViewModelTest {
             // Pre-populate reply preview cache via loadReplyPreviewIfNeeded
             coEvery {
                 conversationRepository.getReplyPreview("test-message-id", any())
-            } returns com.lxmf.messenger.data.repository.ReplyPreview(
-                messageId = "test-message-id",
-                senderName = "Test Peer",
-                contentPreview = "Hello world",
-                hasImage = false,
-                hasFileAttachment = false,
-                firstFileName = null,
-            )
+            } returns
+                com.lxmf.messenger.data.repository.ReplyPreview(
+                    messageId = "test-message-id",
+                    senderName = "Test Peer",
+                    contentPreview = "Hello world",
+                    hasImage = false,
+                    hasFileAttachment = false,
+                    firstFileName = null,
+                )
             viewModel.loadReplyPreviewAsync("reply-msg", "test-message-id")
             advanceUntilIdle()
 

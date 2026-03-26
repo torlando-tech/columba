@@ -12,18 +12,24 @@ import java.net.URL
 /**
  * Downloads RNode firmware from GitHub releases.
  *
- * Firmware is hosted at: https://github.com/markqvist/RNode_Firmware/releases
+ * Firmware is hosted at GitHub. The specific owner/repo is determined by the
+ * [FirmwareSource] passed to each method, defaulting to the official source.
  */
 class FirmwareDownloader {
     companion object {
         private const val TAG = "Columba:FirmwareDownload"
-        private const val GITHUB_API_BASE = "https://api.github.com/repos/markqvist/RNode_Firmware"
-        private const val GITHUB_RELEASES = "$GITHUB_API_BASE/releases"
+        private const val GITHUB_API_BASE = "https://api.github.com/repos"
         private const val CONNECT_TIMEOUT_MS = 15000
         private const val READ_TIMEOUT_MS = 60000
 
         // User agent for GitHub API
         private const val USER_AGENT = "Columba-RNode-Flasher/1.0"
+    }
+
+    private fun githubReleasesUrl(source: FirmwareSource): String {
+        requireNotNull(source.owner) { "FirmwareSource.Custom has no GitHub owner" }
+        requireNotNull(source.repo) { "FirmwareSource.Custom has no GitHub repo" }
+        return "$GITHUB_API_BASE/${source.owner}/${source.repo}/releases"
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -45,10 +51,10 @@ class FirmwareDownloader {
     /**
      * Get available firmware releases from GitHub.
      */
-    suspend fun getAvailableReleases(): List<GitHubRelease>? =
+    suspend fun getAvailableReleases(source: FirmwareSource = FirmwareSource.Official): List<GitHubRelease>? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL(GITHUB_RELEASES)
+                val url = URL(githubReleasesUrl(source))
                 val connection = url.openConnection() as HttpURLConnection
 
                 connection.requestMethod = "GET"
@@ -73,10 +79,10 @@ class FirmwareDownloader {
     /**
      * Get the latest release.
      */
-    suspend fun getLatestRelease(): GitHubRelease? =
+    suspend fun getLatestRelease(source: FirmwareSource = FirmwareSource.Official): GitHubRelease? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL("$GITHUB_RELEASES/latest")
+                val url = URL("${githubReleasesUrl(source)}/latest")
                 val connection = url.openConnection() as HttpURLConnection
 
                 connection.requestMethod = "GET"
@@ -97,6 +103,20 @@ class FirmwareDownloader {
                 null
             }
         }
+
+    /**
+     * Check whether a release contains any firmware asset for the given board.
+     */
+    fun hasFirmwareForBoard(
+        release: GitHubRelease,
+        board: RNodeBoard,
+    ): Boolean {
+        val prefix = board.firmwarePrefix.lowercase()
+        return release.assets.any { asset ->
+            val name = asset.name.lowercase()
+            name.startsWith(prefix) && name.endsWith(".zip")
+        }
+    }
 
     /**
      * Find firmware asset for a specific board and frequency band.
@@ -260,10 +280,16 @@ data class GitHubRelease(
     val htmlUrl: String,
 ) {
     /**
-     * Extract version number from tag name.
+     * Extract version number from the release tag or name.
+     * Prefers the name when it looks like a bare version (e.g. "1.85.9"),
+     * falls back to tagName (e.g. "v1.78" → "1.78").
      */
     val version: String
-        get() = tagName.removePrefix("v").removePrefix("V")
+        get() {
+            val cleanName = name.removePrefix("v").removePrefix("V").trim()
+            if (cleanName.matches(Regex("\\d+(\\.\\d+)+"))) return cleanName
+            return tagName.removePrefix("v").removePrefix("V")
+        }
 }
 
 /**

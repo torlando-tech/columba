@@ -76,6 +76,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.data.model.SignalQuality
 import com.lxmf.messenger.ui.components.BluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
+import com.lxmf.messenger.ui.components.ServiceRestartBanner
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
@@ -189,6 +190,10 @@ fun IdentityScreen(
                 sharedInstanceOnline = settingsState.sharedInstanceOnline,
             )
 
+            if (isRestarting) {
+                ServiceRestartBanner()
+            }
+
             // Interfaces Card
             InterfacesCard(
                 interfaces = debugInfo.interfaces,
@@ -215,12 +220,7 @@ fun IdentityScreen(
         }
     }
 
-    // Service Restart Dialog
-    if (isRestarting) {
-        ServiceRestartDialog(
-            onCancel = { viewModel.cancelRestart() },
-        )
-    }
+    // (restart banner is shown inline in the Column above)
 }
 
 @Composable
@@ -1444,52 +1444,4 @@ private fun ServiceControlCard(
             },
         )
     }
-}
-
-/**
- * Blocking dialog shown while restarting the Reticulum service.
- * Shows a cancel button after 15 seconds as an escape hatch.
- */
-@Composable
-private fun ServiceRestartDialog(onCancel: () -> Unit) {
-    var showCancel by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(15_000)
-        showCancel = true
-    }
-
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = { if (showCancel) onCancel() },
-        icon = {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-            )
-        },
-        title = { Text("Restarting Service") },
-        text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "Restarting Reticulum network...",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "This may take a few seconds",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            if (showCancel) {
-                androidx.compose.material3.TextButton(onClick = onCancel) {
-                    Text("Cancel")
-                }
-            }
-        },
-    )
 }

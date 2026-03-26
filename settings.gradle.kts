@@ -35,6 +35,7 @@ includeBuild("LXST-kt") {
         substitute(module("tech.torlando:lxst")).using(project(":lxst"))
     }
 }
+include(":micron")
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")

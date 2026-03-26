@@ -86,6 +86,7 @@ data class SettingsState(
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
     val isRestarting: Boolean = false,
+    val networkStatus: NetworkStatus = NetworkStatus.CONNECTING,
     // Shared instance state
     val isSharedInstance: Boolean = false,
     val preferOwnInstance: Boolean = false,
@@ -162,6 +163,8 @@ data class SettingsState(
     // Update checker state
     val updateCheckResult: com.lxmf.messenger.service.AppUpdateResult = com.lxmf.messenger.service.AppUpdateResult.Idle,
     val includePrereleaseUpdates: Boolean = false,
+    // Message sort order: false = received time (default), true = sent time
+    val sortMessagesBySentTime: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -379,6 +382,7 @@ class SettingsViewModel
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
                             isRestarting = _state.value.isRestarting,
+                            networkStatus = _state.value.networkStatus,
                             // Shared instance state from repository (set by service)
                             isSharedInstance = isSharedInstance,
                             preferOwnInstance = preferOwnInstance,
@@ -399,6 +403,7 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
+                            tryPropagationOnFail = _state.value.tryPropagationOnFail,
                             // Sync state from flows (included in combine to avoid race conditions)
                             autoRetrieveEnabled = autoRetrieveEnabled,
                             retrievalIntervalSeconds = retrievalIntervalSeconds,
@@ -434,6 +439,12 @@ class SettingsViewModel
                             contacts = _state.value.contacts,
                             // Preserve notifications state from loadNotificationsSettings()
                             notificationsEnabled = _state.value.notificationsEnabled,
+                            // Preserve privacy state from loadPrivacySettings()
+                            blockUnknownSenders = _state.value.blockUnknownSenders,
+                            // Preserve message size limit from loadLocationSharingSettings()
+                            incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
+                            // Preserve message sorting from loadLocationSharingSettings()
+                            sortMessagesBySentTime = _state.value.sortMessagesBySentTime,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
@@ -922,27 +933,18 @@ class SettingsViewModel
                     // 2. Restart the service process
                     // 3. Re-initialize with config from database
                     interfaceConfigManager
-                        .applyInterfaceChanges()
-                        .onSuccess {
+                        .applyInterfaceChanges(
+                            onServiceReady = { _state.value = _state.value.copy(isRestarting = false) },
+                        ).onSuccess {
                             Log.i(TAG, "Service restart completed successfully")
                         }.onFailure { error ->
                             Log.e(TAG, "Service restart failed: ${error.message}", error)
                         }.getOrThrow() // Convert failure to exception for catch block
-
-                    _state.value = _state.value.copy(isRestarting = false)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error restarting service", e)
                     _state.value = _state.value.copy(isRestarting = false)
                 }
             }
-        }
-
-        /**
-         * Dismiss the restart dialog without stopping the background coroutine.
-         * The restart will either complete or hit the 60s timeout on its own.
-         */
-        fun cancelRestart() {
-            _state.value = _state.value.copy(isRestarting = false)
         }
 
         /**
@@ -963,8 +965,9 @@ class SettingsViewModel
                     // Use InterfaceConfigManager which handles the full restart lifecycle
                     // Python will check for shared instance, find it offline, and use own interfaces
                     interfaceConfigManager
-                        .applyInterfaceChanges()
-                        .onSuccess {
+                        .applyInterfaceChanges(
+                            onServiceReady = { _state.value = _state.value.copy(isRestarting = false) },
+                        ).onSuccess {
                             Log.i(TAG, "Service restart completed - now using Columba's own instance")
                         }.onFailure { error ->
                             Log.e(TAG, "Service restart failed: ${error.message}", error)
@@ -973,7 +976,6 @@ class SettingsViewModel
                     // Keep wasUsingSharedInstance = true to show informational banner
                     _state.value =
                         _state.value.copy(
-                            isRestarting = false,
                             wasUsingSharedInstance = true,
                         )
                 } catch (e: Exception) {
@@ -1096,6 +1098,7 @@ class SettingsViewModel
 
                     // Monitor the service's network status for logging
                     reticulumProtocol.networkStatus.collect { status ->
+                        _state.update { it.copy(networkStatus = status) }
                         val currentState = _state.value
 
                         // Only log when we're using a shared instance
@@ -1565,6 +1568,16 @@ class SettingsViewModel
                     _state.update { it.copy(incomingMessageSizeLimitKb = limitKb) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.sortMessagesBySentTime.collect { sortBySent ->
+                    _state.update { it.copy(sortMessagesBySentTime = sortBySent) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.tryPropagationOnFailFlow.collect { enabled ->
+                    _state.update { it.copy(tryPropagationOnFail = enabled) }
+                }
+            }
         }
 
         /**
@@ -1662,6 +1675,13 @@ class SettingsViewModel
                 if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
                     reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
                 }
+            }
+        }
+
+        fun setSortMessagesBySentTime(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setSortMessagesBySentTime(enabled)
+                Log.d(TAG, "Sort messages by sent time: $enabled")
             }
         }
 

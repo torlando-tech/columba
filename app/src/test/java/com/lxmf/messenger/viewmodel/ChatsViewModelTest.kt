@@ -4,10 +4,13 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.repository.BlockedPeerRepository
 import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.repository.Conversation
 import com.lxmf.messenger.data.repository.ConversationRepository
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +46,8 @@ class ChatsViewModelTest {
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
+    private lateinit var blockedPeerRepository: BlockedPeerRepository
+    private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var viewModel: ChatsViewModel
 
     private val testConversation1 =
@@ -79,6 +84,7 @@ class ChatsViewModelTest {
         )
 
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var identityResolutionManager: IdentityResolutionManager
 
     @Before
     fun setup() {
@@ -86,9 +92,13 @@ class ChatsViewModelTest {
 
         conversationRepository = mockk()
         contactRepository = mockk()
+        blockedPeerRepository = mockk()
+        reticulumProtocol = mockk()
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
         receivedLocationRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
@@ -98,7 +108,19 @@ class ChatsViewModelTest {
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.manualSyncResult } returns MutableSharedFlow()
 
-        viewModel = ChatsViewModel(conversationRepository, contactRepository, propagationNodeManager, receivedLocationRepository)
+        // Default: transport disabled
+        coEvery { reticulumProtocol.isTransportEnabled() } returns false
+
+        viewModel =
+            ChatsViewModel(
+                conversationRepository,
+                contactRepository,
+                blockedPeerRepository,
+                reticulumProtocol,
+                propagationNodeManager,
+                receivedLocationRepository,
+                identityResolutionManager,
+            )
     }
 
     @After
@@ -127,7 +149,16 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // WhileSubscribed requires active collector - test() provides one
             newViewModel.chatsState.test {
@@ -157,7 +188,16 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -226,7 +266,16 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             newViewModel.chatsState.test {
@@ -265,7 +314,16 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -294,7 +352,16 @@ class ChatsViewModelTest {
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
             // NOW create ViewModel
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             newViewModel.chatsState.test {
                 // Skip initial loading state, wait for actual data from repository
@@ -323,7 +390,16 @@ class ChatsViewModelTest {
             every { repository.getConversations() } returns flowOf(duplicateConversations)
             every { repository.observeDrafts() } returns flowOf(emptyMap())
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // When: chatsState is collected
             newViewModel.chatsState.test {
@@ -353,7 +429,16 @@ class ChatsViewModelTest {
                     ),
                 )
 
-            val newViewModel = ChatsViewModel(repository, mockk(), propagationNodeManager, receivedLocationRepository)
+            val newViewModel =
+                ChatsViewModel(
+                    repository,
+                    mockk(),
+                    blockedPeerRepository,
+                    reticulumProtocol,
+                    propagationNodeManager,
+                    receivedLocationRepository,
+                    identityResolutionManager,
+                )
 
             // When: Search query is set
             newViewModel.searchQuery.value = "alice"
@@ -407,5 +492,117 @@ class ChatsViewModelTest {
             val result = viewModel.getContactLocation("unknown")
 
             assertNull(result)
+        }
+
+    // ========== Block User Tests ==========
+
+    @Test
+    fun `blockUser persists block and notifies protocol`() =
+        runTest {
+            val capturedPeerHash = slot<String>()
+            val capturedDestHash = slot<String>()
+            coEvery {
+                blockedPeerRepository.blockPeer(capture(capturedPeerHash), any(), any(), any())
+            } just Runs
+            coEvery {
+                reticulumProtocol.blockDestination(capture(capturedDestHash))
+            } returns Result.success(Unit)
+
+            viewModel.blockUser(
+                peerHash = "peer1",
+                peerIdentityHash = "id_hash_1",
+                displayName = "Alice",
+                deleteConversation = false,
+                blackholeEnabled = false,
+            )
+            advanceUntilIdle()
+
+            assertEquals("peer1", capturedPeerHash.captured)
+            assertEquals("peer1", capturedDestHash.captured)
+            coVerify(exactly = 0) { reticulumProtocol.blackholeIdentity(any()) }
+            coVerify(exactly = 0) { conversationRepository.deleteConversation(any()) }
+        }
+
+    @Test
+    fun `blockUser with blackhole calls blackholeIdentity`() =
+        runTest {
+            val capturedIdHash = slot<String>()
+            coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
+            coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
+            coEvery {
+                reticulumProtocol.blackholeIdentity(capture(capturedIdHash))
+            } returns Result.success(Unit)
+
+            viewModel.blockUser(
+                peerHash = "peer1",
+                peerIdentityHash = "id_hash_1",
+                displayName = "Alice",
+                deleteConversation = false,
+                blackholeEnabled = true,
+            )
+            advanceUntilIdle()
+
+            assertEquals("id_hash_1", capturedIdHash.captured)
+        }
+
+    @Test
+    fun `blockUser with deleteConversation deletes conversation`() =
+        runTest {
+            val capturedDeleteHash = slot<String>()
+            coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } just Runs
+            coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
+            coEvery { conversationRepository.deleteConversation(capture(capturedDeleteHash)) } just Runs
+
+            viewModel.blockUser(
+                peerHash = "peer1",
+                peerIdentityHash = null,
+                displayName = "Alice",
+                deleteConversation = true,
+                blackholeEnabled = false,
+            )
+            advanceUntilIdle()
+
+            assertEquals("peer1", capturedDeleteHash.captured)
+        }
+
+    @Test
+    fun `blockUser with null identityHash skips blackhole even when enabled`() =
+        runTest {
+            val capturedBlackholeEnabled = slot<Boolean>()
+            coEvery {
+                blockedPeerRepository.blockPeer(any(), any(), any(), capture(capturedBlackholeEnabled))
+            } just Runs
+            coEvery { reticulumProtocol.blockDestination(any()) } returns Result.success(Unit)
+
+            viewModel.blockUser(
+                peerHash = "peer1",
+                peerIdentityHash = null,
+                displayName = "Alice",
+                deleteConversation = false,
+                blackholeEnabled = true,
+            )
+            advanceUntilIdle()
+
+            // Block is persisted with blackhole=true in DB, but transport-level blackhole is skipped
+            assertTrue(capturedBlackholeEnabled.captured)
+            coVerify(exactly = 0) { reticulumProtocol.blackholeIdentity(any()) }
+        }
+
+    @Test
+    fun `blockUser handles errors gracefully`() =
+        runTest {
+            coEvery { blockedPeerRepository.blockPeer(any(), any(), any(), any()) } throws Exception("DB error")
+
+            viewModel.blockUser(
+                peerHash = "peer1",
+                peerIdentityHash = null,
+                displayName = "Alice",
+                deleteConversation = false,
+                blackholeEnabled = false,
+            )
+            advanceUntilIdle()
+
+            // Should not crash
+            assertTrue("ViewModel should handle block errors gracefully", true)
         }
 }

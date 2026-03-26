@@ -113,6 +113,9 @@ class ReticulumService : Service() {
         managers.lockManager.acquireAll()
         Log.d(TAG, "Wake locks acquired in onCreate")
 
+        // Clean up stale announces (>30 days old) on each service lifecycle
+        managers.persistenceManager.cleanupStaleAnnounces()
+
         // Create binder with callbacks
         binder =
             ServiceModule.createBinder(

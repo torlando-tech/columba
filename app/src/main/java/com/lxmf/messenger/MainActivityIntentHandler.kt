@@ -50,11 +50,34 @@ class MainActivityIntentHandler(
     }
 
     private fun handleActionView(intent: Intent) {
-        val data = intent.data
-        if (data != null && data.scheme == "lxma") {
-            val lxmaUrl = data.toString()
-            Log.d(logTag, "Opening LXMF deep link: $lxmaUrl")
-            pendingNavigation.value = PendingNavigation.AddContact(lxmaUrl)
+        val data = intent.data ?: return
+        when (data.scheme) {
+            "lxma" -> {
+                val lxmaUrl = data.toString()
+                Log.d(logTag, "Opening LXMF deep link: $lxmaUrl")
+                pendingNavigation.value = PendingNavigation.AddContact(lxmaUrl)
+            }
+            "nomadnetwork" -> {
+                // Raw string parsing because nomadnetwork://hash:/path confuses
+                // Android's URI parser (colon treated as host:port separator)
+                val raw = data.toString().removePrefix("nomadnetwork://")
+                if (raw.startsWith("lxmf@")) {
+                    val hash = raw.removePrefix("lxmf@")
+                    Log.d(logTag, "Opening conversation from nomadnetwork lxmf@ link: ${hash.take(16)}...")
+                    pendingNavigation.value = PendingNavigation.Conversation(hash, hash.take(12))
+                } else {
+                    val colonIdx = raw.indexOf(':')
+                    val (nodeHash, path) =
+                        if (colonIdx > 0) {
+                            raw.substring(0, colonIdx) to raw.substring(colonIdx + 1)
+                        } else {
+                            raw to "/page/index.mu"
+                        }
+                    Log.d(logTag, "Opening NomadNet page: $nodeHash $path")
+                    pendingNavigation.value =
+                        PendingNavigation.NomadNetBrowser(nodeHash.lowercase(), path)
+                }
+            }
         }
     }
 

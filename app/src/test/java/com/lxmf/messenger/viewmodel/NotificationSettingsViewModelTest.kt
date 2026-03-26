@@ -14,6 +14,7 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -72,6 +73,7 @@ class NotificationSettingsViewModelTest {
         every { settingsRepository.notificationBleConnectedFlow } returns notificationBleConnectedFlow
         every { settingsRepository.notificationBleDisconnectedFlow } returns notificationBleDisconnectedFlow
         every { settingsRepository.hasRequestedNotificationPermissionFlow } returns hasRequestedNotificationPermissionFlow
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup suspend function stubs
         coEvery { settingsRepository.saveNotificationsEnabled(any()) } just Runs

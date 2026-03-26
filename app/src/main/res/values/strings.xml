@@ -12,4 +12,14 @@
 
     <!-- Locate on Map -->
     <string name="locate_on_map">Locate on Map</string>
+
+    <!-- Service restart banner -->
+    <string name="service_restart_banner">Restarting Reticulum service\u2026</string>
+
+    <!-- Offline mode banner -->
+    <string name="offline_banner_shutdown">Columba is offline</string>
+    <string name="offline_banner_error">Connection error</string>
+    <string name="offline_banner_reconnecting">Reconnecting\u2026</string>
+    <string name="offline_banner_reconnect">Reconnect</string>
+    <string name="offline_banner_reconnecting_description">Reconnecting in progress</string>
 </resources>

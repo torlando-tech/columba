@@ -57,6 +57,11 @@ data class Message(
     val receivedInterface: String? = null,
     val receivedRssi: Int? = null,
     val receivedSnr: Float? = null,
+    // Local reception timestamp (our clock), for sort ordering.
+    // Null for messages received before this feature was added.
+    val receivedAt: Long? = null,
+    // Interface name through which message was sent (null for received messages or pre-feature messages)
+    val sentInterface: String? = null,
 )
 
 /**
@@ -183,6 +188,33 @@ class ConversationRepository
         }
 
         /**
+         * Get paged messages sorted by sender's timestamp (original LXMF timestamp).
+         * Used when user selects "Sort by sent time" preference.
+         */
+        @Suppress("SuspendFunWithFlowReturnType") // Suspend is needed to fetch active identity before creating Flow
+        suspend fun getMessagesPagedBySentTime(peerHash: String): Flow<PagingData<Message>> {
+            val activeIdentity =
+                localIdentityDao.getActiveIdentitySync()
+                    ?: return emptyFlow()
+            val identityHash = activeIdentity.identityHash
+
+            return Pager(
+                config =
+                    PagingConfig(
+                        pageSize = 30,
+                        initialLoadSize = 30,
+                        prefetchDistance = 20,
+                        enablePlaceholders = false,
+                    ),
+                pagingSourceFactory = {
+                    messageDao.getMessagesForConversationPagedBySentTime(peerHash, identityHash)
+                },
+            ).flow.map { pagingData ->
+                pagingData.map { entity -> entity.toMessage() }
+            }
+        }
+
+        /**
          * Save a message and update the conversation
          * Creates conversation if it doesn't exist
          */
@@ -212,6 +244,9 @@ class ConversationRepository
             // This ensures foreign key constraint is satisfied
             val existingConversation = conversationDao.getConversation(peerHash, identityHash)
 
+            // Use receivedAt for conversation ordering (immune to sender clock skew)
+            val conversationTimestamp = message.receivedAt ?: message.timestamp
+
             if (existingConversation != null) {
                 // Update existing conversation
                 // Only increment unread if: NOT from us, AND message is NEW (not duplicate)
@@ -222,7 +257,7 @@ class ConversationRepository
                         peerName = sanitizedPeerName, // Update name (SANITIZED) in case it changed from new announce
                         peerPublicKey = peerPublicKey ?: existingConversation.peerPublicKey, // Update public key if provided
                         lastMessage = sanitizedContent, // Store SANITIZED content
-                        lastMessageTimestamp = message.timestamp,
+                        lastMessageTimestamp = conversationTimestamp,
                         unreadCount =
                             if (shouldIncrementUnread) {
                                 existingConversation.unreadCount + 1 // Increment only for NEW received messages
@@ -243,7 +278,7 @@ class ConversationRepository
                         peerName = sanitizedPeerName, // Use SANITIZED name
                         peerPublicKey = peerPublicKey, // Use provided key or null
                         lastMessage = sanitizedContent, // Store SANITIZED content
-                        lastMessageTimestamp = message.timestamp,
+                        lastMessageTimestamp = conversationTimestamp,
                         unreadCount = if (message.isFromMe) 0 else 1,
                         lastSeenTimestamp = 0,
                     )
@@ -277,6 +312,8 @@ class ConversationRepository
                         deliveryMethod = message.deliveryMethod,
                         errorMessage = message.errorMessage,
                         replyToMessageId = message.replyToMessageId, // Reply reference
+                        receivedAt = message.receivedAt,
+                        sentInterface = message.sentInterface,
                     )
                 messageDao.insertMessage(messageEntity)
 
@@ -480,6 +517,17 @@ class ConversationRepository
         }
 
         /**
+         * Get IDs of recent received messages for the active identity.
+         * Used to pre-seed the notification dedup cache at startup so that
+         * replayed/re-broadcast messages don't trigger duplicate notifications.
+         * Bounded to [since] to avoid unbounded memory growth.
+         */
+        suspend fun getReceivedMessageIds(since: Long): List<String> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return messageDao.getReceivedMessageIds(activeIdentity.identityHash, since)
+        }
+
+        /**
          * Observe a message by ID for real-time updates (e.g., status changes from pending → delivered).
          * Returns a Flow that emits whenever the message changes in the database.
          */
@@ -533,7 +581,20 @@ class ConversationRepository
                 replyToMessageId = replyToMessageId,
                 receivedHopCount = receivedHopCount,
                 receivedInterface = receivedInterface,
+                receivedAt = receivedAt,
+                sentInterface = sentInterface,
             )
+
+        /**
+         * Update the sent interface name for a message (active identity scoped).
+         */
+        suspend fun updateMessageSentInterface(
+            messageId: String,
+            sentInterface: String?,
+        ) {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
+            messageDao.updateSentInterface(messageId, activeIdentity.identityHash, sentInterface)
+        }
 
         /**
          * Update message delivery details (method and error) for the active identity

@@ -32,6 +32,8 @@ class KotlinRNodeBridgeOnlineStatusTest {
     private lateinit var mockBluetoothManager: BluetoothManager
     private lateinit var mockBluetoothAdapter: BluetoothAdapter
 
+    private val testInterfaceName = "RNodeInterface[BLE]"
+
     @Before
     fun setup() {
         mockContext = mockk<Context>(relaxed = true)
@@ -58,13 +60,16 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val listener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     receivedStatuses.add(isOnline)
                 }
             }
 
         bridge.addOnlineStatusListener(listener)
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertEquals("Listener should receive status", 1, receivedStatuses.size)
         assertTrue("Status should be online", receivedStatuses[0])
@@ -77,15 +82,18 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val listener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     receivedStatuses.add(isOnline)
                 }
             }
 
         bridge.addOnlineStatusListener(listener)
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
         bridge.removeOnlineStatusListener(listener)
-        bridge.notifyOnlineStatusChanged(false)
+        bridge.notifyOnlineStatusChanged(false, testInterfaceName)
 
         assertEquals("Should only receive one notification", 1, receivedStatuses.size)
         assertTrue("First status should be online", receivedStatuses[0])
@@ -99,21 +107,27 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val listener1 =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     listener1Count.incrementAndGet()
                 }
             }
 
         val listener2 =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     listener2Count.incrementAndGet()
                 }
             }
 
         bridge.addOnlineStatusListener(listener1)
         bridge.addOnlineStatusListener(listener2)
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertEquals("Listener 1 should be notified", 1, listener1Count.get())
         assertEquals("Listener 2 should be notified", 1, listener2Count.get())
@@ -126,13 +140,16 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         bridge.addOnlineStatusListener(
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     receivedStatus = isOnline
                 }
             },
         )
 
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertTrue("Status should be true (online)", receivedStatus == true)
     }
@@ -144,15 +161,39 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         bridge.addOnlineStatusListener(
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     receivedStatus = isOnline
                 }
             },
         )
 
-        bridge.notifyOnlineStatusChanged(false)
+        bridge.notifyOnlineStatusChanged(false, testInterfaceName)
 
         assertFalse("Status should be false (offline)", receivedStatus == true)
+    }
+
+    @Test
+    fun `notifyOnlineStatusChanged passes interface name to listener`() {
+        val bridge = KotlinRNodeBridge(mockContext)
+        var receivedName: String? = null
+
+        bridge.addOnlineStatusListener(
+            object : RNodeOnlineStatusListener {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
+                    receivedName = interfaceName
+                }
+            },
+        )
+
+        bridge.notifyOnlineStatusChanged(false, "RNodeInterface[Classic]")
+
+        assertEquals("Interface name should be passed through", "RNodeInterface[Classic]", receivedName)
     }
 
     @Test
@@ -162,7 +203,10 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val listener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     notificationCount.incrementAndGet()
                 }
             }
@@ -170,7 +214,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
         // Register same listener twice
         bridge.addOnlineStatusListener(listener)
         bridge.addOnlineStatusListener(listener)
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertEquals("Should only receive one notification despite duplicate registration", 1, notificationCount.get())
     }
@@ -182,14 +226,20 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val throwingListener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     error("Test exception")
                 }
             }
 
         val normalListener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     listener2Called.set(true)
                 }
             }
@@ -198,7 +248,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
         bridge.addOnlineStatusListener(normalListener)
 
         // Should not throw and should still notify second listener
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertTrue("Second listener should still be called", listener2Called.get())
     }
@@ -210,15 +260,18 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         bridge.addOnlineStatusListener(
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     receivedStatuses.add(isOnline)
                 }
             },
         )
 
-        bridge.notifyOnlineStatusChanged(true)
-        bridge.notifyOnlineStatusChanged(false)
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
+        bridge.notifyOnlineStatusChanged(false, testInterfaceName)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertEquals("Should receive all three status changes", 3, receivedStatuses.size)
         assertTrue("First status should be online", receivedStatuses[0])
@@ -231,8 +284,8 @@ class KotlinRNodeBridgeOnlineStatusTest {
         val bridge = KotlinRNodeBridge(mockContext)
 
         // Should not throw any exception
-        bridge.notifyOnlineStatusChanged(true)
-        bridge.notifyOnlineStatusChanged(false)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
+        bridge.notifyOnlineStatusChanged(false, testInterfaceName)
     }
 
     @Test
@@ -241,7 +294,10 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val listener =
             object : RNodeOnlineStatusListener {
-                override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                override fun onRNodeOnlineStatusChanged(
+                    isOnline: Boolean,
+                    interfaceName: String,
+                ) {
                     // No-op listener for testing removal
                 }
             }
@@ -264,7 +320,10 @@ class KotlinRNodeBridgeOnlineStatusTest {
             Thread {
                 bridge.addOnlineStatusListener(
                     object : RNodeOnlineStatusListener {
-                        override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
+                        override fun onRNodeOnlineStatusChanged(
+                            isOnline: Boolean,
+                            interfaceName: String,
+                        ) {
                             notificationCount.incrementAndGet()
                         }
                     },
@@ -275,7 +334,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         assertTrue("All registrations should complete", latch.await(5, TimeUnit.SECONDS))
 
-        bridge.notifyOnlineStatusChanged(true)
+        bridge.notifyOnlineStatusChanged(true, testInterfaceName)
 
         assertEquals("All listeners should be notified", listenerCount, notificationCount.get())
     }

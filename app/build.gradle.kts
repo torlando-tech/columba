@@ -362,11 +362,13 @@ dependencies {
     implementation(project(":data"))
     implementation("tech.torlando:lxst")
     implementation(project(":reticulum"))
+    implementation(project(":micron"))
 
     // Core
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.process)
     implementation(libs.compose.activity)
     implementation("androidx.core:core-splashscreen:1.0.1")
 

@@ -67,10 +67,13 @@ class InterfaceConfigManager
          * This RESTARTS THE SERVICE PROCESS to ensure clean port release.
          * The process typically takes 8-12 seconds.
          *
+         * @param onServiceReady Called after Reticulum is initialized (Step 9) but before
+         *   post-init bookkeeping (identity restore, manager restart). Callers can use this
+         *   to clear UI loading state early since the service is usable at this point.
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(): Result<Unit> =
+        suspend fun applyInterfaceChanges(onServiceReady: (() -> Unit)? = null): Result<Unit> =
             runCatching {
                 withTimeout(APPLY_CHANGES_TIMEOUT_MS) {
                     Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
@@ -292,6 +295,9 @@ class InterfaceConfigManager
                             throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                         }
 
+                    // Signal caller that service is usable (before post-init bookkeeping)
+                    onServiceReady?.invoke()
+
                     // Step 10: Restore peer identities (uses batched loading to prevent OOM)
                     Log.d(TAG, "Step 10: Batch restoring peer identities...")
                     try {
@@ -379,10 +385,16 @@ class InterfaceConfigManager
          * Generic batched restoration to prevent OOM when loading large tables across the
          * Chaquopy bridge. Fetches records in pages and yields between batches so the GC
          * can reclaim the previous batch's bridge objects.
+         *
+         * Batch size is kept at 200 (not 500) to reduce binder pressure: each batch
+         * serializes to ~20-24KB of JSON over binder IPC. Smaller batches with brief
+         * delays between them prevent saturating the 1MB binder buffer, which otherwise
+         * causes cascading DeadObjectException crashes in Room's multi-instance
+         * invalidation. See: GitHub #647, COLUMBA-14.
          */
         private suspend fun <T> restoreInBatches(
             label: String,
-            batchSize: Int = 500,
+            batchSize: Int = 200,
             fetchBatch: suspend (limit: Int, offset: Int) -> List<T>,
             processBatch: suspend (List<T>) -> Result<Int>,
         ): Int {
@@ -417,6 +429,9 @@ class InterfaceConfigManager
                         if (batchCount < batchSize) {
                             emptyList()
                         } else {
+                            // Brief delay lets the binder buffer drain between batches,
+                            // preventing buffer saturation on devices with slow Python execution.
+                            kotlinx.coroutines.delay(100)
                             yield() // Let GC reclaim previous batch's bridge objects
                             fetchBatch(batchSize, offset)
                         }

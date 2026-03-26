@@ -9,9 +9,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
-import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.data.model.ImageCompressionPreset
+import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
@@ -88,6 +88,8 @@ class MessagingViewModel
         private val identityRepository: com.lxmf.messenger.data.repository.IdentityRepository,
         private val conversationLinkManager: ConversationLinkManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
+        private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
+        private val identityResolutionManager: com.lxmf.messenger.service.IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -104,6 +106,10 @@ class MessagingViewModel
                     .take(255) // Limit length for filesystem compatibility
                     .ifEmpty { "attachment" } // Fallback if empty after sanitization
         }
+
+        // Whether Reticulum transport mode is enabled (for blackhole option in block dialog)
+        private val _isTransportEnabled = MutableStateFlow(false)
+        val isTransportEnabled: StateFlow<Boolean> = _isTransportEnabled
 
         // Track the currently active conversation - drives reactive message loading
         private val _currentConversation = MutableStateFlow<String?>(null)
@@ -124,15 +130,20 @@ class MessagingViewModel
                 .combine(
                     _currentConversation,
                     _messagesRefreshTrigger,
-                ) { peerHash, _ -> peerHash }
-                .flatMapLatest { peerHash ->
-                    Log.d(TAG, "Flow: Switching to conversation $peerHash")
+                    settingsRepository.sortMessagesBySentTime,
+                ) { peerHash, _, sortBySent -> peerHash to sortBySent }
+                .flatMapLatest { (peerHash, sortBySent) ->
+                    Log.d(TAG, "Flow: Switching to conversation $peerHash (sortBySent=$sortBySent)")
                     if (peerHash != null) {
-                        conversationRepository
-                            .getMessagesPaged(peerHash)
-                            .map { pagingData ->
-                                pagingData.map { it.toMessageUi() }
+                        val pagedFlow =
+                            if (sortBySent) {
+                                conversationRepository.getMessagesPagedBySentTime(peerHash)
+                            } else {
+                                conversationRepository.getMessagesPaged(peerHash)
                             }
+                        pagedFlow.map { pagingData ->
+                            pagingData.map { it.toMessageUi() }
+                        }
                     } else {
                         flowOf(PagingData.empty())
                     }
@@ -657,6 +668,37 @@ class MessagingViewModel
         }
 
         /**
+         * Block the current conversation peer.
+         */
+        fun blockUser(
+            deleteConversation: Boolean,
+            blackholeEnabled: Boolean,
+        ) {
+            val peerHash = _currentConversation.value ?: return
+            viewModelScope.launch {
+                try {
+                    val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                    val peerIdentityHash =
+                        publicKey?.let {
+                            com.lxmf.messenger.data.util.HashUtils
+                                .computeIdentityHash(it)
+                        }
+                    blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, currentPeerName, blackholeEnabled)
+                    reticulumProtocol.blockDestination(peerHash)
+                    if (blackholeEnabled && peerIdentityHash != null) {
+                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                    }
+                    if (deleteConversation) {
+                        conversationRepository.deleteConversation(peerHash)
+                    }
+                    Log.d(TAG, "Blocked user ${peerHash.take(16)} (blackhole=$blackholeEnabled, delete=$deleteConversation)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error blocking user", e)
+                }
+            }
+        }
+
+        /**
          * Start sharing location with a single peer.
          * Used from the conversation screen where the target is already known.
          *
@@ -688,6 +730,14 @@ class MessagingViewModel
         }
 
         init {
+            viewModelScope.launch {
+                try {
+                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
+
             // NOTE: Message collection has been moved to MessageCollector service
             // which runs at application level to ensure messages are collected
             // even when no conversations are open.
@@ -853,6 +903,14 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
+                    // Enrich sentInterface on delivery — only on successful delivery,
+                    // where the routing table still reflects the actual send path.
+                    // Other statuses (failed, retrying_propagated) carry too much
+                    // routing ambiguity to produce accurate interface data.
+                    if (update.status == "delivered") {
+                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    }
+
                     // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
                     _messagesRefreshTrigger.value++
 
@@ -862,6 +920,32 @@ class MessagingViewModel
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Enrich sentInterface on delivery if it wasn't captured at send time.
+         * Skips propagated messages: they route through the propagation node
+         * (a different hash than conversationHash), so querying conversationHash
+         * would return the wrong interface or null.
+         */
+        private suspend fun enrichSentInterfaceOnDelivery(
+            message: com.lxmf.messenger.data.db.entity.MessageEntity,
+            messageHash: String,
+        ) {
+            if (!message.isFromMe || message.sentInterface != null || message.deliveryMethod == "propagated") return
+            try {
+                val destHashBytes =
+                    message.conversationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
+                val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
+                if (sentInterface != null) {
+                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
             }
         }
 
@@ -972,6 +1056,11 @@ class MessagingViewModel
 
             // Enable fast polling (1s) for active conversation
             reticulumProtocol.setConversationActive(true)
+
+            // Request path for this conversation peer if we don't have one
+            viewModelScope.launch(Dispatchers.IO) {
+                identityResolutionManager.requestPathForContact(destinationHash)
+            }
 
             // Mark conversation as read when opening
             viewModelScope.launch {
@@ -1175,6 +1264,15 @@ class MessagingViewModel
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
+            // Query outbound interface immediately after send (best-effort)
+            val sentInterface =
+                try {
+                    reticulumProtocol.getNextHopInterfaceName(receipt.destinationHash)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to query sent interface: ${e.message}")
+                    null
+                }
+
             val message =
                 DataMessage(
                     id = receipt.messageHash.joinToString("") { "%02x".format(it) },
@@ -1186,6 +1284,8 @@ class MessagingViewModel
                     fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
                     replyToMessageId = replyToMessageId,
+                    receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
+                    sentInterface = sentInterface,
                 )
             clearSelectedImage()
             clearFileAttachments()
@@ -1199,16 +1299,18 @@ class MessagingViewModel
             deliveryMethodString: String,
         ) {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
+            val now = System.currentTimeMillis()
             val message =
                 DataMessage(
                     id = UUID.randomUUID().toString(),
                     destinationHash = destinationHash,
                     content = sanitized,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = now,
                     isFromMe = true,
                     status = "failed",
                     deliveryMethod = deliveryMethodString,
                     errorMessage = error.message,
+                    receivedAt = now,
                 )
             saveMessageToDatabase(destinationHash, currentPeerName, message)
         }

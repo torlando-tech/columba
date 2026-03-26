@@ -16,7 +16,7 @@ import importlib.util
 import traceback
 from logging_utils import log_debug, log_info, log_warning, log_error, log_separator
 from signal_quality import extract_signal_metrics, add_signal_to_message_event
-from interface_lookup import get_receiving_interface
+from interface_lookup import get_receiving_interface, format_interface_name
 
 # umsgpack is available via RNS dependencies (bundled with Chaquopy on Android)
 try:
@@ -589,6 +589,7 @@ class ReticulumWrapper:
             "lxmf.propagation": AnnounceHandler("lxmf.propagation", self._announce_handler),
             "nomadnetwork.node": AnnounceHandler("nomadnetwork.node", self._announce_handler),
             "rmsp.maps": AnnounceHandler("rmsp.maps", self._announce_handler),
+            "lxst.telephony": AnnounceHandler("lxst.telephony", self._announce_handler),
         }
 
         # RMSP client for map tile fetching over Reticulum
@@ -1210,8 +1211,6 @@ class ReticulumWrapper:
             if not hasattr(RNS.Transport, 'path_table') or not RNS.Transport.path_table:
                 return
 
-            current_time = time.time()
-            stale_threshold = 60  # Paths older than 60 seconds are considered stale
             stale_paths = []
 
             # Scan for stale BLE paths
@@ -1222,11 +1221,10 @@ class ReticulumWrapper:
 
                     # Check if this is a BLE path
                     if receiving_interface and "BLE" in str(type(receiving_interface).__name__):
-                        # Check for timestamp=0 bug or very old timestamps
+                        # Only clear paths with timestamp=0 (the actual Reticulum bug)
+                        # Paths with valid timestamps from prior sessions should be preserved
                         if timestamp == 0:
                             stale_paths.append((dest_hash, timestamp, "timestamp=0 (Unix epoch bug)"))
-                        elif (current_time - timestamp) > stale_threshold:
-                            stale_paths.append((dest_hash, timestamp, f"age={(current_time - timestamp):.0f}s (stale from previous session)"))
                 except (IndexError, TypeError) as e:
                     # Malformed path entry
                     log_debug("ReticulumWrapper", "_clear_stale_ble_paths", f"Skipping malformed path table entry: {e}")
@@ -2382,7 +2380,7 @@ class ReticulumWrapper:
             # Create announce event dict (Transport already stores identity/app_data)
             announce_event = {
                 'destination_hash': destination_hash,
-                'identity_hash': destination_hash,  # For single destinations
+                'identity_hash': announced_identity.hash if announced_identity else destination_hash,
                 'public_key': announced_identity.get_public_key() if announced_identity else b'',
                 'app_data': app_data if app_data else b'',
                 'display_name': display_name,  # Pre-parsed by LXMF (may be None)
@@ -2500,6 +2498,15 @@ class ReticulumWrapper:
                             log_warning("ReticulumWrapper", "shutdown", f"Warning - couldn't detach interface {iface}: {e}")
                 except Exception as e:
                     log_error("ReticulumWrapper", "shutdown", f"Warning - error detaching interfaces: {e}")
+
+            # Step 3.5: Persist transport data before clearing (paths, destinations)
+            if RETICULUM_AVAILABLE:
+                try:
+                    log_debug("ReticulumWrapper", "shutdown", "Persisting transport data before cleanup")
+                    RNS.Transport.persist_data()
+                    log_debug("ReticulumWrapper", "shutdown", "Transport data persisted")
+                except Exception as e:
+                    log_warning("ReticulumWrapper", "shutdown", f"Warning - couldn't persist transport data: {e}")
 
             # Step 4: Clear RNS singleton instance and Transport global state (critical!)
             # RNS uses class variables for singletons and global state tracking
@@ -3151,17 +3158,12 @@ class ReticulumWrapper:
                     # Only use if it's a real interface (has string name), not a Mock auto-attribute
                     receiving_interface = getattr(lxmf_message, 'receiving_interface', None)
                     if receiving_interface is not None:
-                        # Use class name to identify interface type (reliable, not user-configured)
-                        class_name = type(receiving_interface).__name__
-                        # AutoInterfacePeer -> AutoInterface, otherwise use class name directly
-                        if "AutoInterface" in class_name:
-                            interface_type = "AutoInterface"
-                        else:
-                            interface_type = class_name
-                        lxmf_message._columba_interface = interface_type
-                        captured_interface = True
-                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                 f"📡 Got interface from LXMF message (opportunistic): {interface_type}")
+                        interface_name = format_interface_name(receiving_interface)
+                        if interface_name:
+                            lxmf_message._columba_interface = interface_name
+                            captured_interface = True
+                            log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                     f"📡 Got interface from LXMF message (opportunistic): {interface_name}")
 
                         # Extract signal quality metrics from interface
                         rssi, snr = extract_signal_metrics(receiving_interface)
@@ -3194,16 +3196,12 @@ class ReticulumWrapper:
                                 path_entry = RNS.Transport.path_table.get(source_hash)
                                 if path_entry is not None and len(path_entry) > 5 and path_entry[5] is not None:
                                     interface_obj = path_entry[5]
-                                    # Use class name to identify interface type (reliable, not user-configured)
-                                    class_name = type(interface_obj).__name__
-                                    if "AutoInterface" in class_name:
-                                        interface_type = "AutoInterface"
-                                    else:
-                                        interface_type = class_name
-                                    lxmf_message._columba_interface = interface_type
-                                    captured_interface = True
-                                    log_debug("ReticulumWrapper", "_on_lxmf_delivery",
-                                             f"📡 Captured interface from path_table: {interface_type}")
+                                    interface_name = format_interface_name(interface_obj)
+                                    if interface_name:
+                                        lxmf_message._columba_interface = interface_name
+                                        captured_interface = True
+                                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                                 f"📡 Captured interface from path_table: {interface_name}")
 
                                     # Extract signal quality metrics from interface
                                     rssi, snr = extract_signal_metrics(interface_obj)
@@ -3329,6 +3327,14 @@ class ReticulumWrapper:
                     self.kotlin_message_received_callback(json.dumps(message_event))
                     log_info("ReticulumWrapper", "_on_lxmf_delivery",
                             "✅ Kotlin callback invoked with full message (event-driven)")
+
+                    # Remove from pending_inbound since callback succeeded.
+                    # This prevents the queue from growing unbounded and avoids
+                    # duplicate processing when drainPendingMessages() runs on restart.
+                    if hasattr(self.router, 'pending_inbound') and lxmf_message in self.router.pending_inbound:
+                        self.router.pending_inbound.remove(lxmf_message)
+                        log_debug("ReticulumWrapper", "_on_lxmf_delivery",
+                                 f"Removed message from pending_inbound after successful callback (queue now has {len(self.router.pending_inbound)} messages)")
                 except Exception as e:
                     log_error("ReticulumWrapper", "_on_lxmf_delivery",
                              f"⚠️ Error invoking Kotlin callback: {e}")
@@ -6280,6 +6286,17 @@ class ReticulumWrapper:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def persist_transport_data(self) -> Dict:
+        """Persist Reticulum's transport data (path table, destinations) to disk."""
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return {"success": False, "error": "Reticulum not available"}
+        try:
+            RNS.Transport.persist_data()
+            return {"success": True}
+        except Exception as e:
+            log_warning("ReticulumWrapper", "persist_transport_data", f"Error: {e}")
+            return {"success": False, "error": str(e)}
+
     def get_hop_count(self, dest_hash: bytes) -> Optional[int]:
         """Get hop count to destination"""
         if not RETICULUM_AVAILABLE or not self.reticulum:
@@ -7644,7 +7661,7 @@ class ReticulumWrapper:
                                 f"████ RNODE ONLINE STATUS CHANGED ████ [{interface_name}] online={is_online}")
                         if self.kotlin_rnode_bridge:
                             try:
-                                self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online)
+                                self.kotlin_rnode_bridge.notifyOnlineStatusChanged(is_online, interface_name)
                             except Exception as e:
                                 log_error("ReticulumWrapper", "RNodeStatus",
                                         f"Failed to notify Kotlin of online status: {e}")
@@ -8211,6 +8228,35 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "clear_rmsp_servers", "Cleared all RMSP servers")
         except Exception as e:
             log_error("ReticulumWrapper", "clear_rmsp_servers", f"Error: {e}")
+
+    # ============================================================================
+    # Peer Blocking & Blackhole (delegated to blocking_manager.py)
+    # ============================================================================
+
+    def _get_blocking_manager(self):
+        """Lazy-init the blocking manager."""
+        if not hasattr(self, '_blocking_manager') or self._blocking_manager is None:
+            from blocking_manager import BlockingManager
+            self._blocking_manager = BlockingManager(self.router, self.reticulum)
+        return self._blocking_manager
+
+    def block_destination(self, destination_hash_hex):
+        return self._get_blocking_manager().block_destination(destination_hash_hex)
+
+    def unblock_destination(self, destination_hash_hex):
+        return self._get_blocking_manager().unblock_destination(destination_hash_hex)
+
+    def restore_blocked_destinations(self, hashes_list):
+        return self._get_blocking_manager().restore_blocked_destinations(hashes_list)
+
+    def blackhole_identity(self, identity_hash_hex):
+        return self._get_blocking_manager().blackhole_identity(identity_hash_hex)
+
+    def unblackhole_identity(self, identity_hash_hex):
+        return self._get_blocking_manager().unblackhole_identity(identity_hash_hex)
+
+    def is_transport_enabled(self):
+        return self._get_blocking_manager().is_transport_enabled()
 
     # ============================================================================
     # Protocol Version Information (for About screen)

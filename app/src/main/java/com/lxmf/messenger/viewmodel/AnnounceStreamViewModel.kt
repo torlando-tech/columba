@@ -15,6 +15,7 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -46,6 +47,8 @@ class AnnounceStreamViewModel
         private val contactRepository: com.lxmf.messenger.data.repository.ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val identityRepository: IdentityRepository,
+        private val blockedPeerRepository: com.lxmf.messenger.data.repository.BlockedPeerRepository,
+        private val identityResolutionManager: IdentityResolutionManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "AnnounceStreamViewModel"
@@ -53,6 +56,10 @@ class AnnounceStreamViewModel
             // Made var for testing
             internal var updateIntervalMs = 30_000L
         }
+
+        // Whether Reticulum transport mode is enabled (for blackhole option)
+        private val _isTransportEnabled = MutableStateFlow(false)
+        val isTransportEnabled: StateFlow<Boolean> = _isTransportEnabled
 
         // Dirty flag: starts true for initial load, set on each announce, cleared by periodic timer
         private val reachableCountDirty =
@@ -107,11 +114,10 @@ class AnnounceStreamViewModel
                 val showAudio = params.showAudio
                 val selectedInterfaces = params.selectedInterfaces
                 // Build type list for database query
-                // If showAudio is true but PEER is not selected, still include PEER in DB query
-                // (because audio announces have nodeType=PEER), then filter by aspect in memory
+                // If showAudio is true but PHONE is not selected, include PHONE in DB query
                 val typesForQuery =
-                    if (showAudio && !selectedTypes.contains(NodeType.PEER)) {
-                        selectedTypes + NodeType.PEER
+                    if (showAudio && !selectedTypes.contains(NodeType.PHONE)) {
+                        selectedTypes + NodeType.PHONE
                     } else {
                         selectedTypes
                     }
@@ -133,7 +139,7 @@ class AnnounceStreamViewModel
                                 // (exclude PEER if user didn't select it and we only added it for audio)
                                 val matchesNodeType =
                                     selectedTypes.map { it.name }.contains(announce.nodeType)
-                                val isAudioAnnounce = announce.aspect == "call.audio"
+                                val isAudioAnnounce = announce.nodeType == NodeType.PHONE.name
 
                                 val matchesTypeOrAudio =
                                     (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
@@ -169,6 +175,14 @@ class AnnounceStreamViewModel
         val announceError: StateFlow<String?> = _announceError.asStateFlow()
 
         init {
+            viewModelScope.launch {
+                try {
+                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
+
             // Reticulum is now initialized by ColumbaApplication with config from database
             // No need to initialize here
             Log.d(TAG, "AnnounceStreamViewModel initialized - using RNS from ColumbaApplication")
@@ -346,6 +360,10 @@ class AnnounceStreamViewModel
                             )
                             announceRepository.setFavorite(destinationHash, true)
                             Log.d(TAG, "Added contact from announce: $destinationHash")
+                            // Request path for the newly added contact (with hasPath guard)
+                            viewModelScope.launch(Dispatchers.IO) {
+                                identityResolutionManager.requestPathForContact(destinationHash)
+                            }
                         } else {
                             Log.e(TAG, "Cannot add contact: announce not found for $destinationHash")
                         }
@@ -354,6 +372,34 @@ class AnnounceStreamViewModel
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle contact status for $destinationHash", e)
+                }
+            }
+        }
+
+        /**
+         * Block a peer from the announce detail screen.
+         */
+        fun blockPeer(
+            destinationHash: String,
+            peerName: String,
+            publicKey: ByteArray?,
+            blackholeEnabled: Boolean,
+        ) {
+            viewModelScope.launch {
+                try {
+                    val peerIdentityHash =
+                        publicKey?.let {
+                            com.lxmf.messenger.data.util.HashUtils
+                                .computeIdentityHash(it)
+                        }
+                    blockedPeerRepository.blockPeer(destinationHash, peerIdentityHash, peerName, blackholeEnabled)
+                    reticulumProtocol.blockDestination(destinationHash)
+                    if (blackholeEnabled && peerIdentityHash != null) {
+                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                    }
+                    Log.d(TAG, "Blocked peer ${destinationHash.take(16)} (blackhole=$blackholeEnabled)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error blocking peer", e)
                 }
             }
         }
@@ -543,6 +589,25 @@ class AnnounceStreamViewModel
                 }
             }
         }
+
+        /**
+         * Get all announces sharing the same identity as [destinationHash], excluding [destinationHash] itself.
+         * Used to surface cross-links between telephony (lxst.telephony) and messaging (lxmf.delivery)
+         * destinations that belong to the same peer identity.
+         *
+         * Reactive: re-emits whenever the source announce or its linked announces change in the DB.
+         */
+        fun getLinkedAnnouncesFlow(destinationHash: String): Flow<List<Announce>> =
+            announceRepository.getAnnounceFlow(destinationHash).flatMapLatest { announce ->
+                if (announce == null) {
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                } else {
+                    val identityHash =
+                        com.lxmf.messenger.data.util.HashUtils
+                            .computeIdentityHash(announce.publicKey)
+                    announceRepository.getLinkedAnnouncesFlow(identityHash, destinationHash)
+                }
+            }
 
         // TODO: viewModelScope is cancelled shortly after onCleared() returns (as a
         // registered Closeable), so the coroutine launched below is likely cancelled

@@ -11,6 +11,7 @@ import com.lxmf.messenger.notifications.CallNotificationHelper
 import com.lxmf.messenger.reticulum.rnode.KotlinRNodeBridge
 import com.lxmf.messenger.reticulum.rnode.RNodeErrorListener
 import com.lxmf.messenger.reticulum.usb.KotlinUSBBridge
+import com.lxmf.messenger.service.di.ServiceDatabaseProvider
 import com.lxmf.messenger.service.manager.BleCoordinator
 import com.lxmf.messenger.service.manager.CallbackBroadcaster
 import com.lxmf.messenger.service.manager.EventHandler
@@ -127,6 +128,9 @@ class ReticulumServiceBinder(
                             eventHandler.startEventHandling()
                             eventHandler.drainPendingMessages()
 
+                            // Restore LXMF blocked destinations from DB
+                            restoreBlockedDestinations()
+
                             // Announce LXMF destination
                             announceLxmfDestination()
 
@@ -231,8 +235,13 @@ class ReticulumServiceBinder(
             // Register online status listener to trigger UI refresh when RNode connects/disconnects
             rnodeBridge?.addOnlineStatusListener(
                 object : com.lxmf.messenger.reticulum.rnode.RNodeOnlineStatusListener {
-                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean) {
-                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ online=$isOnline")
+                    override fun onRNodeOnlineStatusChanged(
+                        isOnline: Boolean,
+                        interfaceName: String,
+                    ) {
+                        Log.d(TAG, "████ RNODE ONLINE STATUS CHANGED ████ [$interfaceName] online=$isOnline")
+                        // Update RNode alert notification (heads-up on disconnect, cancel on reconnect)
+                        notificationManager.updateRNodeStatus(isOnline, interfaceName)
                         // Broadcast status change so UI can refresh interface list
                         broadcaster.broadcastStatusChange(
                             if (isOnline) "RNODE_ONLINE" else "RNODE_OFFLINE",
@@ -296,6 +305,35 @@ class ReticulumServiceBinder(
             Log.d(TAG, "Message received callback set before Python initialization")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set message received callback before init: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Restore LXMF blocked destinations from the database after Python init.
+     * Blackhole does NOT need restore — Reticulum persists and reloads its own list.
+     */
+    private fun restoreBlockedDestinations() {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val db = ServiceDatabaseProvider.getDatabase(context)
+                val localIdentityDao = db.localIdentityDao()
+                val blockedPeerDao = db.blockedPeerDao()
+                val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return@launch
+                val blockedHashes = blockedPeerDao.getBlockedPeerHashes(activeIdentity.identityHash)
+                if (blockedHashes.isNotEmpty()) {
+                    wrapperManager.withWrapper { wrapper ->
+                        val pyList =
+                            com.chaquo.python.Python
+                                .getInstance()
+                                .builtins
+                                .callAttr("list", blockedHashes.toTypedArray())
+                        wrapper.callAttr("restore_blocked_destinations", pyList)
+                    }
+                    Log.i(TAG, "Restored ${blockedHashes.size} LXMF block(s) from DB")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error restoring blocked destinations", e)
+            }
         }
     }
 
@@ -429,7 +467,11 @@ class ReticulumServiceBinder(
 
     override fun requestPath(destHash: ByteArray): String = routingManager.requestPath(destHash)
 
+    override fun persistTransportData() = routingManager.persistTransportData()
+
     override fun getHopCount(destHash: ByteArray): Int = routingManager.getHopCount(destHash)
+
+    override fun getNextHopInterfaceName(destHash: ByteArray): String? = routingManager.getNextHopInterfaceName(destHash)
 
     override fun getPathTableHashes(): String = routingManager.getPathTableHashes()
 
@@ -1008,6 +1050,110 @@ class ReticulumServiceBinder(
         }
 
     // ===========================================
+    // Peer Blocking & Blackhole
+    // ===========================================
+
+    override fun blockDestination(destinationHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("block_destination", destinationHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error blocking destination", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    override fun unblockDestination(destinationHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("unblock_destination", destinationHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unblocking destination", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    override fun restoreBlockedDestinations(hashesJson: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                val pyList =
+                    com.chaquo.python.Python
+                        .getInstance()
+                        .builtins
+                        .callAttr(
+                            "list",
+                            org.json.JSONArray(hashesJson).let { arr ->
+                                Array(arr.length()) { arr.getString(it) }
+                            },
+                        )
+                wrapper.callAttr("restore_blocked_destinations", pyList)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring blocked destinations", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    override fun blackholeIdentity(identityHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("blackhole_identity", identityHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error blackholing identity", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    override fun unblackholeIdentity(identityHashHex: String): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("unblackhole_identity", identityHashHex)?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unblackholing identity", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    override fun isTransportEnabled(): String =
+        try {
+            wrapperManager.withWrapper { wrapper ->
+                wrapper.callAttr("is_transport_enabled")?.toString()
+                    ?: """{"success": false, "error": "No result"}"""
+            } ?: """{"success": false, "error": "Wrapper not initialized"}"""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking transport enabled", e)
+            org.json
+                .JSONObject()
+                .put("success", false)
+                .put("error", e.message ?: "Unknown error")
+                .toString()
+        }
+
+    // ===========================================
     // Conversation Link Management
     // ===========================================
 
@@ -1100,6 +1246,26 @@ class ReticulumServiceBinder(
             Log.e(TAG, "Error fetching RMSP tiles", e)
             null
         }
+
+    // ===========================================
+    // NomadNet Page Browser
+    // ===========================================
+
+    override fun requestNomadnetPage(
+        destHash: ByteArray,
+        path: String,
+        formDataJson: String?,
+        timeoutSeconds: Float,
+    ): String {
+        Log.d(TAG, "Requesting NomadNet page: $path from ${destHash.joinToString("") { "%02x".format(it) }.take(16)}...")
+        return wrapperManager.requestNomadnetPage(destHash, path, formDataJson, timeoutSeconds)
+    }
+
+    override fun cancelNomadnetPageRequest() {
+        wrapperManager.cancelNomadnetPageRequest()
+    }
+
+    override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)
 
     // ===========================================
     // Event Broadcasting Helpers

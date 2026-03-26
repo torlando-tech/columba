@@ -3,6 +3,7 @@ package com.lxmf.messenger.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.lxmf.messenger.data.db.dao.AnnounceDao
+import com.lxmf.messenger.data.db.dao.BlockedPeerDao
 import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
@@ -15,6 +16,7 @@ import com.lxmf.messenger.data.db.dao.PeerIdentityDao
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.dao.RmspServerDao
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
+import com.lxmf.messenger.data.db.entity.BlockedPeerEntity
 import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
@@ -41,8 +43,9 @@ import com.lxmf.messenger.data.db.entity.RmspServerEntity
         OfflineMapRegionEntity::class,
         RmspServerEntity::class,
         DraftEntity::class,
+        BlockedPeerEntity::class,
     ],
-    version = 40,
+    version = 43,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -69,4 +72,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun rmspServerDao(): RmspServerDao
 
     abstract fun draftDao(): DraftDao
+
+    abstract fun blockedPeerDao(): BlockedPeerDao
 }

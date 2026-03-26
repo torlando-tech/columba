@@ -148,6 +148,9 @@ class SettingsRepository
             // Update checker preferences
             val INCLUDE_PRERELEASE_UPDATES = booleanPreferencesKey("include_prerelease_updates")
             val LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
+
+            // Message sort order: false = received time (default), true = sent time
+            val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1899,6 +1902,22 @@ class SettingsRepository
         suspend fun setLastUpdateCheckTime(time: Long) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_UPDATE_CHECK_TIME] = time
+            }
+        }
+
+        /**
+         * Whether to sort messages by sender's timestamp instead of received time.
+         * Default is false (sort by received time, which handles sender clock skew).
+         */
+        val sortMessagesBySentTime: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SORT_MESSAGES_BY_SENT_TIME] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSortMessagesBySentTime(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SORT_MESSAGES_BY_SENT_TIME] = enabled
             }
         }
     }

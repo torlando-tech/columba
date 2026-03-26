@@ -76,6 +76,8 @@ fun Message.toMessageUi(): MessageUi {
         receivedInterface = receivedInterface,
         receivedRssi = receivedRssi,
         receivedSnr = receivedSnr,
+        receivedAt = receivedAt,
+        sentInterface = sentInterface,
     )
 }
 

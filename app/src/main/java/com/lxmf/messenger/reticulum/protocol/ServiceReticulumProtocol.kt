@@ -457,9 +457,15 @@ class ServiceReticulumProtocol(
                                 Log.w(TAG, "No alternative relay handler set, providing null")
                                 service?.provideAlternativeRelay(null)
                             }
+                        } catch (e: RemoteException) {
+                            Log.w(TAG, "Service died before alternative relay could be provided", e)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error handling alternative relay request", e)
-                            service?.provideAlternativeRelay(null)
+                            try {
+                                service?.provideAlternativeRelay(null)
+                            } catch (re: RemoteException) {
+                                Log.w(TAG, "Service died during alternative relay error recovery", re)
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -815,6 +821,7 @@ class ServiceReticulumProtocol(
                 service?.unregisterCallback(serviceCallback)
                 context.unbindService(serviceConnection)
                 isBound = false
+                _networkStatus.value = NetworkStatus.SHUTDOWN
                 // Reset ready flag to ensure fresh bind waits for new service callback
                 // Without this, a subsequent bindService() may see the stale flag and
                 // resume immediately with a dead binder reference (DeadObjectException)
@@ -1556,12 +1563,28 @@ class ServiceReticulumProtocol(
             }
         }
 
+    override suspend fun persistTransportData() {
+        try {
+            service?.persistTransportData()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting transport data", e)
+        }
+    }
+
     override fun getHopCount(destinationHash: ByteArray): Int? =
         try {
             val count = service?.getHopCount(destinationHash) ?: -1
             if (count >= 0) count else null
         } catch (e: Exception) {
             Log.e(TAG, "Error getting hop count", e)
+            null
+        }
+
+    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? =
+        try {
+            service?.getNextHopInterfaceName(destinationHash)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting next hop interface name", e)
             null
         }
 
@@ -2792,6 +2815,85 @@ class ServiceReticulumProtocol(
             }
         }
 
+    // NomadNet page browser
+
+    /**
+     * Request a page from a NomadNet node.
+     *
+     * @param destinationHash Destination hash as hex string (32 chars)
+     * @param path Page path (e.g., "/page/index.mu")
+     * @param formDataJson Optional JSON string of form field values
+     * @param timeoutSeconds Total timeout for the operation
+     * @return Result with content and path, or failure
+     */
+    suspend fun requestNomadnetPage(
+        destinationHash: String,
+        path: String = "/page/index.mu",
+        formDataJson: String? = null,
+        timeoutSeconds: Float = 45f,
+    ): Result<NomadnetPageResult> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+
+                val destHashBytes = destinationHash.hexToByteArray()
+                val resultJson =
+                    service.requestNomadnetPage(
+                        destHashBytes,
+                        path,
+                        formDataJson,
+                        timeoutSeconds,
+                    )
+
+                val result = org.json.JSONObject(resultJson)
+                if (result.optBoolean("success", false)) {
+                    NomadnetPageResult(
+                        content = result.getString("content"),
+                        path = result.getString("path"),
+                    )
+                } else {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    suspend fun cancelNomadnetPageRequest() {
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                this@ServiceReticulumProtocol.service?.cancelNomadnetPageRequest()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cancelling NomadNet page request", e)
+            }
+        }
+    }
+
+    /**
+     * Identify ourselves on an existing NomadNet link.
+     * @return Result<Boolean> where Boolean = alreadyIdentified
+     */
+    suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            runCatching {
+                val service =
+                    this@ServiceReticulumProtocol.service
+                        ?: throw IllegalStateException("Service not bound")
+                val resultJson = service.identifyNomadnetLink(destinationHash.hexToByteArray())
+                val result = org.json.JSONObject(resultJson)
+                if (result.optBoolean("success", false)) {
+                    result.optBoolean("already_identified", false)
+                } else {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    data class NomadnetPageResult(
+        val content: String,
+        val path: String,
+    )
+
     // Helper extension functions
 
     /**
@@ -2848,6 +2950,71 @@ class ServiceReticulumProtocol(
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to get BLE-Reticulum version", e)
                 null
+            }
+        }
+
+    // ===========================================
+    // Peer Blocking & Blackhole
+    // ===========================================
+
+    override suspend fun blockDestination(destinationHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.blockDestination(destinationHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.unblockDestination(destinationHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.blackholeIdentity(identityHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val svc = service ?: throw IllegalStateException("Service not bound")
+                val resultJson = svc.unblackholeIdentity(identityHashHex)
+                val result = JSONObject(resultJson)
+                if (!result.optBoolean("success", false)) {
+                    throw RuntimeException(result.optString("error", "Unknown error"))
+                }
+            }
+        }
+
+    override suspend fun isTransportEnabled(): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val svc = service ?: return@withContext false
+                val resultJson = svc.isTransportEnabled()
+                val result = JSONObject(resultJson)
+                result.optBoolean("enabled", false)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking transport enabled", e)
+                false
             }
         }
 

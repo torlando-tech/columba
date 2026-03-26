@@ -144,11 +144,24 @@ interface IReticulumService {
     String requestPath(in byte[] destHash);
 
     /**
+     * Persist Reticulum's transport data (path table, destinations) to disk.
+     * Called periodically for crash resilience.
+     */
+    void persistTransportData();
+
+    /**
      * Get hop count to destination.
      * @param destHash Destination hash bytes
      * @return Hop count, or -1 if unknown
      */
     int getHopCount(in byte[] destHash);
+
+    /**
+     * Get the next-hop interface name for a destination.
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return Formatted interface name (e.g., "TCPInterface[Server/1.2.3.4:4242]"), or null
+     */
+    String getNextHopInterfaceName(in byte[] destHash);
 
     /**
      * Get list of destination hashes from RNS path table.
@@ -560,6 +573,49 @@ interface IReticulumService {
      */
     byte[] fetchRmspTiles(String destinationHashHex, in byte[] publicKey, String geohash, int zoomMin, int zoomMax, long timeoutMs);
 
+    // ==================== PEER BLOCKING & BLACKHOLE ====================
+
+    /**
+     * Block a destination via LXMF router ignore list.
+     * @param destinationHashHex Hex-encoded destination hash
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String blockDestination(String destinationHashHex);
+
+    /**
+     * Unblock a destination from LXMF router ignore list.
+     * @param destinationHashHex Hex-encoded destination hash
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String unblockDestination(String destinationHashHex);
+
+    /**
+     * Restore LXMF blocked destinations from DB at startup.
+     * @param hashesJson JSON array of hex-encoded destination hashes
+     * @return JSON string with result: {"success": true/false, "restored_count": N}
+     */
+    String restoreBlockedDestinations(String hashesJson);
+
+    /**
+     * Blackhole an identity at the Reticulum transport level.
+     * @param identityHashHex Hex-encoded identity hash (16 bytes)
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String blackholeIdentity(String identityHashHex);
+
+    /**
+     * Remove an identity from Reticulum blackhole list.
+     * @param identityHashHex Hex-encoded identity hash (16 bytes)
+     * @return JSON string with result: {"success": true/false, "error": "..."}
+     */
+    String unblackholeIdentity(String identityHashHex);
+
+    /**
+     * Check if Reticulum transport mode is currently enabled.
+     * @return JSON string with result: {"success": true, "enabled": true/false}
+     */
+    String isTransportEnabled();
+
     // ==================== VOICE CALLS (LXST) ====================
 
     /**
@@ -601,4 +657,31 @@ interface IReticulumService {
      * @return JSON string with call state: {"status": "idle/connecting/ringing/active/ended", "remote_identity": "...", "is_muted": false}
      */
     String getCallState();
+
+    // ==================== NOMADNET PAGE BROWSER ====================
+
+    /**
+     * Request a page from a NomadNet node.
+     * Establishes a link to the nomadnetwork.node destination and fetches the page.
+     *
+     * @param destHash Destination hash bytes (16 bytes)
+     * @param path Page path (e.g., "/page/index.mu")
+     * @param formDataJson Optional JSON string of form field name/value pairs
+     * @param timeoutSeconds Total timeout for the operation
+     * @return JSON string with result: {"success": true, "content": "...", "path": "..."} or error
+     */
+    String requestNomadnetPage(in byte[] destHash, String path, String formDataJson, float timeoutSeconds);
+
+    /**
+     * Cancel any in-progress NomadNet page request.
+     * Fire-and-forget (oneway) since cancellation is best-effort.
+     */
+    oneway void cancelNomadnetPageRequest();
+
+    /**
+     * Identify ourselves on an existing NomadNet link (Strangler Fig -> rns_api.py).
+     * @param destHash Destination hash bytes (16 bytes)
+     * @return JSON string: {"success": true, "already_identified": false} or error
+     */
+    String identifyNomadnetLink(in byte[] destHash);
 }

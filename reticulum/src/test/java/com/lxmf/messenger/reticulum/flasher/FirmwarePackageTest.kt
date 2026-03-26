@@ -126,6 +126,34 @@ class GitHubReleaseTest {
 
         assertEquals("1.78", release.version)
     }
+
+    @Test
+    fun `version prefers name when it looks like a version`() {
+        val release =
+            GitHubRelease(
+                id = 1,
+                tagName = "1.85",
+                name = "1.85.9",
+                createdAt = "2024-01-01T00:00:00Z",
+                htmlUrl = "https://github.com/test",
+            )
+
+        assertEquals("1.85.9", release.version)
+    }
+
+    @Test
+    fun `version falls back to tagName when name is descriptive`() {
+        val release =
+            GitHubRelease(
+                id = 1,
+                tagName = "v1.78",
+                name = "1.78 - Bug fixes and improvements",
+                createdAt = "2024-01-01T00:00:00Z",
+                htmlUrl = "https://github.com/test",
+            )
+
+        assertEquals("1.78", release.version)
+    }
 }
 
 class GitHubAssetTest {

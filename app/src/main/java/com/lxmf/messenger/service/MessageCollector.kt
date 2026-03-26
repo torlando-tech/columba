@@ -52,6 +52,7 @@ class MessageCollector
     ) {
         companion object {
             private const val TAG = "MessageCollector"
+            private const val PRESEED_WINDOW_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
         }
 
         // Application-scoped coroutine for background message collection
@@ -83,6 +84,20 @@ class MessageCollector
 
             // Collect messages from the Reticulum protocol
             scope.launch {
+                // Pre-seed processedMessageIds with recent received messages from the DB.
+                // This prevents duplicate notifications when messages are replayed via SharedFlow
+                // or re-broadcast by drainPendingMessages() after a service restart.
+                // Bounded to last 30 days to avoid unbounded memory growth.
+                // Done inside the collection coroutine to ensure it completes before we subscribe.
+                try {
+                    val thirtyDaysAgo = System.currentTimeMillis() - PRESEED_WINDOW_MS
+                    val existingIds = conversationRepository.getReceivedMessageIds(since = thirtyDaysAgo)
+                    processedMessageIds.addAll(existingIds)
+                    Log.i(TAG, "Pre-seeded ${existingIds.size} existing message IDs for notification dedup")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to pre-seed message IDs - duplicate notifications may occur", e)
+                }
+
                 try {
                     reticulumProtocol.observeMessages().collect { receivedMessage ->
                         // De-duplicate: Skip if we've already processed this message in-memory
@@ -186,14 +201,15 @@ class MessageCollector
                         Log.d(TAG, "Received new message #${_messagesCollected.value} from $sourceHash")
 
                         // Create data message for storage
+                        val now = System.currentTimeMillis()
                         val dataMessage =
                             DataMessage(
                                 id = receivedMessage.messageHash,
                                 // From sender's perspective
                                 destinationHash = sourceHash,
                                 content = receivedMessage.content,
-                                // Use local reception time for consistent ordering
-                                timestamp = System.currentTimeMillis(),
+                                // Use sender's timestamp for display; receivedAt for sort ordering
+                                timestamp = receivedMessage.timestamp,
                                 isFromMe = false,
                                 status = "delivered",
                                 // LXMF attachments
@@ -201,6 +217,8 @@ class MessageCollector
                                 // Routing info (hop count and receiving interface)
                                 receivedHopCount = receivedMessage.receivedHopCount,
                                 receivedInterface = receivedMessage.receivedInterface,
+                                // Local reception time for sort ordering
+                                receivedAt = now,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash

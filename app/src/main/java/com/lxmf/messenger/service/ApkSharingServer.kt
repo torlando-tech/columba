@@ -86,6 +86,9 @@ class ApkSharingServer {
     /** Filename used in the Content-Disposition header when serving the APK. */
     var downloadFileName: String = "columba.apk"
 
+    /** Base64-encoded PNG app icon for the download page. Set by the ViewModel. */
+    var iconBase64: String? = null
+
     private var serverSocket: ServerSocket? = null
     private val isRunning = AtomicBoolean(false)
     private var clientExecutor: ExecutorService? = null
@@ -247,8 +250,27 @@ class ApkSharingServer {
     }
 
     private fun serveDownloadPage(output: BufferedOutputStream) {
-        val html =
-            """
+        val body = buildDownloadPageHtml().toByteArray()
+        val headers =
+            buildString {
+                append("HTTP/1.1 200 OK\r\n")
+                append("Content-Type: text/html; charset=utf-8\r\n")
+                append("Content-Length: ${body.size}\r\n")
+                append("Connection: close\r\n")
+                append("\r\n")
+            }
+
+        output.write(headers.toByteArray())
+        output.write(body)
+    }
+
+    private fun buildDownloadPageHtml(): String {
+        val iconTag =
+            iconBase64?.let {
+                """<img class="icon" src="data:image/png;base64,$it" alt="Columba">"""
+            } ?: ""
+
+        return """
             <!DOCTYPE html>
             <html>
             <head>
@@ -285,6 +307,12 @@ class ApkSharingServer {
                         font-size: 18px;
                         font-weight: 600;
                     }
+                    .icon {
+                        width: 80px;
+                        height: 80px;
+                        border-radius: 20px;
+                        margin-bottom: 12px;
+                    }
                     .note {
                         font-size: 12px;
                         color: #777;
@@ -294,6 +322,7 @@ class ApkSharingServer {
             </head>
             <body>
                 <div class="card">
+                    $iconTag
                     <h1>Columba</h1>
                     <p>Tap the button below to download the Columba messenger APK.</p>
                     <a class="btn" href="/columba.apk">Download APK</a>
@@ -303,19 +332,6 @@ class ApkSharingServer {
             </body>
             </html>
             """.trimIndent()
-
-        val body = html.toByteArray()
-        val headers =
-            buildString {
-                append("HTTP/1.1 200 OK\r\n")
-                append("Content-Type: text/html; charset=utf-8\r\n")
-                append("Content-Length: ${body.size}\r\n")
-                append("Connection: close\r\n")
-                append("\r\n")
-            }
-
-        output.write(headers.toByteArray())
-        output.write(body)
     }
 
     private fun serveNotFound(output: BufferedOutputStream) {

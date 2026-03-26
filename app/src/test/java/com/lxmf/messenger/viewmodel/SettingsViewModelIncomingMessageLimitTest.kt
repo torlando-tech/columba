@@ -185,6 +185,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.telemetryHostModeEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.telemetryAllowedRequestersFlow } returns MutableStateFlow(emptySet())
         every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
+        every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
+        every { settingsRepository.tryPropagationOnFailFlow } returns MutableStateFlow(true)
         coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Mock PropagationNodeManager flows (StateFlows)

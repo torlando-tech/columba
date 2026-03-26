@@ -5,6 +5,7 @@ import android.util.Log
 import com.lxmf.messenger.reticulum.usb.KotlinUSBBridge
 import com.lxmf.messenger.reticulum.usb.UsbDeviceInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,6 +66,8 @@ class RNodeFlasher(
 
     private val _flashState = MutableStateFlow<FlashState>(FlashState.Idle)
     val flashState: StateFlow<FlashState> = _flashState.asStateFlow()
+
+    val tncModeController = TncModeController(usbBridge, detector, _flashState)
 
     /**
      * Flash state for UI observation.
@@ -558,6 +561,7 @@ class RNodeFlasher(
      * @param board Target board type
      * @param frequencyBand Frequency band
      * @param version Version to download (null for latest)
+     * @param source Firmware source (GitHub repo) to download from
      * @return true if successful
      */
     suspend fun downloadAndFlash(
@@ -565,6 +569,7 @@ class RNodeFlasher(
         board: RNodeBoard,
         frequencyBand: FrequencyBand,
         version: String? = null,
+        source: FirmwareSource = FirmwareSource.Official,
     ): Boolean =
         withContext(Dispatchers.IO) {
             _flashState.value = FlashState.Progress(0, "Checking for firmware...")
@@ -573,10 +578,10 @@ class RNodeFlasher(
                 // Get release info
                 val release =
                     if (version != null) {
-                        val releases = firmwareDownloader.getAvailableReleases()
+                        val releases = firmwareDownloader.getAvailableReleases(source)
                         releases?.find { it.version == version }
                     } else {
-                        firmwareDownloader.getLatestRelease()
+                        firmwareDownloader.getLatestRelease(source)
                     }
 
                 if (release == null) {
@@ -638,6 +643,7 @@ class RNodeFlasher(
 
                 val firmwarePackage =
                     firmwareRepository.saveFirmware(
+                        source,
                         board,
                         release.version,
                         frequencyBand,

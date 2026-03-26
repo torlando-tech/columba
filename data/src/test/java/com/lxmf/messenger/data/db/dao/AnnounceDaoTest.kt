@@ -59,6 +59,7 @@ class AnnounceDaoTest {
         hops: Int = 1,
         lastSeenTimestamp: Long = System.currentTimeMillis(),
         stampCostFlexibility: Int? = null,
+        isFavorite: Boolean = false,
     ) = AnnounceEntity(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -74,8 +75,8 @@ class AnnounceDaoTest {
                 "PEER" -> "lxmf.delivery"
                 else -> null
             },
-        isFavorite = false,
-        favoritedTimestamp = null,
+        isFavorite = isFavorite,
+        favoritedTimestamp = if (isFavorite) lastSeenTimestamp else null,
         stampCost = if (stampCostFlexibility != null) 16 else null,
         stampCostFlexibility = stampCostFlexibility,
         peeringCost = if (stampCostFlexibility != null) 18 else null,
@@ -548,5 +549,119 @@ class AnnounceDaoTest {
             // Then - All announces deleted (original behavior unchanged)
             val remaining = dao.getAllAnnouncesSync()
             assertEquals(0, remaining.size)
+        }
+
+    // ========== deleteStaleAnnounces Tests ==========
+
+    @Test
+    fun deleteStaleAnnounces_deletesAnnouncesOlderThanCutoff() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val thirtyOneDaysAgo = now - (31L * 24 * 60 * 60 * 1000)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old1", lastSeenTimestamp = thirtyOneDaysAgo))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old2", lastSeenTimestamp = thirtyOneDaysAgo - 1000))
+
+            val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(2, deleted)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(0, remaining.size)
+        }
+
+    @Test
+    fun deleteStaleAnnounces_preservesRecentAnnounces() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val thirtyOneDaysAgo = now - (31L * 24 * 60 * 60 * 1000)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "recent", lastSeenTimestamp = now))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old", lastSeenTimestamp = thirtyOneDaysAgo))
+
+            val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(1, deleted)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(1, remaining.size)
+            assertEquals("recent", remaining[0].destinationHash)
+        }
+
+    @Test
+    fun deleteStaleAnnounces_preservesOldFavorites() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val thirtyOneDaysAgo = now - (31L * 24 * 60 * 60 * 1000)
+
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "old_fav", lastSeenTimestamp = thirtyOneDaysAgo, isFavorite = true),
+            )
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "old_nonfav", lastSeenTimestamp = thirtyOneDaysAgo),
+            )
+
+            val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(1, deleted)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(1, remaining.size)
+            assertEquals("old_fav", remaining[0].destinationHash)
+        }
+
+    @Test
+    fun deleteStaleAnnounces_preservesOldContacts() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val thirtyOneDaysAgo = now - (31L * 24 * 60 * 60 * 1000)
+
+            val identity = createTestIdentity("test_identity_hash")
+            identityDao.insert(identity)
+
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old_contact", lastSeenTimestamp = thirtyOneDaysAgo))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old_stranger", lastSeenTimestamp = thirtyOneDaysAgo))
+
+            contactDao.insertContact(createTestContact("old_contact", "test_identity_hash"))
+
+            val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(1, deleted)
+            val remaining = dao.getAllAnnouncesSync()
+            assertEquals(1, remaining.size)
+            assertEquals("old_contact", remaining[0].destinationHash)
+        }
+
+    @Test
+    fun deleteStaleAnnounces_handlesEmptyTable() =
+        runTest {
+            val cutoff = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(0, deleted)
+        }
+
+    @Test
+    fun deleteStaleAnnounces_returnsCorrectDeletedCount() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val thirtyOneDaysAgo = now - (31L * 24 * 60 * 60 * 1000)
+
+            // 3 old (deletable), 2 recent (kept), 1 old favorite (kept)
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old1", lastSeenTimestamp = thirtyOneDaysAgo))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old2", lastSeenTimestamp = thirtyOneDaysAgo))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "old3", lastSeenTimestamp = thirtyOneDaysAgo))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "recent1", lastSeenTimestamp = now))
+            dao.upsertAnnounce(createTestAnnounce(destinationHash = "recent2", lastSeenTimestamp = now))
+            dao.upsertAnnounce(
+                createTestAnnounce(destinationHash = "old_fav", lastSeenTimestamp = thirtyOneDaysAgo, isFavorite = true),
+            )
+
+            val cutoff = now - (30L * 24 * 60 * 60 * 1000)
+            val deleted = dao.deleteStaleAnnounces(cutoff)
+
+            assertEquals(3, deleted)
+            assertEquals(3, dao.getAllAnnouncesSync().size)
         }
 }

@@ -44,6 +44,8 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -51,6 +53,7 @@ class AnnounceDetailScreenTest {
                     destinationHash = "test_hash",
                     onBackClick = {},
                     onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
                     viewModel = mockViewModel,
                 )
             }
@@ -72,6 +75,8 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -79,6 +84,7 @@ class AnnounceDetailScreenTest {
                     destinationHash = "test_hash",
                     onBackClick = {},
                     onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
                     viewModel = mockViewModel,
                 )
             }
@@ -96,6 +102,8 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -103,6 +111,7 @@ class AnnounceDetailScreenTest {
                     destinationHash = "test_hash",
                     onBackClick = {},
                     onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
                     viewModel = mockViewModel,
                 )
             }
@@ -120,6 +129,8 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -127,6 +138,7 @@ class AnnounceDetailScreenTest {
                     destinationHash = "test_hash",
                     onBackClick = {},
                     onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
                     viewModel = mockViewModel,
                 )
             }
@@ -143,6 +155,8 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
         every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -150,6 +164,7 @@ class AnnounceDetailScreenTest {
                     destinationHash = "test_hash",
                     onBackClick = {},
                     onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
                     viewModel = mockViewModel,
                 )
             }

@@ -16,6 +16,7 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,7 @@ class AnnounceStreamViewModelTest {
     private lateinit var contactRepository: ContactRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var identityRepository: IdentityRepository
+    private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
     private lateinit var announceFlow: MutableSharedFlow<AnnounceEvent>
     private lateinit var viewModel: AnnounceStreamViewModel
@@ -105,6 +107,8 @@ class AnnounceStreamViewModelTest {
         contactRepository = mockk()
         propagationNodeManager = mockk()
         identityRepository = mockk()
+        identityResolutionManager = mockk()
+        coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
 
         // Setup network status flow
         networkStatusFlow = MutableStateFlow(NetworkStatus.SHUTDOWN)
@@ -158,7 +162,16 @@ class AnnounceStreamViewModelTest {
     @Test
     fun `waits for READY status before collecting announces`() =
         runTest {
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
 
             // Status starts as SHUTDOWN - should wait
             viewModel.initializationStatus.test {
@@ -178,7 +191,16 @@ class AnnounceStreamViewModelTest {
     @Test
     fun `handles ERROR status and stops waiting`() =
         runTest {
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
 
             viewModel.initializationStatus.test {
                 assertEquals("Reticulum managed by app", awaitItem())
@@ -199,7 +221,16 @@ class AnnounceStreamViewModelTest {
     fun `handles timeout waiting for READY`() =
         runTest {
             // Don't change status - let it timeout
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
 
             // Fast-forward past the 10 second timeout
             testScheduler.advanceTimeBy(11000)
@@ -221,7 +252,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.getAnnounceCount() } returns 1
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Emit an announce
@@ -259,7 +299,16 @@ class AnnounceStreamViewModelTest {
                 announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } answers { saveCount++ }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Emit multiple announces
@@ -296,7 +345,16 @@ class AnnounceStreamViewModelTest {
                 announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } throws Exception("Database error")
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Emit an announce - should not crash
@@ -317,7 +375,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Verify default selected node types before collecting
@@ -339,7 +406,16 @@ class AnnounceStreamViewModelTest {
             // Start with INITIALIZING
             networkStatusFlow.value = NetworkStatus.INITIALIZING
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
 
             viewModel.initializationStatus.test {
                 assertEquals("Reticulum managed by app", awaitItem())
@@ -365,7 +441,16 @@ class AnnounceStreamViewModelTest {
                     appData = "MyCustomNode".toByteArray(),
                 )
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             announceFlow.emit(announceWithName)
@@ -398,7 +483,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Check default filter
@@ -417,7 +511,16 @@ class AnnounceStreamViewModelTest {
             // Mock both PEER (default) and the types we'll filter by
             every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Update filter to NODE and PROPAGATION_NODE
@@ -445,7 +548,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Set empty filter
@@ -472,7 +584,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Set search query
@@ -498,7 +619,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
 
             // Use ServiceReticulumProtocol instead of base ReticulumProtocol
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Initial state
@@ -529,7 +659,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { serviceReticulumProtocol.triggerAutoAnnounce(any()) } returns Result.failure(Exception("Network error"))
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce (don't advance past auto-dismiss)
@@ -550,7 +689,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
 
             // Use base ReticulumProtocol (not ServiceReticulumProtocol)
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce (don't advance past auto-dismiss)
@@ -571,7 +719,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { identityRepository.getActiveIdentitySync() } returns null
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce (don't advance past auto-dismiss)
@@ -592,7 +749,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Capture isAnnouncing states during execution
@@ -622,7 +788,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger successful announce (don't advance past auto-dismiss)
@@ -646,7 +821,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { serviceReticulumProtocol.triggerAutoAnnounce(any()) } returns Result.failure(Exception("Test error"))
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger failed announce (don't advance past auto-dismiss)
@@ -670,7 +854,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { identityRepository.getActiveIdentitySync() } throws RuntimeException("Database error")
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce - should not crash (don't advance past auto-dismiss)
@@ -689,7 +882,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce and let it complete but NOT auto-dismiss
@@ -715,7 +917,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { serviceReticulumProtocol.triggerAutoAnnounce(any()) } returns Result.failure(Exception("Network error"))
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Trigger announce and let it complete but NOT auto-dismiss
@@ -740,7 +951,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(serviceReticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    serviceReticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Verify initial state
@@ -756,7 +976,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Verify initial count is 0 (from stateIn initialValue)
@@ -768,7 +997,16 @@ class AnnounceStreamViewModelTest {
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Verify announceCount has an initial value (from the repository flow)
@@ -787,7 +1025,16 @@ class AnnounceStreamViewModelTest {
 
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Subscribe to the StateFlow to trigger collection
@@ -814,7 +1061,16 @@ class AnnounceStreamViewModelTest {
             // Given: Network is SHUTDOWN
             networkStatusFlow.value = NetworkStatus.SHUTDOWN
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // When: We wait for any periodic updates (none should happen due to updateIntervalMs = 0)
@@ -834,7 +1090,16 @@ class AnnounceStreamViewModelTest {
             // Given: Network starts as READY
             networkStatusFlow.value = NetworkStatus.READY
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Clear any initial calls
@@ -865,7 +1130,16 @@ class AnnounceStreamViewModelTest {
                 deletedHashes.add(firstArg())
             }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Delete an announce
@@ -884,7 +1158,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.deleteAnnounce(any()) } throws Exception("Database error")
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Delete should not crash even with error
@@ -907,7 +1190,16 @@ class AnnounceStreamViewModelTest {
                 calledWithIdentityHash = firstArg()
             }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Delete all announces
@@ -925,7 +1217,16 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { announceRepository.deleteAllAnnouncesExceptContacts(any()) } throws Exception("Database error")
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Delete all should not crash even with error
@@ -949,7 +1250,16 @@ class AnnounceStreamViewModelTest {
                 deleteAllCalled = true
             }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             advanceUntilIdle()
 
             // Delete all announces
@@ -979,7 +1289,16 @@ class AnnounceStreamViewModelTest {
                 emptyList()
             }
 
-            viewModel = AnnounceStreamViewModel(reticulumProtocol, announceRepository, contactRepository, propagationNodeManager, identityRepository)
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
             // Run the init block tasks (startCollectingAnnouncesWhenReady + first loop iteration)
             runCurrent()
 

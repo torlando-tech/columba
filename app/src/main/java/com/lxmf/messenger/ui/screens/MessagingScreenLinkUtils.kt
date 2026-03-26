@@ -17,7 +17,11 @@ private fun cleanUrlForOpening(raw: String): String {
  */
 internal fun toBrowsableUrl(rawUrl: String): String {
     val cleaned = cleanUrlForOpening(rawUrl)
-    val hasScheme = cleaned.startsWith("http://", ignoreCase = true) || cleaned.startsWith("https://", ignoreCase = true)
+    val hasScheme =
+        cleaned.startsWith("http://", ignoreCase = true) ||
+            cleaned.startsWith("https://", ignoreCase = true) ||
+            cleaned.startsWith("nomadnetwork://", ignoreCase = true) ||
+            cleaned.startsWith("lxma://", ignoreCase = true)
     return if (hasScheme) cleaned else "https://$cleaned"
 }
 

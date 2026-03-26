@@ -70,7 +70,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
 import com.lxmf.messenger.reticulum.model.NodeType
-import com.lxmf.messenger.ui.components.AudioBadge
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.OtherBadge
 import com.lxmf.messenger.ui.components.PeerCard
@@ -431,13 +430,14 @@ fun NodeTypeFilterDialog(
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                // Checkbox for each node type
-                NodeType.entries.forEach { nodeType ->
+                // Checkbox for each node type (PHONE is shown via the audio toggle, not here)
+                NodeType.entries.filter { it != NodeType.PHONE }.forEach { nodeType ->
                     val (displayName, description) =
                         when (nodeType) {
                             NodeType.NODE -> "Node" to "Nomadnet nodes"
                             NodeType.PEER -> "Peer" to "Nodes you can message with"
                             NodeType.PROPAGATION_NODE -> "Relay" to "Relay/repeater nodes for signal propagation"
+                            NodeType.PHONE -> error("PHONE filtered above")
                         }
 
                     Row(
@@ -637,8 +637,7 @@ fun AnnounceCard(
         badgeContent = {
             // Show aspect-specific badge or node type badge
             when (announce.aspect) {
-                "call.audio" -> AudioBadge()
-                "lxmf.delivery", "lxmf.propagation", "nomadnetwork.node", null -> {
+                "lxmf.delivery", "lxmf.propagation", "nomadnetwork.node", "lxst.telephony", null -> {
                     NodeTypeBadge(nodeType = announce.nodeType)
                 }
                 else -> OtherBadge()

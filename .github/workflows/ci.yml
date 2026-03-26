@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, 'v[0-9].[0-9]+.x' ]
+    branches: [ main, 'v[0-9].[0-9]+.x', 'release/**' ]
   pull_request:
-    branches: [ main, 'v[0-9].[0-9]+.x' ]
+    branches: [ main, 'v[0-9].[0-9]+.x', 'release/**' ]
 
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 1
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+        uses: gradle/actions/wrapper-validation@v5
 
   lint:
     name: Code Quality (ktlint + detekt + CPD)
@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: false
 
@@ -136,7 +136,7 @@ jobs:
 
       - name: Comment audit results on PR
         if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -169,7 +169,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: false
 
@@ -289,7 +289,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: false
 
@@ -328,16 +328,31 @@ jobs:
             robolectric-4.16-
             robolectric-
 
+      - name: Resolve dependencies (with retry)
+        # Pre-resolve all dependencies before running tests. This isolates transient
+        # Maven repository errors (e.g. 502 from dl.google.com) from actual test failures,
+        # and avoids retrying the entire test suite for a network blip.
+        run: |
+          for attempt in 1 2 3; do
+            echo "Dependency resolution attempt $attempt/3..."
+            if ./gradlew :app:dependencies --configuration noSentryDebugUnitTestRuntimeClasspath -q 2>/dev/null; then
+              echo "Dependencies resolved successfully."
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to resolve dependencies after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::Dependency resolution failed (attempt $attempt), retrying in 15s..."
+            sleep 15
+          done
+
       - name: Run app unit tests (shard ${{ matrix.shard }})
         # Build cache enabled for faster incremental builds
         # AIDL and JaCoCo caching issues are handled by clean steps above
         # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
         # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
         run: ./gradlew :app:testNoSentryDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
-
-      - name: Run reticulum and data module tests
-        if: matrix.shard == 0
-        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
@@ -376,6 +391,91 @@ jobs:
             **/build/reports/jacoco/
           retention-days: 7
 
+  module-tests:
+    name: Module Tests (reticulum + data + micron)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Clean AIDL generated code
+        run: |
+          # Clean AIDL generated code to avoid stale cache issues
+          # This MUST happen before Gradle cache restore to prevent cached stale AIDL files
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
+
+      - name: Clean JaCoCo execution data
+        run: |
+          # Clean stale JaCoCo execution data to avoid "exceeds max age" errors in Codecov
+          rm -rf build/jacoco
+          rm -rf */build/jacoco
+          rm -rf build/reports/jacoco
+          rm -rf */build/reports/jacoco
+
+      - name: Cache Robolectric Android SDKs
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.16-${{ runner.os }}
+          restore-keys: |
+            robolectric-4.16-
+            robolectric-
+
+      - name: Run reticulum, data, and micron module tests
+        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-test-results
+          path: |
+            **/build/test-results/test*/*.xml
+            **/build/test-results/test*/*.html
+          retention-days: 7
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-test-reports
+          path: |
+            **/build/reports/tests/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./**/build/reports/jacoco/**/*.xml
+          flags: unittests
+          name: codecov-modules
+          fail_ci_if_error: false
+          verbose: true
+
   instrumented-tests:
     name: Instrumented Tests
     # Run in parallel with other jobs
@@ -392,7 +492,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: false
 
@@ -437,7 +537,7 @@ jobs:
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.37.0
         with:
           api-level: 34
           arch: x86_64
@@ -453,7 +553,7 @@ jobs:
             echo "Emulator ready, generating snapshot for caching."
 
       - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.37.0
         with:
           api-level: 34
           arch: x86_64
@@ -492,9 +592,11 @@ jobs:
 
       - name: Capture logcat on failure
         if: failure()
+        timeout-minutes: 1
+        continue-on-error: true
         run: |
           mkdir -p artifacts
-          adb logcat -d > artifacts/logcat.log || true
+          timeout 30 adb logcat -d > artifacts/logcat.log || true
 
       - name: Upload logcat output
         if: failure()
@@ -515,7 +617,7 @@ jobs:
   ci-passed:
     name: ✅ CI Passed — APK Ready
     if: always()
-    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, instrumented-tests]
+    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, module-tests, instrumented-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -528,7 +630,8 @@ jobs:
              [[ "${{ needs.threading-audit.result }}" != "success" ]] || \
              [[ "${{ needs.proguard-verification.result }}" != "success" ]] || \
              [[ "${{ needs.python-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.kotlin-tests.result }}" != "success" ]]; then
+             [[ "${{ needs.kotlin-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.module-tests.result }}" != "success" ]]; then
             echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
@@ -539,6 +642,7 @@ jobs:
             echo "| ProGuard Verification | ${{ needs.proguard-verification.result }} |" >> $GITHUB_STEP_SUMMARY
             echo "| Python Tests | ${{ needs.python-tests.result }} |" >> $GITHUB_STEP_SUMMARY
             echo "| Kotlin Tests | ${{ needs.kotlin-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Module Tests | ${{ needs.module-tests.result }} |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 

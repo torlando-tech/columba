@@ -21,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Hub
@@ -64,7 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.NodeTypeBadge
 import com.lxmf.messenger.ui.components.ProfileIcon
-import com.lxmf.messenger.ui.util.getReceivingInterfaceInfo
+import com.lxmf.messenger.ui.util.getInterfaceInfo
 import com.lxmf.messenger.util.formatTimeSince
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 
@@ -74,6 +76,8 @@ fun AnnounceDetailScreen(
     destinationHash: String,
     onBackClick: () -> Unit,
     onStartChat: (destinationHash: String, peerName: String) -> Unit,
+    onViewAnnounce: (destinationHash: String) -> Unit,
+    onBrowseNode: (destinationHash: String) -> Unit = {},
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -87,11 +91,18 @@ fun AnnounceDetailScreen(
     // Observe if this contact is the current relay
     val isMyRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
 
+    // Cross-linked announces (e.g., telephony <-> messaging for the same identity)
+    val linkedAnnounces by viewModel.getLinkedAnnouncesFlow(destinationHash).collectAsState(initial = emptyList())
+
     // Dialog state for remove confirmation
     var showRemoveDialog by remember { mutableStateOf(false) }
 
     // Dialog state for relay unset confirmation
     var showUnsetRelayDialog by remember { mutableStateOf(false) }
+
+    // Block dialog state
+    var showBlockDialog by remember { mutableStateOf(false) }
+    val isTransportEnabled by viewModel.isTransportEnabled.collectAsState(initial = false)
 
     Scaffold(
         topBar = {
@@ -283,6 +294,126 @@ fun AnnounceDetailScreen(
                     }
                 }
 
+                // Cross-link buttons: show when telephony and messaging destinations share an identity
+                if (linkedAnnounces.isNotEmpty()) {
+                    when (announceNonNull.aspect) {
+                        "lxst.telephony" -> {
+                            val linkedPeer = linkedAnnounces.firstOrNull { it.aspect == "lxmf.delivery" }
+                            if (linkedPeer != null) {
+                                Button(
+                                    onClick = { onViewAnnounce(linkedPeer.destinationHash) },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary,
+                                        ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Chat,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "View messaging destination",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                        "lxmf.delivery" -> {
+                            val linkedPhone = linkedAnnounces.firstOrNull { it.aspect == "lxst.telephony" }
+                            if (linkedPhone != null) {
+                                Button(
+                                    onClick = { onViewAnnounce(linkedPhone.destinationHash) },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary,
+                                        ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Call,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "View telephony destination",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Show "Browse Node" button for NomadNet content nodes
+                if (announceNonNull.aspect == "nomadnetwork.node") {
+                    Button(
+                        onClick = {
+                            onBrowseNode(announceNonNull.destinationHash)
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                            ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Browse Node",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                // Block button
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { showBlockDialog = true },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Block",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 // Information cards
                 InfoCard(
                     icon = Icons.Default.Fingerprint,
@@ -320,9 +451,9 @@ fun AnnounceDetailScreen(
                 // Show interface information if available
                 // The Python layer now provides the full interface name including user-configured names
                 // (e.g., "TCPInterface[Sideband Server/192.168.1.100:4965]")
-                // getReceivingInterfaceInfo() extracts the friendly name from this string
+                // getInterfaceInfo() extracts the friendly name from this string
                 announceNonNull.receivingInterface?.let { interfaceName ->
-                    val interfaceInfo = getReceivingInterfaceInfo(interfaceName)
+                    val interfaceInfo = getInterfaceInfo(interfaceName)
                     InfoCard(
                         icon = interfaceInfo.icon,
                         title = "Received Via",
@@ -339,7 +470,7 @@ fun AnnounceDetailScreen(
                     subtitle =
                         when (announceNonNull.aspect) {
                             "lxmf.delivery" -> "LXMF messaging peer"
-                            "call.audio" -> "Audio call destination"
+                            "lxst.telephony" -> "LXST telephony destination"
                             "lxmf.propagation" -> "Message relay/propagation node"
                             "nomadnetwork.node" -> "NomadNet content node"
                             null -> "No aspect information available"
@@ -400,6 +531,28 @@ fun AnnounceDetailScreen(
             onDismiss = {
                 showRemoveDialog = false
             },
+        )
+    }
+
+    // Block user dialog
+    if (showBlockDialog) {
+        BlockUserDialog(
+            peerName = announce?.peerName ?: "this peer",
+            isTransportEnabled = isTransportEnabled,
+            onConfirm = { deleteMessages, blackholeEnabled ->
+                val ann = announce
+                if (ann != null) {
+                    viewModel.blockPeer(
+                        destinationHash = ann.destinationHash,
+                        peerName = ann.peerName,
+                        publicKey = ann.publicKey,
+                        blackholeEnabled = blackholeEnabled,
+                    )
+                }
+                showBlockDialog = false
+                onBackClick()
+            },
+            onDismiss = { showBlockDialog = false },
         )
     }
 

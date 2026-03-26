@@ -57,4 +57,10 @@ data class MessageEntity(
     val receivedRssi: Int? = null,
     // SNR in dB when message was received (typically -20 to +20, null for BLE/TCP or sent messages)
     val receivedSnr: Float? = null,
+    // Local reception timestamp — System.currentTimeMillis() when we received/sent the message.
+    // Used for sorting messages by arrival order (immune to sender clock skew).
+    // Null for messages created before this feature was added.
+    val receivedAt: Long? = null,
+    // Interface name through which message was sent (null for received messages or pre-feature messages)
+    val sentInterface: String? = null,
 )

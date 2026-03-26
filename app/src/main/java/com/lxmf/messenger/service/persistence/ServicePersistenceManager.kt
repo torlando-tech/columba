@@ -32,6 +32,7 @@ class ServicePersistenceManager(
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
+        private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
     }
 
     /**
@@ -66,11 +67,29 @@ class ServicePersistenceManager(
     }
 
     private val announceDao by lazy { database.announceDao() }
+    private val blockedPeerDao by lazy { database.blockedPeerDao() }
     private val contactDao by lazy { database.contactDao() }
     private val messageDao by lazy { database.messageDao() }
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
+
+    /**
+     * Check if a peer is explicitly blocked.
+     * This is defense-in-depth: catches messages during the window between
+     * Python init and LXMF ignore list restore.
+     * Fails open: if DB check fails, message is allowed through.
+     */
+    private suspend fun isBlockedPeer(
+        sourceHash: String,
+        identityHash: String,
+    ): Boolean =
+        try {
+            blockedPeerDao.isBlocked(sourceHash, identityHash)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking blocked status, allowing message: ${e.message}")
+            false
+        }
 
     /**
      * Persist an announce to the database.
@@ -190,6 +209,12 @@ class ServicePersistenceManager(
                 return false
             }
 
+            // Check if this peer is explicitly blocked (defense-in-depth for LXMF ignore list)
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) {
+                Log.d(TAG, "Blocking message from blocked peer: ${sourceHash.take(16)}")
+                return false
+            }
+
             // Check if we should block this sender
             if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) {
                 return false
@@ -230,6 +255,9 @@ class ServicePersistenceManager(
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
 
+            // Use local reception time for conversation ordering (immune to sender clock skew)
+            val receivedAt = System.currentTimeMillis()
+
             // Insert/update conversation
             if (existingConversation != null) {
                 // Update peerName if we resolved a better name (nickname or announce)
@@ -239,7 +267,7 @@ class ServicePersistenceManager(
                     existingConversation.copy(
                         peerName = updatedPeerName,
                         lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = timestamp,
+                        lastMessageTimestamp = receivedAt,
                         unreadCount = existingConversation.unreadCount + 1,
                         peerPublicKey = publicKey ?: existingConversation.peerPublicKey,
                     )
@@ -252,7 +280,7 @@ class ServicePersistenceManager(
                         peerName = peerName,
                         peerPublicKey = publicKey,
                         lastMessage = sanitizedPreview,
-                        lastMessageTimestamp = timestamp,
+                        lastMessageTimestamp = receivedAt,
                         unreadCount = 1,
                         lastSeenTimestamp = 0,
                     )
@@ -278,6 +306,7 @@ class ServicePersistenceManager(
                     receivedInterface = receivedInterface,
                     receivedRssi = receivedRssi,
                     receivedSnr = receivedSnr,
+                    receivedAt = receivedAt,
                 )
             messageDao.insertMessage(messageEntity)
 
@@ -471,6 +500,24 @@ class ServicePersistenceManager(
             Log.e(TAG, "Error finding announce by identity hash", e)
             null
         }
+
+    /**
+     * Delete announces older than 30 days, preserving favorites and contacts.
+     * Intended to be called once per service lifecycle (e.g., in onCreate).
+     */
+    fun cleanupStaleAnnounces() {
+        scope.launch {
+            try {
+                val cutoffTime = System.currentTimeMillis() - ANNOUNCE_TTL_MS
+                val deleted = announceDao.deleteStaleAnnounces(cutoffTime)
+                if (deleted > 0) {
+                    Log.d(TAG, "Cleaned up $deleted stale announces (>30 days old)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cleaning up stale announces", e)
+            }
+        }
+    }
 
     /**
      * Close the database connection.

@@ -528,6 +528,14 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             val canonicalFile = File(reticulumDir, "identity_$TEST_IDENTITY_HASH")
             assertTrue("Canonical file should be created", canonicalFile.exists())
             assertEquals(64L, canonicalFile.length())
+
+            // Verify opportunistic backup also ran
+            val updated = localIdentityDao.getIdentity(TEST_IDENTITY_HASH)
+            assertNotNull("encryptedKeyData should be backed up after file recovery", updated?.encryptedKeyData)
+            assertEquals(
+                IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                updated?.keyEncryptionVersion,
+            )
         }
 
     @Test

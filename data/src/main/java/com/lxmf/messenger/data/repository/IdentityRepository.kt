@@ -421,7 +421,7 @@ class IdentityRepository
          * @param identityHash Optional identity hash to use (if not provided, migration will retry later)
          * @param destinationHash Optional destination hash to use (if not provided, migration will retry later)
          */
-        @Suppress("LongMethod") // Migration logic is complex but cohesive
+        @Suppress("LongMethod", "CyclomaticComplexMethod") // Migration logic is complex but cohesive
         suspend fun migrateDefaultIdentityIfNeeded(
             identityHash: String? = null,
             destinationHash: String? = null,
@@ -488,8 +488,15 @@ class IdentityRepository
                 if (keyData == null || keyData.size != 64) {
                     android.util.Log.e(
                         "IdentityRepository",
-                        "Cannot migrate identity: key data unavailable or invalid size (${keyData?.size}), will retry",
+                        "Cannot migrate identity: key data unavailable or invalid size (${keyData?.size})",
                     )
+                    // If the file exists but content is invalid, retry will never succeed —
+                    // remove the placeholder to avoid an infinite failed-migration loop.
+                    // If the file doesn't exist yet, keep placeholder so we retry when it appears.
+                    if (defaultIdentityFile.exists() && placeholder != null) {
+                        android.util.Log.w("IdentityRepository", "File exists but invalid — removing placeholder")
+                        identityDao.delete(placeholder.identityHash)
+                    }
                     return@withContext
                 }
 

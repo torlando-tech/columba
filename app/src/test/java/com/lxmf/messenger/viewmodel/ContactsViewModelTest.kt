@@ -588,32 +588,32 @@ class ContactsViewModelTest {
     // ========== Update Operations Tests ==========
 
     @Test
-    fun `updateNickname - calls repository`() =
+    fun `updateContact nickname - calls repository`() =
         runTest {
             // Given
             coEvery { contactRepository.updateNickname(any(), any()) } just Runs
 
             // When
-            val result = runCatching { viewModel.updateNickname(testDestHash, "New Nickname") }
+            val result = runCatching { viewModel.updateContact(testDestHash, nickname = "New Nickname") }
             advanceUntilIdle()
 
             // Then
-            assertTrue("updateNickname should complete without exception", result.isSuccess)
+            assertTrue("updateContact should complete without exception", result.isSuccess)
             coVerify { contactRepository.updateNickname(testDestHash, "New Nickname") }
         }
 
     @Test
-    fun `updateNotes - calls repository`() =
+    fun `updateContact notes - calls repository`() =
         runTest {
             // Given
             coEvery { contactRepository.updateNotes(any(), any()) } just Runs
 
             // When
-            val result = runCatching { viewModel.updateNotes(testDestHash, "Some notes") }
+            val result = runCatching { viewModel.updateContact(testDestHash, notes = "Some notes") }
             advanceUntilIdle()
 
             // Then
-            assertTrue("updateNotes should complete without exception", result.isSuccess)
+            assertTrue("updateContact should complete without exception", result.isSuccess)
             coVerify { contactRepository.updateNotes(testDestHash, "Some notes") }
         }
 
@@ -853,17 +853,17 @@ class ContactsViewModelTest {
         }
 
     @Test
-    fun `updateNickname - handles errors gracefully`() =
+    fun `updateContact - handles errors gracefully`() =
         runTest {
             // Given
             coEvery { contactRepository.updateNickname(any(), any()) } throws RuntimeException("DB error")
 
             // When: Should not crash
-            val result = runCatching { viewModel.updateNickname(testDestHash, "Name") }
+            val result = runCatching { viewModel.updateContact(testDestHash, nickname = "Name") }
             advanceUntilIdle()
 
             // Then: Verify attempt was made and error was handled gracefully
-            assertTrue("updateNickname should handle errors gracefully", result.isSuccess)
+            assertTrue("updateContact should handle errors gracefully", result.isSuccess)
             coVerify { contactRepository.updateNickname(testDestHash, "Name") }
         }
 

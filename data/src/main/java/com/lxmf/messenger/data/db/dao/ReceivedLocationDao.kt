@@ -110,10 +110,42 @@ interface ReceivedLocationDao {
     suspend fun deleteExpiredLocations(gracePeriodCutoff: Long = System.currentTimeMillis() - 3600_000L)
 
     /**
+     * Get SOS trail locations for a sender.
+     */
+    @Query(
+        """
+        SELECT * FROM received_locations
+        WHERE senderHash = :senderHash AND source = 'sos_trail'
+        ORDER BY timestamp ASC
+        LIMIT :limit
+        """,
+    )
+    fun getSosTrailForSender(
+        senderHash: String,
+        limit: Int = 200,
+    ): Flow<List<ReceivedLocationEntity>>
+
+    /**
      * Delete all locations for a sender (when contact is removed).
      */
     @Query("DELETE FROM received_locations WHERE senderHash = :senderHash")
     suspend fun deleteLocationsForSender(senderHash: String)
+
+    /**
+     * Delete only SOS trail locations for a sender.
+     * Preserves location sharing positions.
+     */
+    @Query("DELETE FROM received_locations WHERE senderHash = :senderHash AND source = 'sos_trail'")
+    suspend fun deleteSosTrailForSender(senderHash: String)
+
+    /**
+     * Get distinct sender hashes that have recent SOS trail entries.
+     * Used to restore SosActiveTracker on startup.
+     */
+    @Query(
+        "SELECT DISTINCT senderHash FROM received_locations WHERE source = 'sos_trail' AND timestamp > :sinceTimestamp",
+    )
+    suspend fun getRecentSosTrailSenders(sinceTimestamp: Long): List<String>
 
     /**
      * Delete all locations (for data reset).

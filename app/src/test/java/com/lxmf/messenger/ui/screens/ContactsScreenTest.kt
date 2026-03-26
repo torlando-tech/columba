@@ -625,6 +625,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = {},
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -647,6 +649,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = {},
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -666,6 +670,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = {},
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -687,6 +693,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = {},
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -710,6 +718,8 @@ class ContactsScreenTest {
                 onEditNickname = { editCalled = true },
                 onViewDetails = {},
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -733,6 +743,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = { viewDetailsCalled = true },
                 onRemove = {},
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -756,6 +768,8 @@ class ContactsScreenTest {
                 onEditNickname = {},
                 onViewDetails = {},
                 onRemove = { removeCalled = true },
+                isSos = false,
+                onToggleSos = {},
             )
         }
 
@@ -1232,6 +1246,7 @@ class ContactsScreenTest {
         every { mockViewModel.contactCount } returns MutableStateFlow(contactCount)
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.currentRelayInfo } returns MutableStateFlow(currentRelayInfo)
+        every { mockViewModel.sosActiveSenders } returns MutableStateFlow(emptySet())
 
         // Mock decodeQrCode to return null by default
         coEvery { mockViewModel.decodeQrCode(any()) } returns null

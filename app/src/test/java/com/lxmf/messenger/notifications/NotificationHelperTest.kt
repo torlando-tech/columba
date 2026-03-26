@@ -414,7 +414,7 @@ class NotificationHelperTest {
     // ========== Cancel Notification Tests ==========
 
     @Test
-    fun `cancelAllNotifications clears all notifications`() =
+    fun `cancelNotification with no args clears all notifications`() =
         runBlocking {
             // Given: Post a notification
             notificationHelper.notifyMessageReceived(
@@ -428,7 +428,7 @@ class NotificationHelperTest {
             assertTrue("Notification should exist", shadowNotificationManager.allNotifications.isNotEmpty())
 
             // When
-            notificationHelper.cancelAllNotifications()
+            notificationHelper.cancelNotification()
 
             // Then
             assertTrue("All notifications should be cancelled", shadowNotificationManager.allNotifications.isEmpty())

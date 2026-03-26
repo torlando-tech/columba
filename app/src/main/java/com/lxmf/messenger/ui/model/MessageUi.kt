@@ -77,6 +77,11 @@ data class MessageUi(
      */
     val hasFileAttachments: Boolean = false,
     /**
+     * Indicates whether this message has an audio attachment (LXMF field 7).
+     * When true, fieldsJson contains audio data for playback.
+     */
+    val hasAudioAttachment: Boolean = false,
+    /**
      * ID of the message this is replying to, if any.
      * Extracted from LXMF field 16 {"reply_to": "message_id"}.
      */

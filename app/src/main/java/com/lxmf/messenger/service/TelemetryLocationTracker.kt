@@ -36,9 +36,13 @@ internal class TelemetryLocationTracker(
     }
 
     @Volatile private var locationTrackingActive = false
+
     @Volatile private var gmsLocationTrackingCallback: LocationCallback? = null
+
     @Volatile private var platformLocationTrackingListener: LocationListener? = null
+
     @Volatile private var latestTrackedLocation: Location? = null
+
     @Volatile private var latestTrackedLocationRecordedAtMs: Long? = null
 
     val isTracking: Boolean get() = locationTrackingActive
@@ -175,8 +179,7 @@ internal class TelemetryLocationTracker(
         }
     }
 
-    private fun isLocationRecent(location: Location): Boolean =
-        getTrackedLocationAgeMs(location) <= MAX_TRACKED_LOCATION_AGE_MS
+    private fun isLocationRecent(location: Location): Boolean = getTrackedLocationAgeMs(location) <= MAX_TRACKED_LOCATION_AGE_MS
 
     /**
      * Get the current device location via a one-shot request.

@@ -155,15 +155,16 @@ class ApkSharingViewModelTest {
 
     @Test
     fun `ApkSharingState hotspot mode has all fields`() {
-        val state = ApkSharingState(
-            isServerRunning = true,
-            downloadUrl = "http://192.168.43.1:9090",
-            localIp = "192.168.43.1",
-            sharingMode = SharingMode.HOTSPOT,
-            hotspotSsid = "DIRECT-ab-MyPhone",
-            hotspotPassword = "s3cur3P4ss",
-            apkSizeBytes = 12_000_000,
-        )
+        val state =
+            ApkSharingState(
+                isServerRunning = true,
+                downloadUrl = "http://192.168.43.1:9090",
+                localIp = "192.168.43.1",
+                sharingMode = SharingMode.HOTSPOT,
+                hotspotSsid = "DIRECT-ab-MyPhone",
+                hotspotPassword = "s3cur3P4ss",
+                apkSizeBytes = 12_000_000,
+            )
 
         assertTrue(state.isServerRunning)
         assertEquals(SharingMode.HOTSPOT, state.sharingMode)

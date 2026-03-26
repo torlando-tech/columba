@@ -151,6 +151,40 @@ class SettingsRepository
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
+
+            // SOS Emergency preferences
+            val SOS_ENABLED = booleanPreferencesKey("sos_enabled")
+            val SOS_MESSAGE_TEMPLATE = stringPreferencesKey("sos_message_template")
+            val SOS_COUNTDOWN_SECONDS = intPreferencesKey("sos_countdown_seconds")
+            val SOS_INCLUDE_LOCATION = booleanPreferencesKey("sos_include_location")
+            val SOS_SILENT_AUTO_ANSWER = booleanPreferencesKey("sos_silent_auto_answer")
+            val SOS_SHOW_FLOATING_BUTTON = booleanPreferencesKey("sos_show_floating_button")
+            val SOS_DEACTIVATION_PIN = stringPreferencesKey("sos_deactivation_pin")
+            val SOS_PERIODIC_UPDATES = booleanPreferencesKey("sos_periodic_updates")
+            val SOS_UPDATE_INTERVAL_SECONDS = intPreferencesKey("sos_update_interval_seconds")
+
+            // SOS floating element positions (persisted across recompositions)
+            val SOS_FAB_OFFSET_X = floatPreferencesKey("sos_fab_offset_x")
+            val SOS_FAB_OFFSET_Y = floatPreferencesKey("sos_fab_offset_y")
+            val SOS_PILL_OFFSET_X = floatPreferencesKey("sos_pill_offset_x")
+            val SOS_PILL_OFFSET_Y = floatPreferencesKey("sos_pill_offset_y")
+
+            // SOS state persistence (survives app/phone restart)
+            val SOS_ACTIVE = booleanPreferencesKey("sos_active")
+            val SOS_ACTIVE_SENT_COUNT = intPreferencesKey("sos_active_sent_count")
+            val SOS_ACTIVE_FAILED_COUNT = intPreferencesKey("sos_active_failed_count")
+
+            // SOS trigger modes (multi-select set, migrated from legacy single-mode string)
+            val SOS_TRIGGER_MODES = stringSetPreferencesKey("sos_trigger_modes")
+
+            @Deprecated("Legacy single mode key, kept for migration")
+            val SOS_TRIGGER_MODE_LEGACY = stringPreferencesKey("sos_trigger_mode")
+            val SOS_SHAKE_SENSITIVITY = floatPreferencesKey("sos_shake_sensitivity")
+            val SOS_TAP_COUNT = intPreferencesKey("sos_tap_count")
+
+            // SOS audio recording
+            val SOS_AUDIO_ENABLED = booleanPreferencesKey("sos_audio_enabled")
+            val SOS_AUDIO_DURATION_SECONDS = intPreferencesKey("sos_audio_duration_seconds")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -1918,6 +1952,258 @@ class SettingsRepository
         suspend fun setSortMessagesBySentTime(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SORT_MESSAGES_BY_SENT_TIME] = enabled
+            }
+        }
+
+        // ========== SOS Emergency Settings ==========
+
+        val sosEnabled: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSosEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_ENABLED] = enabled
+            }
+        }
+
+        val sosMessageTemplate: Flow<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_MESSAGE_TEMPLATE]
+                        ?: "SOS! I need help. This is an emergency."
+                }.distinctUntilChanged()
+
+        suspend fun setSosMessageTemplate(template: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_MESSAGE_TEMPLATE] = template
+            }
+        }
+
+        val sosCountdownSeconds: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_COUNTDOWN_SECONDS] ?: 5
+                }.distinctUntilChanged()
+
+        suspend fun setSosCountdownSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_COUNTDOWN_SECONDS] = seconds.coerceIn(0, 30)
+            }
+        }
+
+        val sosIncludeLocation: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_INCLUDE_LOCATION] ?: true
+                }.distinctUntilChanged()
+
+        suspend fun setSosIncludeLocation(include: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_INCLUDE_LOCATION] = include
+            }
+        }
+
+        val sosSilentAutoAnswer: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_SILENT_AUTO_ANSWER] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSosSilentAutoAnswer(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_SILENT_AUTO_ANSWER] = enabled
+            }
+        }
+
+        val sosShowFloatingButton: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_SHOW_FLOATING_BUTTON] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSosShowFloatingButton(show: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_SHOW_FLOATING_BUTTON] = show
+            }
+        }
+
+        val sosDeactivationPin: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_DEACTIVATION_PIN]
+                }.distinctUntilChanged()
+
+        suspend fun setSosDeactivationPin(pin: String?) {
+            context.dataStore.edit { preferences ->
+                if (pin.isNullOrBlank()) {
+                    preferences.remove(PreferencesKeys.SOS_DEACTIVATION_PIN)
+                } else {
+                    preferences[PreferencesKeys.SOS_DEACTIVATION_PIN] = pin
+                }
+            }
+        }
+
+        val sosPeriodicUpdates: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_PERIODIC_UPDATES] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSosPeriodicUpdates(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_PERIODIC_UPDATES] = enabled
+            }
+        }
+
+        val sosUpdateIntervalSeconds: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_UPDATE_INTERVAL_SECONDS] ?: 120
+                }.distinctUntilChanged()
+
+        suspend fun setSosUpdateIntervalSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_UPDATE_INTERVAL_SECONDS] = seconds.coerceIn(30, 600)
+            }
+        }
+
+        // ========== SOS State Persistence ==========
+
+        val sosActive: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_ACTIVE] ?: false
+                }.distinctUntilChanged()
+
+        val sosActiveSentCount: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_ACTIVE_SENT_COUNT] ?: 0
+                }.distinctUntilChanged()
+
+        val sosActiveFailedCount: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_ACTIVE_FAILED_COUNT] ?: 0
+                }.distinctUntilChanged()
+
+        suspend fun persistSosActiveState(
+            sentCount: Int,
+            failedCount: Int,
+        ) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_ACTIVE] = true
+                preferences[PreferencesKeys.SOS_ACTIVE_SENT_COUNT] = sentCount
+                preferences[PreferencesKeys.SOS_ACTIVE_FAILED_COUNT] = failedCount
+            }
+        }
+
+        suspend fun clearSosActiveState() {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_ACTIVE] = false
+                preferences.remove(PreferencesKeys.SOS_ACTIVE_SENT_COUNT)
+                preferences.remove(PreferencesKeys.SOS_ACTIVE_FAILED_COUNT)
+            }
+        }
+
+        // ========== SOS Trigger Mode Settings ==========
+
+        @Suppress("DEPRECATION")
+        val sosTriggerModes: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    // Migrate from legacy single-mode string if needed
+                    val newModes = preferences[PreferencesKeys.SOS_TRIGGER_MODES]
+                    if (newModes != null) {
+                        newModes
+                    } else {
+                        val legacy = preferences[PreferencesKeys.SOS_TRIGGER_MODE_LEGACY]
+                        if (legacy != null && legacy != "manual") setOf(legacy) else emptySet()
+                    }
+                }.distinctUntilChanged()
+
+        suspend fun setSosTriggerModes(modes: Set<String>) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_TRIGGER_MODES] = modes
+            }
+        }
+
+        val sosShakeSensitivity: Flow<Float> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_SHAKE_SENSITIVITY] ?: 2.5f
+                }.distinctUntilChanged()
+
+        suspend fun setSosShakeSensitivity(sensitivity: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_SHAKE_SENSITIVITY] = sensitivity.coerceIn(1.0f, 5.0f)
+            }
+        }
+
+        val sosTapCount: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_TAP_COUNT] ?: 3
+                }.distinctUntilChanged()
+
+        suspend fun setSosTapCount(count: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_TAP_COUNT] = count.coerceIn(3, 5)
+            }
+        }
+
+        // ========== SOS Audio Recording Settings ==========
+
+        val sosAudioEnabled: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_AUDIO_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setSosAudioEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_AUDIO_ENABLED] = enabled
+            }
+        }
+
+        val sosAudioDurationSeconds: Flow<Int> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SOS_AUDIO_DURATION_SECONDS] ?: 30
+                }.distinctUntilChanged()
+
+        suspend fun setSosAudioDurationSeconds(seconds: Int) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_AUDIO_DURATION_SECONDS] = seconds.coerceIn(15, 60)
+            }
+        }
+
+        val sosFabOffsetX: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_FAB_OFFSET_X] ?: 0f }.distinctUntilChanged()
+
+        val sosFabOffsetY: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_FAB_OFFSET_Y] ?: 0f }.distinctUntilChanged()
+
+        val sosPillOffsetX: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_PILL_OFFSET_X] ?: 0f }.distinctUntilChanged()
+
+        val sosPillOffsetY: Flow<Float> =
+            context.dataStore.data.map { it[PreferencesKeys.SOS_PILL_OFFSET_Y] ?: 0f }.distinctUntilChanged()
+
+        suspend fun setSosFabOffset(x: Float, y: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_FAB_OFFSET_X] = x
+                preferences[PreferencesKeys.SOS_FAB_OFFSET_Y] = y
+            }
+        }
+
+        suspend fun setSosPillOffset(x: Float, y: Float) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SOS_PILL_OFFSET_X] = x
+                preferences[PreferencesKeys.SOS_PILL_OFFSET_Y] = y
             }
         }
     }

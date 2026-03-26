@@ -193,6 +193,8 @@ fun MapScreen(
     focusLabel: String? = null,
     // Optional full interface details for bottom sheet
     focusInterfaceDetails: FocusInterfaceDetails? = null,
+    // Optional SOS sender hash for breadcrumb trail rendering
+    sosTrailSenderHash: String? = null,
     // Permission UI state - managed by parent to survive tab switches (issue #342)
     permissionSheetDismissed: Boolean = false,
     onPermissionSheetDismissed: () -> Unit = {},
@@ -840,6 +842,12 @@ fun MapScreen(
                                         }
                                     if (marker != null) {
                                         selectedMarker = marker
+                                        // Center the map on the tapped contact's location
+                                        map.animateCamera(
+                                            CameraUpdateFactory.newLatLng(
+                                                LatLng(marker.latitude, marker.longitude),
+                                            ),
+                                        )
                                         Log.d("MapScreen", "Marker tapped: ${marker.destinationHash.take(16)}")
                                     }
                                 }
@@ -1135,6 +1143,92 @@ fun MapScreen(
             Log.d("MapScreen", "Added focus marker at $focusLatitude, $focusLongitude for $focusLabel")
         }
 
+        // SOS breadcrumb trail - live updates
+        val sosTrailLocations =
+            sosTrailSenderHash?.let {
+                viewModel.observeSosTrailLocations(it).collectAsState(initial = emptyList())
+            }
+
+        LaunchedEffect(sosTrailSenderHash, mapStyleLoaded, sosTrailLocations?.value) {
+            if (!mapStyleLoaded || sosTrailSenderHash == null) return@LaunchedEffect
+            val map = mapLibreMap ?: return@LaunchedEffect
+            val screenDensity = context.resources.displayMetrics.density
+            val locations = sosTrailLocations?.value ?: return@LaunchedEffect
+
+            val trailSourceId = "sos-trail-source"
+            val trailLayerId = "sos-trail-layer"
+            val dotsSourceId = "sos-trail-dots-source"
+            val dotsLayerId = "sos-trail-dots-layer"
+
+            // If no locations (cleared), remove trail layers
+            if (locations.size < 2) {
+                val style = map.style ?: return@LaunchedEffect
+                try { style.removeLayer(trailLayerId) } catch (_: Exception) {}
+                try { style.removeLayer(dotsLayerId) } catch (_: Exception) {}
+                try { style.removeSource(trailSourceId) } catch (_: Exception) {}
+                try { style.removeSource(dotsSourceId) } catch (_: Exception) {}
+                return@LaunchedEffect
+            }
+
+            try {
+                val style = map.style ?: return@LaunchedEffect
+
+                val sortedLocations = locations.sortedBy { it.timestamp }
+                val points = sortedLocations.map { Point.fromLngLat(it.longitude, it.latitude) }
+                val lineFeature = Feature.fromGeometry(LineString.fromLngLats(points))
+                val dotFeatures =
+                    sortedLocations.map { loc ->
+                        Feature.fromGeometry(Point.fromLngLat(loc.longitude, loc.latitude))
+                    }
+
+                // Trail polyline
+                val existingTrailSource = style.getSourceAs<GeoJsonSource>(trailSourceId)
+                if (existingTrailSource != null) {
+                    existingTrailSource.setGeoJson(FeatureCollection.fromFeatures(listOf(lineFeature)))
+                } else {
+                    style.addSource(GeoJsonSource(trailSourceId, FeatureCollection.fromFeatures(listOf(lineFeature))))
+                    val trailLayer =
+                        LineLayer(trailLayerId, trailSourceId)
+                            .withProperties(
+                                PropertyFactory.lineWidth(3f * screenDensity),
+                                PropertyFactory.lineColor(Expression.color(android.graphics.Color.parseColor("#F44336"))),
+                                PropertyFactory.lineOpacity(Expression.literal(0.8f)),
+                            )
+                    val belowLayer = style.getLayer("focus-marker-layer")
+                    if (belowLayer != null) {
+                        style.addLayerBelow(trailLayer, "focus-marker-layer")
+                    } else {
+                        style.addLayer(trailLayer)
+                    }
+                }
+
+                // Trail dot markers
+                val existingDotsSource = style.getSourceAs<GeoJsonSource>(dotsSourceId)
+                if (existingDotsSource != null) {
+                    existingDotsSource.setGeoJson(FeatureCollection.fromFeatures(dotFeatures))
+                } else {
+                    style.addSource(GeoJsonSource(dotsSourceId, FeatureCollection.fromFeatures(dotFeatures)))
+                    val dotsLayer =
+                        CircleLayer(dotsLayerId, dotsSourceId)
+                            .withProperties(
+                                PropertyFactory.circleRadius(4f * screenDensity),
+                                PropertyFactory.circleColor(Expression.color(android.graphics.Color.parseColor("#F44336"))),
+                                PropertyFactory.circleStrokeWidth(1f * screenDensity),
+                                PropertyFactory.circleStrokeColor(Expression.color(android.graphics.Color.WHITE)),
+                            )
+                    if (style.getLayer(trailLayerId) != null) {
+                        style.addLayerAbove(dotsLayer, trailLayerId)
+                    } else {
+                        style.addLayer(dotsLayer)
+                    }
+                }
+
+                Log.d("MapScreen", "Updated SOS trail: ${locations.size} points for ${sosTrailSenderHash.take(8)}")
+            } catch (e: Exception) {
+                Log.e("MapScreen", "Failed to update SOS trail layers", e)
+            }
+        }
+
         // Gradient scrim behind TopAppBar for readability
         Box(
             modifier =
@@ -1207,6 +1301,17 @@ fun MapScreen(
                     // Account for bottom navigation bar
                     .padding(bottom = 80.dp),
         ) {
+            // Clear SOS Trail button (only when trail is visible)
+            if (sosTrailSenderHash != null && (sosTrailLocations?.value?.size ?: 0) >= 2) {
+                SmallFloatingActionButton(
+                    onClick = { viewModel.clearSosTrail(sosTrailSenderHash) },
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear SOS Trail")
+                }
+            }
+
             // Offline Maps button
             SmallFloatingActionButton(
                 onClick = onNavigateToOfflineMaps,

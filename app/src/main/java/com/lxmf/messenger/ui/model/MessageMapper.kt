@@ -43,6 +43,14 @@ fun Message.toMessageUi(): MessageUi {
         Log.d(TAG, "Message ${id.take(16)}... has field 5, hasFiles=$hasFiles, json=${fieldsJson?.take(200)}")
     }
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
+    val hasAudio =
+        fieldsJson?.let {
+            try {
+                org.json.JSONObject(it).has("7")
+            } catch (_: Exception) {
+                false
+            }
+        } == true
 
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
@@ -53,7 +61,7 @@ fun Message.toMessageUi(): MessageUi {
     // Determine if we need to preserve fieldsJson for UI components
     // (uncached image, file attachments, or pending file notification)
     val hasUncachedImage = hasImage && cachedImage == null
-    val needsFieldsJson = hasUncachedImage || hasFiles || hasPendingFileNotification(fieldsJson)
+    val needsFieldsJson = hasUncachedImage || hasFiles || hasAudio || hasPendingFileNotification(fieldsJson)
 
     return MessageUi(
         id = id,
@@ -66,6 +74,7 @@ fun Message.toMessageUi(): MessageUi {
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,
         hasFileAttachments = hasFiles,
+        hasAudioAttachment = hasAudio,
         fieldsJson = if (needsFieldsJson) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
@@ -349,6 +358,48 @@ private fun extractImageBytes(fieldsJson: String?): ByteArray? {
         hexStringToByteArray(hexImageData)
     } catch (e: Exception) {
         Log.e(TAG, "Failed to extract image bytes", e)
+        null
+    }
+}
+
+/**
+ * Extract audio bytes from LXMF field 7.
+ *
+ * Supports formats:
+ * 1. Array format: "7": ["format", "hex_data"]
+ * 2. Array with staging: "7": ["format", null, "staging_path"]
+ *
+ * @param fieldsJson The message's fields JSON
+ * @return Raw audio bytes, or null if not found
+ */
+@Suppress("ReturnCount")
+fun extractAudioBytes(fieldsJson: String?): ByteArray? {
+    if (fieldsJson == null) return null
+
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field7 = fields.opt("7") ?: return null
+
+        // Array format: ["format", null, "staging_path"]
+        if (field7 is JSONArray && field7.length() >= 3 && field7.isNull(1)) {
+            val stagingPath = field7.optString(2, "")
+            if (stagingPath.isNotEmpty()) return loadBinaryFromDisk(stagingPath)
+        }
+
+        // Array format: ["format", "hex_data"]
+        if (field7 is JSONArray && field7.length() >= 2) {
+            val hexData = field7.optString(1, "")
+            if (hexData.isNotEmpty()) return hexStringToByteArray(hexData)
+        }
+
+        // Raw hex string
+        if (field7 is String && field7.isNotEmpty()) {
+            return hexStringToByteArray(field7)
+        }
+
+        null
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to extract audio bytes", e)
         null
     }
 }

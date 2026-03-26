@@ -40,15 +40,19 @@ class NotificationHelper
             private const val CHANNEL_ID_MESSAGES = "messages"
             private const val CHANNEL_ID_ANNOUNCES = "announces"
             private const val CHANNEL_ID_BLE_EVENTS = "ble_events"
+            private const val CHANNEL_ID_SOS = "sos_emergency"
 
             // Notification IDs
             private const val NOTIFICATION_ID_MESSAGE = 1000
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
+            internal const val NOTIFICATION_ID_SOS = 5000
 
             // Intent actions
             const val ACTION_OPEN_ANNOUNCE = "com.lxmf.messenger.ACTION_OPEN_ANNOUNCE"
             const val ACTION_OPEN_CONVERSATION = "com.lxmf.messenger.ACTION_OPEN_CONVERSATION"
+            const val ACTION_SOS_CALL_BACK = "com.lxmf.messenger.ACTION_SOS_CALL_BACK"
+            const val ACTION_SOS_VIEW_MAP = "com.lxmf.messenger.ACTION_SOS_VIEW_MAP"
             private const val ACTION_REPLY = "com.lxmf.messenger.ACTION_REPLY"
             private const val ACTION_MARK_READ = "com.lxmf.messenger.ACTION_MARK_READ"
 
@@ -106,10 +110,23 @@ class NotificationHelper
                         enableVibration(false)
                     }
 
+                val sosChannel =
+                    NotificationChannel(
+                        CHANNEL_ID_SOS,
+                        "SOS Emergency",
+                        NotificationManager.IMPORTANCE_HIGH,
+                    ).apply {
+                        description = "Emergency SOS alerts from contacts"
+                        enableVibration(true)
+                        vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+                        lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                    }
+
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(messagesChannel)
                 manager.createNotificationChannel(announcesChannel)
                 manager.createNotificationChannel(bleEventsChannel)
+                manager.createNotificationChannel(sosChannel)
             }
         }
 
@@ -402,18 +419,260 @@ class NotificationHelper
         }
 
         /**
-         * Cancel a specific notification.
+         * Cancel one or all notifications.
          *
-         * @param notificationId The ID of the notification to cancel
+         * @param notificationId The ID of the notification to cancel, or null to cancel all.
          */
-        fun cancelNotification(notificationId: Int) {
-            notificationManager.cancel(notificationId)
+        fun cancelNotification(notificationId: Int? = null) {
+            if (notificationId != null) {
+                notificationManager.cancel(notificationId)
+            } else {
+                notificationManager.cancelAll()
+            }
         }
 
         /**
-         * Cancel all notifications.
+         * Post an urgent notification when an SOS message is received.
          */
-        fun cancelAllNotifications() {
-            notificationManager.cancelAll()
+        fun notifySosReceived(
+            destinationHash: String,
+            peerName: String,
+            messageContent: String,
+            latitude: Double? = null,
+            longitude: Double? = null,
+            isUpdate: Boolean = false,
+        ) {
+            if (!hasNotificationPermission()) return
+
+            val openPendingIntent =
+                createSosPendingIntent(
+                    action = ACTION_OPEN_CONVERSATION,
+                    requestCode = "sos_open_$destinationHash",
+                    destinationHash = destinationHash,
+                    peerName = peerName,
+                )
+
+            val callBackPendingIntent =
+                createSosPendingIntent(
+                    action = ACTION_SOS_CALL_BACK,
+                    requestCode = "sos_call_$destinationHash",
+                    destinationHash = destinationHash,
+                    peerName = peerName,
+                )
+
+            val contentText =
+                if (latitude != null && longitude != null) {
+                    "GPS: ${"%.5f".format(latitude)}, ${"%.5f".format(longitude)}"
+                } else {
+                    messageContent.take(200)
+                }
+
+            val bigText =
+                buildString {
+                    append(messageContent.take(500))
+                    if (latitude != null && longitude != null) {
+                        append("\n\nLocation: ${"%.5f".format(latitude)}, ${"%.5f".format(longitude)}")
+                    }
+                }
+
+            val builder =
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_SOS)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("SOS from $peerName")
+                    .setContentText(contentText)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setCategory(NotificationCompat.CATEGORY_ALARM)
+                    .setAutoCancel(false)
+                    .setOngoing(true)
+                    .setContentIntent(openPendingIntent)
+                    .addAction(R.mipmap.ic_launcher, "Open Chat", callBackPendingIntent)
+                    .apply {
+                        if (isUpdate) {
+                            setOnlyAlertOnce(true)
+                        } else {
+                            setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+                        }
+                    }
+
+            if (latitude != null && longitude != null) {
+                val mapPendingIntent =
+                    createSosPendingIntent(
+                        action = ACTION_SOS_VIEW_MAP,
+                        requestCode = "sos_map_$destinationHash",
+                        destinationHash = destinationHash,
+                        peerName = peerName,
+                        latitude = latitude,
+                        longitude = longitude,
+                    )
+                builder.addAction(R.mipmap.ic_launcher, "View on Map", mapPendingIntent)
+            }
+
+            val notification = builder.build()
+            val notificationId = NOTIFICATION_ID_SOS xor (destinationHash.hashCode() and 0x7FFFFFFF)
+            try {
+                notificationManager.notify(notificationId, notification)
+            } catch (e: SecurityException) {
+                // Permission was revoked
+            }
+        }
+
+        private fun createSosPendingIntent(
+            action: String,
+            requestCode: String,
+            destinationHash: String? = null,
+            peerName: String? = null,
+            latitude: Double? = null,
+            longitude: Double? = null,
+        ): PendingIntent {
+            val intent =
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    this.action = action
+                    destinationHash?.let { putExtra(EXTRA_DESTINATION_HASH, it) }
+                    peerName?.let { putExtra(EXTRA_PEER_NAME, it) }
+                    latitude?.let { putExtra("latitude", it) }
+                    longitude?.let { putExtra("longitude", it) }
+                }
+            return PendingIntent.getActivity(
+                context,
+                requestCode.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        /**
+         * Show a persistent notification indicating SOS mode is active (sender side).
+         */
+        fun showSosActiveNotification(
+            contactsNotified: Int,
+            failedCount: Int,
+        ) {
+            if (!hasNotificationPermission()) return
+
+            val openIntent =
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+            val openPendingIntent =
+                PendingIntent.getActivity(
+                    context,
+                    "sos_active".hashCode(),
+                    openIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+
+            val text =
+                buildString {
+                    append("$contactsNotified contact(s) notified")
+                    if (failedCount > 0) append(" ($failedCount failed)")
+                }
+
+            val notification =
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID_SOS)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("SOS Active")
+                    .setContentText(text)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_STATUS)
+                    .setAutoCancel(false)
+                    .setOngoing(true)
+                    .setContentIntent(openPendingIntent)
+                    .build()
+
+            try {
+                notificationManager.notify(NOTIFICATION_ID_SOS, notification)
+            } catch (e: SecurityException) {
+                // Permission was revoked
+            }
+        }
+
+        /**
+         * Check if a message content is an SOS emergency message.
+         */
+        fun isSosMessage(content: String): Boolean {
+            val upper = content.uppercase().trimStart()
+            return (
+                upper.startsWith("SOS") ||
+                    upper.startsWith("URGENCE") ||
+                    upper.startsWith("EMERGENCY")
+            ) &&
+                !isSosCancelledMessage(content)
+        }
+
+        /**
+         * Parse GPS coordinates from an SOS message.
+         */
+        fun parseSosLocation(content: String): Pair<Double, Double>? {
+            val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
+            val match = regex.find(content) ?: return null
+            return try {
+                val lat = match.groupValues[1].replace(',', '.').toDouble()
+                val lng = match.groupValues[2].replace(',', '.').toDouble()
+                if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
+            } catch (e: NumberFormatException) {
+                null
+            }
         }
     }
+
+/**
+ * Check if a message is an SOS cancellation. Top-level to avoid TooManyFunctions in NotificationHelper.
+ */
+
+/**
+ * Check if a message is an SOS periodic update. Top-level to avoid TooManyFunctions in NotificationHelper.
+ */
+fun isSosUpdate(content: String): Boolean = content.uppercase().trimStart().startsWith("SOS UPDATE")
+
+fun isSosCancelledMessage(content: String): Boolean {
+    val upper = content.uppercase().trimStart()
+    return upper.startsWith("SOS CANCELLED") || upper.startsWith("SOS CANCELED")
+}
+
+/** Extract SOS state from fieldsJson FIELD_COMMANDS. Returns "active", "cancelled", "update", or null. */
+fun extractSosState(fieldsJson: String?): String? {
+    if (fieldsJson == null) return null
+    return try {
+        val fields = org.json.JSONObject(fieldsJson)
+        fields.optString("sos_state").ifEmpty { null }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** Check if a message is SOS using FIELD_COMMANDS (primary) or text content (fallback). */
+fun isSosMessageByField(
+    content: String,
+    fieldsJson: String?,
+): Boolean {
+    val sosState = extractSosState(fieldsJson)
+    if (sosState != null) return sosState == "active" || sosState == "update"
+    // Text-based fallback for Sideband/legacy compatibility
+    val upper = content.uppercase().trimStart()
+    return (upper.startsWith("SOS") || upper.startsWith("URGENCE") || upper.startsWith("EMERGENCY")) &&
+        !isSosCancelledMessage(content)
+}
+
+/** Check if a message is SOS cancellation using FIELD_COMMANDS (primary) or text content (fallback). */
+fun isSosCancelledByField(
+    content: String,
+    fieldsJson: String?,
+): Boolean {
+    val sosState = extractSosState(fieldsJson)
+    if (sosState != null) return sosState == "cancelled"
+    return isSosCancelledMessage(content)
+}
+
+/** Check if a message is SOS update using FIELD_COMMANDS (primary) or text content (fallback). */
+fun isSosUpdateByField(
+    content: String,
+    fieldsJson: String?,
+): Boolean {
+    val sosState = extractSosState(fieldsJson)
+    if (sosState != null) return sosState == "update"
+    return isSosUpdate(content)
+}

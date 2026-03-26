@@ -2230,6 +2230,9 @@ class ServiceReticulumProtocol(
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
         iconAppearance: IconAppearance?,
+        telemetryJson: String?,
+        audioData: ByteArray?,
+        sosState: String?,
     ): Result<MessageReceipt> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -2280,6 +2283,22 @@ class ServiceReticulumProtocol(
                     }
                 }
 
+                // Handle audio data by writing to temp file if needed
+                var smallAudioData: ByteArray? = null
+                var audioDataPath: String? = null
+                if (audioData != null) {
+                    if (audioData.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                        smallAudioData = audioData
+                    } else {
+                        val tempFile =
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                FileUtils.writeTempAttachment(context, "sos_audio.m4a", audioData)
+                            }
+                        audioDataPath = tempFile.absolutePath
+                        Log.d(TAG, "Large audio (${audioData.size} bytes) written to temp file")
+                    }
+                }
+
                 val resultJson =
                     service.sendLxmfMessageWithMethod(
                         destinationHash,
@@ -2296,6 +2315,10 @@ class ServiceReticulumProtocol(
                         iconAppearance?.iconName,
                         iconAppearance?.foregroundColor,
                         iconAppearance?.backgroundColor,
+                        telemetryJson,
+                        smallAudioData,
+                        audioDataPath,
+                        sosState,
                     )
                 val result = JSONObject(resultJson)
 

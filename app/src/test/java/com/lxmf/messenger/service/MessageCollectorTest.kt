@@ -40,6 +40,7 @@ class MessageCollectorTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var receivedLocationDao: com.lxmf.messenger.data.db.dao.ReceivedLocationDao
     private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var messageCollector: MessageCollector
 
@@ -59,6 +60,8 @@ class MessageCollectorTest {
         identityRepository = mockk()
         notificationHelper = mockk()
         peerIconDao = mockk()
+        receivedLocationDao = mockk()
+        coEvery { receivedLocationDao.insert(any()) } returns Unit
         conversationLinkManager = mockk()
 
         // Default behavior for conversationLinkManager
@@ -67,6 +70,7 @@ class MessageCollectorTest {
 
         // Explicit stubs for notificationHelper (suspend function)
         coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
+        every { notificationHelper.isSosMessage(any()) } returns false
 
         // Explicit stubs for peerIconDao
         coEvery { peerIconDao.getIcon(any()) } returns null
@@ -107,6 +111,7 @@ class MessageCollectorTest {
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
                 peerIconDao = peerIconDao,
+                receivedLocationDao = receivedLocationDao,
                 conversationLinkManager = conversationLinkManager,
             )
     }

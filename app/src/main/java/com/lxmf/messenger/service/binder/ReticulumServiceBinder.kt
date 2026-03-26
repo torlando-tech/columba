@@ -835,6 +835,10 @@ class ReticulumServiceBinder(
         iconName: String?,
         iconFgColor: String?,
         iconBgColor: String?,
+        telemetryJson: String?,
+        audioData: ByteArray?,
+        audioDataPath: String?,
+        sosState: String?,
     ): String =
         try {
             wrapperManager.withWrapper { wrapper ->
@@ -868,6 +872,10 @@ class ReticulumServiceBinder(
                         iconName,
                         iconFgColor,
                         iconBgColor,
+                        telemetryJson,
+                        audioData,
+                        audioDataPath,
+                        sosState,
                     )
                 // Use PythonResultConverter to properly convert Python dict to JSON
                 // (bytes values like message_hash need Base64 encoding)

@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
@@ -96,6 +97,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,6 +105,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lxmf.messenger.R
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.model.EnrichedContact
 import com.lxmf.messenger.ui.components.AddContactConfirmationDialog
@@ -113,8 +116,6 @@ import com.lxmf.messenger.util.formatRelativeTime
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationConstants
 import com.lxmf.messenger.util.validation.ValidationResult
-import androidx.compose.ui.res.stringResource
-import com.lxmf.messenger.R
 import com.lxmf.messenger.viewmodel.AddContactResult
 import com.lxmf.messenger.viewmodel.AnnounceStreamViewModel
 import com.lxmf.messenger.viewmodel.ContactsViewModel
@@ -147,6 +148,7 @@ fun ContactsScreen(
     val hasPendingSharedImages = sharedImagesFromViewModel != null
 
     val contactsState by viewModel.contactsState.collectAsState()
+    val sosActiveSenders by viewModel.sosActiveSenders.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
@@ -499,6 +501,7 @@ fun ContactsScreen(
                                 item(key = "relay_${relay.destinationHash}") {
                                     ContactListItemWithMenu(
                                         contact = relay,
+                                        hasSosActive = sosActiveSenders.contains(relay.destinationHash),
                                         onClick = {
                                             if (relay.status == ContactStatus.PENDING_IDENTITY ||
                                                 relay.status == ContactStatus.UNRESOLVED
@@ -522,6 +525,7 @@ fun ContactsScreen(
                                         },
                                         onLocateOnMap = { onLocateOnMap(relay.destinationHash) },
                                         getContactLocation = { viewModel.getContactLocation(it) },
+                                        onToggleSos = { viewModel.toggleSosTag(relay.destinationHash) },
                                     )
                                 }
                             }
@@ -542,6 +546,7 @@ fun ContactsScreen(
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
+                                        hasSosActive = sosActiveSenders.contains(contact.destinationHash),
                                         onClick = {
                                             if (contact.status == ContactStatus.PENDING_IDENTITY ||
                                                 contact.status == ContactStatus.UNRESOLVED
@@ -572,6 +577,7 @@ fun ContactsScreen(
                                         onRemove = { viewModel.deleteContact(contact.destinationHash) },
                                         onLocateOnMap = { onLocateOnMap(contact.destinationHash) },
                                         getContactLocation = { viewModel.getContactLocation(it) },
+                                        onToggleSos = { viewModel.toggleSosTag(contact.destinationHash) },
                                     )
                                 }
                             }
@@ -594,6 +600,7 @@ fun ContactsScreen(
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
+                                        hasSosActive = sosActiveSenders.contains(contact.destinationHash),
                                         onClick = {
                                             if (contact.status == ContactStatus.PENDING_IDENTITY ||
                                                 contact.status == ContactStatus.UNRESOLVED
@@ -624,6 +631,7 @@ fun ContactsScreen(
                                         onRemove = { viewModel.deleteContact(contact.destinationHash) },
                                         onLocateOnMap = { onLocateOnMap(contact.destinationHash) },
                                         getContactLocation = { viewModel.getContactLocation(it) },
+                                        onToggleSos = { viewModel.toggleSosTag(contact.destinationHash) },
                                     )
                                 }
                             }
@@ -856,7 +864,7 @@ fun ContactsScreen(
                 editNicknameCurrentValue = null
             },
             onConfirm = { newNickname ->
-                viewModel.updateNickname(nicknameContactHash, newNickname)
+                viewModel.updateContact(nicknameContactHash, nickname = newNickname)
                 showEditNicknameDialog = false
                 editNicknameContactHash = null
                 editNicknameCurrentValue = null
@@ -919,6 +927,7 @@ fun ContactsScreen(
 @Composable
 private fun ContactListItemWithMenu(
     contact: EnrichedContact,
+    hasSosActive: Boolean = false,
     onClick: () -> Unit,
     onPinToggle: () -> Unit,
     onEditNickname: () -> Unit,
@@ -926,6 +935,7 @@ private fun ContactListItemWithMenu(
     onRemove: () -> Unit,
     onLocateOnMap: () -> Unit = {},
     getContactLocation: suspend (String) -> Pair<Double, Double>? = { null },
+    onToggleSos: () -> Unit = {},
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var showMenu by remember { mutableStateOf(false) }
@@ -943,6 +953,7 @@ private fun ContactListItemWithMenu(
     Box(modifier = Modifier.fillMaxWidth()) {
         ContactListItem(
             contact = contact,
+            hasSosActive = hasSosActive,
             onClick = onClick,
             onPinClick = onPinToggle,
             onLongPress = {
@@ -978,6 +989,11 @@ private fun ContactListItemWithMenu(
                 onLocateOnMap()
                 showMenu = false
             },
+            isSos = contact.isSosContact,
+            onToggleSos = {
+                onToggleSos()
+                showMenu = false
+            },
         )
     }
 }
@@ -986,6 +1002,7 @@ private fun ContactListItemWithMenu(
 @Composable
 fun ContactListItem(
     contact: EnrichedContact,
+    hasSosActive: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onPinClick: () -> Unit,
@@ -1008,9 +1025,20 @@ fun ContactListItem(
                     onLongClick = onLongPress,
                 ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border =
+            if (hasSosActive) {
+                androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.error)
+            } else {
+                null
+            },
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor =
+                    if (hasSosActive) {
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
             ),
     ) {
         Row(
@@ -1098,6 +1126,26 @@ fun ContactListItem(
                             contentDescription = "My Relay",
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onTertiary,
+                        )
+                    }
+                }
+
+                // SOS badge overlay (Warning icon in top-start corner)
+                if (contact.isSosContact) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(20.dp)
+                                .align(Alignment.TopStart)
+                                .offset(x = (-4).dp, y = (-4).dp)
+                                .background(MaterialTheme.colorScheme.error, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = "SOS Contact",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onError,
                         )
                     }
                 }
@@ -1289,6 +1337,8 @@ fun ContactContextMenu(
     onRemove: () -> Unit,
     hasLocation: Boolean = false,
     onLocateOnMap: () -> Unit = {},
+    isSos: Boolean = false,
+    onToggleSos: () -> Unit = {},
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1310,6 +1360,21 @@ fun ContactContextMenu(
                 Text(if (isPinned) "Unpin Contact" else "Pin Contact")
             },
             onClick = onPin,
+        )
+
+        // SOS toggle
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = if (isSos) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+            },
+            text = {
+                Text(if (isSos) "Unmark as SOS Contact" else "Mark as SOS Contact")
+            },
+            onClick = onToggleSos,
         )
 
         HorizontalDivider()

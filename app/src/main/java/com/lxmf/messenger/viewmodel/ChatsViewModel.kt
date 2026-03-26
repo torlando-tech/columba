@@ -77,6 +77,9 @@ class ChatsViewModel
         // Cache for contact saved state flows to prevent flickering on recomposition
         private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()
 
+        // Cache for SOS contact state flows
+        private val sosCacheFlows = ConcurrentHashMap<String, StateFlow<Boolean>>()
+
         // Draft texts keyed by peerHash - for showing "Draft:" in conversation list
         val draftsMap: StateFlow<Map<String, String>> =
             conversationRepository
@@ -245,4 +248,47 @@ class ChatsViewModel
          * Returns a Pair(latitude, longitude) or null if no valid location is known.
          */
         suspend fun getContactLocation(peerHash: String): Pair<Double, Double>? = receivedLocationRepository.getContactLocation(peerHash)
+
+        /**
+         * Check if a peer is tagged as an SOS contact.
+         */
+        fun isSosContact(peerHash: String): StateFlow<Boolean> =
+            sosCacheFlows.getOrPut(peerHash) {
+                contactRepository
+                    .isSosContactFlow(peerHash)
+                    .stateIn(
+                        scope = viewModelScope,
+                        started = SharingStarted.WhileSubscribed(5000),
+                        initialValue = false,
+                    )
+            }
+
+        private val sosActiveCacheFlows = mutableMapOf<String, StateFlow<Boolean>>()
+
+        /**
+         * Check if a peer has an active SOS emergency (receiver side).
+         */
+        fun hasSosActive(peerHash: String): StateFlow<Boolean> =
+            sosActiveCacheFlows.getOrPut(peerHash) {
+                com.lxmf.messenger.service.SosActiveTracker.isActive(peerHash)
+                    .stateIn(
+                        scope = viewModelScope,
+                        started = SharingStarted.WhileSubscribed(5000),
+                        initialValue = false,
+                    )
+            }
+
+        /**
+         * Toggle SOS tag for a contact.
+         */
+        fun toggleSosTag(peerHash: String) {
+            viewModelScope.launch {
+                try {
+                    contactRepository.toggleSosTag(peerHash)
+                    Log.d(TAG, "Toggled SOS tag for $peerHash")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to toggle SOS tag for $peerHash", e)
+                }
+            }
+        }
     }

@@ -1578,6 +1578,15 @@ class ReticulumWrapper:
                     if mode != "full":
                         config_lines.append(f"    interface_mode = {mode}")
 
+                    # IFAC parameters
+                    network_name = iface.get("network_name")
+                    if network_name:
+                        config_lines.append(f"    network_name = {network_name}")
+
+                    passphrase = iface.get("passphrase")
+                    if passphrase:
+                        config_lines.append(f"    passphrase = {passphrase}")
+
                     log_info("ReticulumWrapper", "_create_config_file",
                             f"RNode TCP config written: tcp_host={tcp_host}")
                 else:
@@ -1599,6 +1608,8 @@ class ReticulumWrapper:
                         "st_alock": iface.get("st_alock"),
                         "lt_alock": iface.get("lt_alock"),
                         "mode": iface.get("mode", "full"),
+                        "network_name": iface.get("network_name"),
+                        "passphrase": iface.get("passphrase"),
                         "enable_framebuffer": iface.get("enable_framebuffer", True),  # Display Columba logo on RNode
                     }
                     self._pending_rnode_configs.append(rnode_config)

@@ -856,6 +856,8 @@ class InterfaceManagementViewModel
                         stAlock = config.stAlock?.toString() ?: "",
                         ltAlock = config.ltAlock?.toString() ?: "",
                         mode = config.mode,
+                        networkName = config.networkName.orEmpty(),
+                        passphrase = config.passphrase.orEmpty(),
                     )
 
                 is InterfaceConfig.TCPServer ->
@@ -933,6 +935,8 @@ class InterfaceManagementViewModel
                         stAlock = state.stAlock.toDoubleOrNull(),
                         ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.mode,
+                        networkName = state.networkName.trim().ifEmpty { null },
+                        passphrase = state.passphrase.ifEmpty { null },
                     )
 
                 "TCPServer" ->

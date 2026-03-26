@@ -54,6 +54,8 @@ fun InterfaceConfig.toJsonString(): String =
                     stAlock?.let { put("st_alock", it) }
                     ltAlock?.let { put("lt_alock", it) }
                     put("mode", mode)
+                    networkName?.let { put("network_name", it) }
+                    passphrase?.let { put("passphrase", it) }
                     put("enable_framebuffer", enableFramebuffer)
                 }.toString()
 

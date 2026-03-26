@@ -471,6 +471,9 @@ fun MapScreen(
         }
     }
 
+    // Collect pending "Locate on Map" focus before initial positioning LaunchedEffects
+    val pendingFocus by viewModel.pendingFocusContact.collectAsState()
+
     // If focus coordinates are provided, center on them instead of user location
     LaunchedEffect(mapLibreMap, focusLatitude, focusLongitude) {
         val map = mapLibreMap ?: return@LaunchedEffect
@@ -492,7 +495,7 @@ fun MapScreen(
     LaunchedEffect(mapLibreMap, state.userLocation != null) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val location = state.userLocation ?: return@LaunchedEffect
-        if (!hasInitiallyCentered && focusLatitude == null && viewModel.pendingFocusContact.value == null) {
+        if (!hasInitiallyCentered && focusLatitude == null && pendingFocus == null) {
             val cameraPosition =
                 CameraPosition
                     .Builder()
@@ -528,7 +531,7 @@ fun MapScreen(
 
         // Skip initial positioning when a "Locate on Map" request is pending —
         // the pendingFocus LaunchedEffect will handle camera positioning instead.
-        if (viewModel.pendingFocusContact.value != null) return@LaunchedEffect
+        if (pendingFocus != null) return@LaunchedEffect
 
         val savedPos = state.lastCameraPosition
         val defaultCenter = state.defaultRegionCenter
@@ -588,7 +591,6 @@ fun MapScreen(
     }
     // Animate camera to a contact marker requested via "Locate on Map".
     // Uses contactMarkers as a key so it retries when markers load from the database.
-    val pendingFocus by viewModel.pendingFocusContact.collectAsState()
     LaunchedEffect(pendingFocus, mapLibreMap, state.contactMarkers) {
         val hash = pendingFocus ?: return@LaunchedEffect
         val map = mapLibreMap ?: return@LaunchedEffect
@@ -604,10 +606,12 @@ fun MapScreen(
                     .zoom(15.0)
                     .build()
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+            isInitialPositionSet = true
             viewModel.consumePendingFocus()
         } ?: run {
             // Markers loaded but contact not found — stop waiting to avoid stale focus
             if (state.contactMarkers.isNotEmpty() || !state.isLoading) {
+                isInitialPositionSet = true
                 viewModel.consumePendingFocus()
             }
         }

@@ -610,10 +610,10 @@ fun MapScreen(
             hasInitiallyCentered = true
             viewModel.consumePendingFocus()
         } ?: run {
-            // Markers loaded but contact not found — stop waiting to avoid stale focus
+            // Markers loaded but contact not found — stop waiting to avoid stale focus.
+            // Don't set hasInitiallyCentered so GPS LaunchedEffect can still recover camera.
             if (state.contactMarkers.isNotEmpty() || !state.isLoading) {
                 isInitialPositionSet = true
-                hasInitiallyCentered = true
                 viewModel.consumePendingFocus()
             }
         }

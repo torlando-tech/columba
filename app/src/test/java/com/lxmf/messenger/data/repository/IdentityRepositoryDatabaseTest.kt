@@ -619,9 +619,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             defaultIdentityFile.writeBytes(keyData)
 
             val placeholder =
-                createTestIdentity(identityHash = "migration_placeholder").copy(
-                    isActive = false,
-                )
+                createTestIdentity(identityHash = "migration_placeholder", isActive = false)
             localIdentityDao.insert(placeholder)
 
             // Make encryption throw — this is the scenario that caused the original bug
@@ -660,9 +658,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             defaultIdentityFile.writeBytes(ByteArray(32)) // Wrong size!
 
             val placeholder =
-                createTestIdentity(identityHash = "migration_placeholder").copy(
-                    isActive = false,
-                )
+                createTestIdentity(identityHash = "migration_placeholder", isActive = false)
             localIdentityDao.insert(placeholder)
 
             // When

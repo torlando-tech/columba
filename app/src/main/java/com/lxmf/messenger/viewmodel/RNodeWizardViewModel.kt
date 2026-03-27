@@ -401,6 +401,9 @@ class RNodeWizardViewModel
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
+                            // Skip straight to review — user doesn't need to re-walk the wizard
+                            currentStep = WizardStep.REVIEW_CONFIGURE,
+                            showAdvancedSettings = true,
                             // Connection type
                             connectionType = connectionType,
                             // Pre-populate TCP fields (for TCP mode)

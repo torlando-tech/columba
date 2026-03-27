@@ -5,10 +5,10 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import app.cash.turbine.test
 import com.lxmf.messenger.data.crypto.IdentityKeyEncryptor
-import com.lxmf.messenger.data.crypto.IdentityKeyMigrator
 import com.lxmf.messenger.data.crypto.IdentityKeyProvider
 import com.lxmf.messenger.test.DatabaseTest
 import io.mockk.clearAllMocks
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -47,6 +47,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
     private lateinit var repository: IdentityRepository
     private lateinit var mockContext: Context
     private lateinit var mockKeyEncryptor: IdentityKeyEncryptor
+    private lateinit var mockKeyProvider: IdentityKeyProvider
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var tempDir: File
 
@@ -69,6 +70,8 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             byteArrayOf(0x01) + firstArg<ByteArray>()
         }
 
+        mockKeyProvider = mockk()
+
         repository =
             IdentityRepository(
                 identityDao = localIdentityDao,
@@ -77,7 +80,7 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
                 ioDispatcher = testDispatcher,
                 keyEncryptor = mockKeyEncryptor,
                 keyMigrator = mockk(),
-                keyProvider = mockk(),
+                keyProvider = mockKeyProvider,
             )
     }
 
@@ -601,6 +604,121 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             assertTrue(
                 "encryptedKeyData should remain unchanged",
                 existingEncrypted.contentEquals(updated?.encryptedKeyData),
+            )
+        }
+
+    // ========== Migration Abort Tests ==========
+
+    @Test
+    fun `migrateDefaultIdentityIfNeeded aborts when encryption fails`() =
+        runTest {
+            // Setup: valid default_identity file on disk + placeholder in DB
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val defaultIdentityFile = File(reticulumDir, "default_identity")
+            val keyData = ByteArray(64) { it.toByte() }
+            defaultIdentityFile.writeBytes(keyData)
+
+            val placeholder =
+                createTestIdentity(identityHash = "migration_placeholder").copy(
+                    isActive = false,
+                )
+            localIdentityDao.insert(placeholder)
+
+            // Make encryption throw — this is the scenario that caused the original bug
+            every { mockKeyEncryptor.encryptWithDeviceKey(any()) } throws
+                RuntimeException("Keystore unavailable")
+
+            // When
+            repository.migrateDefaultIdentityIfNeeded(
+                identityHash = "real_identity_hash",
+                destinationHash = "real_dest_hash",
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: no identity should have been inserted with null keys
+            val inserted = localIdentityDao.getIdentity("real_identity_hash")
+            assertNull(
+                "Identity must NOT be inserted when encryption fails",
+                inserted,
+            )
+
+            // Placeholder should still exist (kept for retry on next startup)
+            val placeholderStillExists =
+                localIdentityDao.identityExists("migration_placeholder")
+            assertTrue(
+                "Placeholder should remain so migration retries next startup",
+                placeholderStillExists,
+            )
+        }
+
+    @Test
+    fun `migrateDefaultIdentityIfNeeded removes placeholder when file content is invalid`() =
+        runTest {
+            // Setup: default_identity file exists but has wrong size (not 64 bytes)
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val defaultIdentityFile = File(reticulumDir, "default_identity")
+            defaultIdentityFile.writeBytes(ByteArray(32)) // Wrong size!
+
+            val placeholder =
+                createTestIdentity(identityHash = "migration_placeholder").copy(
+                    isActive = false,
+                )
+            localIdentityDao.insert(placeholder)
+
+            // When
+            repository.migrateDefaultIdentityIfNeeded(
+                identityHash = "some_hash",
+                destinationHash = "some_dest",
+            )
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: placeholder should be removed to break the infinite retry loop
+            val placeholderExists =
+                localIdentityDao.identityExists("migration_placeholder")
+            assertFalse(
+                "Placeholder should be removed when file is invalid (avoids infinite retry)",
+                placeholderExists,
+            )
+
+            // And no identity should be inserted
+            val inserted = localIdentityDao.getIdentity("some_hash")
+            assertNull("No identity should be inserted with invalid key data", inserted)
+        }
+
+    // ========== Encrypted Key Data Decryption Fallback Test ==========
+
+    @Test
+    fun `ensureIdentityFileExists recovers from encryptedKeyData when no file or legacy keyData`() =
+        runTest {
+            // Setup: no file on disk, no legacy keyData, but encryptedKeyData is present
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val decryptedKey = ByteArray(64) { (it + 10).toByte() }
+
+            coEvery {
+                mockKeyProvider.getDecryptedKeyData(TEST_IDENTITY_HASH)
+            } returns Result.success(decryptedKey)
+
+            val identity =
+                createTestIdentity().copy(
+                    keyData = null,
+                    encryptedKeyData = byteArrayOf(0xCA.toByte(), 0xFE.toByte()), // Has encrypted data
+                    keyEncryptionVersion = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                    filePath = "/nonexistent/path", // No file at stored path
+                )
+            localIdentityDao.insert(identity)
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: should recover the file from decrypted key data
+            assertTrue("Should recover from encryptedKeyData", result.isSuccess)
+
+            val canonicalFile = File(reticulumDir, "identity_$TEST_IDENTITY_HASH")
+            assertTrue("Canonical file should be created", canonicalFile.exists())
+            assertTrue(
+                "File content should match decrypted key",
+                decryptedKey.contentEquals(canonicalFile.readBytes()),
             )
         }
 }

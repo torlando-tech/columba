@@ -191,6 +191,10 @@ data class RNodeWizardState(
     val showAdvancedSettings: Boolean = false,
     // Display logo on RNode screen
     val enableFramebuffer: Boolean = true,
+    // IFAC (Interface Access Code) authentication
+    val networkName: String = "",
+    val passphrase: String = "",
+    val passphraseVisible: Boolean = false,
     // Validation errors
     val nameError: String? = null,
     val frequencyError: String? = null,
@@ -432,6 +436,8 @@ class RNodeWizardViewModel
                             ltAlock = config.ltAlock?.toString() ?: "",
                             interfaceMode = config.mode,
                             enableFramebuffer = config.enableFramebuffer,
+                            networkName = config.networkName.orEmpty(),
+                            passphrase = config.passphrase.orEmpty(),
                         )
                     }
 
@@ -3319,6 +3325,18 @@ class RNodeWizardViewModel
             _state.update { it.copy(enableFramebuffer = enabled) }
         }
 
+        fun updateNetworkName(value: String) {
+            _state.update { it.copy(networkName = value) }
+        }
+
+        fun updatePassphrase(value: String) {
+            _state.update { it.copy(passphrase = value) }
+        }
+
+        fun togglePassphraseVisible() {
+            _state.update { it.copy(passphraseVisible = !it.passphraseVisible) }
+        }
+
         /**
          * Get the maximum TX power for the selected region (or default fallback).
          */
@@ -3497,6 +3515,8 @@ class RNodeWizardViewModel
                             stAlock = state.stAlock.toDoubleOrNull(),
                             ltAlock = state.ltAlock.toDoubleOrNull(),
                             mode = state.interfaceMode,
+                            networkName = state.networkName.trim().ifEmpty { null },
+                            passphrase = state.passphrase.trim().ifEmpty { null },
                             enableFramebuffer = state.enableFramebuffer,
                         )
 

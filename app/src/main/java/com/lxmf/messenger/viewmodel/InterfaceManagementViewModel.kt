@@ -901,7 +901,7 @@ class InterfaceManagementViewModel
                         kissFraming = false,
                         mode = state.mode,
                         networkName = state.networkName.trim().ifEmpty { null },
-                        passphrase = state.passphrase.ifEmpty { null },
+                        passphrase = state.passphrase.trim().ifEmpty { null },
                         socksProxyEnabled = state.socksProxyEnabled,
                         socksProxyHost = state.socksProxyHost.trim(),
                         socksProxyPort = state.socksProxyPort.toIntOrNull() ?: 9050,
@@ -936,7 +936,7 @@ class InterfaceManagementViewModel
                         ltAlock = state.ltAlock.toDoubleOrNull(),
                         mode = state.mode,
                         networkName = state.networkName.trim().ifEmpty { null },
-                        passphrase = state.passphrase.ifEmpty { null },
+                        passphrase = state.passphrase.trim().ifEmpty { null },
                     )
 
                 "TCPServer" ->

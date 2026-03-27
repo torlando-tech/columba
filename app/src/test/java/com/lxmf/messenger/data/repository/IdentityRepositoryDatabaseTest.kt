@@ -498,4 +498,109 @@ class IdentityRepositoryDatabaseTest : DatabaseTest() {
             val updated = localIdentityDao.getIdentity(TEST_IDENTITY_HASH)
             assertEquals(canonicalFile.absolutePath, updated?.filePath)
         }
+
+    // ========== Identity File Loss Prevention Tests ==========
+
+    @Test
+    fun `ensureIdentityFileExists recovers from stored filePath when canonical missing`() =
+        runTest {
+            // Setup: file exists at stored filePath (default_identity) but NOT at canonical path
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val defaultIdentityFile = File(reticulumDir, "default_identity")
+            val keyData = ByteArray(64) { it.toByte() }
+            defaultIdentityFile.writeBytes(keyData)
+
+            val identity =
+                createTestIdentity().copy(
+                    keyData = null,
+                    encryptedKeyData = null,
+                    filePath = defaultIdentityFile.absolutePath,
+                )
+            localIdentityDao.insert(identity)
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should succeed by copying from stored filePath to canonical
+            assertTrue("Should recover from stored filePath", result.isSuccess)
+
+            val canonicalFile = File(reticulumDir, "identity_$TEST_IDENTITY_HASH")
+            assertTrue("Canonical file should be created", canonicalFile.exists())
+            assertEquals(64L, canonicalFile.length())
+
+            // Verify opportunistic backup also ran
+            val updated = localIdentityDao.getIdentity(TEST_IDENTITY_HASH)
+            assertNotNull("encryptedKeyData should be backed up after file recovery", updated?.encryptedKeyData)
+            assertEquals(
+                IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                updated?.keyEncryptionVersion,
+            )
+        }
+
+    @Test
+    fun `ensureIdentityFileExists performs opportunistic key backup`() =
+        runTest {
+            // Setup: file exists at canonical path but encryptedKeyData is null in DB
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val canonicalFile = File(reticulumDir, "identity_$TEST_IDENTITY_HASH")
+            val keyData = ByteArray(64) { it.toByte() }
+            canonicalFile.writeBytes(keyData)
+
+            val identity =
+                createTestIdentity().copy(
+                    keyData = null,
+                    encryptedKeyData = null, // Key not backed up!
+                    keyEncryptionVersion = 0,
+                    filePath = canonicalFile.absolutePath,
+                )
+            localIdentityDao.insert(identity)
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should succeed AND backup the key
+            assertTrue("Should succeed", result.isSuccess)
+
+            val updated = localIdentityDao.getIdentity(TEST_IDENTITY_HASH)
+            assertNotNull("encryptedKeyData should now be set", updated?.encryptedKeyData)
+            assertEquals(
+                "keyEncryptionVersion should be device-only",
+                IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                updated?.keyEncryptionVersion,
+            )
+        }
+
+    @Test
+    fun `ensureIdentityFileExists does not overwrite existing encryptedKeyData`() =
+        runTest {
+            // Setup: file exists AND encryptedKeyData already set
+            val reticulumDir = File(tempDir, "reticulum").apply { mkdirs() }
+            val canonicalFile = File(reticulumDir, "identity_$TEST_IDENTITY_HASH")
+            val keyData = ByteArray(64) { it.toByte() }
+            canonicalFile.writeBytes(keyData)
+
+            val existingEncrypted = byteArrayOf(0x01, 0x02, 0x03)
+            val identity =
+                createTestIdentity().copy(
+                    encryptedKeyData = existingEncrypted,
+                    keyEncryptionVersion = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                    filePath = canonicalFile.absolutePath,
+                )
+            localIdentityDao.insert(identity)
+
+            // When
+            val result = repository.ensureIdentityFileExists(identity)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then: Should NOT overwrite existing encryptedKeyData
+            assertTrue(result.isSuccess)
+
+            val updated = localIdentityDao.getIdentity(TEST_IDENTITY_HASH)
+            assertTrue(
+                "encryptedKeyData should remain unchanged",
+                existingEncrypted.contentEquals(updated?.encryptedKeyData),
+            )
+        }
 }

@@ -358,6 +358,8 @@ class RnsApi:
                        f"Page request failed for {path}")
             response_event.set()
 
+        self._download_progress = -1.0
+
         def progress_update(request_receipt):
             self._download_progress = request_receipt.progress
 

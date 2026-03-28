@@ -662,8 +662,11 @@ class NomadNetBrowserViewModel
                     result.fold(
                         onSuccess = { pageResult ->
                             if (pageResult.type == "file") {
-                                // Unexpected file response on a page path
+                                // Unexpected file response on a page path —
+                                // clear loading state so screen doesn't get stuck
                                 _isPullRefreshing.value = false
+                                _browserState.value =
+                                    BrowserState.Error("Server returned a file instead of a page")
                                 _downloadState.value =
                                     DownloadState(
                                         isActive = false,

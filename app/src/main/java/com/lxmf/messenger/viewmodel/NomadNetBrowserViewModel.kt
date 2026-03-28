@@ -116,6 +116,9 @@ class NomadNetBrowserViewModel
         @Volatile
         private var fetchEpoch = 0
 
+        @Volatile
+        private var statusPollingJob: kotlinx.coroutines.Job? = null
+
         private val partialManager: PartialManager? by lazy {
             (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
                 PartialManager(
@@ -291,15 +294,17 @@ class NomadNetBrowserViewModel
             path: String,
             formDataJson: String,
         ) {
-            fetchEpoch++
+            val epoch = ++fetchEpoch
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
             _browserState.value = BrowserState.Loading("Requesting page...")
+            startStatusPolling(epoch)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
+                        stopStatusPolling(epoch)
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
                     }
@@ -311,6 +316,8 @@ class NomadNetBrowserViewModel
                             formDataJson = formDataJson,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
+
+                    stopStatusPolling(epoch)
 
                     result.fold(
                         onSuccess = { pageResult ->
@@ -326,6 +333,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
+                    stopStatusPolling(epoch)
                     Log.e(TAG, "Error navigating", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
                 }
@@ -369,6 +377,7 @@ class NomadNetBrowserViewModel
 
         fun cancelLoading() {
             val epoch = ++fetchEpoch
+            stopStatusPolling()
             _browserState.value = BrowserState.Error("Cancelled")
             _isPullRefreshing.value = false
             viewModelScope.launch(Dispatchers.IO) {
@@ -422,6 +431,7 @@ class NomadNetBrowserViewModel
 
         override fun onCleared() {
             super.onCleared()
+            stopStatusPolling()
             // Cancel any in-flight Python page request so the IO thread isn't blocked
             // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
             // Use NonCancellable because viewModelScope is already cancelled at this point.
@@ -474,6 +484,41 @@ class NomadNetBrowserViewModel
         }
 
         /**
+         * Start polling Python for request phase status ("Looking up path...", etc.).
+         * Runs on Dispatchers.IO in viewModelScope. Automatically stops when fetchEpoch changes
+         * or the coroutine is cancelled.
+         */
+        private fun startStatusPolling(epoch: Int) {
+            statusPollingJob?.cancel()
+            val protocol = reticulumProtocol as? ServiceReticulumProtocol ?: return
+            statusPollingJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        while (fetchEpoch == epoch) {
+                            kotlinx.coroutines.delay(200)
+                            if (fetchEpoch != epoch) break
+                            val status = protocol.getNomadnetRequestStatus()
+                            if (status.isNotEmpty()) {
+                                _browserState.value = BrowserState.Loading(status)
+                            }
+                        }
+                    } catch (_: kotlinx.coroutines.CancellationException) {
+                        // Normal shutdown
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Status polling stopped: ${e.message}")
+                    }
+                }
+        }
+
+        private fun stopStatusPolling(epoch: Int? = null) {
+            // If epoch is provided, only stop if it still matches (prevents
+            // a stale IO coroutine from killing a newer navigation's poller)
+            if (epoch != null && fetchEpoch != epoch) return
+            statusPollingJob?.cancel()
+            statusPollingJob = null
+        }
+
+        /**
          * Fetch a page from the network, optionally caching the response.
          */
         private fun fetchPage(
@@ -481,22 +526,22 @@ class NomadNetBrowserViewModel
             path: String,
             cacheResponse: Boolean,
         ) {
-            fetchEpoch++
+            val epoch = ++fetchEpoch
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
             _browserState.value = BrowserState.Loading("Requesting page...")
+            startStatusPolling(epoch)
 
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
+                        stopStatusPolling(epoch)
                         _isPullRefreshing.value = false
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
                     }
-
-                    _browserState.value = BrowserState.Loading("Connecting to node...")
 
                     val result =
                         protocol.requestNomadnetPage(
@@ -504,6 +549,8 @@ class NomadNetBrowserViewModel
                             path = path,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
+
+                    stopStatusPolling(epoch)
 
                     result.fold(
                         onSuccess = { pageResult ->
@@ -523,6 +570,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
+                    stopStatusPolling(epoch)
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")

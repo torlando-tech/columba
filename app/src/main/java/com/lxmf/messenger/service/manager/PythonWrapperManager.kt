@@ -869,6 +869,21 @@ class PythonWrapperManager(
     }
 
     /**
+     * Get current NomadNet request phase status for UI display.
+     * Polled by Kotlin ViewModel to show granular progress.
+     */
+    fun getNomadnetRequestStatus(): String {
+        val api = rnsApi ?: return ""
+        return try {
+            api.callAttr("get_request_status")?.toString() ?: ""
+        } catch (
+            @Suppress("SwallowedException") e: Exception,
+        ) {
+            ""
+        }
+    }
+
+    /**
      * Cancel any in-progress NomadNet page request.
      * Uses rns_api.py (Strangler Fig).
      */

@@ -1,6 +1,7 @@
 package com.lxmf.messenger.ui.screens
 
 import android.content.Intent
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -79,12 +80,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lxmf.messenger.ui.components.MicronPageContent
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.BrowserState
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.NavigationEvent
 import com.lxmf.messenger.viewmodel.NomadNetBrowserViewModel.RenderingMode
+import java.io.File
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,6 +109,7 @@ fun NomadNetBrowserScreen(
     val partialStates by viewModel.partialStates.collectAsState()
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
+    val downloadState by viewModel.downloadState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var showIdentifyConfirm by remember { mutableStateOf(false) }
     val currentPage =
@@ -154,6 +159,23 @@ fun NomadNetBrowserScreen(
         } else {
             viewModel.goBack()
         }
+    }
+
+    // Show download dialog when download is active or completed
+    if (downloadState.isActive || downloadState.filePath != null || downloadState.error != null) {
+        NomadNetDownloadDialog(
+            downloadState = downloadState,
+            onDismiss = { viewModel.clearDownload() },
+            onCancel = { viewModel.cancelDownload() },
+            onOpen = { path ->
+                openDownloadedFile(context, path)
+                viewModel.clearDownload()
+            },
+            onShare = { path ->
+                shareDownloadedFile(context, path)
+                viewModel.clearDownload()
+            },
+        )
     }
 
     if (showIdentifyConfirm) {
@@ -566,3 +588,126 @@ fun NomadNetBrowserScreen(
         }
     }
 }
+
+@Composable
+private fun NomadNetDownloadDialog(
+    downloadState: NomadNetBrowserViewModel.DownloadState,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+    onOpen: (String) -> Unit,
+    onShare: (String) -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!downloadState.isActive) onDismiss() },
+        title = {
+            Text(
+                if (downloadState.isActive) {
+                    "Downloading..."
+                } else if (downloadState.error != null) {
+                    "Download Failed"
+                } else {
+                    "Download Complete"
+                },
+            )
+        },
+        text = {
+            Column {
+                if (downloadState.isActive) {
+                    Text(downloadState.fileName, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = { downloadState.progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "${(downloadState.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (downloadState.error != null) {
+                    Text(
+                        downloadState.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text(downloadState.fileName, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        formatFileSize(downloadState.fileSize),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (downloadState.isActive) {
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            } else if (downloadState.filePath != null) {
+                TextButton(onClick = { onOpen(downloadState.filePath) }) { Text("Open") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("OK") }
+            }
+        },
+        dismissButton = {
+            if (!downloadState.isActive && downloadState.filePath != null) {
+                TextButton(onClick = { onShare(downloadState.filePath) }) { Text("Share") }
+            } else if (!downloadState.isActive) {
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        },
+    )
+}
+
+private fun openDownloadedFile(
+    context: android.content.Context,
+    filePath: String,
+) {
+    try {
+        val file = File(filePath)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val mimeType = getMimeTypeFromFileName(file.name)
+        val intent =
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        context.startActivity(Intent.createChooser(intent, "Open with"))
+    } catch (_: Exception) {
+        // No app available to handle this file type
+    }
+}
+
+private fun shareDownloadedFile(
+    context: android.content.Context,
+    filePath: String,
+) {
+    try {
+        val file = File(filePath)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val mimeType = getMimeTypeFromFileName(file.name)
+        val intent =
+            Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        context.startActivity(Intent.createChooser(intent, "Share file"))
+    } catch (_: Exception) {
+        // No app available to share
+    }
+}
+
+private fun getMimeTypeFromFileName(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
+}
+
+private fun formatFileSize(bytes: Long): String =
+    when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+    }

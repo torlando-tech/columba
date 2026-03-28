@@ -28,6 +28,16 @@ def format_interface_name(interface_obj) -> Optional[str]:
     user_name = getattr(interface_obj, 'name', None)
     if user_name and user_name != class_name:
         return f"{class_name}[{user_name}]"
+    # For auto-discovered interfaces, name equals class_name — try target address
+    target = getattr(interface_obj, 'target_ip', None) or getattr(interface_obj, 'target_host', None)
+    port = getattr(interface_obj, 'target_port', None)
+    if target:
+        addr = f"{target}:{port}" if port else target
+        return f"{class_name}[{addr}]"
+    # Last resort: RNS __str__ may include useful info (e.g., "TCPInterface[addr]")
+    iface_str = str(interface_obj)
+    if "[" in iface_str:
+        return iface_str
     return class_name
 
 

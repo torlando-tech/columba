@@ -1265,6 +1265,8 @@ class ReticulumServiceBinder(
         wrapperManager.cancelNomadnetPageRequest()
     }
 
+    override fun getNomadnetRequestStatus(): String = wrapperManager.getNomadnetRequestStatus()
+
     override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)
 
     // ===========================================

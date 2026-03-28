@@ -2871,6 +2871,17 @@ class ServiceReticulumProtocol(
         }
     }
 
+    suspend fun getNomadnetRequestStatus(): String =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                this@ServiceReticulumProtocol.service?.nomadnetRequestStatus ?: ""
+            } catch (
+                @Suppress("SwallowedException") e: Exception,
+            ) {
+                ""
+            }
+        }
+
     /**
      * Identify ourselves on an existing NomadNet link.
      * @return Result<Boolean> where Boolean = alreadyIdentified

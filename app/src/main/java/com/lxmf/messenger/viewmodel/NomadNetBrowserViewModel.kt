@@ -226,14 +226,36 @@ class NomadNetBrowserViewModel
 
             partialManager?.clear()
 
-            // Collect form field values for submission
+            // Collect form field values for submission.
+            // NomadNet link fields can be:
+            //   - "fieldname" → look up value from form fields
+            //   - "key=value" → inline variable (sent as "var_key")
+            //   - "*" → submit all form fields
             val isFormSubmission = fieldNames.isNotEmpty()
             val formDataJson =
                 if (isFormSubmission) {
                     val data = JSONObject()
-                    for (fieldName in fieldNames) {
-                        val value = _formFields.value[fieldName] ?: ""
-                        data.put(fieldName, value)
+                    val submitAll = "*" in fieldNames
+                    for (fieldEntry in fieldNames) {
+                        if (fieldEntry == "*") continue
+                        if ("=" in fieldEntry) {
+                            // Inline variable: "key=value" → sent as "var_key"
+                            val eqIdx = fieldEntry.indexOf('=')
+                            val key = fieldEntry.substring(0, eqIdx)
+                            val value = fieldEntry.substring(eqIdx + 1)
+                            data.put("var_$key", value)
+                        } else {
+                            // Form field reference: look up value from form state
+                            val value = _formFields.value[fieldEntry] ?: ""
+                            data.put(fieldEntry, value)
+                        }
+                    }
+                    if (submitAll) {
+                        for ((key, value) in _formFields.value) {
+                            if (!data.has(key)) {
+                                data.put(key, value)
+                            }
+                        }
                     }
                     data.toString()
                 } else {

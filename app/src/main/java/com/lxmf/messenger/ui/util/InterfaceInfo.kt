@@ -87,6 +87,7 @@ fun getInterfaceInfo(interfaceName: String): InterfaceInfo {
     val friendlyName = extractFriendlyName(interfaceName)
     val interfaceType = extractInterfaceType(interfaceName)
     val category = categorizeInterface(interfaceName)
+    val bracketContent = interfaceName.substringAfter("[", "").substringBefore("]", "")
 
     val displayText =
         when (category) {
@@ -94,9 +95,18 @@ fun getInterfaceInfo(interfaceName: String): InterfaceInfo {
             else -> friendlyName ?: category.defaultText
         }
 
+    // When there's no friendly name but bracket content exists (e.g., an IP address),
+    // show it as the subtitle instead of just the interface class name
+    val subtitle =
+        if (friendlyName == null && bracketContent.isNotEmpty()) {
+            "$interfaceType — $bracketContent"
+        } else {
+            interfaceType
+        }
+
     return InterfaceInfo(
         icon = category.icon,
         text = displayText,
-        subtitle = interfaceType,
+        subtitle = subtitle,
     )
 }

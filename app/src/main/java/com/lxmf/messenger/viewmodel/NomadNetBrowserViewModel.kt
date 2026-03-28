@@ -394,6 +394,9 @@ class NomadNetBrowserViewModel
 
                     progressJob.cancel()
 
+                    // If user cancelled while download was in progress, don't update state
+                    if (fetchEpoch != downloadEpoch) return@launch
+
                     result.fold(
                         onSuccess = { pageResult ->
                             if (pageResult.type == "file") {

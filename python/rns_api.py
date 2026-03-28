@@ -359,7 +359,7 @@ class RnsApi:
             response_event.set()
 
         def progress_update(request_receipt):
-            pass  # Callback required by RNS to track transfer progress
+            self._download_progress = request_receipt.progress
 
         log_debug("RnsApi", "request_nomadnet_page",
                  f"Sending request for path: {path}")
@@ -425,6 +425,11 @@ class RnsApi:
             filename = name_raw.decode("utf-8", errors="replace")
         else:
             filename = str(name_raw)
+
+        # Sanitize filename to prevent path traversal
+        filename = os.path.basename(filename)
+        if not filename:
+            filename = "download"
 
         if not download_dir:
             download_dir = "/tmp/nomadnet_downloads"

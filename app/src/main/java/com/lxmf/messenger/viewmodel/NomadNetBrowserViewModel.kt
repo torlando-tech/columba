@@ -115,6 +115,8 @@ class NomadNetBrowserViewModel
 
         @Volatile
         private var fetchEpoch = 0
+
+        @Volatile
         private var statusPollingJob: kotlinx.coroutines.Job? = null
 
         private val partialManager: PartialManager? by lazy {
@@ -270,17 +272,17 @@ class NomadNetBrowserViewModel
             path: String,
             formDataJson: String,
         ) {
-            fetchEpoch++
+            val epoch = ++fetchEpoch
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
             _browserState.value = BrowserState.Loading("Requesting page...")
-            startStatusPolling(fetchEpoch)
+            startStatusPolling(epoch)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
-                        stopStatusPolling()
+                        stopStatusPolling(epoch)
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
                     }
@@ -293,7 +295,7 @@ class NomadNetBrowserViewModel
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
 
-                    stopStatusPolling()
+                    stopStatusPolling(epoch)
 
                     result.fold(
                         onSuccess = { pageResult ->
@@ -309,7 +311,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
-                    stopStatusPolling()
+                    stopStatusPolling(epoch)
                     Log.e(TAG, "Error navigating", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
                 }
@@ -486,7 +488,10 @@ class NomadNetBrowserViewModel
                 }
         }
 
-        private fun stopStatusPolling() {
+        private fun stopStatusPolling(epoch: Int? = null) {
+            // If epoch is provided, only stop if it still matches (prevents
+            // a stale IO coroutine from killing a newer navigation's poller)
+            if (epoch != null && fetchEpoch != epoch) return
             statusPollingJob?.cancel()
             statusPollingJob = null
         }
@@ -499,18 +504,18 @@ class NomadNetBrowserViewModel
             path: String,
             cacheResponse: Boolean,
         ) {
-            fetchEpoch++
+            val epoch = ++fetchEpoch
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
             _browserState.value = BrowserState.Loading("Requesting page...")
-            startStatusPolling(fetchEpoch)
+            startStatusPolling(epoch)
 
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
-                        stopStatusPolling()
+                        stopStatusPolling(epoch)
                         _isPullRefreshing.value = false
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
@@ -523,7 +528,7 @@ class NomadNetBrowserViewModel
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
 
-                    stopStatusPolling()
+                    stopStatusPolling(epoch)
 
                     result.fold(
                         onSuccess = { pageResult ->
@@ -543,7 +548,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
-                    stopStatusPolling()
+                    stopStatusPolling(epoch)
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")

@@ -68,6 +68,7 @@ class MapViewModelTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
+    private lateinit var reticulumProtocol: com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
     private lateinit var viewModel: MapViewModel
 
     @Before
@@ -85,7 +86,9 @@ class MapViewModelTest {
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
         offlineMapRegionRepository = mockk()
+        reticulumProtocol = mockk()
 
+        coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { announceDao.getEnrichedAnnounces() } returns flowOf(emptyList())
@@ -133,6 +136,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -155,6 +159,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -177,6 +182,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -199,6 +205,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -226,6 +233,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -256,6 +264,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -286,6 +295,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Verify initial state has no error message
@@ -314,6 +324,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -336,6 +347,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -363,6 +375,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -434,6 +447,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -482,6 +496,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -507,6 +522,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -531,6 +547,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -553,6 +570,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val location1 = createMockLocation(37.7749, -122.4194)
             val location2 = createMockLocation(40.7128, -74.0060)
@@ -608,6 +626,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val newLocation = createMockLocation(40.7128, -74.0060) // New York
 
@@ -661,6 +680,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -706,6 +726,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -730,6 +751,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val mockLocation = createMockLocation(37.7749, -122.4194)
 
@@ -764,6 +786,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val originalState = viewModel.state.value
@@ -793,6 +816,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -820,6 +844,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -847,6 +872,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -874,6 +900,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -901,6 +928,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -928,6 +956,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -956,6 +985,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             val now = System.currentTimeMillis()
 
@@ -985,6 +1015,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val selectedContacts =
@@ -1026,6 +1057,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result = runCatching { viewModel.startSharing(emptyList(), com.lxmf.messenger.ui.model.SharingDuration.FIFTEEN_MINUTES) }
@@ -1050,6 +1082,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val selectedContacts =
@@ -1088,6 +1121,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result = runCatching { viewModel.stopSharing() }
@@ -1112,6 +1146,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result = runCatching { viewModel.stopSharing("specific_hash") }
@@ -1136,6 +1171,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result1 = runCatching { viewModel.stopSharing("hash1") }
@@ -1196,6 +1232,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1232,6 +1269,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1262,6 +1300,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1343,6 +1382,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1384,6 +1424,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1456,6 +1497,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1523,6 +1565,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1592,6 +1635,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1643,6 +1687,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1673,6 +1718,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1698,6 +1744,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.state.test {
@@ -1720,6 +1767,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.dismissLocationPermissionSheet()
@@ -1747,6 +1795,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             viewModel.dismissLocationPermissionSheet()
 
@@ -1765,6 +1814,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Then: Permission sheet should still be dismissed
@@ -1793,6 +1843,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1817,6 +1868,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             val result = runCatching { viewModel.enableHttp() }
@@ -1845,6 +1897,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Change HTTP enabled state
@@ -1872,6 +1925,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             viewModel.dismissPermissionCard()
 
@@ -1890,6 +1944,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Then: Permission card should still be dismissed
@@ -1920,6 +1975,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Then: Permission card should NOT be dismissed
@@ -1945,6 +2001,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
             vm1.dismissPermissionCard()
             assertTrue(vm1.state.value.isPermissionCardDismissed)
@@ -1962,6 +2019,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             // Then: The second ViewModel should NOT have the card dismissed
@@ -1984,6 +2042,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             assertNull(viewModel.pendingFocusContact.value)
@@ -2003,6 +2062,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.focusOnContact("abc123")
@@ -2024,6 +2084,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.focusOnContact("abc123")
@@ -2047,6 +2108,7 @@ class MapViewModelTest {
                     mapTileSourceManager,
                     telemetryCollectorManager,
                     offlineMapRegionRepository,
+                    reticulumProtocol,
                 )
 
             viewModel.focusOnContact("first")

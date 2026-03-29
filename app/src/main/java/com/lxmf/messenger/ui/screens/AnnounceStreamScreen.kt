@@ -1034,19 +1034,21 @@ fun ClearAllAnnouncesDialog(
 /**
  * Stable key function for announce paging lists.
  *
- * Uses [AnnounceEntity.destinationHash] as the primary key so Compose can track
+ * Uses [com.lxmf.messenger.data.repository.Announce.destinationHash] as the primary key so Compose can track
  * items across list re-sorts (e.g., when new announces insert at the top).
  * Falls back to appending a disambiguator only for transient Paging3 duplicates
  * (issue #542) to avoid a duplicate-key crash.
  */
 private fun LazyPagingItems<com.lxmf.messenger.data.repository.Announce>.stableKey(): (index: Int) -> Any {
     val seen = mutableSetOf<String>()
-    return { index ->
-        val hash = peek(index)?.destinationHash
-        if (hash != null) {
-            if (seen.add(hash)) hash else "${hash}_dup$index"
-        } else {
-            "placeholder_$index"
+    val keys =
+        Array<Any>(itemCount) { index ->
+            val hash = peek(index)?.destinationHash
+            if (hash != null) {
+                if (seen.add(hash)) hash else "${hash}_dup$index"
+            } else {
+                "placeholder_$index"
+            }
         }
-    }
+    return { index -> keys[index] }
 }

@@ -15,6 +15,7 @@ import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.notifications.isSosCancelledByField
 import com.lxmf.messenger.notifications.isSosMessageByField
 import com.lxmf.messenger.notifications.isSosUpdateByField
+import com.lxmf.messenger.notifications.parseSosLocation
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +88,21 @@ class MessageCollector
 
             isStarted = true
             Log.i(TAG, "Starting message collection service")
+
+            // Restore SOS active senders from DB (needed after stop/restart within same session)
+            scope.launch {
+                try {
+                    val recentSenders = receivedLocationDao.getRecentSosTrailSenders(
+                        sinceTimestamp = System.currentTimeMillis() - 24 * 3600_000L,
+                    )
+                    if (recentSenders.isNotEmpty()) {
+                        SosActiveTracker.restoreFromSenders(recentSenders.toSet())
+                        Log.d(TAG, "Restored ${recentSenders.size} SOS active senders")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to restore SOS active senders", e)
+                }
+            }
 
             // Collect messages from the Reticulum protocol
             scope.launch {
@@ -184,7 +200,7 @@ class MessageCollector
                             if (!existingMessage.isRead) {
                                 // Store SOS trail location (only for unread = first processing)
                                 if (isSosMessageByField(receivedMessage.content, fieldsJson)) {
-                                    val trailLocation = notificationHelper.parseSosLocation(receivedMessage.content)
+                                    val trailLocation = parseSosLocation(receivedMessage.content, fieldsJson)
                                     if (trailLocation != null) {
                                         try {
                                             receivedLocationDao.insert(
@@ -207,7 +223,7 @@ class MessageCollector
                                 }
                                 try {
                                     if (isSosMessageByField(receivedMessage.content, fieldsJson)) {
-                                        val location = notificationHelper.parseSosLocation(receivedMessage.content)
+                                        val location = parseSosLocation(receivedMessage.content, fieldsJson)
                                         notificationHelper.notifySosReceived(
                                             destinationHash = sourceHash,
                                             peerName = peerName,
@@ -361,7 +377,7 @@ class MessageCollector
                                     Log.d(TAG, "Cleared SOS active and notification for ${sourceHash.take(16)}")
                                 } else if (isSosMessageByField(receivedMessage.content, newFieldsJson)) {
                                     SosActiveTracker.addSender(sourceHash)
-                                    val location = notificationHelper.parseSosLocation(receivedMessage.content)
+                                    val location = parseSosLocation(receivedMessage.content, newFieldsJson)
                                     notificationHelper.notifySosReceived(
                                         destinationHash = sourceHash,
                                         peerName = peerName,

@@ -162,6 +162,7 @@ import com.lxmf.messenger.MainActivity
 import com.lxmf.messenger.R
 import com.lxmf.messenger.notifications.NotificationHelper
 import com.lxmf.messenger.notifications.isSosMessageByField
+import com.lxmf.messenger.notifications.parseSosLocation
 import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import com.lxmf.messenger.ui.components.AttachmentPanel
@@ -2160,7 +2161,7 @@ fun MessageBubble(
 
                         // "View on Map" button for SOS messages with GPS coordinates
                         if (isSosMessage) {
-                            val sosLocation = parseSosGpsLocation(message.content, message.fieldsJson)
+                            val sosLocation = parseSosLocation(message.content, message.fieldsJson)
                             if (sosLocation != null) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
@@ -2623,35 +2624,6 @@ fun EmptyMessagesState() {
 
 private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
 
-private fun parseSosGpsLocation(content: String, fieldsJson: String? = null): Pair<Double, Double>? {
-    // Primary: extract from FIELD_TELEMETRY in fieldsJson
-    if (fieldsJson != null) {
-        try {
-            val fields = org.json.JSONObject(fieldsJson)
-            // FIELD_TELEMETRY key "2" contains unpacked telemetry with lat/lng
-            val telemetry = fields.optJSONObject("2")
-            if (telemetry != null) {
-                val lat = telemetry.optDouble("lat", Double.NaN)
-                val lng = telemetry.optDouble("lng", Double.NaN)
-                val validCoords = !lat.isNaN() && !lng.isNaN() &&
-                    lat in -90.0..90.0 && lng in -180.0..180.0
-                if (validCoords) return Pair(lat, lng)
-            }
-        } catch (_: Exception) {
-            // Fall through to text parsing
-        }
-    }
-    // Fallback: parse from message text (locale-independent regex)
-    val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
-    val match = regex.find(content) ?: return null
-    return try {
-        val lat = match.groupValues[1].replace(',', '.').toDouble()
-        val lng = match.groupValues[2].replace(',', '.').toDouble()
-        if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
-    } catch (e: NumberFormatException) {
-        null
-    }
-}
 
 @Composable
 private fun FullscreenImageDialog(

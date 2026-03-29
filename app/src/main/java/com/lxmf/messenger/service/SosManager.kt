@@ -452,7 +452,7 @@ class SosManager
                 scope.launch {
                     val durationSeconds = settingsRepository.sosAudioDurationSeconds.first()
 
-                    val started = withContext(Dispatchers.Main) { audioRecorder.start() }
+                    val started = withContext(Dispatchers.IO) { audioRecorder.start() }
                     if (!started) {
                         Log.w(TAG, "Audio recording failed to start")
                         return@launch

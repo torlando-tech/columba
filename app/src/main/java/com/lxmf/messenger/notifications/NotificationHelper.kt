@@ -603,21 +603,40 @@ class NotificationHelper
                 !isSosCancelledMessage(content)
         }
 
-        /**
-         * Parse GPS coordinates from an SOS message.
-         */
-        fun parseSosLocation(content: String): Pair<Double, Double>? {
-            val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
-            val match = regex.find(content) ?: return null
-            return try {
-                val lat = match.groupValues[1].replace(',', '.').toDouble()
-                val lng = match.groupValues[2].replace(',', '.').toDouble()
-                if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
-            } catch (e: NumberFormatException) {
-                null
+    }
+
+/**
+ * Parse GPS coordinates from an SOS message.
+ * Checks FIELD_TELEMETRY first (Sideband-compatible), then falls back to text regex.
+ */
+fun parseSosLocation(content: String, fieldsJson: String? = null): Pair<Double, Double>? {
+    // Primary: extract from FIELD_TELEMETRY in fieldsJson
+    if (fieldsJson != null) {
+        try {
+            val fields = org.json.JSONObject(fieldsJson)
+            val telemetry = fields.optJSONObject("2")
+            if (telemetry != null) {
+                val lat = telemetry.optDouble("lat", Double.NaN)
+                val lng = telemetry.optDouble("lng", Double.NaN)
+                if (!lat.isNaN() && !lng.isNaN() && lat in -90.0..90.0 && lng in -180.0..180.0) {
+                    return Pair(lat, lng)
+                }
             }
+        } catch (_: Exception) {
+            // Fall through to text parsing
         }
     }
+    // Fallback: parse from message text (locale-independent regex)
+    val regex = Regex("""GPS:\s*(-?[\d.,]+),\s*(-?[\d.,]+)""")
+    val match = regex.find(content) ?: return null
+    return try {
+        val lat = match.groupValues[1].replace(',', '.').toDouble()
+        val lng = match.groupValues[2].replace(',', '.').toDouble()
+        if (lat in -90.0..90.0 && lng in -180.0..180.0) Pair(lat, lng) else null
+    } catch (e: NumberFormatException) {
+        null
+    }
+}
 
 /**
  * Check if a message is an SOS cancellation. Top-level to avoid TooManyFunctions in NotificationHelper.

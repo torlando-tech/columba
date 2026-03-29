@@ -679,7 +679,7 @@ class MapViewModel
                             id = id,
                             name = iface.name,
                             type = iface.type,
-                            category = categorizeInterface(iface.type),
+                            category = categorizeInterface(iface.type, iface.reachableOn),
                             latitude = iface.latitude!!,
                             longitude = iface.longitude!!,
                             height = iface.height,

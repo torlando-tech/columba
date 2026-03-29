@@ -66,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.lxmf.messenger.data.model.InterfaceType
 import com.lxmf.messenger.data.repository.Announce
@@ -260,10 +261,7 @@ fun AnnounceStreamScreen(
                 ) {
                     items(
                         count = pagingItems.itemCount,
-                        key = { index ->
-                            val announce = pagingItems.peek(index)
-                            if (announce != null) "${announce.destinationHash}_$index" else "placeholder_$index"
-                        },
+                        key = pagingItems.stableKey(),
                     ) { index ->
                         val announce = pagingItems[index]
                         if (announce != null) {
@@ -830,12 +828,7 @@ fun AnnounceStreamContent(
             ) {
                 items(
                     count = pagingItems.itemCount,
-                    key = { index ->
-                        // Include index to prevent duplicate key crash when Paging3
-                        // transiently returns overlapping items (issue #542)
-                        val hash = pagingItems.peek(index)?.destinationHash
-                        if (hash != null) "${hash}_$index" else "placeholder_$index"
-                    },
+                    key = pagingItems.stableKey(),
                 ) { index ->
                     val announce = pagingItems[index]
                     if (announce != null) {
@@ -1036,4 +1029,24 @@ fun ClearAllAnnouncesDialog(
             }
         },
     )
+}
+
+/**
+ * Stable key function for announce paging lists.
+ *
+ * Uses [AnnounceEntity.destinationHash] as the primary key so Compose can track
+ * items across list re-sorts (e.g., when new announces insert at the top).
+ * Falls back to appending a disambiguator only for transient Paging3 duplicates
+ * (issue #542) to avoid a duplicate-key crash.
+ */
+private fun LazyPagingItems<com.lxmf.messenger.data.repository.Announce>.stableKey(): (index: Int) -> Any {
+    val seen = mutableSetOf<String>()
+    return { index ->
+        val hash = peek(index)?.destinationHash
+        if (hash != null) {
+            if (seen.add(hash)) hash else "${hash}_dup$index"
+        } else {
+            "placeholder_$index"
+        }
+    }
 }

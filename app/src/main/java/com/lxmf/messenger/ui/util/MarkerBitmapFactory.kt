@@ -238,6 +238,67 @@ object MarkerBitmapFactory {
     }
 
     /**
+     * Creates a rounded-rectangle marker for a discovered network interface.
+     * Visually distinct from contact markers (circle) to avoid confusion.
+     *
+     * @param mdiIconName The MDI icon name (e.g., "radio-tower", "cloud", "bluetooth")
+     * @param backgroundColor The category-specific color
+     * @param sizeDp The marker size in dp (default 32, smaller than contact markers)
+     * @param density Screen density for dp to px conversion
+     * @param context Context for loading the MDI font
+     * @return A bitmap with the marker, or null if the icon name is invalid
+     */
+    fun createInterfaceMarker(
+        mdiIconName: String,
+        backgroundColor: Int,
+        sizeDp: Float = 32f,
+        density: Float,
+        context: Context,
+    ): Bitmap? {
+        val codepoint = MaterialDesignIcons.getCodepointOrNull(mdiIconName) ?: return null
+
+        val sizePx = (sizeDp * density).toInt()
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val padding = 2f * density
+        val cornerRadius = 6f * density
+
+        // Draw rounded rectangle background
+        val bgPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = backgroundColor
+                style = Paint.Style.FILL
+            }
+        val rect = android.graphics.RectF(padding, padding, sizePx - padding, sizePx - padding)
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
+
+        // Draw white border
+        val borderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 2f * density
+            }
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+
+        // Draw MDI icon centered
+        val mdiTypeface = ResourcesCompat.getFont(context, R.font.materialdesignicons)
+        val iconPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = sizePx * 0.5f
+                textAlign = Paint.Align.CENTER
+                typeface = mdiTypeface
+            }
+        val centerX = sizePx / 2f
+        val centerY = sizePx / 2f - (iconPaint.descent() + iconPaint.ascent()) / 2
+        canvas.drawText(codepoint, centerX, centerY, iconPaint)
+
+        return bitmap
+    }
+
+    /**
      * Creates a dashed circle ring bitmap for stale location markers.
      *
      * @param sizeDp The diameter of the circle in density-independent pixels

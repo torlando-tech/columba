@@ -98,6 +98,25 @@ data class InterfaceMarker(
     val hops: Int,
 )
 
+internal fun InterfaceMarker.toFocusInterfaceDetails() =
+    com.lxmf.messenger.ui.screens.FocusInterfaceDetails(
+        name = name,
+        type = type,
+        latitude = latitude,
+        longitude = longitude,
+        height = height,
+        reachableOn = reachableOn,
+        port = port,
+        frequency = frequency,
+        bandwidth = bandwidth,
+        spreadingFactor = spreadingFactor,
+        codingRate = codingRate,
+        modulation = modulation,
+        status = status,
+        lastHeard = lastHeard,
+        hops = hops,
+    )
+
 internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
     markers
         .groupBy { it.destinationHash.lowercase() }
@@ -154,7 +173,7 @@ data class MapState(
  * - Location sharing state
  * - Location permission state
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList") // TODO: extract MapDataSources wrapper to reduce constructor params
 @HiltViewModel
 class MapViewModel
     @Inject

@@ -350,6 +350,7 @@ class NomadNetBrowserViewModel
                     )
                 } catch (e: Exception) {
                     stopStatusPolling(epoch)
+                    if (fetchEpoch != epoch) return@launch
                     Log.e(TAG, "Error navigating", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
                 }
@@ -704,6 +705,7 @@ class NomadNetBrowserViewModel
                     )
                 } catch (e: Exception) {
                     stopStatusPolling(epoch)
+                    if (fetchEpoch != epoch) return@launch
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")

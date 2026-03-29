@@ -96,6 +96,7 @@ data class InterfaceMarker(
     val status: String,
     val lastHeard: Long,
     val hops: Int,
+    val firstSeen: Long? = null,
 )
 
 internal fun InterfaceMarker.toFocusInterfaceDetails() =
@@ -115,6 +116,7 @@ internal fun InterfaceMarker.toFocusInterfaceDetails() =
         status = status,
         lastHeard = lastHeard,
         hops = hops,
+        firstSeen = firstSeen,
     )
 
 internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
@@ -188,6 +190,7 @@ class MapViewModel
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
         private val reticulumProtocol: ReticulumProtocol,
+        private val interfaceFirstSeenDao: com.lxmf.messenger.data.db.dao.InterfaceFirstSeenDao,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -645,30 +648,54 @@ class MapViewModel
         private suspend fun loadInterfaceMarkers() {
             try {
                 val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                val withLocation = discovered.filter { it.hasLocation }
+
+                // Persist first-seen timestamps (INSERT OR IGNORE preserves originals)
+                val now = System.currentTimeMillis()
+                val ids =
+                    withLocation.map { iface ->
+                        val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"
+                        interfaceFirstSeenDao.insertIfNotExists(
+                            com.lxmf.messenger.data.db.entity
+                                .InterfaceFirstSeenEntity(id, now),
+                        )
+                        id
+                    }
+
+                // Batch-fetch first-seen timestamps
+                val firstSeenMap =
+                    if (ids.isNotEmpty()) {
+                        interfaceFirstSeenDao
+                            .getFirstSeenBatch(ids)
+                            .associate { it.interfaceId to it.firstSeenTimestamp }
+                    } else {
+                        emptyMap()
+                    }
+
                 val markers =
-                    discovered
-                        .filter { it.hasLocation }
-                        .map { iface ->
-                            InterfaceMarker(
-                                id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}",
-                                name = iface.name,
-                                type = iface.type,
-                                category = categorizeInterface(iface.type),
-                                latitude = iface.latitude!!,
-                                longitude = iface.longitude!!,
-                                height = iface.height,
-                                frequency = iface.frequency,
-                                bandwidth = iface.bandwidth,
-                                spreadingFactor = iface.spreadingFactor,
-                                codingRate = iface.codingRate,
-                                modulation = iface.modulation,
-                                reachableOn = iface.reachableOn,
-                                port = iface.port,
-                                status = iface.status,
-                                lastHeard = iface.lastHeard,
-                                hops = iface.hops,
-                            )
-                        }
+                    withLocation.map { iface ->
+                        val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"
+                        InterfaceMarker(
+                            id = id,
+                            name = iface.name,
+                            type = iface.type,
+                            category = categorizeInterface(iface.type),
+                            latitude = iface.latitude!!,
+                            longitude = iface.longitude!!,
+                            height = iface.height,
+                            frequency = iface.frequency,
+                            bandwidth = iface.bandwidth,
+                            spreadingFactor = iface.spreadingFactor,
+                            codingRate = iface.codingRate,
+                            modulation = iface.modulation,
+                            reachableOn = iface.reachableOn,
+                            port = iface.port,
+                            status = iface.status,
+                            lastHeard = iface.lastHeard,
+                            hops = iface.hops,
+                            firstSeen = firstSeenMap[id],
+                        )
+                    }
                 _state.update { it.copy(interfaceMarkers = markers) }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load interface markers", e)

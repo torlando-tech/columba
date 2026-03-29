@@ -1770,13 +1770,20 @@ internal fun FocusInterfaceContent(
         }
 
         // Status details
-        if (details.lastHeard != null || details.hops != null) {
+        if (details.firstSeen != null || details.lastHeard != null || details.hops != null) {
             HorizontalDivider()
             Text(
                 text = "Status",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+            details.firstSeen?.let { timestamp ->
+                val timeAgo = formatTimeAgo(timestamp)
+                InterfaceDetailRow(
+                    label = "First Seen",
+                    value = timeAgo,
+                )
+            }
             details.lastHeard?.let { timestamp ->
                 val timeAgo = formatTimeAgo(timestamp)
                 InterfaceDetailRow(

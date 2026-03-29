@@ -16,17 +16,20 @@ data class InterfaceInfo(
 
 /**
  * Enum representing known interface categories with their display properties.
+ * Used by both the announce detail screen and the map interface pins.
  */
-private enum class InterfaceCategory(
+enum class InterfaceCategory(
     val icon: ImageVector,
+    val mdiIconName: String,
     val defaultText: String,
+    val markerColor: Int,
 ) {
-    AUTO(Icons.Default.Wifi, "Local Network"),
-    TCP(Icons.Default.Cloud, "TCP/IP"),
-    BLUETOOTH(Icons.Default.Bluetooth, "Bluetooth"),
-    LORA(Icons.Default.CellTower, "LoRa Radio"),
-    SERIAL(Icons.Default.SettingsInputAntenna, "Serial"),
-    UNKNOWN(Icons.Default.SettingsInputAntenna, ""),
+    AUTO(Icons.Default.Wifi, "access-point", "Local Network", 0xFF2E7D32.toInt()),
+    TCP(Icons.Default.Cloud, "cloud", "TCP/IP", 0xFF1565C0.toInt()),
+    BLUETOOTH(Icons.Default.Bluetooth, "bluetooth", "Bluetooth", 0xFF283593.toInt()),
+    LORA(Icons.Default.CellTower, "radio-tower", "LoRa Radio", 0xFFE64A19.toInt()),
+    SERIAL(Icons.Default.SettingsInputAntenna, "antenna", "Serial", 0xFF616161.toInt()),
+    UNKNOWN(Icons.Default.SettingsInputAntenna, "antenna", "", 0xFF9E9E9E.toInt()),
 }
 
 /**
@@ -66,7 +69,7 @@ private fun extractInterfaceType(interfaceName: String): String = interfaceName.
 /**
  * Determine the interface category based on the interface name.
  */
-private fun categorizeInterface(interfaceName: String): InterfaceCategory {
+internal fun categorizeInterface(interfaceName: String): InterfaceCategory {
     val lowerName = interfaceName.lowercase()
     return when {
         lowerName.contains("autointerface") ||

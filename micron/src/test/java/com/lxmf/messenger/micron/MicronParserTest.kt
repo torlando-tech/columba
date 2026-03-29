@@ -376,7 +376,7 @@ class MicronParserTest {
 
     @Test
     fun `simple link with destination only`() {
-        val doc = MicronParser.parse("[/page/index.mu]")
+        val doc = MicronParser.parse("`[/page/index.mu]")
         val link =
             doc.lines[0]
                 .elements
@@ -389,7 +389,7 @@ class MicronParserTest {
 
     @Test
     fun `link with label and destination`() {
-        val doc = MicronParser.parse("[Home Page`/page/index.mu]")
+        val doc = MicronParser.parse("`[Home Page`/page/index.mu]")
         val link =
             doc.lines[0]
                 .elements
@@ -401,7 +401,7 @@ class MicronParserTest {
 
     @Test
     fun `link with field submission`() {
-        val doc = MicronParser.parse("[Submit`/page/form`username|password]")
+        val doc = MicronParser.parse("`[Submit`/page/form`username|password]")
         val link =
             doc.lines[0]
                 .elements
@@ -414,7 +414,7 @@ class MicronParserTest {
 
     @Test
     fun `link has underline style`() {
-        val doc = MicronParser.parse("[Click me`/page]")
+        val doc = MicronParser.parse("`[Click me`/page]")
         val link =
             doc.lines[0]
                 .elements
@@ -432,7 +432,7 @@ class MicronParserTest {
 
     @Test
     fun `text before and after link`() {
-        val doc = MicronParser.parse("Click [here`/page] for more")
+        val doc = MicronParser.parse("Click `[here`/page] for more")
         val elements = doc.lines[0].elements
         assertEquals("Click ", (elements[0] as MicronElement.Text).content)
         assertEquals("here", (elements[1] as MicronElement.Link).label)
@@ -443,7 +443,7 @@ class MicronParserTest {
 
     @Test
     fun `text field with name and default value`() {
-        val doc = MicronParser.parse("<|username`john>")
+        val doc = MicronParser.parse("`<|username`john>")
         val field =
             doc.lines[0]
                 .elements
@@ -457,7 +457,7 @@ class MicronParserTest {
 
     @Test
     fun `text field with custom width`() {
-        val doc = MicronParser.parse("<32|email`user@example.com>")
+        val doc = MicronParser.parse("`<32|email`user@example.com>")
         val field =
             doc.lines[0]
                 .elements
@@ -470,7 +470,7 @@ class MicronParserTest {
 
     @Test
     fun `masked password field`() {
-        val doc = MicronParser.parse("<!|password`>")
+        val doc = MicronParser.parse("`<!|password`>")
         val field =
             doc.lines[0]
                 .elements
@@ -482,7 +482,7 @@ class MicronParserTest {
 
     @Test
     fun `checkbox field`() {
-        val doc = MicronParser.parse("<?|agree`yes`I agree to terms>")
+        val doc = MicronParser.parse("`<?|agree`yes`I agree to terms>")
         val checkbox =
             doc.lines[0]
                 .elements
@@ -496,7 +496,7 @@ class MicronParserTest {
 
     @Test
     fun `checkbox prechecked`() {
-        val doc = MicronParser.parse("<?|agree`yes`I agree`*>")
+        val doc = MicronParser.parse("`<?|agree`yes`I agree`*>")
         val checkbox =
             doc.lines[0]
                 .elements
@@ -507,7 +507,7 @@ class MicronParserTest {
 
     @Test
     fun `radio button`() {
-        val doc = MicronParser.parse("<^|color`red`Red option>")
+        val doc = MicronParser.parse("`<^|color`red`Red option>")
         val radio =
             doc.lines[0]
                 .elements
@@ -521,7 +521,7 @@ class MicronParserTest {
 
     @Test
     fun `radio button prechecked`() {
-        val doc = MicronParser.parse("<^|color`blue`Blue`*>")
+        val doc = MicronParser.parse("`<^|color`blue`Blue`*>")
         val radio =
             doc.lines[0]
                 .elements
@@ -532,7 +532,10 @@ class MicronParserTest {
 
     @Test
     fun `unclosed field treated as text`() {
-        val doc = MicronParser.parse("<no closing bracket")
+        // Bare < at line start triggers depth reset (D2), so the < is consumed
+        // and remainder is parsed as text. Use backtick prefix to test field parsing.
+        val doc = MicronParser.parse("`<no closing bracket")
+        // No closing > means parseField fails — the < is treated as literal
         val text = doc.lines[0].elements[0] as MicronElement.Text
         assertEquals("<no closing bracket", text.content)
     }
@@ -626,9 +629,9 @@ class MicronParserTest {
             >Welcome
             -
             `!Bold text`! and `*italic`*
-            [Visit`/page/about.mu]
-            <|name`Enter name>
-            [Submit`/page/submit`name]
+            `[Visit`/page/about.mu]
+            `<|name`Enter name>
+            `[Submit`/page/submit`name]
             """.trimIndent()
 
         val doc = MicronParser.parse(markup)
@@ -691,7 +694,7 @@ class MicronParserTest {
 
     @Test
     fun `multiple fields on same line`() {
-        val doc = MicronParser.parse("<|first`John> <|last`Doe>")
+        val doc = MicronParser.parse("`<|first`John> `<|last`Doe>")
         val fields = doc.lines[0].elements.filterIsInstance<MicronElement.Field>()
         assertEquals(2, fields.size)
         assertEquals("first", fields[0].name)
@@ -700,7 +703,7 @@ class MicronParserTest {
 
     @Test
     fun `link with empty label uses destination`() {
-        val doc = MicronParser.parse("[`/page/home.mu]")
+        val doc = MicronParser.parse("`[`/page/home.mu]")
         val link =
             doc.lines[0]
                 .elements
@@ -867,12 +870,165 @@ class MicronParserTest {
 
     @Test
     fun `field width clamped to max`() {
-        val doc = MicronParser.parse("<999|wide`>")
+        val doc = MicronParser.parse("`<999|wide`>")
         val field =
             doc.lines[0]
                 .elements
                 .filterIsInstance<MicronElement.Field>()
                 .first()
         assertEquals(256, field.width)
+    }
+
+    // ==================== D1: Links/fields require backtick prefix ====================
+
+    @Test
+    fun `D1 - bare bracket is literal text not a link`() {
+        // In NomadNet, [ only starts a link when preceded by backtick (formatting mode)
+        val doc = MicronParser.parse("x < y and [some note]")
+        val elements = doc.lines[0].elements
+        // Should be a single text element with the literal content
+        val texts = elements.filterIsInstance<MicronElement.Text>()
+        val combined = texts.joinToString("") { it.content }
+        assertEquals("x < y and [some note]", combined)
+        // No links or fields should be parsed
+        assertTrue(elements.none { it is MicronElement.Link })
+        assertTrue(elements.none { it is MicronElement.Field })
+    }
+
+    @Test
+    fun `D1 - bare angle bracket is literal text not a field`() {
+        val doc = MicronParser.parse("if x < 10 then y > 5")
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        val combined = texts.joinToString("") { it.content }
+        assertEquals("if x < 10 then y > 5", combined)
+        assertTrue(doc.lines[0].elements.none { it is MicronElement.Field })
+    }
+
+    @Test
+    fun `D1 - backtick bracket still parses as link`() {
+        val doc = MicronParser.parse("`[Home`/page/index.mu]")
+        val link = doc.lines[0].elements.filterIsInstance<MicronElement.Link>().first()
+        assertEquals("Home", link.label)
+        assertEquals("/page/index.mu", link.destination)
+    }
+
+    @Test
+    fun `D1 - backtick angle bracket still parses as field`() {
+        val doc = MicronParser.parse("`<|username`john>")
+        val field = doc.lines[0].elements.filterIsInstance<MicronElement.Field>().first()
+        assertEquals("username", field.name)
+        assertEquals("john", field.defaultValue)
+    }
+
+    // ==================== D2: Depth reset re-parses remainder ====================
+
+    @Test
+    fun `D2 - depth reset with content after less-than`() {
+        // NomadNet: < resets depth and re-parses remainder of line
+        val doc = MicronParser.parse(">>Heading\n<Content after reset")
+        // "Content after reset" should appear at depth 0
+        val lastLine = doc.lines.last { it.elements.any { e -> e is MicronElement.Text && e.content.contains("Content") } }
+        assertEquals(0, lastLine.indentLevel)
+        val text = lastLine.elements.filterIsInstance<MicronElement.Text>().first()
+        assertEquals("Content after reset", text.content)
+    }
+
+    @Test
+    fun `D2 - bare less-than still resets depth`() {
+        val doc = MicronParser.parse(">>Heading\n<\nAfter reset")
+        // Line after < should be at depth 0
+        val afterLine = doc.lines.last()
+        assertEquals(0, afterLine.indentLevel)
+    }
+
+    // ==================== D3: Literal mode exact match ====================
+
+    @Test
+    fun `D3 - indented literal toggle is not toggled`() {
+        // NomadNet requires exact match: line == "`=" (no leading whitespace)
+        val doc = MicronParser.parse("  `=\n`!bold text`!\n  `=")
+        // Since "  `=" should NOT toggle literal mode, `!bold text`! should be parsed as bold
+        val texts = doc.lines.flatMap { it.elements }.filterIsInstance<MicronElement.Text>()
+        assertTrue(texts.any { it.style.bold && it.content == "bold text" })
+    }
+
+    @Test
+    fun `D3 - exact literal toggle still works`() {
+        val doc = MicronParser.parse("`=\n`!not bold`!\n`=")
+        val text = doc.lines[0].elements[0] as MicronElement.Text
+        assertEquals("`!not bold`!", text.content)
+    }
+
+    // ==================== D5: Divider custom char only for 2-char lines ====================
+
+    @Test
+    fun `D5 - divider with exactly 2 chars uses custom character`() {
+        val doc = MicronParser.parse("-=")
+        val divider = doc.lines[0].elements[0] as MicronElement.Divider
+        assertEquals('=', divider.character)
+    }
+
+    @Test
+    fun `D5 - divider with more than 2 chars uses default character`() {
+        // NomadNet: only exactly 2-char lines use custom char; longer lines get default ─
+        val doc = MicronParser.parse("-Hello")
+        val divider = doc.lines[0].elements[0] as MicronElement.Divider
+        assertEquals('\u2500', divider.character)
+    }
+
+    @Test
+    fun `D5 - single dash uses default character`() {
+        val doc = MicronParser.parse("-")
+        val divider = doc.lines[0].elements[0] as MicronElement.Divider
+        assertEquals('\u2500', divider.character)
+    }
+
+    // ==================== D6: No trimEnd on lines ====================
+
+    @Test
+    fun `D6 - trailing whitespace preserved`() {
+        // Trailing spaces with background color are significant for pixel art
+        val doc = MicronParser.parse("`B00ftext   ")
+        val texts = doc.lines[0].elements.filterIsInstance<MicronElement.Text>()
+        val combined = texts.joinToString("") { it.content }
+        assertEquals("text   ", combined)
+    }
+
+    @Test
+    fun `D6 - trailing spaces not stripped to empty line`() {
+        // A line of only spaces should not become empty (LineBreak)
+        val doc = MicronParser.parse("   ")
+        val elements = doc.lines[0].elements
+        assertTrue(elements[0] is MicronElement.Text)
+        assertEquals("   ", (elements[0] as MicronElement.Text).content)
+    }
+
+    // ==================== D7: Heading + field sanitization ====================
+
+    @Test
+    fun `D7 - heading with field strips heading markers`() {
+        // NomadNet: if line starts with > and contains `<, strip leading > chars
+        val doc = MicronParser.parse(">`<|username`john>")
+        // Should NOT be a heading — the > should be stripped
+        assertFalse(doc.lines[0].isHeading)
+        val field = doc.lines[0].elements.filterIsInstance<MicronElement.Field>().first()
+        assertEquals("username", field.name)
+    }
+
+    // ==================== D8: Divider control character check ====================
+
+    @Test
+    fun `D8 - divider with control character uses default`() {
+        // NomadNet: if ord(divider_char) < 32, use default ─
+        val doc = MicronParser.parse("-\u0001")
+        val divider = doc.lines[0].elements[0] as MicronElement.Divider
+        assertEquals('\u2500', divider.character)
+    }
+
+    @Test
+    fun `D8 - divider with tab control character uses default`() {
+        val doc = MicronParser.parse("-\t")
+        val divider = doc.lines[0].elements[0] as MicronElement.Divider
+        assertEquals('\u2500', divider.character)
     }
 }

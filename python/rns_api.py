@@ -67,8 +67,13 @@ class RnsApi:
                 except Exception:
                     pass
 
+    def get_download_progress(self):
+        """Return current file download progress (0.0-1.0), or -1.0 if idle."""
+        return getattr(self, '_download_progress', -1.0)
+
     def request_nomadnet_page(self, dest_hash, path="/page/index.mu",
-                              form_data_json=None, timeout_seconds=45.0):
+                              form_data_json=None, timeout_seconds=45.0,
+                              download_dir=None):
         """
         Request a page from a NomadNet node.
 
@@ -168,7 +173,8 @@ class RnsApi:
 
             # Make page request over the link
             _status("Requesting page...")
-            return self._send_page_request(link, path, request_data, dest_hash_hex, deadline)
+            return self._send_page_request(link, path, request_data, dest_hash_hex, deadline,
+                                           download_dir=download_dir)
 
         except Exception as e:
             log_error("RnsApi", "request_nomadnet_page", f"Error: {e}")
@@ -313,7 +319,8 @@ class RnsApi:
 
         return link
 
-    def _send_page_request(self, link, path, request_data, dest_hash_hex, deadline):
+    def _send_page_request(self, link, path, request_data, dest_hash_hex, deadline,
+                           download_dir=None):
         """Send a page request over an established link.
 
         Returns a result dict with success/content/error.
@@ -321,12 +328,26 @@ class RnsApi:
         response_event = threading.Event()
         response_data = [None]
         response_error = [None]
+        response_metadata = [None]
 
         def response_received(request_receipt):
             try:
-                response_data[0] = request_receipt.response
-                log_info("RnsApi", "request_nomadnet_page",
-                         f"Page received: {len(response_data[0])} bytes")
+                response_metadata[0] = request_receipt.metadata
+                if request_receipt.metadata:
+                    # File response — read data NOW while handle is still open
+                    # (RNS closes the handle after this callback returns)
+                    raw = request_receipt.response
+                    if hasattr(raw, 'read'):
+                        response_data[0] = raw.read()
+                        raw.close()
+                    else:
+                        response_data[0] = bytes(raw) if raw else b""
+                    log_info("RnsApi", "request_nomadnet_page",
+                             f"File response received for {path} ({len(response_data[0])} bytes)")
+                else:
+                    response_data[0] = request_receipt.response
+                    log_info("RnsApi", "request_nomadnet_page",
+                             f"Page received: {len(response_data[0])} bytes")
             except Exception as e:
                 response_error[0] = str(e)
             response_event.set()
@@ -337,8 +358,10 @@ class RnsApi:
                        f"Page request failed for {path}")
             response_event.set()
 
+        self._download_progress = -1.0
+
         def progress_update(request_receipt):
-            pass  # Callback required by RNS to track transfer progress
+            self._download_progress = request_receipt.progress
 
         log_debug("RnsApi", "request_nomadnet_page",
                  f"Sending request for path: {path}")
@@ -377,6 +400,11 @@ class RnsApi:
             self._evict_cached_link(dest_hash_hex)
             return {"success": False, "error": "Page request timed out"}
 
+        # Check if this is a file response (has metadata with filename)
+        if response_metadata[0] is not None:
+            return self._save_file_response(
+                response_data[0], response_metadata[0], path, download_dir)
+
         # Decode response
         try:
             content = response_data[0].decode("utf-8")
@@ -385,9 +413,51 @@ class RnsApi:
 
         return {
             "success": True,
+            "type": "page",
             "content": content,
             "path": path
         }
+
+    def _save_file_response(self, file_data, metadata, path, download_dir):
+        """Save a file response (already read as bytes) to disk and return result dict."""
+        import os
+
+        name_raw = metadata.get("name", b"download") if isinstance(metadata, dict) else b"download"
+        if isinstance(name_raw, bytes):
+            filename = name_raw.decode("utf-8", errors="replace")
+        else:
+            filename = str(name_raw)
+
+        # Sanitize filename to prevent path traversal
+        filename = os.path.basename(filename)
+        if not filename:
+            filename = "download"
+
+        if not download_dir:
+            download_dir = "/tmp/nomadnet_downloads"
+        os.makedirs(download_dir, exist_ok=True)
+        save_path = os.path.join(download_dir, filename)
+
+        try:
+            with open(save_path, "wb") as out_file:
+                out_file.write(file_data)
+
+            file_size = os.path.getsize(save_path)
+            log_info("RnsApi", "request_nomadnet_page",
+                     f"File saved: {filename} ({file_size} bytes)")
+
+            return {
+                "success": True,
+                "type": "file",
+                "file_path": save_path,
+                "file_name": filename,
+                "file_size": file_size,
+                "path": path,
+            }
+        except Exception as e:
+            log_error("RnsApi", "request_nomadnet_page",
+                     f"Failed to save file {filename}: {e}")
+            return {"success": False, "error": f"Failed to save file: {e}"}
 
     def cancel_nomadnet_page_request(self):
         """Set cancellation flag for any in-progress NomadNet page request."""

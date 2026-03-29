@@ -679,6 +679,12 @@ interface IReticulumService {
     oneway void cancelNomadnetPageRequest();
 
     /**
+     * Get current NomadNet file download progress.
+     * @return Float between 0.0 and 1.0 if download active, -1.0 if idle
+     */
+    float getNomadnetDownloadProgress();
+
+    /**
      * Get current NomadNet request phase status (e.g., "Looking up path...", "Connecting (3 hops)...").
      * @return Status string, empty if idle
      */

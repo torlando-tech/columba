@@ -196,6 +196,8 @@ class SosManager
                 return false
             }
 
+            triggerJob?.cancel()
+            triggerJob = null
             periodicUpdateJob?.cancel()
             periodicUpdateJob = null
             audioRecordingJob?.cancel()

@@ -618,7 +618,8 @@ fun parseSosLocation(content: String, fieldsJson: String? = null): Pair<Double, 
             if (telemetry != null) {
                 val lat = telemetry.optDouble("lat", Double.NaN)
                 val lng = telemetry.optDouble("lng", Double.NaN)
-                if (!lat.isNaN() && !lng.isNaN() && lat in -90.0..90.0 && lng in -180.0..180.0) {
+                val validCoords = !lat.isNaN() && !lng.isNaN()
+                if (validCoords && lat in -90.0..90.0 && lng in -180.0..180.0) {
                     return Pair(lat, lng)
                 }
             }

@@ -333,6 +333,8 @@ class NomadNetBrowserViewModel
 
                     stopStatusPolling(epoch)
 
+                    if (fetchEpoch != epoch) return@launch
+
                     result.fold(
                         onSuccess = { pageResult ->
                             currentNodeHash = nodeHash
@@ -449,6 +451,10 @@ class NomadNetBrowserViewModel
 
         fun goBack(): Boolean {
             if (history.isEmpty()) return false
+
+            // Invalidate any in-flight request so its result doesn't overwrite the page we're navigating back to
+            fetchEpoch++
+            stopStatusPolling()
 
             partialManager?.clear()
             val entry = history.removeAt(history.lastIndex)
@@ -658,6 +664,10 @@ class NomadNetBrowserViewModel
                         )
 
                     stopStatusPolling(epoch)
+
+                    // If user navigated away (back, new link) while we were loading,
+                    // discard this stale result to avoid overwriting the current page
+                    if (fetchEpoch != epoch) return@launch
 
                     result.fold(
                         onSuccess = { pageResult ->

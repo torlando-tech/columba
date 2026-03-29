@@ -1782,3 +1782,34 @@ class TestStartErrorHandling:
         # Bluetooth connection methods should not be called
         iface.kotlin_bridge.connect.assert_not_called()
         assert result is True
+
+
+class TestIfacInit:
+    """Tests that ColumbaRNodeInterface.__init__ reads IFAC params from config."""
+
+    def _make_config(self, **overrides):
+        config = {
+            "target_device_name": "RNode Test",
+            "connection_mode": "classic",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 7,
+            "spreading_factor": 7,
+            "coding_rate": 5,
+        }
+        config.update(overrides)
+        return config
+
+    @patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge')
+    def test_ifac_params_set_from_config(self, _mock_bridge):
+        config = self._make_config(network_name="my-net", passphrase="secret123")
+        iface = ColumbaRNodeInterface(MagicMock(), "test", config)
+        assert iface.ifac_netname == "my-net"
+        assert iface.ifac_netkey == "secret123"
+
+    @patch.object(ColumbaRNodeInterface, '_get_kotlin_bridge')
+    def test_ifac_params_none_when_absent(self, _mock_bridge):
+        config = self._make_config()
+        iface = ColumbaRNodeInterface(MagicMock(), "test", config)
+        assert iface.ifac_netname is None
+        assert iface.ifac_netkey is None

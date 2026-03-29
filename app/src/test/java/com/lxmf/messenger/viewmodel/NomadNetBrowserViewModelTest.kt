@@ -56,6 +56,7 @@ class NomadNetBrowserViewModelTest {
         pageCache = mockk()
         every { pageCache.put(any(), any(), any(), any()) } just Runs
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
+        coEvery { protocol.getNomadnetRequestStatus() } returns ""
         viewModel = NomadNetBrowserViewModel(protocol, pageCache)
     }
 

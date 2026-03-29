@@ -29,6 +29,8 @@ flags:
 ignore:
   - "external/**"
   - "python/test_*.py"
+  # Network-dependent Python code requires a live RNS instance, not unit tests
+  - "python/rns_api.py"
   # Service layer code requires instrumented tests, not unit tests
   - "app/src/main/java/com/lxmf/messenger/service/**"
   - "app/src/main/java/com/lxmf/messenger/reticulum/protocol/**"

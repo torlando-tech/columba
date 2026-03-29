@@ -170,6 +170,7 @@ fun InterfaceConfigDialog(
                             "TCPClient" -> TCPClientFields(configState, onConfigUpdate)
                             "TCPServer" -> TCPServerFields(configState, onConfigUpdate)
                             "AndroidBLE" -> AndroidBLEFields(configState, onConfigUpdate, scrollState)
+                            "RNode" -> RNodeFields(configState, onConfigUpdate)
                         }
 
                         Divider()
@@ -317,70 +318,7 @@ fun TCPClientFields(
         supportingText = configState.targetPortError?.let { { Text(it) } },
     )
 
-    // Network Name (IFAC)
-    OutlinedTextField(
-        value = configState.networkName,
-        onValueChange = { onConfigUpdate(configState.copy(networkName = it)) },
-        label = { Text("Network Name") },
-        placeholder = { Text("Optional") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        supportingText = {
-            Text(
-                "Optional: Sets the virtual network name for this segment. " +
-                    "This allows multiple separate networks to exist on the same " +
-                    "physical channel or medium.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-    )
-
-    // Passphrase (IFAC)
-    OutlinedTextField(
-        value = configState.passphrase,
-        onValueChange = { onConfigUpdate(configState.copy(passphrase = it)) },
-        label = { Text("Passphrase") },
-        placeholder = { Text("Optional") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        visualTransformation =
-            if (configState.passphraseVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-        trailingIcon = {
-            IconButton(
-                onClick = {
-                    onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
-                },
-            ) {
-                Icon(
-                    imageVector =
-                        if (configState.passphraseVisible) {
-                            Icons.Default.VisibilityOff
-                        } else {
-                            Icons.Default.Visibility
-                        },
-                    contentDescription =
-                        if (configState.passphraseVisible) {
-                            "Hide passphrase"
-                        } else {
-                            "Show passphrase"
-                        },
-                )
-            }
-        },
-        supportingText = {
-            Text(
-                "Optional: Sets an authentication passphrase on the interface. " +
-                    "This can be used in conjunction with Network Name, or alone.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-    )
+    IfacFields(configState, onConfigUpdate)
 
     Divider()
 
@@ -455,6 +393,95 @@ fun TCPClientFields(
             )
         }
     }
+}
+
+/**
+ * Shared IFAC (Interface Access Code) fields for network_name and passphrase.
+ * Used by both TCP Client and RNode interface configurations.
+ */
+@Composable
+fun IfacFields(
+    configState: InterfaceConfigState,
+    onConfigUpdate: (InterfaceConfigState) -> Unit,
+) {
+    // Network Name (IFAC)
+    OutlinedTextField(
+        value = configState.networkName,
+        onValueChange = { onConfigUpdate(configState.copy(networkName = it)) },
+        label = { Text("Network Name") },
+        placeholder = { Text("Optional") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        supportingText = {
+            Text(
+                "Optional: Sets the virtual network name for this segment. " +
+                    "This allows multiple separate networks to exist on the same " +
+                    "physical channel or medium.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
+
+    // Passphrase (IFAC)
+    OutlinedTextField(
+        value = configState.passphrase,
+        onValueChange = { onConfigUpdate(configState.copy(passphrase = it)) },
+        label = { Text("Passphrase") },
+        placeholder = { Text("Optional") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        visualTransformation =
+            if (configState.passphraseVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+        trailingIcon = {
+            IconButton(
+                onClick = {
+                    onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
+                },
+            ) {
+                Icon(
+                    imageVector =
+                        if (configState.passphraseVisible) {
+                            Icons.Default.VisibilityOff
+                        } else {
+                            Icons.Default.Visibility
+                        },
+                    contentDescription =
+                        if (configState.passphraseVisible) {
+                            "Hide passphrase"
+                        } else {
+                            "Show passphrase"
+                        },
+                )
+            }
+        },
+        supportingText = {
+            Text(
+                "Optional: Sets an authentication passphrase on the interface. " +
+                    "This can be used in conjunction with Network Name, or alone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
+}
+
+@Composable
+fun RNodeFields(
+    configState: InterfaceConfigState,
+    onConfigUpdate: (InterfaceConfigState) -> Unit,
+) {
+    Text(
+        "RNode IFAC Authentication",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    IfacFields(configState, onConfigUpdate)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

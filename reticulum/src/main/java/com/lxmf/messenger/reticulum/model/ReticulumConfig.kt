@@ -141,6 +141,8 @@ sealed class InterfaceConfig {
      * @param stAlock Short-term airtime limit percentage (optional)
      * @param ltAlock Long-term airtime limit percentage (optional)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param networkName Optional IFAC network name for cryptographic authentication
+     * @param passphrase Optional IFAC passphrase for cryptographic authentication
      * @param enableFramebuffer Display Columba logo on RNode's screen
      */
     data class RNode(
@@ -161,6 +163,8 @@ sealed class InterfaceConfig {
         val stAlock: Double? = null, // Short-term airtime limit %
         val ltAlock: Double? = null, // Long-term airtime limit %
         val mode: String = "access_point",
+        val networkName: String? = null,
+        val passphrase: String? = null,
         val enableFramebuffer: Boolean = true, // Display logo on RNode screen
     ) : InterfaceConfig()
 

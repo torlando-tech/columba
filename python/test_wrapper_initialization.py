@@ -486,6 +486,50 @@ class TestCreateConfigFile(unittest.TestCase):
         self.assertEqual(self.wrapper._pending_rnode_configs[0]["name"], "RNode LoRa")
         self.assertEqual(self.wrapper._pending_rnode_configs[0]["frequency"], 868000000)
 
+    def test_create_config_file_rnode_bt_stores_ifac_params(self):
+        """Test BT/USB RNode stores IFAC params in _pending_rnode_configs."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "IFAC RNode",
+            "target_device_name": "RNode ABC",
+            "connection_mode": "classic",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 7,
+            "spreading_factor": 7,
+            "coding_rate": 5,
+            "network_name": "my-lora-net",
+            "passphrase": "secret123",
+        }]
+
+        self.wrapper._create_config_file(interfaces, use_shared_instance=False)
+
+        self.assertEqual(len(self.wrapper._pending_rnode_configs), 1)
+        config = self.wrapper._pending_rnode_configs[0]
+        self.assertEqual(config["network_name"], "my-lora-net")
+        self.assertEqual(config["passphrase"], "secret123")
+
+    def test_create_config_file_rnode_bt_omits_ifac_when_absent(self):
+        """Test BT/USB RNode stores None for IFAC when not provided."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "No IFAC RNode",
+            "target_device_name": "RNode ABC",
+            "connection_mode": "classic",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 7,
+            "spreading_factor": 7,
+            "coding_rate": 5,
+        }]
+
+        self.wrapper._create_config_file(interfaces, use_shared_instance=False)
+
+        self.assertEqual(len(self.wrapper._pending_rnode_configs), 1)
+        config = self.wrapper._pending_rnode_configs[0]
+        self.assertIsNone(config["network_name"])
+        self.assertIsNone(config["passphrase"])
+
     def test_create_config_file_shared_instance_mode(self):
         """Test creating config file in shared instance mode"""
         interfaces = []  # Interfaces ignored in shared mode

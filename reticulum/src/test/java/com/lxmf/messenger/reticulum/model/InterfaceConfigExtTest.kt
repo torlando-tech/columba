@@ -148,6 +148,8 @@ class InterfaceConfigExtTest {
                 stAlock = 5.0,
                 ltAlock = 10.0,
                 mode = "roaming",
+                networkName = "lora-net",
+                passphrase = "secret123",
                 enableFramebuffer = true,
             )
 
@@ -163,11 +165,13 @@ class InterfaceConfigExtTest {
         assertEquals(5.0, json.getDouble("st_alock"), 0.01)
         assertEquals(10.0, json.getDouble("lt_alock"), 0.01)
         assertEquals("roaming", json.getString("mode"))
+        assertEquals("lora-net", json.getString("network_name"))
+        assertEquals("secret123", json.getString("passphrase"))
         assertTrue(json.getBoolean("enable_framebuffer"))
     }
 
     @Test
-    fun `RNode toJsonString omits null airtime limits`() {
+    fun `RNode toJsonString omits null airtime limits and IFAC`() {
         val config =
             InterfaceConfig.RNode(
                 name = "Test RNode",
@@ -175,12 +179,16 @@ class InterfaceConfigExtTest {
                 targetDeviceName = "RNode-BT",
                 stAlock = null,
                 ltAlock = null,
+                networkName = null,
+                passphrase = null,
             )
 
         val json = JSONObject(config.toJsonString())
 
         assertFalse(json.has("st_alock"))
         assertFalse(json.has("lt_alock"))
+        assertFalse(json.has("network_name"))
+        assertFalse(json.has("passphrase"))
     }
 
     @Test

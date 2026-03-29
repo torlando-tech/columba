@@ -296,83 +296,120 @@ class IdentityRepository
 
         /**
          * Ensure the identity file exists at the canonical path (identity_<hash>).
-         * If the file doesn't exist, recreate it from keyData stored in the database.
-         * Also updates the database filePath if it was pointing to default_identity.
+         * If the file doesn't exist, recreate it from keyData stored in the database,
+         * or recover it from the stored filePath (e.g. default_identity).
+         *
+         * Also performs opportunistic key backup: if the file is found but
+         * encryptedKeyData is null in the DB, encrypts and saves the key now
+         * to prevent future data loss.
          *
          * @param identity The identity to verify/recover
          * @return Result containing the verified file path, or an error if recovery failed
          */
+        @Suppress("ReturnCount", "LongMethod") // Early returns and recovery logic
         suspend fun ensureIdentityFileExists(identity: LocalIdentityEntity): Result<String> =
             withContext(ioDispatcher) {
+                val hashPrefix = identity.identityHash.take(8)
                 try {
                     val reticulumDir = File(context.filesDir, "reticulum")
                     val canonicalPath = File(reticulumDir, "identity_${identity.identityHash}")
 
                     // Check if canonical file exists
                     if (canonicalPath.exists() && canonicalPath.length() == 64L) {
-                        Log.d(TAG, "Identity file exists at canonical path: ${canonicalPath.absolutePath}")
-
-                        // Update database if it was pointing to a different path
-                        if (identity.filePath != canonicalPath.absolutePath) {
-                            Log.i(
-                                TAG,
-                                "Updating database filePath from ${identity.filePath} " +
-                                    "to ${canonicalPath.absolutePath}",
-                            )
-                            identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
-                        }
-
+                        Log.d(TAG, "Identity file exists for $hashPrefix...")
+                        updateFilePathIfNeeded(identity, canonicalPath)
+                        backupKeyIfMissing(identity, canonicalPath, hashPrefix)
                         return@withContext Result.success(canonicalPath.absolutePath)
                     }
 
-                    // File doesn't exist or is invalid - try to recover from keyData
-                    Log.w(
-                        TAG,
-                        "Identity file missing or invalid at ${canonicalPath.absolutePath}, " +
-                            "attempting recovery",
-                    )
+                    Log.w(TAG, "Identity file missing for $hashPrefix..., attempting recovery")
 
-                    // Try legacy plaintext keyData first, then fall back to decrypting encryptedKeyData
+                    // Try to recover from the stored filePath (e.g. default_identity)
+                    val storedFile = File(identity.filePath)
+                    if (storedFile.exists() && storedFile.length() == 64L &&
+                        storedFile.absolutePath != canonicalPath.absolutePath
+                    ) {
+                        Log.i(TAG, "Found identity file at stored path for $hashPrefix..., copying to canonical")
+                        if (!reticulumDir.exists()) reticulumDir.mkdirs()
+                        storedFile.copyTo(canonicalPath, overwrite = true)
+                        updateFilePathIfNeeded(identity, canonicalPath)
+                        backupKeyIfMissing(identity, canonicalPath, hashPrefix)
+                        return@withContext Result.success(canonicalPath.absolutePath)
+                    }
+
+                    // Try legacy plaintext keyData
                     @Suppress("DEPRECATION")
-                    val keyData =
-                        identity.keyData
-                            ?: if (identity.encryptedKeyData != null) {
-                                keyProvider.getDecryptedKeyData(identity.identityHash).getOrNull()
-                            } else {
-                                null
+                    val legacyKeyData = identity.keyData
+                    if (legacyKeyData != null && legacyKeyData.size == 64) {
+                        Log.i(TAG, "Recovering file from legacy keyData for $hashPrefix...")
+                        if (!reticulumDir.exists()) reticulumDir.mkdirs()
+                        canonicalPath.writeBytes(legacyKeyData)
+                        updateFilePathIfNeeded(identity, canonicalPath)
+                        backupKeyIfMissing(identity, canonicalPath, hashPrefix)
+                        return@withContext Result.success(canonicalPath.absolutePath)
+                    }
+
+                    // Fall back to decrypting encryptedKeyData
+                    if (identity.encryptedKeyData != null) {
+                        val decryptResult = keyProvider.getDecryptedKeyData(identity.identityHash)
+                        if (decryptResult.isSuccess) {
+                            val keyData = decryptResult.getOrThrow()
+                            if (keyData.size == 64) {
+                                Log.i(TAG, "Recovering file from encryptedKeyData for $hashPrefix...")
+                                if (!reticulumDir.exists()) reticulumDir.mkdirs()
+                                canonicalPath.writeBytes(keyData)
+                                updateFilePathIfNeeded(identity, canonicalPath)
+                                return@withContext Result.success(canonicalPath.absolutePath)
                             }
-                    if (keyData == null || keyData.size != 64) {
-                        Log.e(
-                            TAG,
-                            "Cannot recover identity ${identity.identityHash}: " +
-                                "no valid key data available (size=${keyData?.size})",
-                        )
-                        return@withContext Result.failure(
-                            IllegalStateException("Identity file missing and no valid keyData backup available"),
-                        )
+                        }
                     }
 
-                    // Ensure directory exists
-                    if (!reticulumDir.exists()) {
-                        reticulumDir.mkdirs()
-                    }
-
-                    // Write keyData to canonical path
-                    canonicalPath.writeBytes(keyData)
-                    Log.i(TAG, "Recovered identity file from keyData: ${canonicalPath.absolutePath}")
-
-                    // Update database filePath
-                    if (identity.filePath != canonicalPath.absolutePath) {
-                        Log.i(TAG, "Updating database filePath to ${canonicalPath.absolutePath}")
-                        identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
-                    }
-
-                    Result.success(canonicalPath.absolutePath)
+                    Log.e(TAG, "Cannot recover identity $hashPrefix...: no key data or file available")
+                    Result.failure(
+                        IllegalStateException("Identity file missing and no valid keyData backup available"),
+                    )
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to ensure identity file exists for ${identity.identityHash}", e)
+                    Log.e(TAG, "Failed to ensure identity file for ${identity.identityHash.take(8)}...", e)
                     Result.failure(e)
                 }
             }
+
+        /**
+         * Update the database filePath if it differs from the canonical path.
+         */
+        private suspend fun updateFilePathIfNeeded(identity: LocalIdentityEntity, canonicalPath: File) {
+            if (identity.filePath != canonicalPath.absolutePath) {
+                Log.i(TAG, "Updating filePath for ${identity.identityHash.take(8)}...")
+                identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
+            }
+        }
+
+        /**
+         * Opportunistic key backup: if the identity file exists but encryptedKeyData is null,
+         * read the key from the file and encrypt it now to prevent future data loss.
+         */
+        private suspend fun backupKeyIfMissing(
+            identity: LocalIdentityEntity,
+            keyFile: File,
+            hashPrefix: String,
+        ) {
+            if (identity.encryptedKeyData != null) return
+
+            try {
+                val keyData = keyFile.readBytes()
+                if (keyData.size != 64) return
+
+                val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                identityDao.updateEncryptedKeyData(
+                    identityHash = identity.identityHash,
+                    encryptedKeyData = encrypted,
+                    version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                )
+                Log.i(TAG, "Opportunistic key backup saved for $hashPrefix...")
+            } catch (e: Exception) {
+                Log.w(TAG, "Opportunistic key backup failed for $hashPrefix...", e)
+            }
+        }
 
         /**
          * Migrate the default identity file to the database if the migration_placeholder exists
@@ -384,7 +421,7 @@ class IdentityRepository
          * @param identityHash Optional identity hash to use (if not provided, migration will retry later)
          * @param destinationHash Optional destination hash to use (if not provided, migration will retry later)
          */
-        @Suppress("LongMethod") // Migration logic is complex but cohesive
+        @Suppress("LongMethod", "CyclomaticComplexMethod") // Migration logic is complex but cohesive
         suspend fun migrateDefaultIdentityIfNeeded(
             identityHash: String? = null,
             destinationHash: String? = null,
@@ -448,18 +485,28 @@ class IdentityRepository
                         null
                     }
 
-                // Encrypt the key data
-                val (encryptedKeyData, keyVersion) =
-                    if (keyData != null && keyData.size == 64) {
-                        try {
-                            val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
-                            encrypted to IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt()
-                        } catch (e: Exception) {
-                            android.util.Log.w("IdentityRepository", "Failed to encrypt key data", e)
-                            null to 0
-                        }
-                    } else {
-                        null to 0
+                if (keyData == null || keyData.size != 64) {
+                    android.util.Log.e(
+                        "IdentityRepository",
+                        "Cannot migrate identity: key data unavailable or invalid size (${keyData?.size})",
+                    )
+                    // If the file exists but content is invalid, retry will never succeed —
+                    // remove the placeholder to avoid an infinite failed-migration loop.
+                    // If the file doesn't exist yet, keep placeholder so we retry when it appears.
+                    if (defaultIdentityFile.exists() && placeholder != null) {
+                        android.util.Log.w("IdentityRepository", "File exists but invalid — removing placeholder")
+                        identityDao.delete(placeholder.identityHash)
+                    }
+                    return@withContext
+                }
+
+                // Encrypt the key data — abort if encryption fails to prevent orphaned identities
+                val encryptedKeyData =
+                    try {
+                        keyEncryptor.encryptWithDeviceKey(keyData)
+                    } catch (e: Exception) {
+                        android.util.Log.e("IdentityRepository", "Failed to encrypt key data, will retry", e)
+                        return@withContext
                     }
 
                 // Create the actual default identity entry
@@ -472,7 +519,7 @@ class IdentityRepository
                         filePath = defaultIdentityFile.absolutePath,
                         keyData = null, // No longer store unencrypted
                         encryptedKeyData = encryptedKeyData,
-                        keyEncryptionVersion = keyVersion,
+                        keyEncryptionVersion = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
                         createdTimestamp = defaultIdentityFile.lastModified(),
                         lastUsedTimestamp = System.currentTimeMillis(),
                         isActive = true,

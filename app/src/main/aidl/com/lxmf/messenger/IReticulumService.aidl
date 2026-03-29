@@ -679,6 +679,18 @@ interface IReticulumService {
     oneway void cancelNomadnetPageRequest();
 
     /**
+     * Get current NomadNet file download progress.
+     * @return Float between 0.0 and 1.0 if download active, -1.0 if idle
+     */
+    float getNomadnetDownloadProgress();
+
+    /**
+     * Get current NomadNet request phase status (e.g., "Looking up path...", "Connecting (3 hops)...").
+     * @return Status string, empty if idle
+     */
+    String getNomadnetRequestStatus();
+
+    /**
      * Identify ourselves on an existing NomadNet link (Strangler Fig -> rns_api.py).
      * @param destHash Destination hash bytes (16 bytes)
      * @return JSON string: {"success": true, "already_identified": false} or error

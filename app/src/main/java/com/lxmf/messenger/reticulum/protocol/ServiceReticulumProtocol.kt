@@ -1149,6 +1149,8 @@ class ServiceReticulumProtocol(
                     iface.stAlock?.let { ifaceJson.put("st_alock", it) }
                     iface.ltAlock?.let { ifaceJson.put("lt_alock", it) }
                     ifaceJson.put("mode", iface.mode)
+                    iface.networkName?.let { ifaceJson.put("network_name", it) }
+                    iface.passphrase?.let { ifaceJson.put("passphrase", it) }
                     ifaceJson.put("enable_framebuffer", iface.enableFramebuffer)
                 }
                 is InterfaceConfig.UDP -> {
@@ -2872,10 +2874,22 @@ class ServiceReticulumProtocol(
 
                 val result = org.json.JSONObject(resultJson)
                 if (result.optBoolean("success", false)) {
-                    NomadnetPageResult(
-                        content = result.getString("content"),
-                        path = result.getString("path"),
-                    )
+                    val type = result.optString("type", "page")
+                    if (type == "file") {
+                        NomadnetPageResult(
+                            content = "",
+                            path = result.getString("path"),
+                            type = "file",
+                            filePath = result.getString("file_path"),
+                            fileName = result.getString("file_name"),
+                            fileSize = result.getLong("file_size"),
+                        )
+                    } else {
+                        NomadnetPageResult(
+                            content = result.getString("content"),
+                            path = result.getString("path"),
+                        )
+                    }
                 } else {
                     throw RuntimeException(result.optString("error", "Unknown error"))
                 }
@@ -2891,6 +2905,28 @@ class ServiceReticulumProtocol(
             }
         }
     }
+
+    suspend fun getNomadnetRequestStatus(): String =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                this@ServiceReticulumProtocol.service?.nomadnetRequestStatus ?: ""
+            } catch (
+                @Suppress("SwallowedException") e: Exception,
+            ) {
+                ""
+            }
+        }
+
+    suspend fun getNomadnetDownloadProgress(): Float =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                this@ServiceReticulumProtocol.service?.nomadnetDownloadProgress ?: -1f
+            } catch (
+                @Suppress("SwallowedException") e: Exception,
+            ) {
+                -1f
+            }
+        }
 
     /**
      * Identify ourselves on an existing NomadNet link.
@@ -2915,6 +2951,10 @@ class ServiceReticulumProtocol(
     data class NomadnetPageResult(
         val content: String,
         val path: String,
+        val type: String = "page",
+        val filePath: String? = null,
+        val fileName: String? = null,
+        val fileSize: Long = 0L,
     )
 
     // Helper extension functions

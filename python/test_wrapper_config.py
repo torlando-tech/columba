@@ -1289,6 +1289,56 @@ class TestTcpRNodeConfigGeneration(unittest.TestCase):
         # Verify interface_mode is present for boundary mode
         self.assertIn("interface_mode = boundary", content)
 
+    def test_create_config_tcp_rnode_includes_ifac_params(self):
+        """Test network_name and passphrase are written when present."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "IFAC RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5,
+            "network_name": "my-lora-net",
+            "passphrase": "secret123"
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify IFAC parameters are present
+        self.assertIn("network_name = my-lora-net", content)
+        self.assertIn("passphrase = secret123", content)
+
+    def test_create_config_tcp_rnode_omits_ifac_when_not_set(self):
+        """Test network_name and passphrase are omitted when not specified."""
+        interfaces = [{
+            "type": "RNode",
+            "name": "No IFAC RNode",
+            "connection_mode": "tcp",
+            "tcp_host": "192.168.1.100",
+            "frequency": 915000000,
+            "bandwidth": 125000,
+            "tx_power": 17,
+            "spreading_factor": 8,
+            "coding_rate": 5
+        }]
+
+        result = self.wrapper._create_config_file(interfaces)
+
+        self.assertTrue(result)
+        with open(self.config_path, 'r') as f:
+            content = f.read()
+
+        # Verify IFAC parameters are not present
+        self.assertNotIn("network_name", content)
+        self.assertNotIn("passphrase", content)
+
 
 if __name__ == '__main__':
     unittest.main()

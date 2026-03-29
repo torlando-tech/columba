@@ -853,6 +853,7 @@ class PythonWrapperManager(
         }
         val api = rnsApi ?: return """{"success": false, "error": "RnsApi not initialized"}"""
         return try {
+            val downloadDir = java.io.File(context.cacheDir, "nomadnet_downloads").absolutePath
             val result =
                 api.callAttr(
                     "request_nomadnet_page",
@@ -860,11 +861,42 @@ class PythonWrapperManager(
                     path,
                     formDataJson,
                     timeoutSeconds,
+                    downloadDir,
                 )
             result?.toString() ?: """{"success": false, "error": "No result from Python"}"""
         } catch (e: Exception) {
             Log.e(TAG, "Error requesting NomadNet page", e)
             """{"success": false, "error": ${org.json.JSONObject.quote(e.message ?: "Unknown error")}}"""
+        }
+    }
+
+    /**
+     * Get current NomadNet file download progress.
+     * @return Float between 0.0 and 1.0 if download active, -1.0 if idle
+     */
+    fun getNomadnetDownloadProgress(): Float {
+        val api = rnsApi ?: return -1f
+        return try {
+            api.callAttr("get_download_progress")?.toFloat() ?: -1f
+        } catch (
+            @Suppress("SwallowedException") e: Exception,
+        ) {
+            -1f
+        }
+    }
+
+    /**
+     * Get current NomadNet request phase status for UI display.
+     * Polled by Kotlin ViewModel to show granular progress.
+     */
+    fun getNomadnetRequestStatus(): String {
+        val api = rnsApi ?: return ""
+        return try {
+            api.callAttr("get_request_status")?.toString() ?: ""
+        } catch (
+            @Suppress("SwallowedException") e: Exception,
+        ) {
+            ""
         }
     }
 

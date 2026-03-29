@@ -36,12 +36,12 @@ class InterfaceInfoTest {
     }
 
     @Test
-    fun `TCP interface with only address falls back to TCP IP`() {
+    fun `TCP interface with only address shows address in subtitle`() {
         val info = getInterfaceInfo("TCPClientInterface[192.168.1.100:4965]")
 
         assertEquals(Icons.Default.Cloud, info.icon)
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — 192.168.1.100:4965", info.subtitle)
     }
 
     @Test
@@ -271,19 +271,19 @@ class InterfaceInfoTest {
     }
 
     @Test
-    fun `Brackets with only address returns fallback`() {
+    fun `Brackets with only address shows address in subtitle`() {
         val info = getInterfaceInfo("TCPClientInterface[10.0.0.1:4242]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — 10.0.0.1:4242", info.subtitle)
     }
 
     @Test
-    fun `Brackets with IPv6 address returns fallback`() {
+    fun `Brackets with IPv6 address shows address in subtitle`() {
         val info = getInterfaceInfo("TCPClientInterface[fe80::1]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — fe80::1", info.subtitle)
     }
 
     @Test
@@ -295,11 +295,11 @@ class InterfaceInfoTest {
     }
 
     @Test
-    fun `Whitespace-only name in brackets returns fallback`() {
+    fun `Whitespace-only name in brackets shows whitespace in subtitle`() {
         val info = getInterfaceInfo("TCPClientInterface[   ]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface —    ", info.subtitle)
     }
 
     @Test
@@ -327,12 +327,12 @@ class InterfaceInfoTest {
     }
 
     @Test
-    fun `Name with slash but blank before slash returns fallback`() {
+    fun `Name with slash but blank before slash shows full bracket in subtitle`() {
         // Test when there's a slash but nothing before it
         val info = getInterfaceInfo("TCPClientInterface[/192.168.1.100:4965]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — /192.168.1.100:4965", info.subtitle)
     }
 
     @Test
@@ -346,20 +346,20 @@ class InterfaceInfoTest {
     }
 
     @Test
-    fun `IPv6 link-local address starting with fe80 returns fallback`() {
+    fun `IPv6 link-local address starting with fe80 shows address in subtitle`() {
         val info = getInterfaceInfo("TCPClientInterface[fe80::a00:27ff:fe4e:66a1%eth0]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — fe80::a00:27ff:fe4e:66a1%eth0", info.subtitle)
     }
 
     @Test
-    fun `Address with dot but no colon returns fallback`() {
+    fun `Address with dot but no colon shows address in subtitle`() {
         // Test looksLikeAddress with dot only (like hostname.local)
         val info = getInterfaceInfo("TCPClientInterface[server.local]")
 
         assertEquals("TCP/IP", info.text)
-        assertEquals("TCPClientInterface", info.subtitle)
+        assertEquals("TCPClientInterface — server.local", info.subtitle)
     }
 
     @Test

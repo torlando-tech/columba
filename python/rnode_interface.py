@@ -209,8 +209,8 @@ class ColumbaRNodeInterface:
         self.announce_rate_grace = 0  # Grace period for announce rate limiting
         self.announce_rate_penalty = 0  # Penalty for exceeding announce rate
         self.ifac_size = 16  # Interface authentication code size
-        self.ifac_netname = None  # Network name for IFAC
-        self.ifac_netkey = None  # Network key for IFAC
+        self.ifac_netname = config.get("network_name")  # Network name for IFAC
+        self.ifac_netkey = config.get("passphrase")  # Raw passphrase; RNS.Transport derives the key
         self.AUTOCONFIGURE_MTU = False  # Whether to autoconfigure MTU
         self.FIXED_MTU = True  # Whether MTU is fixed (not dynamically adjusted)
         # IMPORTANT: HW_MTU must NOT be None!

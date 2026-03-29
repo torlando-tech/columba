@@ -1273,6 +1273,10 @@ class ReticulumServiceBinder(
         wrapperManager.cancelNomadnetPageRequest()
     }
 
+    override fun getNomadnetDownloadProgress(): Float = wrapperManager.getNomadnetDownloadProgress()
+
+    override fun getNomadnetRequestStatus(): String = wrapperManager.getNomadnetRequestStatus()
+
     override fun identifyNomadnetLink(destHash: ByteArray): String = wrapperManager.identifyNomadnetLink(destHash)
 
     // ===========================================

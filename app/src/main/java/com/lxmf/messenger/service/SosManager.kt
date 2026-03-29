@@ -91,7 +91,7 @@ class SosManager
         private val _state = MutableStateFlow<SosState>(SosState.Idle)
         val state: StateFlow<SosState> = _state.asStateFlow()
 
-        private val triggerMutex = kotlinx.coroutines.sync.Mutex()
+        private val isTriggerRunning = java.util.concurrent.atomic.AtomicBoolean(false)
         @Volatile private var triggerJob: Job? = null
         @Volatile private var countdownJob: Job? = null
         @Volatile private var periodicUpdateJob: Job? = null
@@ -134,7 +134,7 @@ class SosManager
          * then proceeds to send emergency messages to all SOS contacts.
          */
         fun trigger() {
-            if (!triggerMutex.tryLock()) return // already in progress
+            if (!isTriggerRunning.compareAndSet(false, true)) return
             triggerJob =
                 scope.launch {
                     try {
@@ -161,7 +161,7 @@ class SosManager
                         Log.e(TAG, "Error triggering SOS", e)
                         _state.value = SosState.Idle
                     } finally {
-                        triggerMutex.unlock()
+                        isTriggerRunning.set(false)
                     }
                 }
         }
@@ -175,6 +175,7 @@ class SosManager
                 countdownJob = null
                 triggerJob?.cancel()
                 triggerJob = null
+                isTriggerRunning.set(false)
                 _state.value = SosState.Idle
                 Log.d(TAG, "SOS countdown cancelled")
             }
@@ -198,6 +199,7 @@ class SosManager
 
             triggerJob?.cancel()
             triggerJob = null
+            isTriggerRunning.set(false)
             periodicUpdateJob?.cancel()
             periodicUpdateJob = null
             audioRecordingJob?.cancel()
@@ -221,6 +223,7 @@ class SosManager
             if (_state.value is SosState.Idle) return
             triggerJob?.cancel()
             triggerJob = null
+            isTriggerRunning.set(false)
             countdownJob?.cancel()
             countdownJob = null
             periodicUpdateJob?.cancel()

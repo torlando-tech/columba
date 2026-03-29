@@ -161,6 +161,7 @@ class MessageCollector
                             val fieldsJson = receivedMessage.fieldsJson
                             if (isSosCancelledByField(receivedMessage.content, fieldsJson)) {
                                 SosActiveTracker.removeSender(sourceHash)
+                                receivedLocationDao.deleteSosTrailForSender(sourceHash)
                                 notificationHelper.cancelNotification(
                                     NotificationHelper.NOTIFICATION_ID_SOS xor (sourceHash.hashCode() and 0x7FFFFFFF),
                                 )
@@ -347,6 +348,7 @@ class MessageCollector
                                 val newFieldsJson = receivedMessage.fieldsJson
                                 if (isSosCancelledByField(receivedMessage.content, newFieldsJson)) {
                                     SosActiveTracker.removeSender(sourceHash)
+                                    receivedLocationDao.deleteSosTrailForSender(sourceHash)
                                     notificationHelper.cancelNotification(
                                         NotificationHelper.NOTIFICATION_ID_SOS xor (sourceHash.hashCode() and 0x7FFFFFFF),
                                     )

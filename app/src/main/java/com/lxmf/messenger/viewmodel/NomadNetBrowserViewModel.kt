@@ -210,6 +210,8 @@ class NomadNetBrowserViewModel
             // Check cache before showing loading spinner
             val cached = pageCache.get(destinationHash, path)
             if (cached != null) {
+                fetchEpoch++ // Invalidate any in-flight request
+                stopStatusPolling()
                 val document = MicronParser.parse(cached)
                 emitPageLoaded(document, path, destinationHash)
                 return
@@ -294,6 +296,8 @@ class NomadNetBrowserViewModel
                 // Non-form link: check cache first
                 val cached = pageCache.get(nodeHash, path)
                 if (cached != null) {
+                    fetchEpoch++ // Invalidate any in-flight request
+                    stopStatusPolling()
                     currentNodeHash = nodeHash
                     val document = MicronParser.parse(cached)
                     emitPageLoaded(document, path, nodeHash)
@@ -319,6 +323,7 @@ class NomadNetBrowserViewModel
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
                         stopStatusPolling(epoch)
+                        if (fetchEpoch != epoch) return@launch
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch
                     }
@@ -652,6 +657,7 @@ class NomadNetBrowserViewModel
                     val protocol = reticulumProtocol as? ServiceReticulumProtocol
                     if (protocol == null) {
                         stopStatusPolling(epoch)
+                        if (fetchEpoch != epoch) return@launch
                         _isPullRefreshing.value = false
                         _browserState.value = BrowserState.Error("Service not available")
                         return@launch

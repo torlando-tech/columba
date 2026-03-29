@@ -25,9 +25,11 @@ enum class InterfaceCategory(
     val markerColor: Int,
 ) {
     AUTO(Icons.Default.Wifi, "access-point", "Local Network", 0xFF2E7D32.toInt()),
-    TCP(Icons.Default.Cloud, "cloud", "TCP/IP", 0xFF1565C0.toInt()),
+    TCP(Icons.Default.Cloud, "earth", "TCP/IP", 0xFF1565C0.toInt()),
     BLUETOOTH(Icons.Default.Bluetooth, "bluetooth", "Bluetooth", 0xFF283593.toInt()),
-    LORA(Icons.Default.CellTower, "radio-tower", "LoRa Radio", 0xFFE64A19.toInt()),
+    LORA(Icons.Default.CellTower, "antenna", "LoRa Radio", 0xFFE64A19.toInt()),
+    I2P(Icons.Default.Cloud, "incognito", "I2P", 0xFF7B1FA2.toInt()),
+    YGGDRASIL(Icons.Default.Cloud, "pine-tree", "Yggdrasil", 0xFF00695C.toInt()),
     SERIAL(Icons.Default.SettingsInputAntenna, "antenna", "Serial", 0xFF616161.toInt()),
     UNKNOWN(Icons.Default.SettingsInputAntenna, "antenna", "", 0xFF9E9E9E.toInt()),
 }
@@ -69,21 +71,45 @@ private fun extractInterfaceType(interfaceName: String): String = interfaceName.
 /**
  * Determine the interface category based on the interface name.
  */
-internal fun categorizeInterface(interfaceName: String): InterfaceCategory {
+internal fun categorizeInterface(interfaceName: String): InterfaceCategory = categorizeInterface(interfaceName, host = null)
+
+/**
+ * Determine the interface category based on the interface name and optional host.
+ * The host is used to distinguish Yggdrasil TCP interfaces from regular TCP.
+ */
+internal fun categorizeInterface(
+    interfaceName: String,
+    host: String?,
+): InterfaceCategory {
     val lowerName = interfaceName.lowercase()
     return when {
         lowerName.contains("autointerface") ||
             lowerName.contains("auto discovery") ||
             lowerName.startsWith("auto") -> InterfaceCategory.AUTO
-        lowerName.contains("tcp") || lowerName.contains("backbone") -> InterfaceCategory.TCP
+        lowerName.contains("i2p") -> InterfaceCategory.I2P
         lowerName.contains("rnode") ||
-            lowerName.contains("lora") -> InterfaceCategory.LORA
+            lowerName.contains("lora") ||
+            lowerName.contains("weave") ||
+            lowerName.contains("kiss") -> InterfaceCategory.LORA
         lowerName.contains("ble") ||
             lowerName.contains("bluetooth") ||
             lowerName.contains("androidble") -> InterfaceCategory.BLUETOOTH
+        lowerName.contains("tcp") || lowerName.contains("backbone") ->
+            if (isYggdrasilHost(host)) InterfaceCategory.YGGDRASIL else InterfaceCategory.TCP
         lowerName.contains("serial") -> InterfaceCategory.SERIAL
         else -> InterfaceCategory.UNKNOWN
     }
+}
+
+/**
+ * Check if a host address belongs to the Yggdrasil network (IPv6 in 0200::/7 space).
+ */
+private fun isYggdrasilHost(host: String?): Boolean {
+    if (host == null) return false
+    val clean = host.trim().removePrefix("[").removeSuffix("]")
+    val firstSegment = clean.takeIf { it.contains(":") }?.split(":")?.firstOrNull()
+    val value = firstSegment?.toIntOrNull(16) ?: return false
+    return value in 0x0200..0x03FF
 }
 
 fun getInterfaceInfo(interfaceName: String): InterfaceInfo {

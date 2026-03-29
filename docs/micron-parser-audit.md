@@ -256,15 +256,18 @@ would fail.
 
 ## Summary
 
-| ID | Severity | Discrepancy | NomadNet | Columba |
-|----|----------|-------------|----------|---------|
-| D1 | **CRITICAL** | `[`/`<` parsed without backtick | Requires backtick | Parsed directly |
-| D2 | **CRITICAL** | `<` depth reset exact match | Re-parses remainder | Exact match only |
-| D3 | MODERATE | Literal mode trim | Exact match `` `= `` | `trimStart()` match |
-| D5 | MODERATE | Divider custom char length | Exactly 2 chars | Any length ≥ 2 |
-| D6 | MODERATE | `trimEnd()` on lines | No trimming | Trims trailing whitespace |
-| D7 | MINOR | Heading + field sanitization | Strips `>` when field present | No sanitization |
-| D8 | MINOR | Divider control char check | Replaces ord < 32 | No check |
+| ID | Severity | Discrepancy | NomadNet | Columba | Status |
+|----|----------|-------------|----------|---------|--------|
+| D1 | **CRITICAL** | `[`/`<` parsed without backtick | Requires backtick | Parsed directly | **FIXED** |
+| D2 | **CRITICAL** | `<` depth reset exact match | Re-parses remainder | Exact match only | **FIXED** |
+| D3 | MODERATE | Literal mode trim | Exact match `` `= `` | `trimStart()` match | **FIXED** |
+| D5 | MODERATE | Divider custom char length | Exactly 2 chars | Any length ≥ 2 | **FIXED** |
+| D6 | MODERATE | `trimEnd()` on lines | No trimming | Trims trailing whitespace | **FIXED** |
+| D7 | MINOR | Heading + field sanitization | Strips `>` when field present | No sanitization | **FIXED** |
+| D8 | MINOR | Divider control char check | Replaces ord < 32 | No check | **FIXED** |
+
+All discrepancies verified against NomadNet `MicronParser.py` and MeshChatX source (2026-03-28)
+and resolved in this PR with 19 regression tests.
 
 ### Test with provided sample document
 

@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.DraftDao
+import com.lxmf.messenger.data.db.dao.InterfaceFirstSeenDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
@@ -81,6 +82,7 @@ object DatabaseModule {
             MIGRATION_40_41,
             MIGRATION_41_42,
             MIGRATION_42_43,
+            MIGRATION_43_44,
         )
     }
 
@@ -1687,6 +1689,17 @@ object DatabaseModule {
             }
         }
 
+    private val MIGRATION_43_44 =
+        object : Migration(43, 44) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS interface_first_seen (" +
+                        "interfaceId TEXT NOT NULL PRIMARY KEY, " +
+                        "firstSeenTimestamp INTEGER NOT NULL)",
+                )
+            }
+        }
+
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
     @Provides
     @Singleton
@@ -1740,6 +1753,9 @@ object DatabaseModule {
 
     @Provides
     fun provideBlockedPeerDao(database: ColumbaDatabase): BlockedPeerDao = database.blockedPeerDao()
+
+    @Provides
+    fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
 
     @Provides
     @Singleton

@@ -451,8 +451,14 @@ class MapViewModel
                         loadInterfaceMarkers()
                     }
                 }
-                // Initial load of interface markers
-                viewModelScope.launch { loadInterfaceMarkers() }
+                // Initial load of interface markers (retry after 5s if service wasn't ready)
+                viewModelScope.launch {
+                    loadInterfaceMarkers()
+                    if (_state.value.interfaceMarkers.isEmpty()) {
+                        delay(5_000L)
+                        loadInterfaceMarkers()
+                    }
+                }
             }
 
             // Collect telemetry collector state for map FABs

@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,7 +26,7 @@ enum class InterfaceCategory(
     val markerColor: Int,
 ) {
     AUTO(Icons.Default.Wifi, com.composables.icons.lucide.R.drawable.lucide_ic_wifi, "Local Network", 0xFF2E7D32.toInt()),
-    TCP(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_globe, "TCP/IP", 0xFF1565C0.toInt()),
+    TCP(Icons.Default.Public, com.composables.icons.lucide.R.drawable.lucide_ic_globe, "TCP/IP", 0xFF1565C0.toInt()),
     BLUETOOTH(Icons.Default.Bluetooth, com.composables.icons.lucide.R.drawable.lucide_ic_bluetooth, "Bluetooth", 0xFF283593.toInt()),
     LORA(Icons.Default.CellTower, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "LoRa Radio", 0xFFE64A19.toInt()),
     I2P(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_eye_off, "I2P", 0xFF7B1FA2.toInt()),

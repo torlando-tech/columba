@@ -657,7 +657,8 @@ class MapViewModel
                 val withLocation = discovered.filter { it.hasLocation }
 
                 // Persist first-seen timestamps (INSERT OR IGNORE preserves originals)
-                val now = System.currentTimeMillis()
+                // Use Unix seconds to match lastHeard (which comes from Python in seconds)
+                val now = System.currentTimeMillis() / 1000
                 val ids =
                     withLocation.map { iface ->
                         val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"

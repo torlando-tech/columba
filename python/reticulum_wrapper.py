@@ -3868,10 +3868,9 @@ class ReticulumWrapper:
                          f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
                 self._request_path_if_needed(dest_hash)
 
-                if not recipient_identity:
-                    error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
-                    log_error("ReticulumWrapper", "send_location_telemetry", f"❌ {error_msg}")
-                    return {"success": False, "error": error_msg}
+                error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known — path requested, retry shortly"
+                log_error("ReticulumWrapper", "send_location_telemetry", f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination
             recipient_lxmf_destination = RNS.Destination(
@@ -4031,10 +4030,9 @@ class ReticulumWrapper:
                          f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
                 self._request_path_if_needed(dest_hash)
 
-                if not recipient_identity:
-                    error_msg = f"Collector identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
-                    log_error("ReticulumWrapper", "send_telemetry_request", f"❌ {error_msg}")
-                    return {"success": False, "error": error_msg}
+                error_msg = f"Collector identity {dest_hash.hex()[:16]} not known — path requested, retry shortly"
+                log_error("ReticulumWrapper", "send_telemetry_request", f"❌ {error_msg}")
+                return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination
             recipient_lxmf_destination = RNS.Destination(
@@ -4409,8 +4407,7 @@ class ReticulumWrapper:
                          f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
                 self._request_path_if_needed(dest_hash)
 
-                if not recipient_identity:
-                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received.", "delivery_method": None}
+                return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known — path requested, retry shortly", "delivery_method": None}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -6198,8 +6195,8 @@ class ReticulumWrapper:
     def _request_path_if_needed(self, dest_hash: bytes) -> bool:
         """Request a path only if one doesn't already exist.
 
-        Returns True if a path exists (either already cached or just requested).
-        Returns False if the request could not be made (mock mode returns True).
+        Returns True  — path already present, or running in mock mode (no request fired).
+        Returns False — a path request was fired (or attempted); path not yet available.
         Callers that need to wait for the path should poll has_path() themselves.
         """
         if not RETICULUM_AVAILABLE or not self.reticulum:
@@ -6216,15 +6213,17 @@ class ReticulumWrapper:
         return False
 
     def request_path(self, dest_hash: bytes) -> Dict:
-        """Request a path to a destination (public API, used by Kotlin)."""
-        try:
-            if not RETICULUM_AVAILABLE:
-                return {"success": True}
+        """Request a path to a destination (public API, used by Kotlin).
 
-            self._request_path_if_needed(dest_hash)
+        Always returns success=True — transport-level exceptions are caught
+        and logged by _request_path_if_needed, so callers cannot distinguish
+        a successful fire from a failed one.
+        """
+        if not RETICULUM_AVAILABLE:
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+
+        self._request_path_if_needed(dest_hash)
+        return {"success": True}
 
     def persist_transport_data(self) -> Dict:
         """Persist Reticulum's transport data (path table, destinations) to disk."""

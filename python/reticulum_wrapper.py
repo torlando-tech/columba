@@ -3033,12 +3033,20 @@ class ReticulumWrapper:
                                             requester_identity = RNS.Identity.recall(lxmf_message.source_hash)
 
                                             if requester_identity is None:
-                                                # Identity not cached — request path (if needed) but don't block delivery
-                                                log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                                        f"Identity for {lxmf_message.source_hash.hex()[:16]} not recalled, requesting path...")
-                                                self._request_path_if_needed(lxmf_message.source_hash)
+                                                # Try identity hash lookup — the sender's path exists
+                                                # (the message arrived), but the identity may be keyed
+                                                # differently in the recall cache.
+                                                requester_identity = RNS.Identity.recall(
+                                                    lxmf_message.source_hash, from_identity_hash=True)
+
+                                            if requester_identity is None:
+                                                # Both lookups failed — silently drop the telemetry
+                                                # response. The sender's identity was never announced
+                                                # to us; a path request won't help since we already
+                                                # have the path (the message arrived over it).
                                                 log_warning("ReticulumWrapper", "_on_lxmf_delivery",
-                                                           f"Cannot send telemetry stream — identity for {lxmf_message.source_hash.hex()[:16]} not available")
+                                                           f"Cannot send telemetry stream — identity for "
+                                                           f"{lxmf_message.source_hash.hex()[:16]} not recalled")
                                             else:
                                                 self._send_telemetry_stream_response(
                                                     lxmf_message.source_hash,

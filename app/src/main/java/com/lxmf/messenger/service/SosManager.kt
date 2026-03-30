@@ -92,6 +92,7 @@ class SosManager
         val state: StateFlow<SosState> = _state.asStateFlow()
 
         private val isTriggerRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+        private val triggerGeneration = java.util.concurrent.atomic.AtomicLong(0)
         @Volatile private var triggerJob: Job? = null
         @Volatile private var countdownJob: Job? = null
         @Volatile private var periodicUpdateJob: Job? = null
@@ -135,6 +136,7 @@ class SosManager
          */
         fun trigger() {
             if (!isTriggerRunning.compareAndSet(false, true)) return
+            val myGeneration = triggerGeneration.incrementAndGet()
             triggerJob =
                 scope.launch {
                     try {
@@ -161,7 +163,10 @@ class SosManager
                         Log.e(TAG, "Error triggering SOS", e)
                         _state.value = SosState.Idle
                     } finally {
-                        isTriggerRunning.set(false)
+                        // Only reset if no newer trigger has started
+                        if (triggerGeneration.get() == myGeneration) {
+                            isTriggerRunning.set(false)
+                        }
                     }
                 }
         }
@@ -175,6 +180,7 @@ class SosManager
                 countdownJob = null
                 triggerJob?.cancel()
                 triggerJob = null
+                triggerGeneration.incrementAndGet()
                 isTriggerRunning.set(false)
                 _state.value = SosState.Idle
                 Log.d(TAG, "SOS countdown cancelled")
@@ -199,6 +205,7 @@ class SosManager
 
             triggerJob?.cancel()
             triggerJob = null
+            triggerGeneration.incrementAndGet()
             isTriggerRunning.set(false)
             periodicUpdateJob?.cancel()
             periodicUpdateJob = null
@@ -223,6 +230,7 @@ class SosManager
             if (_state.value is SosState.Idle) return
             triggerJob?.cancel()
             triggerJob = null
+            triggerGeneration.incrementAndGet()
             isTriggerRunning.set(false)
             countdownJob?.cancel()
             countdownJob = null

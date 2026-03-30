@@ -17,7 +17,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -244,10 +246,11 @@ class SosTriggerDetector
                         settingsRepository.sosTriggerModes,
                         settingsRepository.sosShakeSensitivity,
                         settingsRepository.sosTapCount,
-                        sosManager.state,
-                    ) { enabled, modes, _, _, sosState ->
-                        Triple(enabled, modes, sosState !is SosState.Idle)
+                        sosManager.state.map { it !is SosState.Idle }.distinctUntilChanged(),
+                    ) { enabled, modes, _, _, sosActive ->
+                        Triple(enabled, modes, sosActive)
                     }
+                        .distinctUntilChanged()
                         .collect { (enabled, modes, sosActive) ->
                             try {
                                 val triggerNeeded = enabled && modes.isNotEmpty()

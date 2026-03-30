@@ -253,7 +253,7 @@ jobs:
             --cov-report=xml:coverage-python.xml
 
       - name: Upload Python coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./python/coverage-python.xml
@@ -373,7 +373,7 @@ jobs:
             **/build/reports/tests/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./**/build/reports/jacoco/**/*.xml
@@ -467,7 +467,7 @@ jobs:
             **/build/reports/tests/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./**/build/reports/jacoco/**/*.xml

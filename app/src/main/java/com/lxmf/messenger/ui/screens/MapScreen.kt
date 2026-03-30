@@ -222,7 +222,7 @@ fun MapScreen(
     var selectedMarker by remember { mutableStateOf<ContactMarker?>(null) }
     var selectedInterface by remember { mutableStateOf<InterfaceMarker?>(null) }
     var showFocusInterfaceSheet by remember { mutableStateOf(false) }
-    val filteredInterfaceMarkers = viewModel.filteredInterfaceMarkers
+    val filteredInterfaceMarkers by viewModel.filteredInterfaceMarkers.collectAsState()
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val shareLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val contactLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

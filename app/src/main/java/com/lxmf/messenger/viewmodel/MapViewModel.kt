@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -643,13 +644,13 @@ class MapViewModel
             }
         }
 
-        val filteredInterfaceMarkers: List<InterfaceMarker>
-            get() {
-                val s = _state.value
-                return s.interfaceMarkers.filter { marker ->
-                    s.interfaceFilterEnabled[marker.category] ?: true
-                }
-            }
+        val filteredInterfaceMarkers: StateFlow<List<InterfaceMarker>> =
+            _state
+                .map { s ->
+                    s.interfaceMarkers.filter { marker ->
+                        s.interfaceFilterEnabled[marker.category] ?: true
+                    }
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private suspend fun loadInterfaceMarkers() {
             try {
@@ -661,7 +662,7 @@ class MapViewModel
                 val now = System.currentTimeMillis() / 1000
                 val withId =
                     withLocation.map { iface ->
-                        val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"
+                        val id = "${iface.name}\u0000${iface.type}\u0000${iface.reachableOn ?: ""}"
                         interfaceFirstSeenDao.insertIfNotExists(
                             com.lxmf.messenger.data.db.entity
                                 .InterfaceFirstSeenEntity(id, now),

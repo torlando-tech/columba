@@ -26,7 +26,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -36,7 +36,7 @@ jobs:
           python-version: '3.11'
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v5
+        uses: gradle/actions/wrapper-validation@v6
         continue-on-error: true
 
       - name: Grant execute permission for gradlew

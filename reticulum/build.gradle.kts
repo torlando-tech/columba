@@ -1,6 +1,5 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
     id("com.google.devtools.ksp")
     kotlin("plugin.parcelize")
     kotlin("plugin.serialization")
@@ -10,7 +9,7 @@ plugins {
 
 android {
     namespace = "tech.torlando.columba.reticulum"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -76,7 +75,7 @@ dependencies {
     implementation(libs.serialization.json)
 
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
-    implementation("io.sentry:sentry-android:8.29.0")
+    implementation("io.sentry:sentry-android:8.31.0")
 
     // Testing
     testImplementation(libs.junit)

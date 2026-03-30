@@ -248,18 +248,6 @@ object MarkerBitmapFactory {
      * @param context Context for loading the drawable
      * @return A bitmap with the marker
      */
-
-    /**
-     * Creates a rounded-rectangle marker for a discovered network interface.
-     * Visually distinct from contact markers (circle) to avoid confusion.
-     *
-     * @param iconResId Drawable resource ID for the icon (e.g., Lucide antenna, Material globe)
-     * @param backgroundColor The category-specific color
-     * @param sizeDp The marker size in dp (default 32, smaller than contact markers)
-     * @param density Screen density for dp to px conversion
-     * @param context Context for loading the drawable
-     * @return A bitmap with the marker
-     */
     fun createInterfaceMarker(
         iconResId: Int,
         backgroundColor: Int,

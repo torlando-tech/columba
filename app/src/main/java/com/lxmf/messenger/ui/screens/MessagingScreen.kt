@@ -1891,7 +1891,9 @@ fun MessageBubble(
             }
         } else {
             // Detect SOS messages from others
-            val isSosMessage = !isFromMe && isSosMessageByField(message.content, message.fieldsJson)
+            val isSosMessage = remember(message.id, message.fieldsJson, message.content) {
+                !isFromMe && isSosMessageByField(message.content, message.fieldsJson)
+            }
 
             // Regular message with bubble
             Box {
@@ -2161,7 +2163,9 @@ fun MessageBubble(
 
                         // "View on Map" button for SOS messages with GPS coordinates
                         if (isSosMessage) {
-                            val sosLocation = parseSosLocation(message.content, message.fieldsJson)
+                            val sosLocation = remember(message.id, message.fieldsJson, message.content) {
+                                parseSosLocation(message.content, message.fieldsJson)
+                            }
                             if (sosLocation != null) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(

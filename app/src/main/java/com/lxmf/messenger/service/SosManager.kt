@@ -111,18 +111,23 @@ class SosManager
                 try {
                     val wasActive = settingsRepository.sosActive.first()
                     if (!wasActive) return@launch
-                    // Don't restore if a trigger is already in progress
-                    if (isTriggerRunning.get() || _state.value !is SosState.Idle) return@launch
+                    // Atomically claim the trigger slot — prevents concurrent trigger() from racing
+                    if (!isTriggerRunning.compareAndSet(false, true)) return@launch
+                    try {
+                        if (_state.value !is SosState.Idle) return@launch
 
-                    val sentCount = settingsRepository.sosActiveSentCount.first()
-                    val failedCount = settingsRepository.sosActiveFailedCount.first()
-                    _state.value = SosState.Active(sentCount, failedCount)
-                    notificationHelper.showSosActiveNotification(sentCount, failedCount)
-                    Log.d(TAG, "Restored SOS active state: sent=$sentCount, failed=$failedCount")
+                        val sentCount = settingsRepository.sosActiveSentCount.first()
+                        val failedCount = settingsRepository.sosActiveFailedCount.first()
+                        _state.value = SosState.Active(sentCount, failedCount)
+                        notificationHelper.showSosActiveNotification(sentCount, failedCount)
+                        Log.d(TAG, "Restored SOS active state: sent=$sentCount, failed=$failedCount")
 
-                    val periodicUpdates = settingsRepository.sosPeriodicUpdates.first()
-                    if (periodicUpdates) {
-                        startPeriodicUpdates()
+                        val periodicUpdates = settingsRepository.sosPeriodicUpdates.first()
+                        if (periodicUpdates) {
+                            startPeriodicUpdates()
+                        }
+                    } finally {
+                        isTriggerRunning.set(false)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -462,7 +467,7 @@ class SosManager
                 scope.launch {
                     val durationSeconds = settingsRepository.sosAudioDurationSeconds.first()
 
-                    val started = withContext(Dispatchers.Main) { audioRecorder.start() }
+                    val started = withContext(Dispatchers.IO) { audioRecorder.start() }
                     if (!started) {
                         Log.w(TAG, "Audio recording failed to start")
                         return@launch
@@ -473,11 +478,11 @@ class SosManager
 
                     if (_state.value !is SosState.Active) {
                         Log.d(TAG, "SOS deactivated during audio recording, discarding")
-                        withContext(Dispatchers.Main) { audioRecorder.cancel() }
+                        withContext(Dispatchers.IO) { audioRecorder.cancel() }
                         return@launch
                     }
 
-                    withContext(Dispatchers.Main) { audioRecorder.stopRecorder() }
+                    withContext(Dispatchers.IO) { audioRecorder.stopRecorder() }
                     val audioBytes = withContext(Dispatchers.IO) { audioRecorder.readAndDeleteOutputFile() }
                     if (audioBytes == null) {
                         Log.w(TAG, "Audio recording returned no data")

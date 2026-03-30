@@ -11,6 +11,7 @@ import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.DraftDao
+import com.lxmf.messenger.data.db.dao.InterfaceFirstSeenDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
@@ -1688,12 +1689,17 @@ object DatabaseModule {
             }
         }
 
-    // Migration 43→44: Add source column to received_locations table
+    // Migration 43→44: Add source column + interface_first_seen table
     private val MIGRATION_43_44 =
         object : Migration(43, 44) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE received_locations ADD COLUMN source TEXT NOT NULL DEFAULT 'location_sharing'",
+                )
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS interface_first_seen (" +
+                        "interfaceId TEXT NOT NULL PRIMARY KEY, " +
+                        "firstSeenTimestamp INTEGER NOT NULL)",
                 )
             }
         }
@@ -1751,6 +1757,9 @@ object DatabaseModule {
 
     @Provides
     fun provideBlockedPeerDao(database: ColumbaDatabase): BlockedPeerDao = database.blockedPeerDao()
+
+    @Provides
+    fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
 
     @Provides
     @Singleton

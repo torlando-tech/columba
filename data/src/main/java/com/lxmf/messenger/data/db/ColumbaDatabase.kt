@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.db.dao.ContactDao
 import com.lxmf.messenger.data.db.dao.ConversationDao
 import com.lxmf.messenger.data.db.dao.CustomThemeDao
 import com.lxmf.messenger.data.db.dao.DraftDao
+import com.lxmf.messenger.data.db.dao.InterfaceFirstSeenDao
 import com.lxmf.messenger.data.db.dao.LocalIdentityDao
 import com.lxmf.messenger.data.db.dao.MessageDao
 import com.lxmf.messenger.data.db.dao.OfflineMapRegionDao
@@ -21,6 +22,7 @@ import com.lxmf.messenger.data.db.entity.ContactEntity
 import com.lxmf.messenger.data.db.entity.ConversationEntity
 import com.lxmf.messenger.data.db.entity.CustomThemeEntity
 import com.lxmf.messenger.data.db.entity.DraftEntity
+import com.lxmf.messenger.data.db.entity.InterfaceFirstSeenEntity
 import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.db.entity.MessageEntity
 import com.lxmf.messenger.data.db.entity.OfflineMapRegionEntity
@@ -44,6 +46,7 @@ import com.lxmf.messenger.data.db.entity.RmspServerEntity
         RmspServerEntity::class,
         DraftEntity::class,
         BlockedPeerEntity::class,
+        InterfaceFirstSeenEntity::class,
     ],
     version = 44,
     exportSchema = false,
@@ -74,4 +77,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun draftDao(): DraftDao
 
     abstract fun blockedPeerDao(): BlockedPeerDao
+
+    abstract fun interfaceFirstSeenDao(): InterfaceFirstSeenDao
 }

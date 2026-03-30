@@ -3,7 +3,6 @@ import java.util.Base64
 
 plugins {
     id("com.android.application")
-    kotlin("android")
     kotlin("plugin.compose")
     kotlin("plugin.serialization")
     id("com.google.devtools.ksp")
@@ -78,7 +77,7 @@ val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
     namespace = "com.lxmf.messenger"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lxmf.messenger"
@@ -412,7 +411,7 @@ dependencies {
 
     // Crash Reporting - GlitchTip (Sentry-compatible)
     // Phase 4 Task 4.2: Production Observability
-    implementation("io.sentry:sentry-android:8.29.0")
+    implementation("io.sentry:sentry-android:8.31.0")
 
     // Performance Monitoring - JankStats for frame monitoring
     // Phase 1 Plan 01-03: Frame tracking integration with Sentry
@@ -453,7 +452,7 @@ dependencies {
     testImplementation(libs.compose.test)
     testImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation(libs.paging.testing)
-    testImplementation("androidx.test:core:1.5.0")
+    testImplementation(libs.test.core)
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)

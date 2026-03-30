@@ -164,6 +164,19 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE identityHash = :identityHash")
     suspend fun getAllConversationsList(identityHash: String): List<ConversationEntity>
 
+    @Query(
+        """
+        SELECT peerHash FROM conversations
+        WHERE identityHash = :identityHash
+        ORDER BY lastMessageTimestamp DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun getRecentPeerHashes(
+        identityHash: String,
+        limit: Int,
+    ): List<String>
+
     /**
      * Bulk insert conversations (for import).
      */

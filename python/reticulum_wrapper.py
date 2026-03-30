@@ -3045,28 +3045,12 @@ class ReticulumWrapper:
                                             requester_identity = RNS.Identity.recall(lxmf_message.source_hash)
 
                                             if requester_identity is None:
-                                                # Identity not cached - request path from network (Sideband pattern)
+                                                # Identity not cached — request path (if needed) but don't block delivery
                                                 log_info("ReticulumWrapper", "_on_lxmf_delivery",
                                                         f"Identity for {lxmf_message.source_hash.hex()[:16]} not recalled, requesting path...")
-                                                RNS.Transport.request_path(lxmf_message.source_hash)
-                                                # Queue for retry after path resolution
-                                                def retry_send():
-                                                    import time
-                                                    time.sleep(2)  # Wait for path resolution
-                                                    retry_identity = RNS.Identity.recall(lxmf_message.source_hash)
-                                                    if retry_identity:
-                                                        log_info("ReticulumWrapper", "_on_lxmf_delivery",
-                                                                f"Identity recalled on retry, sending telemetry stream")
-                                                        self._send_telemetry_stream_response(
-                                                            lxmf_message.source_hash,
-                                                            retry_identity,
-                                                            timebase
-                                                        )
-                                                    else:
-                                                        log_warning("ReticulumWrapper", "_on_lxmf_delivery",
-                                                                   f"Still cannot recall identity for {lxmf_message.source_hash.hex()[:16]} after retry")
-                                                import threading
-                                                threading.Thread(target=retry_send, daemon=True).start()
+                                                self._request_path_if_needed(lxmf_message.source_hash)
+                                                log_warning("ReticulumWrapper", "_on_lxmf_delivery",
+                                                           f"Cannot send telemetry stream — identity for {lxmf_message.source_hash.hex()[:16]} not available")
                                             else:
                                                 self._send_telemetry_stream_response(
                                                     lxmf_message.source_hash,
@@ -3589,29 +3573,14 @@ class ReticulumWrapper:
                 log_info("ReticulumWrapper", "send_lxmf_message", f"✅ Retrieved identity from local cache")
 
             if not recipient_identity:
-                # Request path from network (triggers announces from peers who know destination)
+                # Fire-and-forget path request (guarded by has_path check)
                 log_info("ReticulumWrapper", "send_lxmf_message",
-                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
-                try:
-                    RNS.Transport.request_path(dest_hash)
-                except Exception as e:
-                    log_warning("ReticulumWrapper", "send_lxmf_message", f"Error requesting path: {e}")
+                         f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
+                self._request_path_if_needed(dest_hash)
 
-                # Wait up to 5 seconds for path response
-                for attempt in range(10):
-                    time.sleep(0.5)
-                    recipient_identity = RNS.Identity.recall(dest_hash)
-                    if not recipient_identity:
-                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
-                    if recipient_identity:
-                        log_info("ReticulumWrapper", "send_lxmf_message",
-                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
-                        break
-
-                if not recipient_identity:
-                    error_msg = f"Cannot send message: Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
-                    log_error("ReticulumWrapper", "send_lxmf_message", f"❌ {error_msg}")
-                    return {"success": False, "error": error_msg}
+                error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known — path requested, retry shortly"
+                log_warning("ReticulumWrapper", "send_lxmf_message", error_msg)
+                return {"success": False, "error": error_msg}
 
             # Create outgoing LXMF destination object from the recalled identity
             # The router.handle_outbound() REQUIRES a destination object, not just a hash!
@@ -3897,24 +3866,10 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash_hex]
 
             if not recipient_identity:
-                # Request path from network (triggers announces from peers who know destination)
+                # Fire-and-forget path request (guarded by has_path check)
                 log_info("ReticulumWrapper", "send_location_telemetry",
-                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
-                try:
-                    RNS.Transport.request_path(dest_hash)
-                except Exception as e:
-                    log_warning("ReticulumWrapper", "send_location_telemetry", f"Error requesting path: {e}")
-
-                # Wait up to 5 seconds for path response
-                for attempt in range(10):
-                    time.sleep(0.5)
-                    recipient_identity = RNS.Identity.recall(dest_hash)
-                    if not recipient_identity:
-                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
-                    if recipient_identity:
-                        log_info("ReticulumWrapper", "send_location_telemetry",
-                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
-                        break
+                         f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
+                self._request_path_if_needed(dest_hash)
 
                 if not recipient_identity:
                     error_msg = f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
@@ -4074,24 +4029,10 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash_hex]
 
             if not recipient_identity:
-                # Request path from network (triggers announces from peers who know destination)
+                # Fire-and-forget path request (guarded by has_path check)
                 log_info("ReticulumWrapper", "send_telemetry_request",
-                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
-                try:
-                    RNS.Transport.request_path(dest_hash)
-                except Exception as e:
-                    log_warning("ReticulumWrapper", "send_telemetry_request", f"Error requesting path: {e}")
-
-                # Wait up to 5 seconds for path response
-                for attempt in range(10):
-                    time.sleep(0.5)
-                    recipient_identity = RNS.Identity.recall(dest_hash)
-                    if not recipient_identity:
-                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
-                    if recipient_identity:
-                        log_info("ReticulumWrapper", "send_telemetry_request",
-                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
-                        break
+                         f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
+                self._request_path_if_needed(dest_hash)
 
                 if not recipient_identity:
                     error_msg = f"Collector identity {dest_hash.hex()[:16]} not known. Path requested but no response received."
@@ -4466,24 +4407,10 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash.hex()]
 
             if not recipient_identity:
-                # Request path from network (triggers announces from peers who know destination)
+                # Fire-and-forget path request (guarded by has_path check)
                 log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
-                try:
-                    RNS.Transport.request_path(dest_hash)
-                except Exception as e:
-                    log_warning("ReticulumWrapper", "send_lxmf_message_with_method", f"Error requesting path: {e}")
-
-                # Wait up to 5 seconds for path response
-                for attempt in range(10):
-                    time.sleep(0.5)
-                    recipient_identity = RNS.Identity.recall(dest_hash)
-                    if not recipient_identity:
-                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
-                    if recipient_identity:
-                        log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                                 f"✅ Identity resolved after path request (attempt {attempt + 1})")
-                        break
+                         f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
+                self._request_path_if_needed(dest_hash)
 
                 if not recipient_identity:
                     return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known. Path requested but no response received.", "delivery_method": None}
@@ -4755,26 +4682,11 @@ class ReticulumWrapper:
                 recipient_identity = self.identities[dest_hash.hex()]
 
             if not recipient_identity:
-                # Request path from network
+                # Fire-and-forget path request (guarded by has_path check)
                 log_info("ReticulumWrapper", "send_reaction",
-                         f"Identity not found, requesting path to {dest_hash.hex()[:16]}...")
-                try:
-                    RNS.Transport.request_path(dest_hash)
-                except Exception as e:
-                    log_warning("ReticulumWrapper", "send_reaction", f"Error requesting path: {e}")
-
-                # Wait up to 5 seconds for path response
-                wait_start = time.time()
-                while time.time() - wait_start < 5:
-                    recipient_identity = RNS.Identity.recall(dest_hash)
-                    if not recipient_identity:
-                        recipient_identity = RNS.Identity.recall(dest_hash, from_identity_hash=True)
-                    if recipient_identity:
-                        break
-                    time.sleep(0.1)
-
-                if not recipient_identity:
-                    return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known"}
+                         f"Identity not found for {dest_hash.hex()[:16]}, requesting path...")
+                self._request_path_if_needed(dest_hash)
+                return {"success": False, "error": f"Recipient identity {dest_hash.hex()[:16]} not known — path requested, retry shortly"}
 
             # Create destination
             recipient_lxmf_destination = RNS.Destination(
@@ -6286,13 +6198,33 @@ class ReticulumWrapper:
 
         return RNS.Transport.has_path(dest_hash)
 
+    def _request_path_if_needed(self, dest_hash: bytes) -> bool:
+        """Request a path only if one doesn't already exist.
+
+        Returns True if a path exists (either already cached or just requested).
+        Returns False if the request could not be made (mock mode returns True).
+        Callers that need to wait for the path should poll has_path() themselves.
+        """
+        if not RETICULUM_AVAILABLE or not self.reticulum:
+            return True
+
+        if RNS.Transport.has_path(dest_hash):
+            return True
+
+        try:
+            RNS.Transport.request_path(dest_hash)
+        except Exception as e:
+            log_warning("ReticulumWrapper", "_request_path_if_needed",
+                       f"Error requesting path to {dest_hash.hex()[:16]}: {e}")
+        return False
+
     def request_path(self, dest_hash: bytes) -> Dict:
-        """Request a path to a destination"""
+        """Request a path to a destination (public API, used by Kotlin)."""
         try:
             if not RETICULUM_AVAILABLE:
                 return {"success": True}
 
-            RNS.Transport.request_path(dest_hash)
+            self._request_path_if_needed(dest_hash)
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -6724,7 +6656,7 @@ class ReticulumWrapper:
             if not has_path:
                 log_debug("ReticulumWrapper", "establish_link",
                          f"Requesting path to {recipient_dest.hash.hex()[:16]}...")
-                RNS.Transport.request_path(recipient_dest.hash)
+                self._request_path_if_needed(recipient_dest.hash)
 
             # Wait for path if we don't have one
             if not has_path:

@@ -29,7 +29,7 @@ enum class InterfaceCategory(
     TCP(Icons.Default.Public, com.lxmf.messenger.R.drawable.ic_public_24, "TCP/IP", 0xFF1565C0.toInt()),
     BLUETOOTH(Icons.Default.Bluetooth, com.composables.icons.lucide.R.drawable.lucide_ic_bluetooth, "Bluetooth", 0xFF283593.toInt()),
     LORA(Icons.Default.CellTower, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "LoRa Radio", 0xFFE64A19.toInt()),
-    I2P(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_eye_off, "I2P", 0xFF7B1FA2.toInt()),
+    I2P(Icons.Default.Cloud, com.lxmf.messenger.R.drawable.ic_incognito_24, "I2P", 0xFF7B1FA2.toInt()),
     YGGDRASIL(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_tree_pine, "Yggdrasil", 0xFF00695C.toInt()),
     SERIAL(Icons.Default.SettingsInputAntenna, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "Serial", 0xFF616161.toInt()),
     UNKNOWN(Icons.Default.SettingsInputAntenna, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "", 0xFF9E9E9E.toInt()),

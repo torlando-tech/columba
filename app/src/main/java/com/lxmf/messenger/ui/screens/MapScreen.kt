@@ -1299,7 +1299,9 @@ fun MapScreen(
                             },
                             leadingIcon = {
                                 Icon(
-                                    category.icon,
+                                    painter =
+                                        androidx.compose.ui.res
+                                            .painterResource(category.markerIconResId),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )

@@ -14,10 +14,13 @@ import com.lxmf.messenger.data.repository.OfflineMapRegionRepository
 import com.lxmf.messenger.map.MapStyleResult
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.ui.model.SharingDuration
+import com.lxmf.messenger.ui.util.InterfaceCategory
+import com.lxmf.messenger.ui.util.categorizeInterface
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -71,6 +75,51 @@ data class ContactMarker(
     val publicKey: ByteArray? = null,
 )
 
+/**
+ * Represents a discovered network interface with a known location, shown as a map pin.
+ */
+@Immutable
+data class InterfaceMarker(
+    val id: String,
+    val name: String,
+    val type: String,
+    val category: com.lxmf.messenger.ui.util.InterfaceCategory,
+    val latitude: Double,
+    val longitude: Double,
+    val height: Double? = null,
+    val frequency: Long? = null,
+    val bandwidth: Int? = null,
+    val spreadingFactor: Int? = null,
+    val codingRate: Int? = null,
+    val modulation: String? = null,
+    val reachableOn: String? = null,
+    val port: Int? = null,
+    val status: String,
+    val lastHeard: Long,
+    val hops: Int,
+    val firstSeen: Long? = null,
+)
+
+internal fun InterfaceMarker.toFocusInterfaceDetails() =
+    com.lxmf.messenger.ui.screens.FocusInterfaceDetails(
+        name = name,
+        type = type,
+        latitude = latitude,
+        longitude = longitude,
+        height = height,
+        reachableOn = reachableOn,
+        port = port,
+        frequency = frequency,
+        bandwidth = bandwidth,
+        spreadingFactor = spreadingFactor,
+        codingRate = codingRate,
+        modulation = modulation,
+        status = status,
+        lastHeard = lastHeard,
+        hops = hops,
+        firstSeen = firstSeen,
+    )
+
 internal fun deduplicateContactMarkersByDestination(markers: List<ContactMarker>): List<ContactMarker> =
     markers
         .groupBy { it.destinationHash.lowercase() }
@@ -108,6 +157,8 @@ data class MapState(
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
     val mapMarkerDeclutterEnabled: Boolean = true,
+    val interfaceMarkers: List<InterfaceMarker> = emptyList(),
+    val interfaceFilterEnabled: Map<com.lxmf.messenger.ui.util.InterfaceCategory, Boolean> = emptyMap(),
     /** Center coordinates of the default offline map region (fallback when no GPS) */
     val defaultRegionCenter: SavedCameraPosition? = null,
     /** Whether the default region lookup has completed (even if no region was found) */
@@ -125,7 +176,7 @@ data class MapState(
  * - Location sharing state
  * - Location permission state
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList") // TODO: extract MapDataSources wrapper to reduce constructor params
 @HiltViewModel
 class MapViewModel
     @Inject
@@ -139,6 +190,8 @@ class MapViewModel
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
+        private val reticulumProtocol: ReticulumProtocol,
+        private val interfaceFirstSeenDao: com.lxmf.messenger.data.db.dao.InterfaceFirstSeenDao,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MapViewModel"
@@ -307,63 +360,64 @@ class MapViewModel
 
                     Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
 
-                    locations.mapNotNull { loc ->
-                        // Ignore self-echo telemetry entries from collector streams.
-                        val senderHash = loc.senderHash.lowercase()
-                        val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
-                        if (isSelfEcho) {
-                            return@mapNotNull null
-                        }
+                    locations
+                        .mapNotNull { loc ->
+                            // Ignore self-echo telemetry entries from collector streams.
+                            val senderHash = loc.senderHash.lowercase()
+                            val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
+                            if (isSelfEcho) {
+                                return@mapNotNull null
+                            }
 
-                        // Calculate marker state - returns null if marker should be hidden
-                        // Use sender emission timestamp for freshness/staleness semantics:
-                        // a coordinate emitted long ago should be treated as stale,
-                        // even if it was received only recently.
-                        val markerState =
-                            calculateMarkerState(
+                            // Calculate marker state - returns null if marker should be hidden
+                            // Use sender emission timestamp for freshness/staleness semantics:
+                            // a coordinate emitted long ago should be treated as stale,
+                            // even if it was received only recently.
+                            val markerState =
+                                calculateMarkerState(
+                                    timestamp = loc.timestamp,
+                                    expiresAt = loc.expiresAt,
+                                    currentTime = currentTime,
+                                ) ?: return@mapNotNull null
+
+                            // Look up announce for icon data and name fallback
+                            val announce =
+                                announceMap[loc.senderHash]
+                                    ?: announceMapLower[loc.senderHash.lowercase()]
+
+                            // Try contacts first (exact, then case-insensitive)
+                            // Then try announces (exact, then case-insensitive)
+                            val displayName =
+                                contactMap[loc.senderHash]?.displayName
+                                    ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
+                                    ?: announce?.peerName
+                                    ?: loc.senderHash.take(8)
+
+                            if (displayName == loc.senderHash.take(8)) {
+                                Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
+                            }
+
+                            // Prefer appearance from telemetry message, fall back to announce
+                            val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
+
+                            ContactMarker(
+                                destinationHash = loc.senderHash,
+                                displayName = displayName,
+                                latitude = loc.latitude,
+                                longitude = loc.longitude,
+                                accuracy = loc.accuracy,
+                                // Display sender emission timestamp in UI (requested behavior).
+                                // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
                                 timestamp = loc.timestamp,
                                 expiresAt = loc.expiresAt,
-                                currentTime = currentTime,
-                            ) ?: return@mapNotNull null
-
-                        // Look up announce for icon data and name fallback
-                        val announce =
-                            announceMap[loc.senderHash]
-                                ?: announceMapLower[loc.senderHash.lowercase()]
-
-                        // Try contacts first (exact, then case-insensitive)
-                        // Then try announces (exact, then case-insensitive)
-                        val displayName =
-                            contactMap[loc.senderHash]?.displayName
-                                ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
-                                ?: announce?.peerName
-                                ?: loc.senderHash.take(8)
-
-                        if (displayName == loc.senderHash.take(8)) {
-                            Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
-                        }
-
-                        // Prefer appearance from telemetry message, fall back to announce
-                        val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
-
-                        ContactMarker(
-                            destinationHash = loc.senderHash,
-                            displayName = displayName,
-                            latitude = loc.latitude,
-                            longitude = loc.longitude,
-                            accuracy = loc.accuracy,
-                            // Display sender emission timestamp in UI (requested behavior).
-                            // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
-                            timestamp = loc.timestamp,
-                            expiresAt = loc.expiresAt,
-                            state = markerState,
-                            approximateRadius = loc.approximateRadius,
-                            iconName = telemetryAppearance?.first ?: announce?.iconName,
-                            iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
-                            iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
-                            publicKey = announce?.publicKey,
-                        )
-                    }.let(::deduplicateContactMarkersByDestination)
+                                state = markerState,
+                                approximateRadius = loc.approximateRadius,
+                                iconName = telemetryAppearance?.first ?: announce?.iconName,
+                                iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
+                                iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
+                                publicKey = announce?.publicKey,
+                            )
+                        }.let(::deduplicateContactMarkersByDestination)
                 }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(
@@ -395,6 +449,15 @@ class MapViewModel
                     while (isActive) {
                         delay(REFRESH_INTERVAL_MS)
                         _refreshTrigger.value = System.currentTimeMillis()
+                        loadInterfaceMarkers()
+                    }
+                }
+                // Initial load of interface markers (retry after 5s if service wasn't ready)
+                viewModelScope.launch {
+                    loadInterfaceMarkers()
+                    if (_state.value.interfaceMarkers.isEmpty()) {
+                        delay(5_000L)
+                        loadInterfaceMarkers()
                     }
                 }
             }
@@ -569,6 +632,82 @@ class MapViewModel
          */
         fun clearCameraPosition() {
             _state.update { it.copy(lastCameraPosition = null) }
+        }
+
+        // ==================== Interface Markers ====================
+
+        fun toggleInterfaceFilter(category: InterfaceCategory) {
+            _state.update { current ->
+                val newFilters = current.interfaceFilterEnabled.toMutableMap()
+                newFilters[category] = !(newFilters[category] ?: true)
+                current.copy(interfaceFilterEnabled = newFilters)
+            }
+        }
+
+        val filteredInterfaceMarkers: StateFlow<List<InterfaceMarker>> =
+            _state
+                .map { s ->
+                    s.interfaceMarkers.filter { marker ->
+                        s.interfaceFilterEnabled[marker.category] ?: true
+                    }
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+        private suspend fun loadInterfaceMarkers() {
+            try {
+                val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                val withLocation = discovered.filter { it.hasLocation }
+
+                // Compute IDs once and persist first-seen timestamps
+                // (INSERT OR IGNORE preserves originals)
+                val now = System.currentTimeMillis() / 1000
+                val withId =
+                    withLocation.map { iface ->
+                        val id = "${iface.name}\u0000${iface.type}\u0000${iface.reachableOn ?: ""}"
+                        interfaceFirstSeenDao.insertIfNotExists(
+                            com.lxmf.messenger.data.db.entity
+                                .InterfaceFirstSeenEntity(id, now),
+                        )
+                        id to iface
+                    }
+
+                // Batch-fetch first-seen timestamps
+                val ids = withId.map { it.first }
+                val firstSeenMap =
+                    if (ids.isNotEmpty()) {
+                        interfaceFirstSeenDao
+                            .getFirstSeenBatch(ids)
+                            .associate { it.interfaceId to it.firstSeenTimestamp }
+                    } else {
+                        emptyMap()
+                    }
+
+                val markers =
+                    withId.map { (id, iface) ->
+                        InterfaceMarker(
+                            id = id,
+                            name = iface.name,
+                            type = iface.type,
+                            category = categorizeInterface(iface.type, iface.reachableOn),
+                            latitude = iface.latitude!!,
+                            longitude = iface.longitude!!,
+                            height = iface.height,
+                            frequency = iface.frequency,
+                            bandwidth = iface.bandwidth,
+                            spreadingFactor = iface.spreadingFactor,
+                            codingRate = iface.codingRate,
+                            modulation = iface.modulation,
+                            reachableOn = iface.reachableOn,
+                            port = iface.port,
+                            status = iface.status,
+                            lastHeard = iface.lastHeard,
+                            hops = iface.hops,
+                            firstSeen = firstSeenMap[id],
+                        )
+                    }
+                _state.update { it.copy(interfaceMarkers = markers) }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load interface markers", e)
+            }
         }
 
         /**

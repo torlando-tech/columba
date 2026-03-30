@@ -238,6 +238,63 @@ object MarkerBitmapFactory {
     }
 
     /**
+     * Creates a rounded-rectangle marker for a discovered network interface.
+     * Visually distinct from contact markers (circle) to avoid confusion.
+     *
+     * @param iconResId Drawable resource ID for the icon (e.g., Lucide antenna, Material globe)
+     * @param backgroundColor The category-specific color
+     * @param sizeDp The marker size in dp (default 32, smaller than contact markers)
+     * @param density Screen density for dp to px conversion
+     * @param context Context for loading the drawable
+     * @return A bitmap with the marker
+     */
+    fun createInterfaceMarker(
+        iconResId: Int,
+        backgroundColor: Int,
+        sizeDp: Float = 32f,
+        density: Float,
+        context: Context,
+    ): Bitmap {
+        val sizePx = (sizeDp * density).toInt()
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val padding = 2f * density
+        val cornerRadius = 6f * density
+
+        // Draw rounded rectangle background
+        val bgPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = backgroundColor
+                style = Paint.Style.FILL
+            }
+        val rect = android.graphics.RectF(padding, padding, sizePx - padding, sizePx - padding)
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
+
+        // Draw white border
+        val borderPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 2f * density
+            }
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+
+        // Draw vector icon centered
+        val iconPadding = (sizePx * 0.22f).toInt()
+        val drawable =
+            androidx.core.content.ContextCompat
+                .getDrawable(context, iconResId)
+        if (drawable != null) {
+            drawable.setBounds(iconPadding, iconPadding, sizePx - iconPadding, sizePx - iconPadding)
+            drawable.setTint(Color.WHITE)
+            drawable.draw(canvas)
+        }
+
+        return bitmap
+    }
+
+    /**
      * Creates a dashed circle ring bitmap for stale location markers.
      *
      * @param sizeDp The diameter of the circle in density-independent pixels

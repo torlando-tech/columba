@@ -222,13 +222,17 @@ class IdentityResolutionManager
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
 
-            val destHashBytes =
-                destinationHash
-                    .chunked(2)
-                    .map { it.toInt(16).toByte() }
-                    .toByteArray()
+            try {
+                val destHashBytes =
+                    destinationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
 
-            requestPathIfNeeded(destHashBytes, destinationHash)
+                requestPathIfNeeded(destHashBytes, destinationHash)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in retryResolution for ${destinationHash.take(8)}...", e)
+            }
         }
 
         /**

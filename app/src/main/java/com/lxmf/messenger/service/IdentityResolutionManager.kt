@@ -3,6 +3,7 @@ package com.lxmf.messenger.service
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,25 +17,26 @@ import javax.inject.Singleton
 /**
  * Manages background identity resolution for pending contacts.
  *
- * This manager periodically:
- * 1. Checks pending contacts against Reticulum's identity cache
- * 2. Requests paths for contacts that need resolution
- * 3. Marks contacts as UNRESOLVED after 24 hours
- * 4. Persists transport data (paths) for crash resilience
- * 5. Requests paths for all contacts at startup as a safety net
+ * This manager:
+ * 1. Requests paths for the 3 most recent conversations at startup
+ * 2. Periodically checks pending contacts (every 3h, gives up after 24h)
+ * 3. Persists transport data for crash resilience
+ *
+ * All path requests go through [requestPathIfNeeded] which checks hasPath first.
  */
 @Singleton
 class IdentityResolutionManager
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val conversationRepository: ConversationRepository,
         private val reticulumProtocol: ReticulumProtocol,
     ) {
         companion object {
             private const val TAG = "IdentityResolutionMgr"
 
-            // Check interval: 15 minutes
-            private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
+            // Check interval: 3 hours
+            private const val CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
 
             // Resolution timeout: 24 hours
             private const val RESOLUTION_TIMEOUT_MS = 24 * 60 * 60 * 1000L
@@ -44,6 +46,9 @@ class IdentityResolutionManager
 
             // Delay before startup sweep to let Reticulum initialize
             private const val STARTUP_SWEEP_DELAY_MS = 5_000L
+
+            // Number of recent conversations to request paths for at startup
+            private const val STARTUP_SWEEP_LIMIT = 3
         }
 
         private var resolutionJob: Job? = null
@@ -73,11 +78,11 @@ class IdentityResolutionManager
                     }
                 }
 
-            // One-shot startup sweep: request paths for all contacts as a safety net
+            // One-shot startup sweep: request paths for 3 most recent conversations
             startupSweepJob =
                 scope.launch(Dispatchers.IO) {
                     delay(STARTUP_SWEEP_DELAY_MS)
-                    requestPathsForAllContacts()
+                    requestPathsForRecentConversations()
                 }
         }
 
@@ -136,9 +141,8 @@ class IdentityResolutionManager
                                 publicKey = identity.publicKey,
                             )
                         } else {
-                            // Not in cache, request path to trigger network search
-                            Log.d(TAG, "Requesting path for ${contact.destinationHash.take(8)}...")
-                            reticulumProtocol.requestPath(destHashBytes)
+                            // Not in cache, request path (guarded) to trigger network search
+                            requestPathIfNeeded(destHashBytes, contact.destinationHash)
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing contact ${contact.destinationHash.take(8)}...", e)
@@ -166,53 +170,38 @@ class IdentityResolutionManager
                         .map { it.toInt(16).toByte() }
                         .toByteArray()
 
-                if (reticulumProtocol.hasPath(destHashBytes)) {
-                    Log.d(TAG, "Path already exists for ${destinationHash.take(8)}..., skipping request")
-                    return
-                }
-
-                Log.d(TAG, "Requesting path for ${destinationHash.take(8)}...")
-                reticulumProtocol.requestPath(destHashBytes)
+                requestPathIfNeeded(destHashBytes, destinationHash)
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting path for ${destinationHash.take(8)}...", e)
             }
         }
 
         /**
-         * Request paths for all active and pending contacts.
-         * Called once at startup as a safety net to repopulate the path table.
+         * Request paths for the N most recent conversations.
+         * Called once at startup to ensure the most relevant peers are reachable.
          */
-        private suspend fun requestPathsForAllContacts() {
+        private suspend fun requestPathsForRecentConversations() {
             try {
-                val contacts =
-                    contactRepository.getContactsByStatus(
-                        listOf(ContactStatus.ACTIVE, ContactStatus.PENDING_IDENTITY),
-                    )
+                val recentPeerHashes = conversationRepository.getRecentPeerHashes(STARTUP_SWEEP_LIMIT)
 
-                if (contacts.isEmpty()) {
-                    Log.d(TAG, "Startup sweep: no contacts to request paths for")
+                if (recentPeerHashes.isEmpty()) {
+                    Log.d(TAG, "Startup sweep: no recent conversations")
                     return
                 }
 
-                Log.d(TAG, "Startup sweep: requesting paths for ${contacts.size} contact(s)")
+                Log.d(TAG, "Startup sweep: requesting paths for ${recentPeerHashes.size} recent conversation(s)")
 
-                for (contact in contacts) {
+                for (peerHash in recentPeerHashes) {
                     try {
                         val destHashBytes =
-                            contact.destinationHash
+                            peerHash
                                 .chunked(2)
                                 .map { it.toInt(16).toByte() }
                                 .toByteArray()
 
-                        if (reticulumProtocol.hasPath(destHashBytes)) {
-                            Log.d(TAG, "Startup sweep: path exists for ${contact.destinationHash.take(8)}..., skipping")
-                            continue
-                        }
-
-                        Log.d(TAG, "Startup sweep: requesting path for ${contact.destinationHash.take(8)}...")
-                        reticulumProtocol.requestPath(destHashBytes)
+                        requestPathIfNeeded(destHashBytes, peerHash)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Startup sweep: error for ${contact.destinationHash.take(8)}...", e)
+                        Log.e(TAG, "Startup sweep: error for ${peerHash.take(8)}...", e)
                     }
                     delay(PATH_REQUEST_STAGGER_MS)
                 }
@@ -233,13 +222,29 @@ class IdentityResolutionManager
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
 
-            // Request path on network
             val destHashBytes =
                 destinationHash
                     .chunked(2)
                     .map { it.toInt(16).toByte() }
                     .toByteArray()
 
+            requestPathIfNeeded(destHashBytes, destinationHash)
+        }
+
+        /**
+         * Central path request method — checks hasPath before requesting.
+         * All path requests in this class must go through here.
+         */
+        private suspend fun requestPathIfNeeded(
+            destHashBytes: ByteArray,
+            displayHash: String,
+        ) {
+            if (reticulumProtocol.hasPath(destHashBytes)) {
+                Log.d(TAG, "Path exists for ${displayHash.take(8)}..., skipping request")
+                return
+            }
+
+            Log.d(TAG, "Requesting path for ${displayHash.take(8)}...")
             reticulumProtocol.requestPath(destHashBytes)
         }
     }

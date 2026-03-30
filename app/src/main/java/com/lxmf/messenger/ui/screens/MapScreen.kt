@@ -1282,7 +1282,7 @@ fun MapScreen(
                     Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
-                        .padding(top = 56.dp, start = 8.dp),
+                        .padding(top = 64.dp, start = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 com.lxmf.messenger.ui.util.InterfaceCategory.entries

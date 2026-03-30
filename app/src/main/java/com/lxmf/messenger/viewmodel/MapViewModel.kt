@@ -656,20 +656,21 @@ class MapViewModel
                 val discovered = reticulumProtocol.getDiscoveredInterfaces()
                 val withLocation = discovered.filter { it.hasLocation }
 
-                // Persist first-seen timestamps (INSERT OR IGNORE preserves originals)
-                // Use Unix seconds to match lastHeard (which comes from Python in seconds)
+                // Compute IDs once and persist first-seen timestamps
+                // (INSERT OR IGNORE preserves originals)
                 val now = System.currentTimeMillis() / 1000
-                val ids =
+                val withId =
                     withLocation.map { iface ->
                         val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"
                         interfaceFirstSeenDao.insertIfNotExists(
                             com.lxmf.messenger.data.db.entity
                                 .InterfaceFirstSeenEntity(id, now),
                         )
-                        id
+                        id to iface
                     }
 
                 // Batch-fetch first-seen timestamps
+                val ids = withId.map { it.first }
                 val firstSeenMap =
                     if (ids.isNotEmpty()) {
                         interfaceFirstSeenDao
@@ -680,8 +681,7 @@ class MapViewModel
                     }
 
                 val markers =
-                    withLocation.map { iface ->
-                        val id = "${iface.name}-${iface.type}-${iface.reachableOn ?: ""}"
+                    withId.map { (id, iface) ->
                         InterfaceMarker(
                             id = id,
                             name = iface.name,

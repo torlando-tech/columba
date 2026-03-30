@@ -86,7 +86,7 @@ class TestPathRequestErrorMessages(unittest.TestCase):
         source = inspect.getsource(reticulum_wrapper.ReticulumWrapper.send_lxmf_message_with_method)
 
         # The error message should indicate that a path was requested
-        self.assertIn('Path requested but no response received', source,
+        self.assertIn('path requested, retry shortly', source,
                       "Error message should mention path was requested")
 
 

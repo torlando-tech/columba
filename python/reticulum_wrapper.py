@@ -308,13 +308,18 @@ def unpack_location_telemetry(packed_data: bytes) -> Optional[Dict]:
         # Extract battery data if present (Sideband format: [charge%, charging, temp])
         if SID_BATTERY in telemetry:
             try:
+                import math
                 bat = telemetry[SID_BATTERY]
                 if isinstance(bat, (list, tuple)) and len(bat) >= 1:
-                    result["battery_percent"] = bat[0]
+                    bp = bat[0]
+                    if isinstance(bp, (int, float)) and not (isinstance(bp, float) and (math.isnan(bp) or math.isinf(bp))):
+                        result["battery_percent"] = int(bp)
                     if len(bat) >= 2:
-                        result["battery_charging"] = bat[1]
+                        result["battery_charging"] = bool(bat[1])
                     if len(bat) >= 3:
-                        result["battery_temperature"] = bat[2]
+                        bt = bat[2]
+                        if isinstance(bt, (int, float)) and not (isinstance(bt, float) and (math.isnan(bt) or math.isinf(bt))):
+                            result["battery_temperature"] = float(bt)
             except Exception:
                 pass
 
@@ -3372,13 +3377,12 @@ class ReticulumWrapper:
                                     fields_serialized["2"] = value.hex()
                             elif key == FIELD_COMMANDS and isinstance(value, list):
                                 # Field 9: commands — extract SOS state for Kotlin
+                                # Do NOT store under key "9" — it collides with replyToMessageId on Kotlin side
                                 for cmd in value:
                                     if isinstance(cmd, dict) and COMMAND_SOS_STATE in cmd:
                                         args = cmd[COMMAND_SOS_STATE]
                                         if isinstance(args, list) and len(args) > 0:
                                             fields_serialized["sos_state"] = str(args[0])
-                                # Preserve raw commands field for non-SOS command processing
-                                fields_serialized[str(key)] = str(value)
                             else:
                                 fields_serialized[str(key)] = str(value)
                         if fields_serialized:
@@ -4715,14 +4719,20 @@ class ReticulumWrapper:
                 try:
                     import os
                     _MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 5 MB cap for SOS audio
-                    with open(str(audio_data_path), 'rb') as f:
-                        audio_data = f.read(_MAX_AUDIO_BYTES)
-                    log_info("ReticulumWrapper", "send_lxmf_message_with_method",
-                            f"🎙️ Read audio from disk: {len(audio_data)} bytes")
-                    try:
-                        os.remove(str(audio_data_path))
-                    except Exception:
-                        pass
+                    file_size = os.path.getsize(str(audio_data_path))
+                    if file_size > _MAX_AUDIO_BYTES:
+                        log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
+                                   f"Audio file too large ({file_size} bytes, max {_MAX_AUDIO_BYTES}), skipping")
+                        audio_data = None
+                    else:
+                        with open(str(audio_data_path), 'rb') as f:
+                            audio_data = f.read()
+                        log_info("ReticulumWrapper", "send_lxmf_message_with_method",
+                                f"🎙️ Read audio from disk: {len(audio_data)} bytes")
+                        try:
+                            os.remove(str(audio_data_path))
+                        except Exception:
+                            pass
                 except Exception as e:
                     log_warning("ReticulumWrapper", "send_lxmf_message_with_method",
                                f"Failed to read audio from {audio_data_path}: {e}")

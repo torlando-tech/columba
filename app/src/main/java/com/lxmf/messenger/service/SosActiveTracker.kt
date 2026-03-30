@@ -19,24 +19,32 @@ object SosActiveTracker {
     private val explicitlyRemoved = mutableSetOf<String>()
 
     fun addSender(hash: String) {
-        synchronized(explicitlyRemoved) { explicitlyRemoved.remove(hash) }
-        _activeSenders.update { it + hash }
+        synchronized(explicitlyRemoved) {
+            explicitlyRemoved.remove(hash)
+            _activeSenders.update { it + hash }
+        }
     }
 
     fun removeSender(hash: String) {
-        synchronized(explicitlyRemoved) { explicitlyRemoved.add(hash) }
-        _activeSenders.update { it - hash }
+        synchronized(explicitlyRemoved) {
+            explicitlyRemoved.add(hash)
+            _activeSenders.update { it - hash }
+        }
     }
 
     fun isActive(hash: String): Flow<Boolean> = _activeSenders.map { it.contains(hash) }
 
     fun restoreFromSenders(senders: Set<String>) {
-        val safeSet = synchronized(explicitlyRemoved) { senders - explicitlyRemoved }
-        _activeSenders.update { it + safeSet }
+        synchronized(explicitlyRemoved) {
+            val safeSet = senders - explicitlyRemoved
+            _activeSenders.update { it + safeSet }
+        }
     }
 
     fun clear() {
-        synchronized(explicitlyRemoved) { explicitlyRemoved.clear() }
-        _activeSenders.value = emptySet()
+        synchronized(explicitlyRemoved) {
+            explicitlyRemoved.clear()
+            _activeSenders.value = emptySet()
+        }
     }
 }

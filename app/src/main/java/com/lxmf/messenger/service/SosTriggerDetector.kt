@@ -95,7 +95,7 @@ class SosTriggerDetector
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         @Volatile private var isSensorListening = false
-        private var isPowerButtonListening = false
+        @Volatile private var isPowerButtonListening = false
 
         /** Active trigger modes. Override in tests. */
         internal var activeModes: Set<SosTriggerMode> = emptySet()
@@ -247,11 +247,16 @@ class SosTriggerDetector
                         settingsRepository.sosShakeSensitivity,
                         settingsRepository.sosTapCount,
                         sosManager.state.map { it !is SosState.Idle }.distinctUntilChanged(),
-                    ) { enabled, modes, _, _, sosActive ->
-                        Triple(enabled, modes, sosActive)
+                    ) { enabled, modes, sensitivity, tapCount, sosActive ->
+                        listOf(enabled, modes, sensitivity, tapCount, sosActive)
                     }
                         .distinctUntilChanged()
-                        .collect { (enabled, modes, sosActive) ->
+                        .collect { values ->
+                            @Suppress("UNCHECKED_CAST")
+                            val enabled = values[0] as Boolean
+                            @Suppress("UNCHECKED_CAST")
+                            val modes = values[1] as Set<String>
+                            val sosActive = values[4] as Boolean
                             try {
                                 val triggerNeeded = enabled && modes.isNotEmpty()
 
@@ -426,9 +431,11 @@ class SosTriggerDetector
         }
 
         internal fun resetTapState() {
-            tapTimestamps.clear()
-            inTapSpike = false
-            tapSpikeStartTime = 0L
-            lastTapRegisteredTime = 0L
+            synchronized(tapTimestamps) {
+                tapTimestamps.clear()
+                inTapSpike = false
+                tapSpikeStartTime = 0L
+                lastTapRegisteredTime = 0L
+            }
         }
     }

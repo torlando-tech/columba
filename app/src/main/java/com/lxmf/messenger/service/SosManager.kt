@@ -111,6 +111,8 @@ class SosManager
                 try {
                     val wasActive = settingsRepository.sosActive.first()
                     if (!wasActive) return@launch
+                    // Don't restore if a trigger is already in progress
+                    if (isTriggerRunning.get() || _state.value !is SosState.Idle) return@launch
 
                     val sentCount = settingsRepository.sosActiveSentCount.first()
                     val failedCount = settingsRepository.sosActiveFailedCount.first()
@@ -581,11 +583,15 @@ class SosManager
                             sourceIdentity = identity,
                             sosState = "cancelled",
                         )
+                    } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to send cancellation to ${contact.destinationHash.take(8)}", e)
                     }
                 }
                 Log.d(TAG, "SOS cancellation sent to ${contacts.size} contacts")
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending cancellation messages", e)
             }

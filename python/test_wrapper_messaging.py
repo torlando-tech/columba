@@ -174,9 +174,14 @@ class TestSendLXMFMessage(unittest.TestCase):
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
     def test_send_message_identity_not_found(self, mock_lxmf, mock_rns):
-        """Test sending when recipient identity cannot be recalled"""
+        """Test sending when recipient identity cannot be recalled.
+
+        When identity is not found, send_lxmf_message calls _request_path_if_needed
+        which checks has_path before calling Transport.request_path.
+        """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
+        wrapper.reticulum = Mock()  # Must be truthy for _request_path_if_needed to proceed
         wrapper.router = MagicMock()
 
         mock_local_dest = MagicMock()
@@ -189,7 +194,10 @@ class TestSendLXMFMessage(unittest.TestCase):
         # Empty identities cache
         wrapper.identities = {}
 
-        # Should still request path and attempt send
+        # has_path returns False so _request_path_if_needed will fire Transport.request_path
+        mock_rns.Transport.has_path = Mock(return_value=False)
+        mock_rns.Transport.request_path = Mock()
+
         result = wrapper.send_lxmf_message(
             dest_hash=b'0123456789abcdef',
             content="Test message",
@@ -200,8 +208,8 @@ class TestSendLXMFMessage(unittest.TestCase):
         self.assertFalse(result['success'])
         self.assertIn('error', result)
 
-        # Verify path request was attempted
-        mock_rns.Transport.request_path.assert_called()
+        # Verify path request was attempted (through _request_path_if_needed)
+        mock_rns.Transport.request_path.assert_called_once_with(b'0123456789abcdef')
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
@@ -2328,25 +2336,26 @@ class TestPathRequestRetryLogic(unittest.TestCase):
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
     def test_requests_path_when_identity_not_found(self, mock_lxmf_module, mock_rns, mock_sleep):
-        """Test that path is requested when identity recall initially fails"""
+        """Test that _request_path_if_needed fires when identity recall fails.
+
+        After the path-dedup refactor, the send method no longer retries in a loop.
+        It calls _request_path_if_needed (which checks has_path before requesting)
+        and returns an error immediately.
+        """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
+        wrapper.reticulum = Mock()  # Must be truthy for _request_path_if_needed to proceed
         wrapper.router = MagicMock()
         wrapper.local_lxmf_destination = MagicMock()
         wrapper.display_name = "Test"
 
-        # Identity found on 3rd attempt (after path request)
-        mock_identity = MagicMock()
-        mock_identity.hash = b'0123456789abcdef'
-        # recall returns None twice, then identity on 3rd call
-        mock_rns.Identity.recall.side_effect = [None, None, None, mock_identity]
+        # Identity never found (no retry loop to eventually find it)
+        mock_rns.Identity.recall.return_value = None
+        wrapper.identities = {}
 
-        mock_dest = MagicMock()
-        mock_rns.Destination.return_value = mock_dest
-
-        mock_message = MagicMock()
-        mock_message.hash = b'msghash123456789'
-        mock_lxmf_module.LXMessage.return_value = mock_message
+        # has_path returns False so Transport.request_path fires
+        mock_rns.Transport.has_path = Mock(return_value=False)
+        mock_rns.Transport.request_path = Mock()
 
         result = wrapper.send_lxmf_message_with_method(
             dest_hash=b'0123456789abcdef',
@@ -2355,16 +2364,22 @@ class TestPathRequestRetryLogic(unittest.TestCase):
             delivery_method="direct"
         )
 
-        # Verify path was requested
-        mock_rns.Transport.request_path.assert_called()
-        # Verify sleep was called (retry loop)
-        self.assertTrue(mock_sleep.called)
+        # Verify path was requested through _request_path_if_needed
+        mock_rns.Transport.request_path.assert_called_once_with(b'0123456789abcdef')
+        # Should return error immediately (no retry loop, no sleep)
+        self.assertFalse(result['success'])
+        self.assertIn('error', result)
+        self.assertFalse(mock_sleep.called, "No retry loop means no sleep calls")
 
     @patch('reticulum_wrapper.time.sleep')
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.LXMF')
     def test_path_request_timeout_returns_error(self, mock_lxmf_module, mock_rns, mock_sleep):
-        """Test error returned when path request times out after all retries"""
+        """Test error returned immediately when identity not found.
+
+        After the path-dedup refactor, there is no retry loop. The send method
+        calls _request_path_if_needed and returns an error immediately.
+        """
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
         wrapper.initialized = True
         wrapper.router = MagicMock()
@@ -2373,6 +2388,11 @@ class TestPathRequestRetryLogic(unittest.TestCase):
 
         # Identity never found
         mock_rns.Identity.recall.return_value = None
+        wrapper.identities = {}
+
+        # has_path returns False so the path request fires
+        mock_rns.Transport.has_path = Mock(return_value=False)
+        mock_rns.Transport.request_path = Mock()
 
         result = wrapper.send_lxmf_message_with_method(
             dest_hash=b'0123456789abcdef',
@@ -2384,9 +2404,9 @@ class TestPathRequestRetryLogic(unittest.TestCase):
         # Should fail with "not known" error
         self.assertFalse(result['success'])
         self.assertIn('not known', result['error'].lower())
-        # Verify retry attempts ran (at least 10 sleep calls for the retry loop)
-        # Note: Use >= because background threads may also call time.sleep
-        self.assertGreaterEqual(mock_sleep.call_count, 10)
+        # No retry loop means no sleep calls
+        self.assertEqual(mock_sleep.call_count, 0,
+                         "No retry loop — should not sleep")
 
     @patch('reticulum_wrapper.time.sleep')
     @patch('reticulum_wrapper.RNS')

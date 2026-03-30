@@ -35,39 +35,46 @@ class TestPathRequestIntegration(unittest.TestCase):
     """Integration tests that verify the path request code is present and structured correctly."""
 
     def test_path_request_code_exists_in_send_lxmf_message(self):
-        """Verify that send_lxmf_message contains path request logic"""
+        """Verify that send_lxmf_message delegates path requests to _request_path_if_needed"""
         import inspect
         source = inspect.getsource(reticulum_wrapper.ReticulumWrapper.send_lxmf_message)
 
-        # Check for key patterns that indicate path request logic
-        self.assertIn('Transport.request_path', source,
-                      "send_lxmf_message should call Transport.request_path")
-        self.assertIn('Identity not found, requesting path', source,
-                      "send_lxmf_message should log path request")
-        self.assertIn('Identity resolved after path request', source,
-                      "send_lxmf_message should log successful resolution")
+        # Send methods now delegate to _request_path_if_needed instead of calling Transport directly
+        self.assertIn('_request_path_if_needed', source,
+                      "send_lxmf_message should call _request_path_if_needed")
+        self.assertIn('Identity not found', source,
+                      "send_lxmf_message should log when identity is not found")
 
     def test_path_request_code_exists_in_send_lxmf_message_with_method(self):
-        """Verify that send_lxmf_message_with_method contains path request logic"""
+        """Verify that send_lxmf_message_with_method delegates path requests to _request_path_if_needed"""
         import inspect
         source = inspect.getsource(reticulum_wrapper.ReticulumWrapper.send_lxmf_message_with_method)
 
-        # Check for key patterns
-        self.assertIn('Transport.request_path', source,
-                      "send_lxmf_message_with_method should call Transport.request_path")
-        self.assertIn('Identity not found, requesting path', source,
-                      "send_lxmf_message_with_method should log path request")
+        # Send methods now delegate to _request_path_if_needed instead of calling Transport directly
+        self.assertIn('_request_path_if_needed', source,
+                      "send_lxmf_message_with_method should call _request_path_if_needed")
+        self.assertIn('Identity not found', source,
+                      "send_lxmf_message_with_method should log when identity is not found")
 
-    def test_retry_loop_has_correct_timing(self):
-        """Verify the retry loop parameters (10 iterations, 0.5s sleep = 5s total)"""
+    def test_no_retry_loop_in_send_method(self):
+        """Verify send methods no longer contain blocking retry loops.
+
+        After the path-dedup refactor, send methods call _request_path_if_needed
+        and fail immediately if the identity isn't found, rather than polling
+        in a 5-second retry loop.
+        """
         import inspect
         source = inspect.getsource(reticulum_wrapper.ReticulumWrapper.send_lxmf_message_with_method)
 
-        # Check for the retry loop structure
-        self.assertIn('range(10)', source,
-                      "Retry loop should iterate 10 times")
-        self.assertIn('sleep(0.5)', source,
-                      "Should sleep 0.5 seconds between retries")
+        # The retry loop (range(10) + sleep(0.5)) should be gone
+        self.assertNotIn('range(10)', source,
+                         "send_lxmf_message_with_method should no longer have a retry loop")
+        self.assertNotIn('sleep(0.5)', source,
+                         "send_lxmf_message_with_method should no longer sleep between retries")
+
+        # Instead, it should delegate to _request_path_if_needed
+        self.assertIn('_request_path_if_needed', source,
+                      "send_lxmf_message_with_method should delegate to _request_path_if_needed")
 
 
 class TestPathRequestErrorMessages(unittest.TestCase):

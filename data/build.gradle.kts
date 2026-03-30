@@ -64,11 +64,11 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
-    testImplementation("androidx.test:core:1.7.0")
+    testImplementation(libs.test.core)
     testImplementation(libs.turbine)
     testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
-    androidTestImplementation("androidx.test:core:1.7.0")
+    androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation(libs.coroutines.test)

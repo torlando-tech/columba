@@ -241,22 +241,20 @@ object MarkerBitmapFactory {
      * Creates a rounded-rectangle marker for a discovered network interface.
      * Visually distinct from contact markers (circle) to avoid confusion.
      *
-     * @param mdiIconName The MDI icon name (e.g., "radio-tower", "cloud", "bluetooth")
+     * @param iconResId Drawable resource ID for the icon (e.g., Lucide antenna, Material globe)
      * @param backgroundColor The category-specific color
      * @param sizeDp The marker size in dp (default 32, smaller than contact markers)
      * @param density Screen density for dp to px conversion
-     * @param context Context for loading the MDI font
-     * @return A bitmap with the marker, or null if the icon name is invalid
+     * @param context Context for loading the drawable
+     * @return A bitmap with the marker
      */
     fun createInterfaceMarker(
-        mdiIconName: String,
+        iconResId: Int,
         backgroundColor: Int,
         sizeDp: Float = 32f,
         density: Float,
         context: Context,
-    ): Bitmap? {
-        val codepoint = MaterialDesignIcons.getCodepointOrNull(mdiIconName) ?: return null
-
+    ): Bitmap {
         val sizePx = (sizeDp * density).toInt()
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -282,18 +280,16 @@ object MarkerBitmapFactory {
             }
         canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
 
-        // Draw MDI icon centered
-        val mdiTypeface = ResourcesCompat.getFont(context, R.font.materialdesignicons)
-        val iconPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
-                textSize = sizePx * 0.5f
-                textAlign = Paint.Align.CENTER
-                typeface = mdiTypeface
-            }
-        val centerX = sizePx / 2f
-        val centerY = sizePx / 2f - (iconPaint.descent() + iconPaint.ascent()) / 2
-        canvas.drawText(codepoint, centerX, centerY, iconPaint)
+        // Draw vector icon centered
+        val iconPadding = (sizePx * 0.22f).toInt()
+        val drawable =
+            androidx.core.content.ContextCompat
+                .getDrawable(context, iconResId)
+        if (drawable != null) {
+            drawable.setBounds(iconPadding, iconPadding, sizePx - iconPadding, sizePx - iconPadding)
+            drawable.setTint(Color.WHITE)
+            drawable.draw(canvas)
+        }
 
         return bitmap
     }

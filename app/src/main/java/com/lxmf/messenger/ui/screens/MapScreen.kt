@@ -1124,11 +1124,11 @@ fun MapScreen(
                 if (style.getImage(imageId) == null) {
                     MarkerBitmapFactory
                         .createInterfaceMarker(
-                            mdiIconName = category.mdiIconName,
+                            iconResId = category.markerIconResId,
                             backgroundColor = category.markerColor,
                             density = screenDensity,
                             context = context,
-                        )?.let { bitmap -> style.addImage(imageId, bitmap) }
+                        ).let { bitmap -> style.addImage(imageId, bitmap) }
                 }
             }
 

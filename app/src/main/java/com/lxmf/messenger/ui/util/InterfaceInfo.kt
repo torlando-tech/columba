@@ -20,18 +20,18 @@ data class InterfaceInfo(
  */
 enum class InterfaceCategory(
     val icon: ImageVector,
-    val mdiIconName: String,
+    val markerIconResId: Int,
     val defaultText: String,
     val markerColor: Int,
 ) {
-    AUTO(Icons.Default.Wifi, "access-point", "Local Network", 0xFF2E7D32.toInt()),
-    TCP(Icons.Default.Cloud, "earth", "TCP/IP", 0xFF1565C0.toInt()),
-    BLUETOOTH(Icons.Default.Bluetooth, "bluetooth", "Bluetooth", 0xFF283593.toInt()),
-    LORA(Icons.Default.CellTower, "antenna", "LoRa Radio", 0xFFE64A19.toInt()),
-    I2P(Icons.Default.Cloud, "incognito", "I2P", 0xFF7B1FA2.toInt()),
-    YGGDRASIL(Icons.Default.Cloud, "pine-tree", "Yggdrasil", 0xFF00695C.toInt()),
-    SERIAL(Icons.Default.SettingsInputAntenna, "antenna", "Serial", 0xFF616161.toInt()),
-    UNKNOWN(Icons.Default.SettingsInputAntenna, "antenna", "", 0xFF9E9E9E.toInt()),
+    AUTO(Icons.Default.Wifi, com.composables.icons.lucide.R.drawable.lucide_ic_wifi, "Local Network", 0xFF2E7D32.toInt()),
+    TCP(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_globe, "TCP/IP", 0xFF1565C0.toInt()),
+    BLUETOOTH(Icons.Default.Bluetooth, com.composables.icons.lucide.R.drawable.lucide_ic_bluetooth, "Bluetooth", 0xFF283593.toInt()),
+    LORA(Icons.Default.CellTower, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "LoRa Radio", 0xFFE64A19.toInt()),
+    I2P(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_eye_off, "I2P", 0xFF7B1FA2.toInt()),
+    YGGDRASIL(Icons.Default.Cloud, com.composables.icons.lucide.R.drawable.lucide_ic_tree_pine, "Yggdrasil", 0xFF00695C.toInt()),
+    SERIAL(Icons.Default.SettingsInputAntenna, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "Serial", 0xFF616161.toInt()),
+    UNKNOWN(Icons.Default.SettingsInputAntenna, com.composables.icons.lucide.R.drawable.lucide_ic_antenna, "", 0xFF9E9E9E.toInt()),
 }
 
 /**

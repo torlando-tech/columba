@@ -319,7 +319,7 @@ interface AnnounceDao {
             pi.backgroundColor as iconBackgroundColor
         FROM announces a
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.destinationHash IN (SELECT DISTINCT senderHash FROM received_locations)
+        WHERE lower(a.destinationHash) IN (SELECT DISTINCT lower(senderHash) FROM received_locations)
         """,
     )
     fun getAnnouncesForLocationSenders(): Flow<List<MapAnnounceLookup>>

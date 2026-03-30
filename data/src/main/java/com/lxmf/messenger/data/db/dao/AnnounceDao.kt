@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.lxmf.messenger.data.db.entity.AnnounceEntity
 import com.lxmf.messenger.data.model.EnrichedAnnounce
+import com.lxmf.messenger.data.model.MapAnnounceLookup
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -299,6 +300,29 @@ interface AnnounceDao {
         """,
     )
     fun getEnrichedAnnounces(): Flow<List<EnrichedAnnounce>>
+
+    /**
+     * Get lightweight announce data only for peers that have location entries.
+     *
+     * Used by MapViewModel to resolve display names and icons for map markers
+     * without loading the full announce table. Scoped via subquery on
+     * received_locations to avoid CursorWindow overflow on large databases.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM announces a
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE a.destinationHash IN (SELECT DISTINCT senderHash FROM received_locations)
+        """,
+    )
+    fun getAnnouncesForLocationSenders(): Flow<List<MapAnnounceLookup>>
 
     /**
      * Search announces with icon data by peer name or destination hash.

@@ -291,7 +291,7 @@ class MapViewModel
                 combine(
                     receivedLocationDao.getLatestLocationsPerSenderUnfiltered(),
                     contacts,
-                    announceDao.getEnrichedAnnounces(),
+                    announceDao.getAnnouncesForLocationSenders(),
                     _refreshTrigger,
                 ) { locations, contactList, announceList, _ ->
                     val currentTime = System.currentTimeMillis()
@@ -307,63 +307,64 @@ class MapViewModel
 
                     Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
 
-                    locations.mapNotNull { loc ->
-                        // Ignore self-echo telemetry entries from collector streams.
-                        val senderHash = loc.senderHash.lowercase()
-                        val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
-                        if (isSelfEcho) {
-                            return@mapNotNull null
-                        }
+                    locations
+                        .mapNotNull { loc ->
+                            // Ignore self-echo telemetry entries from collector streams.
+                            val senderHash = loc.senderHash.lowercase()
+                            val isSelfEcho = localHashes.any { localHash -> senderHash == localHash }
+                            if (isSelfEcho) {
+                                return@mapNotNull null
+                            }
 
-                        // Calculate marker state - returns null if marker should be hidden
-                        // Use sender emission timestamp for freshness/staleness semantics:
-                        // a coordinate emitted long ago should be treated as stale,
-                        // even if it was received only recently.
-                        val markerState =
-                            calculateMarkerState(
+                            // Calculate marker state - returns null if marker should be hidden
+                            // Use sender emission timestamp for freshness/staleness semantics:
+                            // a coordinate emitted long ago should be treated as stale,
+                            // even if it was received only recently.
+                            val markerState =
+                                calculateMarkerState(
+                                    timestamp = loc.timestamp,
+                                    expiresAt = loc.expiresAt,
+                                    currentTime = currentTime,
+                                ) ?: return@mapNotNull null
+
+                            // Look up announce for icon data and name fallback
+                            val announce =
+                                announceMap[loc.senderHash]
+                                    ?: announceMapLower[loc.senderHash.lowercase()]
+
+                            // Try contacts first (exact, then case-insensitive)
+                            // Then try announces (exact, then case-insensitive)
+                            val displayName =
+                                contactMap[loc.senderHash]?.displayName
+                                    ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
+                                    ?: announce?.peerName
+                                    ?: loc.senderHash.take(8)
+
+                            if (displayName == loc.senderHash.take(8)) {
+                                Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
+                            }
+
+                            // Prefer appearance from telemetry message, fall back to announce
+                            val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
+
+                            ContactMarker(
+                                destinationHash = loc.senderHash,
+                                displayName = displayName,
+                                latitude = loc.latitude,
+                                longitude = loc.longitude,
+                                accuracy = loc.accuracy,
+                                // Display sender emission timestamp in UI (requested behavior).
+                                // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
                                 timestamp = loc.timestamp,
                                 expiresAt = loc.expiresAt,
-                                currentTime = currentTime,
-                            ) ?: return@mapNotNull null
-
-                        // Look up announce for icon data and name fallback
-                        val announce =
-                            announceMap[loc.senderHash]
-                                ?: announceMapLower[loc.senderHash.lowercase()]
-
-                        // Try contacts first (exact, then case-insensitive)
-                        // Then try announces (exact, then case-insensitive)
-                        val displayName =
-                            contactMap[loc.senderHash]?.displayName
-                                ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
-                                ?: announce?.peerName
-                                ?: loc.senderHash.take(8)
-
-                        if (displayName == loc.senderHash.take(8)) {
-                            Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
-                        }
-
-                        // Prefer appearance from telemetry message, fall back to announce
-                        val telemetryAppearance = parseAppearanceJson(loc.appearanceJson)
-
-                        ContactMarker(
-                            destinationHash = loc.senderHash,
-                            displayName = displayName,
-                            latitude = loc.latitude,
-                            longitude = loc.longitude,
-                            accuracy = loc.accuracy,
-                            // Display sender emission timestamp in UI (requested behavior).
-                            // Freshness/staleness is based on sender emission time (timestamp) per calculateMarkerState above.
-                            timestamp = loc.timestamp,
-                            expiresAt = loc.expiresAt,
-                            state = markerState,
-                            approximateRadius = loc.approximateRadius,
-                            iconName = telemetryAppearance?.first ?: announce?.iconName,
-                            iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
-                            iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
-                            publicKey = announce?.publicKey,
-                        )
-                    }.let(::deduplicateContactMarkersByDestination)
+                                state = markerState,
+                                approximateRadius = loc.approximateRadius,
+                                iconName = telemetryAppearance?.first ?: announce?.iconName,
+                                iconForegroundColor = telemetryAppearance?.second ?: announce?.iconForegroundColor,
+                                iconBackgroundColor = telemetryAppearance?.third ?: announce?.iconBackgroundColor,
+                                publicKey = announce?.publicKey,
+                            )
+                        }.let(::deduplicateContactMarkersByDestination)
                 }.collect { markers ->
                     _state.update { currentState ->
                         currentState.copy(

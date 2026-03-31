@@ -740,6 +740,15 @@ class ConversationRepository
         }
 
         /**
+         * Get peer hashes of the N most recent conversations.
+         * Used by IdentityResolutionManager for scoped startup path requests.
+         */
+        suspend fun getRecentPeerHashes(limit: Int): List<String> {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
+            return conversationDao.getRecentPeerHashes(activeIdentity.identityHash, limit)
+        }
+
+        /**
          * Get the saved draft for a conversation, if any.
          */
         suspend fun getDraft(peerHash: String): String? {

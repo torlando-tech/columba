@@ -3,6 +3,7 @@ package com.lxmf.messenger.service
 import android.util.Log
 import com.lxmf.messenger.data.db.entity.ContactStatus
 import com.lxmf.messenger.data.repository.ContactRepository
+import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,16 +19,16 @@ import javax.inject.Singleton
  *
  * This manager periodically:
  * 1. Checks pending contacts against Reticulum's identity cache
- * 2. Requests paths for contacts that need resolution
- * 3. Marks contacts as UNRESOLVED after 24 hours
- * 4. Persists transport data (paths) for crash resilience
- * 5. Requests paths for all contacts at startup as a safety net
+ * 2. Marks contacts as UNRESOLVED after 24 hours
+ * 3. Persists transport data (paths) for crash resilience
+ * 4. Requests paths for the 3 most recent chat recipients at startup
  */
 @Singleton
 class IdentityResolutionManager
     @Inject
     constructor(
         private val contactRepository: ContactRepository,
+        private val conversationRepository: ConversationRepository,
         private val reticulumProtocol: ReticulumProtocol,
     ) {
         companion object {
@@ -44,6 +45,9 @@ class IdentityResolutionManager
 
             // Delay before startup sweep to let Reticulum initialize
             private const val STARTUP_SWEEP_DELAY_MS = 5_000L
+
+            // Max recent conversations to request paths for at startup
+            private const val STARTUP_SWEEP_LIMIT = 3
         }
 
         private var resolutionJob: Job? = null
@@ -73,11 +77,13 @@ class IdentityResolutionManager
                     }
                 }
 
-            // One-shot startup sweep: request paths for all contacts as a safety net
+            // One-shot startup sweep: request paths for the 3 most recent chat recipients only.
+            // Requesting paths for ALL contacts floods the Reticulum network and contends
+            // the Python GIL during the startup window when the user is most likely to send.
             startupSweepJob =
                 scope.launch(Dispatchers.IO) {
                     delay(STARTUP_SWEEP_DELAY_MS)
-                    requestPathsForAllContacts()
+                    requestPathsForRecentConversations()
                 }
         }
 
@@ -136,9 +142,7 @@ class IdentityResolutionManager
                                 publicKey = identity.publicKey,
                             )
                         } else {
-                            // Not in cache, request path to trigger network search
-                            Log.d(TAG, "Requesting path for ${contact.destinationHash.take(8)}...")
-                            reticulumProtocol.requestPath(destHashBytes)
+                            Log.d(TAG, "Identity not yet resolved for ${contact.destinationHash.take(8)}...")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing contact ${contact.destinationHash.take(8)}...", e)
@@ -179,42 +183,42 @@ class IdentityResolutionManager
         }
 
         /**
-         * Request paths for all active and pending contacts.
-         * Called once at startup as a safety net to repopulate the path table.
+         * Request paths for the most recent conversation recipients only.
+         *
+         * Limited to [STARTUP_SWEEP_LIMIT] peers to avoid flooding the Reticulum network
+         * and contending the Python GIL during the critical post-startup window.
+         * Other contacts will resolve lazily when the user opens their conversation.
          */
-        private suspend fun requestPathsForAllContacts() {
+        private suspend fun requestPathsForRecentConversations() {
             try {
-                val contacts =
-                    contactRepository.getContactsByStatus(
-                        listOf(ContactStatus.ACTIVE, ContactStatus.PENDING_IDENTITY),
-                    )
+                val recentPeerHashes = conversationRepository.getRecentPeerHashes(STARTUP_SWEEP_LIMIT)
 
-                if (contacts.isEmpty()) {
-                    Log.d(TAG, "Startup sweep: no contacts to request paths for")
+                if (recentPeerHashes.isEmpty()) {
+                    Log.d(TAG, "Startup sweep: no recent conversations")
                     return
                 }
 
-                Log.d(TAG, "Startup sweep: requesting paths for ${contacts.size} contact(s)")
+                Log.d(TAG, "Startup sweep: requesting paths for ${recentPeerHashes.size} recent conversation(s)")
 
-                for (contact in contacts) {
+                for (peerHash in recentPeerHashes) {
                     try {
                         val destHashBytes =
-                            contact.destinationHash
+                            peerHash
                                 .chunked(2)
                                 .map { it.toInt(16).toByte() }
                                 .toByteArray()
 
                         if (reticulumProtocol.hasPath(destHashBytes)) {
-                            Log.d(TAG, "Startup sweep: path exists for ${contact.destinationHash.take(8)}..., skipping")
+                            Log.d(TAG, "Startup sweep: path exists for ${peerHash.take(8)}..., skipping")
                             continue
                         }
 
-                        Log.d(TAG, "Startup sweep: requesting path for ${contact.destinationHash.take(8)}...")
+                        Log.d(TAG, "Startup sweep: requesting path for ${peerHash.take(8)}...")
                         reticulumProtocol.requestPath(destHashBytes)
+                        delay(PATH_REQUEST_STAGGER_MS)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Startup sweep: error for ${contact.destinationHash.take(8)}...", e)
+                        Log.e(TAG, "Startup sweep: error for ${peerHash.take(8)}...", e)
                     }
-                    delay(PATH_REQUEST_STAGGER_MS)
                 }
 
                 Log.d(TAG, "Startup sweep complete")

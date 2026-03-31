@@ -79,14 +79,13 @@ class SosManager
         /** Override in tests to use a test dispatcher. */
         internal var dispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default
 
-        private val scope by lazy {
+        private val scope =
             CoroutineScope(SupervisorJob() + dispatcher).also { s ->
                 s.launch {
                     launch { settingsRepository.sosDeactivationPin.collect { cachedDeactivationPin = it } }
                     launch { settingsRepository.sosSilentAutoAnswer.collect { cachedSilentAutoAnswer = it } }
                 }
             }
-        }
 
         private val _state = MutableStateFlow<SosState>(SosState.Idle)
         val state: StateFlow<SosState> = _state.asStateFlow()
@@ -204,9 +203,7 @@ class SosManager
         fun deactivate(pin: String? = null): Boolean {
             if (_state.value !is SosState.Active) return false
 
-            // Read PIN synchronously if cache hasn't been populated yet (brief window at startup)
             val requiredPin = cachedDeactivationPin
-                ?: kotlinx.coroutines.runBlocking { settingsRepository.sosDeactivationPin.first() }
             if (!requiredPin.isNullOrBlank() && requiredPin != pin) {
                 Log.d(TAG, "SOS deactivation PIN mismatch")
                 return false

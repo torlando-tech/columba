@@ -1,4 +1,6 @@
-<img src="./columba-icon.svg" width="200" height="200" alt="alt text" />
+<p align="center">
+  <img src="./columba-icon.svg" width="200" height="200" alt="alt text" />
+</p>
 
 # Columba
 

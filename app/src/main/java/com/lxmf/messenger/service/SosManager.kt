@@ -389,6 +389,7 @@ class SosManager
 
         @SuppressLint("MissingPermission")
         private fun startPeriodicUpdates() {
+            if (_state.value !is SosState.Active) return
             periodicUpdateJob?.cancel()
             periodicUpdateJob =
                 scope.launch {

@@ -55,6 +55,13 @@ enum class SosTriggerMode(val key: String) {
  * It should be started when SOS is enabled with a non-MANUAL trigger mode,
  * and stopped otherwise.
  */
+/** Snapshot of SOS settings for combine/distinctUntilChanged. */
+private data class SosSettingsSnapshot(
+    val enabled: Boolean,
+    val modes: Set<String>,
+    val sosActive: Boolean,
+)
+
 @Singleton
 class SosTriggerDetector
     @Inject
@@ -247,16 +254,12 @@ class SosTriggerDetector
                         settingsRepository.sosShakeSensitivity,
                         settingsRepository.sosTapCount,
                         sosManager.state.map { it !is SosState.Idle }.distinctUntilChanged(),
-                    ) { enabled, modes, sensitivity, tapCount, sosActive ->
-                        listOf(enabled, modes, sensitivity, tapCount, sosActive)
+                    ) { enabled, modes, _, _, sosActive ->
+                        // sensitivity and tapCount are change-triggers only (re-read in start())
+                        SosSettingsSnapshot(enabled, modes, sosActive)
                     }
                         .distinctUntilChanged()
-                        .collect { values ->
-                            @Suppress("UNCHECKED_CAST")
-                            val enabled = values[0] as Boolean
-                            @Suppress("UNCHECKED_CAST")
-                            val modes = values[1] as Set<String>
-                            val sosActive = values[4] as Boolean
+                        .collect { (enabled, modes, sosActive) ->
                             try {
                                 val triggerNeeded = enabled && modes.isNotEmpty()
 

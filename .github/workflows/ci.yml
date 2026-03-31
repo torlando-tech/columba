@@ -248,6 +248,7 @@ jobs:
       - name: Run Python unit tests with coverage
         run: |
           cd python && python -m pytest -v -n auto --dist loadfile \
+            --junitxml=junit.xml \
             --cov=. \
             --cov-report=term-missing \
             --cov-report=xml:coverage-python.xml
@@ -261,6 +262,14 @@ jobs:
           name: codecov-python
           fail_ci_if_error: false
           verbose: true
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./python/junit.xml
+          flags: python
 
       - name: Upload Python coverage report
         if: always()
@@ -386,6 +395,14 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./**/build/test-results/test*/*.xml
+          flags: kotlin-shard-${{ matrix.shard }}
+
       - name: Upload Kotlin coverage reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -499,6 +516,14 @@ jobs:
             **/build/outputs/androidTest-results/**/*.xml
             **/build/outputs/androidTest-results/**/*.html
           retention-days: 7
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./**/build/outputs/androidTest-results/**/*.xml
+          flags: instrumented
 
       - name: Upload instrumented test reports
         if: failure()

@@ -30,7 +30,6 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -160,7 +159,6 @@ class KotlinUSBBridge(
     private var currentDriver: UsbSerialDriver? = null
     private var currentPort: UsbSerialPort? = null
     private var ioManager: SerialInputOutputManager? = null
-    private var ioManagerFuture: java.util.concurrent.Future<*>? = null
     private var connectedDeviceId: Int? = null
 
     // Direct USB access for testConnection-free reads/writes during DFU.
@@ -186,9 +184,6 @@ class KotlinUSBBridge(
     private var kissHasCommand = false
     private var kissCommand: Byte = 0
     private val kissDataBuffer = mutableListOf<Byte>()
-
-    // Executor for serial I/O
-    private val ioExecutor = Executors.newSingleThreadExecutor()
 
     // Python callbacks
     @Volatile
@@ -684,7 +679,7 @@ class KotlinUSBBridge(
                 val manager = SerialInputOutputManager(port, this)
                 manager.readTimeout = 100 // Small timeout to reduce CPU usage
                 ioManager = manager
-                ioManagerFuture = ioExecutor.submit(manager)
+                manager.start()
             }
 
             Log.i(TAG, "Connected to USB device $deviceId (${getDriverTypeName(driver)}) at $baudRate baud (ioManager=$startIoManager)")
@@ -717,8 +712,6 @@ class KotlinUSBBridge(
         // Stop I/O manager
         ioManager?.stop()
         ioManager = null
-        ioManagerFuture?.cancel(true)
-        ioManagerFuture = null
 
         // Close port
         try {
@@ -1058,17 +1051,12 @@ class KotlinUSBBridge(
         rawModeEnabled.set(true)
 
         val manager = ioManager
-        val future = ioManagerFuture
         if (manager != null) {
             manager.stop()
             ioManager = null
-            ioManagerFuture = null
 
-            // Cancel the future to interrupt the thread if it's blocked
-            future?.cancel(true)
-
-            // Wait for the manager thread to actually stop
-            waitForManagerStop(future)
+            // Wait for the manager threads to actually stop
+            waitForManagerStop(manager)
             Log.d(TAG, "SerialInputOutputManager stopped")
 
             // Drain any data that was buffered by the serial port during async
@@ -1082,19 +1070,17 @@ class KotlinUSBBridge(
     }
 
     /**
-     * Wait for the SerialInputOutputManager to stop, handling expected exceptions.
+     * Wait for the SerialInputOutputManager to stop by polling its state.
      */
-    @Suppress("SwallowedException")
-    private fun waitForManagerStop(future: java.util.concurrent.Future<*>?) {
-        try {
-            future?.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (e: java.util.concurrent.CancellationException) {
-            // Expected - we cancelled it, no action needed
-            Log.v(TAG, "Manager future cancelled as expected")
-        } catch (e: java.util.concurrent.TimeoutException) {
-            Log.w(TAG, "Timeout waiting for SerialInputOutputManager to stop")
-        } catch (e: Exception) {
-            Log.w(TAG, "Error waiting for SerialInputOutputManager: ${e.message}")
+    private fun waitForManagerStop(manager: SerialInputOutputManager) {
+        val deadline = System.currentTimeMillis() + 500
+        while (manager.state != SerialInputOutputManager.State.STOPPED &&
+            System.currentTimeMillis() < deadline
+        ) {
+            Thread.sleep(10)
+        }
+        if (manager.state != SerialInputOutputManager.State.STOPPED) {
+            Log.w(TAG, "Timeout waiting for SerialInputOutputManager to stop (state=${manager.state})")
         }
     }
 
@@ -1136,7 +1122,7 @@ class KotlinUSBBridge(
         val manager = SerialInputOutputManager(port, this)
         manager.readTimeout = 100
         ioManager = manager
-        ioManagerFuture = ioExecutor.submit(manager)
+        manager.start()
     }
 
     /**
@@ -1363,7 +1349,6 @@ class KotlinUSBBridge(
         }
 
         scope.cancel()
-        ioExecutor.shutdown()
         Log.d(TAG, "KotlinUSBBridge shutdown")
     }
 }

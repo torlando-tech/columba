@@ -344,7 +344,7 @@ class MapViewModel
                 combine(
                     receivedLocationDao.getLatestLocationsPerSenderUnfiltered(),
                     contacts,
-                    announceDao.getEnrichedAnnounces(),
+                    announceDao.getAnnouncesForLocationSenders(),
                     _refreshTrigger,
                 ) { locations, contactList, announceList, _ ->
                     val currentTime = System.currentTimeMillis()

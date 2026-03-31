@@ -165,6 +165,23 @@ interface ConversationDao {
     suspend fun getAllConversationsList(identityHash: String): List<ConversationEntity>
 
     /**
+     * Get peer hashes of the N most recent conversations by last message time.
+     * Used for scoped startup path requests (avoids flooding the network).
+     */
+    @Query(
+        """
+        SELECT peerHash FROM conversations
+        WHERE identityHash = :identityHash
+        ORDER BY lastMessageTimestamp DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun getRecentPeerHashes(
+        identityHash: String,
+        limit: Int,
+    ): List<String>
+
+    /**
      * Bulk insert conversations (for import).
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

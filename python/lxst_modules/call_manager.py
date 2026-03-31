@@ -330,23 +330,14 @@ class CallManager:
             identity = RNS.Identity.recall(identity_hash)
             RNS.log(f"Identity.recall() returned: {identity is not None}", RNS.LOG_DEBUG)
 
-            # If identity not known locally, query the network (same pattern as LXMF messaging)
+            # If identity not known locally, request path (guarded) and fail immediately
             if identity is None:
-                RNS.log(f"Identity not found, requesting path to {destination_hash_hex[:16]}...", RNS.LOG_DEBUG)
-                try:
-                    RNS.Transport.request_path(identity_hash)
-                except Exception as e:
-                    RNS.log(f"Error requesting path: {e}", RNS.LOG_WARNING)
-
-                # Wait up to 5 seconds for path response to resolve identity
-                for attempt in range(10):
-                    if self._cancel_event.is_set():
-                        return {"success": False, "error": "Call cancelled"}
-                    time.sleep(0.5)
-                    identity = RNS.Identity.recall(identity_hash)
-                    if identity:
-                        RNS.log(f"Identity resolved after path request (attempt {attempt + 1})", RNS.LOG_DEBUG)
-                        break
+                RNS.log(f"Identity not found for {destination_hash_hex[:16]}, requesting path...", RNS.LOG_DEBUG)
+                if not RNS.Transport.has_path(identity_hash):
+                    try:
+                        RNS.Transport.request_path(identity_hash)
+                    except Exception as e:
+                        RNS.log(f"Error requesting path: {e}", RNS.LOG_WARNING)
 
             if identity is None:
                 RNS.log(f"Unknown identity: {destination_hash_hex[:16]}...", RNS.LOG_WARNING)

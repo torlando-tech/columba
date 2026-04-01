@@ -2232,55 +2232,22 @@ class ServiceReticulumProtocol(
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
         iconAppearance: IconAppearance?,
+        audioData: ByteArray?,
+        audioCodecId: String?,
     ): Result<MessageReceipt> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val service = this@ServiceReticulumProtocol.service ?: throw IllegalStateException("Service not bound")
-
                 val privateKey = sourceIdentity.privateKey ?: throw IllegalArgumentException("Source identity must have private key")
+                val methodString = deliveryMethod.toMethodString()
 
-                val methodString =
-                    when (deliveryMethod) {
-                        DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
-                        DeliveryMethod.DIRECT -> "direct"
-                        DeliveryMethod.PROPAGATED -> "propagated"
-                    }
-
-                // Partition attachments into small (bytes via Binder) and large (file paths)
-                // This avoids Android Binder IPC transaction size limits (~1MB)
-                val smallAttachments = mutableMapOf<String, ByteArray>()
-                val largeAttachmentPaths = mutableMapOf<String, String>()
-
-                fileAttachments?.forEach { (filename, bytes) ->
-                    if (bytes.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
-                        smallAttachments[filename] = bytes
-                    } else {
-                        // Write large file to temp on IO thread and pass path
-                        val tempFile =
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                FileUtils.writeTempAttachment(context, filename, bytes)
-                            }
-                        largeAttachmentPaths[filename] = tempFile.absolutePath
-                        Log.d(TAG, "Large attachment '$filename' (${bytes.size} bytes) written to temp file")
-                    }
-                }
-
-                // Handle large images by writing to temp file to bypass Binder IPC limits
-                var smallImageData: ByteArray? = null
-                var imageDataPath: String? = null
-                if (imageData != null) {
-                    if (imageData.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
-                        smallImageData = imageData
-                    } else {
-                        // Write large image to temp on IO thread and pass path
-                        val tempFile =
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                FileUtils.writeTempAttachment(context, "image.$imageFormat", imageData)
-                            }
-                        imageDataPath = tempFile.absolutePath
-                        Log.d(TAG, "Large image (${imageData.size} bytes) written to temp file")
-                    }
-                }
+                val (smallAttachments, largeAttachmentPaths) = partitionAttachments(fileAttachments)
+                val (smallImageData, imageDataPath) = partitionBinaryData(imageData, "image.$imageFormat")
+                val (smallAudioData, audioDataPath) =
+                    partitionBinaryData(
+                        audioData?.takeIf { audioCodecId != null },
+                        "audio.$audioCodecId",
+                    )
 
                 val resultJson =
                     service.sendLxmfMessageWithMethod(
@@ -2292,6 +2259,9 @@ class ServiceReticulumProtocol(
                         smallImageData,
                         imageFormat,
                         imageDataPath,
+                        smallAudioData,
+                        audioCodecId,
+                        audioDataPath,
                         smallAttachments.ifEmpty { null },
                         largeAttachmentPaths.ifEmpty { null },
                         replyToMessageId,
@@ -2320,6 +2290,42 @@ class ServiceReticulumProtocol(
                 )
             }
         }
+
+    private fun DeliveryMethod.toMethodString(): String =
+        when (this) {
+            DeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+            DeliveryMethod.DIRECT -> "direct"
+            DeliveryMethod.PROPAGATED -> "propagated"
+        }
+
+    private suspend fun partitionAttachments(fileAttachments: List<Pair<String, ByteArray>>?): Pair<Map<String, ByteArray>, Map<String, String>> {
+        val small = mutableMapOf<String, ByteArray>()
+        val large = mutableMapOf<String, String>()
+        fileAttachments?.forEach { (filename, bytes) ->
+            if (bytes.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+                small[filename] = bytes
+            } else {
+                val tempFile = FileUtils.writeTempAttachment(context, filename, bytes)
+                large[filename] = tempFile.absolutePath
+                Log.d(TAG, "Large attachment '$filename' (${bytes.size} bytes) written to temp file")
+            }
+        }
+        return small to large
+    }
+
+    private suspend fun partitionBinaryData(
+        data: ByteArray?,
+        tempName: String,
+    ): Pair<ByteArray?, String?> {
+        if (data == null) return null to null
+        return if (data.size <= FileUtils.FILE_TRANSFER_THRESHOLD) {
+            data to null
+        } else {
+            val tempFile = FileUtils.writeTempAttachment(context, tempName, data)
+            Log.d(TAG, "Large binary (${data.size} bytes) written to temp file")
+            null to tempFile.absolutePath
+        }
+    }
 
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,

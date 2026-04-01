@@ -363,6 +363,8 @@ class MockReticulumProtocol : ReticulumProtocol {
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
         iconAppearance: IconAppearance?,
+        audioData: ByteArray?,
+        audioCodecId: String?,
     ): Result<MessageReceipt> {
         // Mock implementation - same as sendLxmfMessage
         return Result.success(

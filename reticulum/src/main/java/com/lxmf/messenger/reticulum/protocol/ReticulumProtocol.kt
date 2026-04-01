@@ -314,6 +314,8 @@ interface ReticulumProtocol {
         fileAttachments: List<Pair<String, ByteArray>>? = null,
         replyToMessageId: String? = null,
         iconAppearance: IconAppearance? = null,
+        audioData: ByteArray? = null,
+        audioCodecId: String? = null,
     ): Result<MessageReceipt>
 
     /**

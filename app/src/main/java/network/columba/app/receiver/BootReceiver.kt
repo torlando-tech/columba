@@ -21,9 +21,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
         Log.d(TAG, "Boot completed — starting Reticulum service")
-        val serviceIntent = Intent().apply {
-            setClassName(context.packageName, "network.columba.app.service.ReticulumService")
-        }
+        val serviceIntent = Intent(context, network.columba.app.service.ReticulumService::class.java)
         try {
             context.startForegroundService(serviceIntent)
             Log.d(TAG, "Reticulum service start requested")

@@ -104,7 +104,8 @@ class LocationForegroundService : Service() {
 
         return NotificationCompat
             .Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_launcher) // TODO: use a white-on-transparent vector drawable (app-wide issue)
+            .setContentTitle("Location Sharing")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(openIntent)

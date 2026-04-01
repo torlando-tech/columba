@@ -212,7 +212,7 @@ class TelemetryCollectorManager
                             }
                         }
                         _collectorAddress.value = address
-                        Log.d(TAG, "Collector address updated: ${address ?: "none"}")
+                        Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
                         restartPeriodicSend()
                         restartPeriodicRequest()
                         updateLocationTracking()

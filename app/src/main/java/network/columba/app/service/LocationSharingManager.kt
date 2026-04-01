@@ -151,10 +151,9 @@ class LocationSharingManager
                         return@launch
                     }
 
+                    LocationServiceCoordinator.acquire(context, LocationServiceCoordinator.REASON_SHARING)
                     _activeSessions.value = active
                     _isSharing.value = true
-
-                    LocationServiceCoordinator.acquire(context, LocationServiceCoordinator.REASON_SHARING)
                     if (locationUpdateJob == null || locationUpdateJob?.isActive != true) {
                         startLocationUpdates()
                     }

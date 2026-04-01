@@ -41,6 +41,7 @@ object LocationServiceCoordinator {
             }
         }
         synchronized(activeReasons) {
+            if (serviceFailed) return // re-check under lock
             val wasEmpty = activeReasons.isEmpty()
             activeReasons.add(reason)
             val text = notificationText()

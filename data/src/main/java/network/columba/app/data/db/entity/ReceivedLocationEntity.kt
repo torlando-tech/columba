@@ -38,5 +38,6 @@ data class ReceivedLocationEntity(
 ) {
     companion object {
         const val SOURCE_LOCATION_SHARING = "location_sharing"
+        // Future: SOURCE_SOS_TRAIL = "sos_trail" for SOS breadcrumb trail entries (see PR #713)
     }
 }

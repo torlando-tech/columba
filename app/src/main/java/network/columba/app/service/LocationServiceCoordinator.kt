@@ -20,14 +20,26 @@ object LocationServiceCoordinator {
 
     // Set when the service fails to start (e.g. SecurityException on Android 14+).
     // Prevents observers from retrying acquire() in a loop.
-    // Reset when the user re-grants permission and the app is restarted.
     @Volatile
     private var serviceFailed = false
 
     fun isAcquired(reason: String): Boolean = synchronized(activeReasons) { reason in activeReasons }
 
+    /** Call after the user re-grants location permission to allow re-acquiring the service. */
+    fun resetFailedState() {
+        serviceFailed = false
+        Log.d(TAG, "serviceFailed flag cleared — permission likely re-granted")
+    }
+
     fun acquire(context: Context, reason: String) {
-        if (serviceFailed) return
+        if (serviceFailed) {
+            // Check if permission was re-granted since the failure
+            if (com.lxmf.messenger.util.LocationPermissionManager.hasPermission(context)) {
+                resetFailedState()
+            } else {
+                return
+            }
+        }
         synchronized(activeReasons) {
             val wasEmpty = activeReasons.isEmpty()
             activeReasons.add(reason)

@@ -204,7 +204,7 @@ class LocationSharingManager
                 val obj = array.getJSONObject(i)
                 SharingSession(
                     destinationHash = obj.getString("destinationHash"),
-                    displayName = obj.getString("displayName"),
+                    displayName = obj.optString("displayName", ""),
                     startTime = obj.getLong("startTime"),
                     endTime = if (obj.has("endTime")) obj.getLong("endTime") else null,
                 )
@@ -353,11 +353,14 @@ class LocationSharingManager
                 stopLocationUpdates()
                 sessionCheckJob?.cancel()
                 sessionCheckJob = null
+                persistSessions()
+                // Release LAST so the foreground service keeps the process alive for the DataStore write
                 LocationServiceCoordinator.release(context, LocationServiceCoordinator.REASON_SHARING)
+            } else {
+                persistSessions()
             }
 
             Log.d(TAG, "Stopped sharing, remaining sessions: ${updated.size}")
-            persistSessions()
 
             scope.launch {
                 _sharingEvents.emit(SharingEvent.Stopped(destinationHash))
@@ -506,15 +509,15 @@ class LocationSharingManager
                 _activeSessions.value = active
                 _isSharing.value = active.isNotEmpty()
 
+                _sharingEvents.emit(SharingEvent.SessionsExpired(expired.size))
+                persistSessions()
+
                 if (active.isEmpty()) {
                     stopLocationUpdates()
                     sessionCheckJob?.cancel()
                     sessionCheckJob = null
                     LocationServiceCoordinator.release(context, LocationServiceCoordinator.REASON_SHARING)
                 }
-
-                _sharingEvents.emit(SharingEvent.SessionsExpired(expired.size))
-                persistSessions()
             }
         }
 

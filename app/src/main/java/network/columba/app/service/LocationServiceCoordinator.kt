@@ -52,10 +52,11 @@ object LocationServiceCoordinator {
             activeReasons.add(reason)
             val text = notificationText()
             if (wasEmpty) {
-                currentGeneration++
-                Log.d(TAG, "Starting location foreground service (reason: $reason, gen=$currentGeneration)")
+                val nextGen = currentGeneration + 1
+                Log.d(TAG, "Starting location foreground service (reason: $reason, gen=$nextGen)")
                 try {
-                    LocationForegroundService.start(context, text, currentGeneration)
+                    LocationForegroundService.start(context, text, nextGen)
+                    currentGeneration = nextGen // commit only on success
                 } catch (e: Exception) {
                     activeReasons.remove(reason)
                     Log.e(TAG, "Failed to start service, rolled back '$reason'", e)

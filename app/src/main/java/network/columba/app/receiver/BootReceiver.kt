@@ -26,7 +26,7 @@ class BootReceiver : BroadcastReceiver() {
             context.startForegroundService(serviceIntent)
             Log.d(TAG, "Reticulum service start requested")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start Reticulum service at boot", e)
+            Log.e(TAG, "Failed to start Reticulum service at boot: ${e::class.simpleName}", e)
         }
     }
 }

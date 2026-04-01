@@ -18,9 +18,16 @@ object LocationServiceCoordinator {
 
     private val activeReasons = mutableSetOf<String>()
 
+    // Set when the service fails to start (e.g. SecurityException on Android 14+).
+    // Prevents observers from retrying acquire() in a loop.
+    // Reset when the user re-grants permission and the app is restarted.
+    @Volatile
+    private var serviceFailed = false
+
     fun isAcquired(reason: String): Boolean = synchronized(activeReasons) { reason in activeReasons }
 
     fun acquire(context: Context, reason: String) {
+        if (serviceFailed) return
         synchronized(activeReasons) {
             val wasEmpty = activeReasons.isEmpty()
             activeReasons.add(reason)
@@ -46,6 +53,7 @@ object LocationServiceCoordinator {
         synchronized(activeReasons) {
             Log.w(TAG, "Clearing all reasons due to service failure (was: $activeReasons)")
             activeReasons.clear()
+            serviceFailed = true
         }
     }
 

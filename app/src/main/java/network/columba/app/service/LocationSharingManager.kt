@@ -109,6 +109,7 @@ class LocationSharingManager
 
         // Platform LocationManager listener (used when GMS is not available)
         private var platformLocationListener: LocationListener? = null
+        private val isRestoring = java.util.concurrent.atomic.AtomicBoolean(false)
 
         // Location callback for GMS updates
         private val locationCallback =
@@ -135,10 +136,11 @@ class LocationSharingManager
          */
         @SuppressLint("MissingPermission")
         fun restoreIfActive() {
-            if (_isSharing.value) return // already active, don't clobber
+            if (_isSharing.value) return
+            if (!isRestoring.compareAndSet(false, true)) return
             scope.launch {
                 try {
-                    if (_isSharing.value) return@launch // re-check after dispatch
+                    if (_isSharing.value) return@launch
                     val json = settingsRepository.getLocationSharingSessions() ?: return@launch
                     val sessions = deserializeSessions(json)
                     if (sessions.isEmpty()) return@launch
@@ -165,6 +167,8 @@ class LocationSharingManager
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restore sharing sessions, clearing", e)
                     settingsRepository.clearLocationSharingSessions()
+                } finally {
+                    isRestoring.set(false)
                 }
             }
         }

@@ -2,12 +2,8 @@ package network.columba.app.service
 
 import android.content.Context
 import android.location.Location
-import android.location.LocationListener
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import network.columba.app.util.LocationCompat
@@ -16,11 +12,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
- * Manages continuous location tracking for telemetry background sends.
+ * Provides on-demand location fixes for telemetry background sends.
  *
- * Keeps a recent cached location fix so that periodic telemetry sends
- * can obtain a position even when the app is in the background and no
- * other app is requesting location updates.
+ * Instead of keeping a continuous GPS subscription (which drains ~29 mAh/h),
+ * uses one-shot fixes only when a telemetry send actually needs a position.
+ * Each fix takes ~10-20s and is cached for [MAX_TRACKED_LOCATION_AGE_MS] to
+ * avoid redundant GPS activations if called again quickly.
  */
 internal class TelemetryLocationTracker(
     private val context: Context,
@@ -29,15 +26,11 @@ internal class TelemetryLocationTracker(
 ) {
     companion object {
         private const val TAG = "TelemetryLocationTracker"
-        private const val TRACKING_UPDATE_INTERVAL_MS = 30_000L
-        private const val TRACKING_MIN_UPDATE_INTERVAL_MS = 15_000L
         private const val MAX_TRACKED_LOCATION_AGE_MS = 5 * 60 * 1000L
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
     }
 
     @Volatile private var locationTrackingActive = false
-    @Volatile private var gmsLocationTrackingCallback: LocationCallback? = null
-    @Volatile private var platformLocationTrackingListener: LocationListener? = null
     @Volatile private var latestTrackedLocation: Location? = null
     @Volatile private var latestTrackedLocationRecordedAtMs: Long? = null
 
@@ -59,23 +52,6 @@ internal class TelemetryLocationTracker(
      */
     fun stop() {
         if (!locationTrackingActive) return
-
-        try {
-            if (useGms) {
-                gmsLocationTrackingCallback?.let { callback ->
-                    fusedLocationClient?.removeLocationUpdates(callback)
-                }
-                gmsLocationTrackingCallback = null
-            } else {
-                platformLocationTrackingListener?.let { listener ->
-                    LocationCompat.removeLocationUpdates(context, listener)
-                }
-                platformLocationTrackingListener = null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error while stopping telemetry location tracking", e)
-        }
-
         locationTrackingActive = false
         latestTrackedLocation = null
         latestTrackedLocationRecordedAtMs = null
@@ -85,8 +61,8 @@ internal class TelemetryLocationTracker(
     /**
      * Return a recent valid location suitable for telemetry.
      *
-     * Prefers the continuously tracked location if it is less than [MAX_TRACKED_LOCATION_AGE_MS]
-     * old, otherwise falls back to a one-shot location request with a timeout.
+     * Returns the cached location if it is less than [MAX_TRACKED_LOCATION_AGE_MS] old,
+     * otherwise performs a one-shot GPS fix (typically ~10-20s).
      */
     suspend fun getTelemetryLocation(): Location? {
         val tracked = latestTrackedLocation
@@ -121,42 +97,10 @@ internal class TelemetryLocationTracker(
     // Internal helpers
     // ------------------------------------------------------------------
 
-    @Suppress("MissingPermission")
     private fun start() {
         if (locationTrackingActive) return
-
-        try {
-            if (useGms) {
-                val callback =
-                    object : LocationCallback() {
-                        override fun onLocationResult(result: LocationResult) {
-                            val location = result.lastLocation ?: return
-                            cacheTrackedLocation(location)
-                        }
-                    }
-
-                val request =
-                    LocationRequest
-                        .Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, TRACKING_UPDATE_INTERVAL_MS)
-                        .setMinUpdateIntervalMillis(TRACKING_MIN_UPDATE_INTERVAL_MS)
-                        .build()
-
-                fusedLocationClient!!.requestLocationUpdates(request, callback, context.mainLooper)
-                gmsLocationTrackingCallback = callback
-            } else {
-                platformLocationTrackingListener =
-                    LocationCompat.requestLocationUpdates(context, TRACKING_UPDATE_INTERVAL_MS) { location ->
-                        cacheTrackedLocation(location)
-                    }
-            }
-
-            locationTrackingActive = true
-            Log.d(TAG, "Location tracking started for telemetry")
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Unable to start telemetry location tracking (permission missing)", e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Unable to start telemetry location tracking", e)
-        }
+        locationTrackingActive = true
+        Log.d(TAG, "Location tracking enabled (on-demand one-shot mode)")
     }
 
     private fun cacheTrackedLocation(location: Location) {

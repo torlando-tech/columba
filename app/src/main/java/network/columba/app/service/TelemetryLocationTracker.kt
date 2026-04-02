@@ -26,7 +26,7 @@ internal class TelemetryLocationTracker(
 ) {
     companion object {
         private const val TAG = "TelemetryLocationTracker"
-        private const val MAX_TRACKED_LOCATION_AGE_MS = 5 * 60 * 1000L
+        private const val MAX_TRACKED_LOCATION_AGE_MS = 30_000L // 30s dedup window
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
     }
 

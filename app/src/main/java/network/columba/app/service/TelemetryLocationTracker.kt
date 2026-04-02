@@ -65,12 +65,11 @@ internal class TelemetryLocationTracker(
      * otherwise performs a one-shot GPS fix (typically ~10-20s).
      */
     suspend fun getTelemetryLocation(): Location? {
+        if (!locationTrackingActive) return null
+
         val tracked = latestTrackedLocation
-        if (tracked != null) {
-            if (isLocationRecent(tracked)) {
-                return tracked
-            }
-            Log.w(TAG, "Tracked location is stale (${getTrackedLocationAgeMs(tracked)} ms), refreshing")
+        if (tracked != null && isLocationRecent(tracked)) {
+            return tracked
         }
 
         val current =
@@ -84,13 +83,7 @@ internal class TelemetryLocationTracker(
         }
 
         cacheTrackedLocation(current)
-
-        return if (isLocationRecent(current)) {
-            current
-        } else {
-            Log.w(TAG, "Current location is stale (${getTrackedLocationAgeMs(current)} ms), rejecting")
-            null
-        }
+        return current
     }
 
     // ------------------------------------------------------------------

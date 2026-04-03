@@ -27,6 +27,7 @@ internal class TelemetryLocationTracker(
     companion object {
         private const val TAG = "TelemetryLocationTracker"
         private const val MAX_TRACKED_LOCATION_AGE_MS = 30_000L // 30s dedup window
+        private const val MAX_ONE_SHOT_FIX_AGE_MS = 5 * 60 * 1000L // reject OS-cached fixes older than 5 min
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
     }
 
@@ -77,10 +78,12 @@ internal class TelemetryLocationTracker(
 
         if (current == null) {
             Log.w(TAG, "Timed out waiting for one-shot location (${ONE_SHOT_LOCATION_TIMEOUT_MS}ms)")
+        } else if (!isFixFresh(current)) {
+            Log.w(TAG, "One-shot fix is stale (age=${System.currentTimeMillis() - current.time}ms), rejecting")
         } else {
             cacheTrackedLocation(current)
         }
-        return current
+        return current?.takeIf { isFixFresh(it) }
     }
 
     // ------------------------------------------------------------------
@@ -96,6 +99,14 @@ internal class TelemetryLocationTracker(
     private fun cacheTrackedLocation(location: Location) {
         latestTrackedLocation = location
         latestTrackedLocationRecordedAtMs = System.currentTimeMillis()
+    }
+
+    /** Check if a fix from the OS is recent enough based on its capture time. */
+    private fun isFixFresh(location: Location): Boolean {
+        // location.time == 0 means the provider didn't set a timestamp (common in test/mock);
+        // treat as fresh since we just received it from the OS
+        if (location.time <= 0) return true
+        return System.currentTimeMillis() - location.time <= MAX_ONE_SHOT_FIX_AGE_MS
     }
 
     private fun getTrackedLocationAgeMs(location: Location): Long {

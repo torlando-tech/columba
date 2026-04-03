@@ -66,7 +66,9 @@ object LocationServiceCoordinator {
                 try {
                     LocationForegroundService.start(context, text, currentGeneration)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to update service notification for '$reason'", e)
+                    activeReasons.remove(reason)
+                    Log.e(TAG, "Failed to update service notification for '$reason', rolled back", e)
+                    return
                 }
                 Log.d(TAG, "Location service updated, added reason: $reason (active: $activeReasons)")
             }

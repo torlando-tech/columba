@@ -200,14 +200,19 @@ class LocationSharingManager
 
         private fun deserializeSessions(json: String): List<SharingSession> {
             val array = org.json.JSONArray(json)
-            return (0 until array.length()).map { i ->
-                val obj = array.getJSONObject(i)
-                SharingSession(
-                    destinationHash = obj.getString("destinationHash"),
-                    displayName = obj.optString("displayName", ""),
-                    startTime = obj.getLong("startTime"),
-                    endTime = if (obj.has("endTime")) obj.getLong("endTime") else null,
-                )
+            return (0 until array.length()).mapNotNull { i ->
+                try {
+                    val obj = array.getJSONObject(i)
+                    SharingSession(
+                        destinationHash = obj.getString("destinationHash"),
+                        displayName = obj.optString("displayName", ""),
+                        startTime = obj.getLong("startTime"),
+                        endTime = if (obj.has("endTime")) obj.getLong("endTime") else null,
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Skipping malformed session at index $i", e)
+                    null
+                }
             }
         }
 

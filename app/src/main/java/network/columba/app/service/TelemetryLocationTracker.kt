@@ -79,10 +79,9 @@ internal class TelemetryLocationTracker(
 
         if (current == null) {
             Log.w(TAG, "Timed out waiting for one-shot location (${ONE_SHOT_LOCATION_TIMEOUT_MS}ms)")
-            return null
+        } else {
+            cacheTrackedLocation(current)
         }
-
-        cacheTrackedLocation(current)
         return current
     }
 

@@ -465,8 +465,8 @@ class TelemetryCollectorManagerTest {
             mockkObject(LocationCompat)
             try {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
-                every { LocationCompat.getCurrentLocation(any(), any()) } answers {
-                    val callback = secondArg<(Location?) -> Unit>()
+                every { LocationCompat.getCurrentLocation(any(), any(), any()) } answers {
+                    val callback = thirdArg<(Location?) -> Unit>()
                     val location =
                         Location("test").apply {
                             latitude = 48.8566
@@ -521,8 +521,8 @@ class TelemetryCollectorManagerTest {
             mockkObject(LocationCompat)
             try {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
-                every { LocationCompat.getCurrentLocation(any(), any()) } answers {
-                    val callback = secondArg<(Location?) -> Unit>()
+                every { LocationCompat.getCurrentLocation(any(), any(), any()) } answers {
+                    val callback = thirdArg<(Location?) -> Unit>()
                     val location =
                         Location("test").apply {
                             latitude = 48.8566

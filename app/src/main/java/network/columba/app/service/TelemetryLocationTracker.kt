@@ -162,8 +162,11 @@ internal class TelemetryLocationTracker(
                     }
                 }
             } else {
+                val signal = android.os.CancellationSignal()
+                continuation.invokeOnCancellation { signal.cancel() }
+
                 if (continuation.isActive) {
-                    LocationCompat.getCurrentLocation(context) { location ->
+                    LocationCompat.getCurrentLocation(context, signal) { location ->
                         if (continuation.isActive) {
                             continuation.resume(location)
                         }

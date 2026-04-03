@@ -153,7 +153,7 @@ class TelemetryCollectorManager
         // On-demand location fixes for background sends.
         private val locationTracker = TelemetryLocationTracker(context, useGms, fusedLocationClient)
 
-        /** Activate the location tracker directly. Exposed for testing. */
+        @androidx.annotation.VisibleForTesting
         internal fun ensureLocationTrackerActive() = locationTracker.update(true)
 
         // Last attempt timestamps (success OR failure) used to throttle retries.

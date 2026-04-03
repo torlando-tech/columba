@@ -497,6 +497,8 @@ class TelemetryCollectorManagerTest {
                 hostModeEnabledFlow.value = true
                 networkStatusFlow.value = NetworkStatus.READY
                 advanceUntilIdle()
+                // Activate tracker directly (enabling via flow starts periodic loops that hang the test)
+                manager.ensureLocationTrackerActive()
 
                 val result = manager.sendTelemetryNow()
 
@@ -577,6 +579,7 @@ class TelemetryCollectorManagerTest {
                 collectorAddressFlow.value = remoteHash
                 networkStatusFlow.value = NetworkStatus.READY
                 advanceUntilIdle()
+                manager.ensureLocationTrackerActive()
 
                 val result = manager.sendTelemetryNow()
 

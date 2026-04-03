@@ -150,8 +150,11 @@ class TelemetryCollectorManager
         private var periodicSendJob: Job? = null
         private var periodicRequestJob: Job? = null
 
-        // Continuous location tracking (keeps a recent valid fix for background sends).
+        // On-demand location fixes for background sends.
         private val locationTracker = TelemetryLocationTracker(context, useGms, fusedLocationClient)
+
+        /** Activate the location tracker directly. Exposed for testing. */
+        internal fun ensureLocationTrackerActive() = locationTracker.update(true)
 
         // Last attempt timestamps (success OR failure) used to throttle retries.
         // We keep last successful timestamps in SettingsRepository for UI/history,

@@ -65,8 +65,6 @@ internal class TelemetryLocationTracker(
      * otherwise performs a one-shot GPS fix (typically ~10-20s).
      */
     suspend fun getTelemetryLocation(): Location? {
-        if (!locationTrackingActive) return null
-
         val tracked = latestTrackedLocation
         if (tracked != null && isLocationRecent(tracked)) {
             return tracked

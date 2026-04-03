@@ -98,6 +98,7 @@ object LocationCompat {
     @SuppressLint("MissingPermission")
     fun getCurrentLocation(
         context: Context,
+        cancellationSignal: android.os.CancellationSignal? = null,
         onResult: (Location?) -> Unit,
     ) {
         val locationManager =
@@ -120,7 +121,7 @@ object LocationCompat {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 locationManager.getCurrentLocation(
                     provider,
-                    null, // CancellationSignal
+                    cancellationSignal,
                     context.mainExecutor,
                 ) { location ->
                     onResult(location)
@@ -169,6 +170,16 @@ object LocationCompat {
                     listener,
                     Looper.getMainLooper(),
                 )
+
+                // Cancel the request if the caller signals cancellation
+                cancellationSignal?.setOnCancelListener {
+                    if (!resultDelivered) {
+                        resultDelivered = true
+                        handler.removeCallbacksAndMessages(listener)
+                        locationManager.removeUpdates(listener)
+                        onResult(null)
+                    }
+                }
 
                 // Safety timeout: fall back to last known location
                 handler.postAtTime(

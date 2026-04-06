@@ -10,7 +10,7 @@ plugins {
     id("io.sentry.android.gradle") version "6.1.0" apply false
     id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("de.aaschmid.cpd") version "3.5"
 }

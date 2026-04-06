@@ -437,7 +437,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.2.0")
 
     // Memory leak detection
-    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 
     // Testing
     testImplementation(libs.junit)

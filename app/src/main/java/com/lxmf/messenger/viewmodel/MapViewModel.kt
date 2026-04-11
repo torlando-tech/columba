@@ -157,14 +157,16 @@ data class MapState(
     val isSendingTelemetry: Boolean = false,
     val isRequestingTelemetry: Boolean = false,
     val mapMarkerDeclutterEnabled: Boolean = true,
-    val interfaceMarkers: List<InterfaceMarker> = emptyList(),
-    val interfaceFilterEnabled: Map<com.lxmf.messenger.ui.util.InterfaceCategory, Boolean> = emptyMap(),
     /** Center coordinates of the default offline map region (fallback when no GPS) */
     val defaultRegionCenter: SavedCameraPosition? = null,
     /** Whether the default region lookup has completed (even if no region was found) */
     val defaultRegionLoaded: Boolean = false,
     /** Last camera position for restoring viewport after tab switches */
     val lastCameraPosition: SavedCameraPosition? = null,
+    /** Discovered interface markers with location data */
+    val interfaceMarkers: List<InterfaceMarker> = emptyList(),
+    /** Per-category filter state for interface markers (true = visible) */
+    val interfaceFilterEnabled: Map<com.lxmf.messenger.ui.util.InterfaceCategory, Boolean> = emptyMap(),
 )
 
 /**

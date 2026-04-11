@@ -1043,6 +1043,7 @@ fun ColumbaNavigation(
                         networkStatus = settingsState.networkStatus,
                         isRestarting = settingsState.isRestarting,
                         onReconnect = { settingsViewModel.restartService() },
+                        hasCompletedOnboarding = onboardingState.hasCompletedOnboarding,
                     )
                     NavHost(
                         modifier = Modifier.weight(1f),

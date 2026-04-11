@@ -16,7 +16,7 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.data.repository.ReceivedLocationRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.IdentityResolutionManager
@@ -74,7 +74,7 @@ class MessagingViewModelImageLoadingTest {
         )
 
     private lateinit var applicationContext: android.content.Context
-    private lateinit var reticulumProtocol: ServiceReticulumProtocol
+    private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository

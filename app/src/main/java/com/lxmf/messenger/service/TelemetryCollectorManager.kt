@@ -8,7 +8,6 @@ import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -718,13 +717,9 @@ class TelemetryCollectorManager
                         reticulumProtocol.storeOwnTelemetry(locationJson, iconAppearance)
                     } else {
                         // Get LXMF identity for network send
-                        val serviceProtocol =
-                            reticulumProtocol as? ServiceReticulumProtocol
-                                ?: return TelemetrySendResult.Error("Protocol not available")
-
                         val sourceIdentity =
                             try {
-                                serviceProtocol.getLxmfIdentity().getOrNull()
+                                reticulumProtocol.getLxmfIdentity().getOrNull()
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to get LXMF identity", e)
                                 null
@@ -770,13 +765,9 @@ class TelemetryCollectorManager
 
             try {
                 // Get LXMF identity
-                val serviceProtocol =
-                    reticulumProtocol as? ServiceReticulumProtocol
-                        ?: return TelemetryRequestResult.Error("Protocol not available")
-
                 val sourceIdentity =
                     try {
-                        serviceProtocol.getLxmfIdentity().getOrNull()
+                        reticulumProtocol.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity", e)
                         null

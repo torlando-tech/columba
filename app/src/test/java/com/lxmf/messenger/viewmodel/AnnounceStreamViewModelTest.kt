@@ -15,7 +15,6 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import io.mockk.*
@@ -55,7 +54,7 @@ class AnnounceStreamViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var reticulumProtocol: ReticulumProtocol
-    private lateinit var serviceReticulumProtocol: ServiceReticulumProtocol
+    private lateinit var serviceReticulumProtocol: ReticulumProtocol
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var propagationNodeManager: PropagationNodeManager
@@ -614,11 +613,11 @@ class AnnounceStreamViewModelTest {
     // ========== Manual Announce Tests ==========
 
     @Test
-    fun `triggerAnnounce succeeds with ServiceReticulumProtocol`() =
+    fun `triggerAnnounce succeeds with NativeReticulumProtocol`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            // Use ServiceReticulumProtocol instead of base ReticulumProtocol
+            // Use NativeReticulumProtocol instead of base ReticulumProtocol
             viewModel =
                 AnnounceStreamViewModel(
                     serviceReticulumProtocol,
@@ -654,7 +653,7 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
-    fun `triggerAnnounce fails when ServiceReticulumProtocol returns error`() =
+    fun `triggerAnnounce fails when NativeReticulumProtocol returns error`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
             coEvery { serviceReticulumProtocol.triggerAutoAnnounce(any()) } returns Result.failure(Exception("Network error"))
@@ -684,11 +683,11 @@ class AnnounceStreamViewModelTest {
         }
 
     @Test
-    fun `triggerAnnounce fails when not using ServiceReticulumProtocol`() =
+    fun `triggerAnnounce works with base ReticulumProtocol`() =
         runTest {
             networkStatusFlow.value = NetworkStatus.READY
 
-            // Use base ReticulumProtocol (not ServiceReticulumProtocol)
+            // Use base ReticulumProtocol — triggerAutoAnnounce is available on all implementations
             viewModel =
                 AnnounceStreamViewModel(
                     reticulumProtocol,
@@ -701,16 +700,13 @@ class AnnounceStreamViewModelTest {
                 )
             advanceUntilIdle()
 
-            // Trigger announce (don't advance past auto-dismiss)
             viewModel.triggerAnnounce()
             runCurrent()
             advanceTimeBy(100)
             runCurrent()
 
-            // Verify error state - service not available
+            // Verify announce completed (no type guard error)
             assertFalse(viewModel.isAnnouncing.value)
-            assertFalse(viewModel.announceSuccess.value)
-            assertEquals("Service not available", viewModel.announceError.value)
         }
 
     @Test

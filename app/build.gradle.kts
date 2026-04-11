@@ -7,7 +7,7 @@ plugins {
     kotlin("plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
+
     id("io.sentry.android.gradle")
 }
 
@@ -80,7 +80,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.lxmf.messenger"
+        applicationId = "network.columba.app"
         minSdk = 24
         targetSdk = 35
         versionCode = versionCodeValue
@@ -321,37 +321,6 @@ sentry {
         logcat {
             enabled.set(true)
             minLevel.set(io.sentry.android.gradle.instrumentation.logcat.LogcatLevel.WARNING)
-        }
-    }
-}
-
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        buildPython("python3.11")
-
-        pip {
-            // Install ble-reticulum from GitHub
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
-
-            // Install requirements from requirements.txt
-            install("-r", "../python/requirements.txt")
-        }
-
-        // Include Python source files (needed for pkgutil.get_data() to deploy BLE interface)
-        pyc {
-            // Disabled: .pyc compilation requires buildPython 3.11 on the build host.
-            // Re-enable once all contributor environments have python3.11 available.
-            src = false
-        }
-
-        // Extract package files so .py sources are accessible at runtime
-        extractPackages("ble_reticulum", "ble_modules")
-    }
-
-    sourceSets {
-        getByName("main") {
-            srcDir("../python")
         }
     }
 }

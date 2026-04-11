@@ -44,9 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,7 +58,7 @@ import com.lxmf.messenger.service.SharingSession
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
 import com.lxmf.messenger.ui.components.ProfileIcon
 import com.lxmf.messenger.ui.model.SharingDuration
-import kotlinx.coroutines.delay
+import com.lxmf.messenger.ui.util.rememberLifecycleTickerMillis
 
 /**
  * Settings card for managing location sharing preferences and active sessions.
@@ -155,8 +153,7 @@ fun LocationSharingCard(
                     .clickable(
                         onClick = onBackgroundPermissionClick,
                         role = Role.Button,
-                    )
-                    .padding(vertical = 4.dp),
+                    ).padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -852,13 +849,7 @@ private fun TelemetryCollectorSection(
             }
             // Last send timestamp with periodic refresh
             if (lastSendTime != null) {
-                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(5_000)
-                        currentTime = System.currentTimeMillis()
-                    }
-                }
+                val currentTime = rememberLifecycleTickerMillis(periodMs = 5_000L)
                 Text(
                     text = "Last sent: ${formatTelemetryRelativeTime(lastSendTime, currentTime)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -989,13 +980,7 @@ private fun TelemetryCollectorSection(
             }
             // Last request timestamp with periodic refresh
             if (lastRequestTime != null) {
-                var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(5_000)
-                        currentTime = System.currentTimeMillis()
-                    }
-                }
+                val currentTime = rememberLifecycleTickerMillis(periodMs = 5_000L)
                 Text(
                     text = "Last received: ${formatTelemetryRelativeTime(lastRequestTime, currentTime)}",
                     style = MaterialTheme.typography.bodySmall,

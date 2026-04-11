@@ -8,7 +8,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.util.LocationCompat
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -468,12 +467,13 @@ class TelemetryCollectorManagerTest {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
                 every { LocationCompat.getCurrentLocation(any(), any()) } answers {
                     val callback = secondArg<(Location?) -> Unit>()
-                    val location = Location("test").apply {
-                        latitude = 48.8566
-                        longitude = 2.3522
-                        accuracy = 5f
-                        time = System.currentTimeMillis()
-                    }
+                    val location =
+                        Location("test").apply {
+                            latitude = 48.8566
+                            longitude = 2.3522
+                            accuracy = 5f
+                            time = System.currentTimeMillis()
+                        }
                     callback(location)
                 }
 
@@ -521,16 +521,17 @@ class TelemetryCollectorManagerTest {
                 every { LocationCompat.isPlayServicesAvailable(any()) } returns false
                 every { LocationCompat.getCurrentLocation(any(), any()) } answers {
                     val callback = secondArg<(Location?) -> Unit>()
-                    val location = Location("test").apply {
-                        latitude = 48.8566
-                        longitude = 2.3522
-                        accuracy = 5f
-                        time = System.currentTimeMillis()
-                    }
+                    val location =
+                        Location("test").apply {
+                            latitude = 48.8566
+                            longitude = 2.3522
+                            accuracy = 5f
+                            time = System.currentTimeMillis()
+                        }
                     callback(location)
                 }
 
-                val serviceProtocol = mockk<ServiceReticulumProtocol>()
+                val serviceProtocol = mockk<ReticulumProtocol>()
                 every { serviceProtocol.networkStatus } returns networkStatusFlow
                 coEvery { serviceProtocol.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
                 coEvery { serviceProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)

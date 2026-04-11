@@ -21,6 +21,7 @@ data class SystemInfo(
     val reticulumVersion: String?,
     val lxmfVersion: String?,
     val bleReticulumVersion: String?,
+    val lxstVersion: String? = null,
 )
 
 object DeviceInfoUtil {
@@ -31,6 +32,7 @@ object DeviceInfoUtil {
         reticulumVersion: String?,
         lxmfVersion: String?,
         bleReticulumVersion: String?,
+        lxstVersion: String? = null,
     ): SystemInfo {
         val buildDate =
             SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
@@ -50,11 +52,12 @@ object DeviceInfoUtil {
             reticulumVersion = reticulumVersion,
             lxmfVersion = lxmfVersion,
             bleReticulumVersion = bleReticulumVersion,
+            lxstVersion = lxstVersion,
         )
     }
 
-    fun formatForClipboard(info: SystemInfo): String {
-        return buildString {
+    fun formatForClipboard(info: SystemInfo): String =
+        buildString {
             appendLine("Columba ${info.appVersion} (${info.appBuildCode})")
             appendLine("Build: ${info.gitCommitHash} (${info.buildDate})")
             appendLine("Android ${info.androidVersion} (API ${info.apiLevel})")
@@ -72,15 +75,14 @@ object DeviceInfoUtil {
                 appendLine("BLE-Reticulum: ${info.bleReticulumVersion}")
             }
         }.trim()
-    }
 
     /**
      * Format system information as Markdown for GitHub bug reports.
      *
      * Note: Identity hash is truncated to 8 characters for privacy.
      */
-    fun formatForBugReport(info: SystemInfo): String {
-        return buildString {
+    fun formatForBugReport(info: SystemInfo): String =
+        buildString {
             appendLine("### System Information")
             appendLine("- **Columba**: ${info.appVersion} (${info.appBuildCode})")
             appendLine("- **Build**: ${info.gitCommitHash} (${info.buildDate})")
@@ -109,5 +111,4 @@ object DeviceInfoUtil {
                 appendLine("- **BLE-Reticulum**: ${info.bleReticulumVersion}")
             }
         }.trim()
-    }
 }

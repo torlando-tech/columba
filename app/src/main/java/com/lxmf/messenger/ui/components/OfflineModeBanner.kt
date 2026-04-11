@@ -32,7 +32,10 @@ import com.lxmf.messenger.reticulum.model.NetworkStatus
  * Pure visibility function — determines if the offline banner should be shown.
  * Shown for SHUTDOWN (user intentionally stopped) and ERROR (service crashed/failed).
  */
-internal fun shouldShowOfflineBanner(networkStatus: NetworkStatus): Boolean = networkStatus is NetworkStatus.SHUTDOWN || networkStatus is NetworkStatus.ERROR
+internal fun shouldShowOfflineBanner(
+    networkStatus: NetworkStatus,
+    hasCompletedOnboarding: Boolean = true,
+): Boolean = hasCompletedOnboarding && (networkStatus is NetworkStatus.SHUTDOWN || networkStatus is NetworkStatus.ERROR)
 
 /**
  * Persistent thin banner shown when the Reticulum service is offline.
@@ -43,9 +46,10 @@ fun OfflineModeBanner(
     networkStatus: NetworkStatus,
     isRestarting: Boolean,
     onReconnect: () -> Unit,
+    hasCompletedOnboarding: Boolean = true,
 ) {
     AnimatedVisibility(
-        visible = shouldShowOfflineBanner(networkStatus) || isRestarting,
+        visible = shouldShowOfflineBanner(networkStatus, hasCompletedOnboarding) || isRestarting,
         enter = expandVertically(),
         exit = shrinkVertically(),
     ) {

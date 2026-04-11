@@ -12,7 +12,6 @@ import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -51,8 +50,9 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
-    private lateinit var serviceProtocol: ServiceReticulumProtocol
+    private lateinit var serviceProtocol: ReticulumProtocol
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
+    private lateinit var debugInfoFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
 
     @Before
@@ -79,11 +79,15 @@ class InterfaceManagementViewModelStatusEventTest {
         // Mock InterfaceConfigManager
         every { configManager.checkAndClearPendingChanges() } returns false
 
-        // Mock interfaceStatusFlow for ServiceReticulumProtocol (event-driven updates)
+        // Mock event flows for NativeReticulumProtocol (event-driven updates)
         interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        debugInfoFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
         every { serviceProtocol.interfaceStatusFlow } returns interfaceStatusFlow
+        every { serviceProtocol.debugInfoFlow } returns debugInfoFlow
 
-        // Mock getDebugInfo for initial status fetch
+        // Mock protocol methods called during ViewModel init
+        coEvery { serviceProtocol.isDiscoveryEnabled() } returns false
+        coEvery { serviceProtocol.getDiscoveredInterfaces() } returns emptyList()
         coEvery { serviceProtocol.getDebugInfo() } returns
             mapOf(
                 "interfaces" to
@@ -106,7 +110,7 @@ class InterfaceManagementViewModelStatusEventTest {
     }
 
     @Test
-    fun `ViewModel initializes without error with ServiceReticulumProtocol`() =
+    fun `ViewModel initializes without error with NativeReticulumProtocol`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -123,7 +127,7 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `ViewModel observes ServiceReticulumProtocol interfaceStatusFlow`() =
+    fun `ViewModel observes NativeReticulumProtocol interfaceStatusFlow`() =
         runTest {
             viewModel =
                 InterfaceManagementViewModel(
@@ -222,11 +226,15 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `non-ServiceReticulumProtocol does not crash`() =
+    fun `non-NativeReticulumProtocol does not crash`() =
         runTest {
-            // Use a generic ReticulumProtocol mock instead of ServiceReticulumProtocol
+            // Use a generic ReticulumProtocol mock instead of NativeReticulumProtocol
             val genericProtocol: ReticulumProtocol = mockk()
+            every { genericProtocol.interfaceStatusFlow } returns MutableSharedFlow()
+            every { genericProtocol.debugInfoFlow } returns MutableSharedFlow()
             coEvery { genericProtocol.getDebugInfo() } returns emptyMap()
+            coEvery { genericProtocol.isDiscoveryEnabled() } returns false
+            coEvery { genericProtocol.getDiscoveredInterfaces() } returns emptyList()
 
             viewModel =
                 InterfaceManagementViewModel(

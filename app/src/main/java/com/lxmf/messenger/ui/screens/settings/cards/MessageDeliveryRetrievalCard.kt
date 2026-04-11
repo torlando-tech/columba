@@ -43,9 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,8 +54,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.service.RelayInfo
 import com.lxmf.messenger.ui.components.CollapsibleSettingsCard
+import com.lxmf.messenger.ui.util.rememberLifecycleTickerMillis
 import com.lxmf.messenger.util.DestinationHashValidator
-import kotlinx.coroutines.delay
 
 /**
  * Settings card for message delivery and retrieval options.
@@ -503,14 +501,7 @@ fun MessageDeliveryRetrievalCard(
 
         // Last sync timestamp with periodic refresh
         if (lastSyncTimestamp != null) {
-            // Trigger recomposition every 5 seconds to update relative time
-            var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    delay(5_000)
-                    currentTime = System.currentTimeMillis()
-                }
-            }
+            val currentTime = rememberLifecycleTickerMillis(periodMs = 5_000L)
             Text(
                 text = "Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}",
                 style = MaterialTheme.typography.bodySmall,

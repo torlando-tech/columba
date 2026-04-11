@@ -89,6 +89,8 @@ class DiscoveredInterfacesViewModelTest {
         coEvery { reticulumProtocol.isDiscoveryEnabled() } returns false
         coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
         coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns emptySet()
+        coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectLimit(any()) } returns Unit
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         every { interfaceRepository.bootstrapInterfaceNames } returns bootstrapNamesFlow
@@ -108,10 +110,11 @@ class DiscoveredInterfacesViewModelTest {
             reticulumProtocol,
             settingsRepository,
             interfaceRepository,
-            interfaceConfigManager,
         )
 
-    /** Mock applyInterfaceChanges to succeed and invoke the onServiceReady callback. */
+    /**
+     * Legacy helper retained for older tests; direct native hot-apply no longer uses it.
+     */
     private fun mockApplyInterfaceChangesSuccess() {
         coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
             firstArg<(() -> Unit)?>()?.invoke()
@@ -616,10 +619,9 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `setAutoconnectCount - triggers service restart`() =
+    fun `setAutoconnectCount - applies limit directly without service restart`() =
         runTest {
             // Given
-            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -627,9 +629,10 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setAutoconnectCount(5)
             advanceUntilIdle()
 
-            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            // Then
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { reticulumProtocol.setAutoconnectLimit(5) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
@@ -649,10 +652,10 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `setAutoconnectCount - sets error message on failure`() =
+    fun `setAutoconnectCount - sets error message on hot-apply failure`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Restart failed"))
+            coEvery { reticulumProtocol.setAutoconnectLimit(any()) } throws RuntimeException("Hot update failed")
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -663,7 +666,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertTrue(
                 viewModel.state.value.errorMessage
-                    ?.contains("Failed to restart service") == true,
+                    ?.contains("Failed to update autoconnect count") == true,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -813,11 +816,10 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `toggleDiscovery - triggers service restart`() =
+    fun `toggleDiscovery - applies setting directly without service restart`() =
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -825,17 +827,18 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.toggleDiscovery()
             advanceUntilIdle()
 
-            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            // Then
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { reticulumProtocol.setDiscoveryEnabled(true) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
-    fun `toggleDiscovery - sets error message on restart failure`() =
+    fun `toggleDiscovery - sets error message on direct apply failure`() =
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Service error"))
+            coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } throws RuntimeException("Service error")
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -846,7 +849,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertTrue(
                 viewModel.state.value.errorMessage
-                    ?.contains("Failed to restart service") == true,
+                    ?.contains("Failed to update discovery settings") == true,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }

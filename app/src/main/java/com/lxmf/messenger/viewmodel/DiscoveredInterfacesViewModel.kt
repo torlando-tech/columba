@@ -7,7 +7,6 @@ import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.DiscoveredInterface
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,7 +69,6 @@ class DiscoveredInterfacesViewModel
         private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val interfaceRepository: InterfaceRepository,
-        private val interfaceConfigManager: InterfaceConfigManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DiscoveredIfacesVM"
@@ -215,24 +213,12 @@ class DiscoveredInterfacesViewModel
                     }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
-                    // Restart the Reticulum service to apply changes
-                    Log.d(TAG, "Restarting Reticulum service to apply discovery settings...")
-                    interfaceConfigManager
-                        .applyInterfaceChanges(
-                            onServiceReady = { _state.update { it.copy(isRestarting = false) } },
-                        ).onSuccess {
-                            Log.d(TAG, "Reticulum service restarted successfully")
-                            // Reload discovered interfaces after restart
-                            loadDiscoveredInterfaces()
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to restart Reticulum service", error)
-                            _state.update {
-                                it.copy(
-                                    isRestarting = false,
-                                    errorMessage = "Failed to restart service: ${error.message}",
-                                )
-                            }
-                        }
+                    // Apply discovery setting directly (no service restart needed on native stack)
+                    Log.d(TAG, "Applying discovery setting: enabled=$newEnabled")
+                    reticulumProtocol.setDiscoveryEnabled(newEnabled)
+                    _state.update { it.copy(isRestarting = false) }
+                    Log.d(TAG, "Discovery setting applied successfully")
+                    loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle discovery", e)
                     _state.update {
@@ -258,43 +244,19 @@ class DiscoveredInterfacesViewModel
                 try {
                     val clampedCount = count.coerceIn(0, 10)
 
-                    // Update UI immediately to show restarting state
-                    _state.update {
-                        it.copy(
-                            autoconnectCount = clampedCount,
-                            isRestarting = true,
-                        )
-                    }
+                    _state.update { it.copy(autoconnectCount = clampedCount) }
 
                     // Save settings to DataStore
                     settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
                     Log.d(TAG, "Autoconnect count saved: $clampedCount")
 
-                    // Restart the Reticulum service to apply changes
-                    Log.d(TAG, "Restarting Reticulum service to apply autoconnect count...")
-                    interfaceConfigManager
-                        .applyInterfaceChanges(
-                            onServiceReady = { _state.update { it.copy(isRestarting = false) } },
-                        ).onSuccess {
-                            Log.d(TAG, "Reticulum service restarted successfully")
-                            // Reload discovered interfaces after restart
-                            loadDiscoveredInterfaces()
-                        }.onFailure { error ->
-                            Log.e(TAG, "Failed to restart Reticulum service", error)
-                            _state.update {
-                                it.copy(
-                                    isRestarting = false,
-                                    errorMessage = "Failed to restart service: ${error.message}",
-                                )
-                            }
-                        }
+                    // Apply directly without restart (native stack supports hot update)
+                    reticulumProtocol.setAutoconnectLimit(clampedCount)
+                    loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect count", e)
                     _state.update {
-                        it.copy(
-                            isRestarting = false,
-                            errorMessage = "Failed to update autoconnect count: ${e.message}",
-                        )
+                        it.copy(errorMessage = "Failed to update autoconnect count: ${e.message}")
                     }
                 }
             }

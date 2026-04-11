@@ -1,4 +1,5 @@
 @file:Suppress("InjectDispatcher")
+
 package com.lxmf.messenger.reticulum.protocol
 
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
 /**
- * Tests for continuation race condition patterns used in ServiceReticulumProtocol.
+ * Tests for continuation race condition patterns used in NativeReticulumProtocol.
  *
  * The pattern under test:
  * 1. suspendCancellableCoroutine stores continuation in a field
@@ -29,7 +30,7 @@ import kotlin.coroutines.resume
  */
 class ContinuationRaceTest {
     /**
-     * Simulates the UNSAFE pattern currently in ServiceReticulumProtocol.
+     * Simulates the UNSAFE pattern currently in NativeReticulumProtocol.
      * This class has the race condition.
      */
     class UnsafeContinuationHolder {

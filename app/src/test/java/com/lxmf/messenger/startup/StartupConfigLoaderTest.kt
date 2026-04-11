@@ -4,6 +4,7 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -67,6 +68,7 @@ class StartupConfigLoaderTest {
         settingsRepository = mockk()
 
         // Default stubs for settings that most tests don't override
+        coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
 
@@ -233,6 +235,7 @@ class StartupConfigLoaderTest {
                 preferOwn = true,
                 rpcKey = "key",
                 transport = false,
+                batteryProfile = BatteryProfile.BALANCED,
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
             )
@@ -243,6 +246,7 @@ class StartupConfigLoaderTest {
                 preferOwn = true,
                 rpcKey = "key",
                 transport = false,
+                batteryProfile = BatteryProfile.BALANCED,
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
             )
@@ -253,6 +257,7 @@ class StartupConfigLoaderTest {
                 preferOwn = false,
                 rpcKey = null,
                 transport = true,
+                batteryProfile = BatteryProfile.PERFORMANCE,
                 discoverInterfaces = true,
                 autoconnectDiscoveredCount = 5,
             )

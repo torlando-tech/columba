@@ -4,6 +4,7 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.BlockedPeerRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
@@ -46,6 +47,7 @@ class ChatsViewModelTest {
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
+    private lateinit var announceRepository: AnnounceRepository
     private lateinit var blockedPeerRepository: BlockedPeerRepository
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var viewModel: ChatsViewModel
@@ -92,6 +94,7 @@ class ChatsViewModelTest {
 
         conversationRepository = mockk()
         contactRepository = mockk()
+        announceRepository = mockk()
         blockedPeerRepository = mockk()
         reticulumProtocol = mockk()
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
@@ -115,6 +118,7 @@ class ChatsViewModelTest {
             ChatsViewModel(
                 conversationRepository,
                 contactRepository,
+                announceRepository,
                 blockedPeerRepository,
                 reticulumProtocol,
                 propagationNodeManager,
@@ -153,6 +157,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -192,6 +197,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -270,6 +276,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -318,6 +325,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -356,6 +364,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -394,6 +403,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,
@@ -433,6 +443,7 @@ class ChatsViewModelTest {
                 ChatsViewModel(
                     repository,
                     mockk(),
+                    announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
                     propagationNodeManager,

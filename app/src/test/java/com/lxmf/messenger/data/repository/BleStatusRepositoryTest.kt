@@ -9,7 +9,6 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.test.BleTestFixtures
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -43,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleStatusRepositoryTest {
     private val testDispatcher = StandardTestDispatcher()
-    private lateinit var mockProtocol: ServiceReticulumProtocol
+    private lateinit var mockProtocol: ReticulumProtocol
     private lateinit var mockContext: Context
     private lateinit var mockBridge: KotlinBLEBridge
     private lateinit var repository: BleStatusRepository
@@ -58,7 +57,7 @@ class BleStatusRepositoryTest {
         defaultBleConnectionsFlow = MutableSharedFlow(replay = 1)
 
         // Mock protocol with explicit stubs (no relaxed)
-        mockProtocol = mockk<ServiceReticulumProtocol>()
+        mockProtocol = mockk<ReticulumProtocol>()
         every { mockProtocol.getBleConnectionDetails() } returns "[]"
         every { mockProtocol.bleConnectionsFlow } returns defaultBleConnectionsFlow
 
@@ -143,7 +142,7 @@ class BleStatusRepositoryTest {
         }
 
     @Test
-    fun getConnectedPeers_returns_empty_list_when_protocol_is_not_ServiceReticulumProtocol() =
+    fun getConnectedPeers_returns_empty_list_when_protocol_is_not_NativeReticulumProtocol() =
         runTest {
             // Given
             val wrongProtocol = mockk<ReticulumProtocol>()

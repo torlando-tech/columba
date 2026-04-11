@@ -8,6 +8,7 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
@@ -28,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -84,6 +86,7 @@ class SettingsViewModelTest {
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
     private val retrievalIntervalSecondsFlow = MutableStateFlow(30)
     private val transportNodeEnabledFlow = MutableStateFlow(true)
+    private val batteryProfileFlow = MutableStateFlow(BatteryProfile.BALANCED)
     private val defaultDeliveryMethodFlow = MutableStateFlow("direct")
     private val imageCompressionPresetFlow =
         MutableStateFlow(com.lxmf.messenger.data.model.ImageCompressionPreset.AUTO)
@@ -153,6 +156,7 @@ class SettingsViewModelTest {
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
+        every { settingsRepository.batteryProfileFlow } returns batteryProfileFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
         every { settingsRepository.locationSharingEnabledFlow } returns flowOf(false)
@@ -192,6 +196,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveAutoRetrieveEnabled(any()) } just Runs
         coEvery { settingsRepository.saveRetrievalIntervalSeconds(any()) } just Runs
         coEvery { settingsRepository.saveTransportNodeEnabled(any()) } just Runs
+        coEvery { settingsRepository.saveBatteryProfile(any()) } just Runs
         coEvery { settingsRepository.saveLocationSharingEnabled(any()) } just Runs
         coEvery { settingsRepository.saveDefaultSharingDuration(any()) } just Runs
         coEvery { settingsRepository.saveLocationPrecisionRadius(any()) } just Runs
@@ -229,7 +234,10 @@ class SettingsViewModelTest {
 
         // Mock ReticulumProtocol methods
         every { reticulumProtocol.networkStatus } returns networkStatusFlow
+        every { reticulumProtocol.supportsSharedInstanceAvailabilityChecks } returns true
+        every { reticulumProtocol.unbindService() } just Runs
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
+        coEvery { reticulumProtocol.isSharedInstanceAvailable() } returns false
 
         // Mock MapTileSourceManager flows
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
@@ -1551,24 +1559,22 @@ class SettingsViewModelTest {
 
                 viewModel.triggerManualAnnounce()
 
-                // Since protocol is mocked but not as ServiceReticulumProtocol,
-                // it will set error state. We verify the state change happened.
-                // Use expectMostRecentItem() to get the latest state without timing issues.
+                // triggerAutoAnnounce is available on all ReticulumProtocol implementations.
+                // The mock returns a default result. Verify the method ran by checking
+                // that isManualAnnouncing was set and then cleared.
                 val finalState = expectMostRecentItem()
-                // The method sets isManualAnnouncing=true initially, then sets it back to false
-                // with an error. We just verify the error was set (proving the method ran).
-                assertEquals("Service not available", finalState.manualAnnounceError)
+                assertFalse(finalState.isManualAnnouncing)
 
                 cancelAndConsumeRemainingEvents()
             }
         }
 
     @Test
-    fun `triggerManualAnnounce success with ServiceReticulumProtocol`() =
+    fun `triggerManualAnnounce success with NativeReticulumProtocol`() =
         runTest {
-            // Given: ServiceReticulumProtocol that returns success
+            // Given: NativeReticulumProtocol that returns success
             val serviceProtocol =
-                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                mockk<ReticulumProtocol>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                     coEvery { triggerAutoAnnounce(any()) } returns Result.success(Unit)
                 }
@@ -1612,11 +1618,11 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `triggerManualAnnounce failure with ServiceReticulumProtocol`() =
+    fun `triggerManualAnnounce failure with NativeReticulumProtocol`() =
         runTest {
-            // Given: ServiceReticulumProtocol that returns failure
+            // Given: NativeReticulumProtocol that returns failure
             val serviceProtocol =
-                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                mockk<ReticulumProtocol>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                     coEvery { triggerAutoAnnounce(any()) } returns Result.failure(RuntimeException("Announce failed"))
                 }
@@ -1823,6 +1829,7 @@ class SettingsViewModelTest {
                 } just Runs
 
                 val result = runCatching { viewModel.shutdownService() }
+                advanceUntilIdle()
 
                 assertTrue("shutdownService should complete successfully", result.isSuccess)
                 // Verify ACTION_STOP intent is sent to stop the foreground service via ContextCompat
@@ -2235,7 +2242,7 @@ class SettingsViewModelTest {
 
             var monitorCallCount = 0
             val serviceProtocol =
-                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                mockk<ReticulumProtocol>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                     coEvery { isSharedInstanceAvailable() } coAnswers {
                         monitorCallCount++
@@ -2276,15 +2283,15 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `viewmodel passes ServiceReticulumProtocol check for monitoring`() =
+    fun `viewmodel passes NativeReticulumProtocol check for monitoring`() =
         runTest {
-            // Verify that the ViewModel correctly identifies ServiceReticulumProtocol
+            // Verify that the ViewModel correctly identifies NativeReticulumProtocol
             // for shared instance monitoring. This is important because the monitor
-            // only calls isSharedInstanceAvailable() on ServiceReticulumProtocol.
+            // only calls isSharedInstanceAvailable() on NativeReticulumProtocol.
             SettingsViewModel.enableMonitors = false
 
             val serviceProtocol =
-                mockk<com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol>(relaxed = true) {
+                mockk<ReticulumProtocol>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                 }
 
@@ -2304,7 +2311,7 @@ class SettingsViewModelTest {
                     updateChecker = updateChecker,
                 )
 
-            // The ViewModel should be created successfully with ServiceReticulumProtocol
+            // The ViewModel should be created successfully with NativeReticulumProtocol
             viewModel.state.test {
                 val state = awaitItem()
                 assertFalse(state.isRestarting)

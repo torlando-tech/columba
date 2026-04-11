@@ -4,7 +4,7 @@ import android.util.Log
 import com.lxmf.messenger.micron.MicronDocument
 import com.lxmf.messenger.micron.MicronElement
 import com.lxmf.messenger.micron.MicronParser
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.util.DestinationHashValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +26,7 @@ import org.json.JSONObject
  * Each partial is fetched from the network, parsed, and its state exposed via [states].
  */
 class PartialManager(
-    private val protocol: ServiceReticulumProtocol,
+    private val protocol: ReticulumProtocol,
     private val scope: CoroutineScope,
     private val currentNodeHash: () -> String,
     private val formFields: () -> Map<String, String>,

@@ -233,11 +233,6 @@ class InterfaceManagementViewModel
          */
         private fun parseAndUpdateInterfaceStatus(statusJson: String) {
             try {
-                // When debugInfoFlow is providing full snapshots (transportInterfaces populated),
-                // skip lightweight status-only updates to avoid divergence between online status
-                // and the transport interface list (which includes spawned peer counts).
-                if (_state.value.transportInterfaces.isNotEmpty()) return
-
                 val json = JSONObject(statusJson)
                 val statusMap = mutableMapOf<String, Boolean>()
                 json.keys().forEach { name ->

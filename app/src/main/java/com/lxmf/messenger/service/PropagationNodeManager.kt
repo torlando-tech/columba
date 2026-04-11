@@ -409,25 +409,24 @@ class PropagationNodeManager
         private suspend fun pollForSyncCompletion(timeoutJob: kotlinx.coroutines.Job) {
             val pollInterval = 500L
             val maxPolls = 120 // 60 seconds max
-            var done = false
             for (i in 0 until maxPolls) {
-                if (done || !_isSyncing.value) return
                 kotlinx.coroutines.delay(pollInterval)
+                if (!_isSyncing.value) return
 
                 val state = reticulumProtocol.getPropagationState().getOrNull()
                 if (state != null) {
                     _syncProgress.value = SyncProgress.InProgress(state.stateName, state.progress)
-                    done = handlePollResult(state, timeoutJob)
+                    if (handlePollResult(state, timeoutJob)) return
                 }
             }
         }
 
         private suspend fun handlePollResult(
-            state: com.lxmf.messenger.reticulum.protocol.ReticulumProtocol.PropagationState,
+            state: com.lxmf.messenger.reticulum.protocol.PropagationState,
             timeoutJob: kotlinx.coroutines.Job,
         ): Boolean =
             when {
-                state.stateName == "complete" -> {
+                state.stateName == "complete" || state.stateName == "idle" -> {
                     timeoutJob.cancel()
                     handleSyncComplete(state.messagesReceived)
                     true

@@ -173,7 +173,7 @@ class NativeReticulumProtocol(
         }
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Native reticulum-kt / lxmf-kt instances
     private var reticulum: Reticulum? = null
@@ -362,6 +362,7 @@ class NativeReticulumProtocol(
         withContext(Dispatchers.IO) {
             runCatching {
                 _networkStatus.value = NetworkStatus.INITIALIZING
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 storagePath = config.storagePath
                 lastConfig = config
                 selectedBatteryProfile = config.batteryProfile

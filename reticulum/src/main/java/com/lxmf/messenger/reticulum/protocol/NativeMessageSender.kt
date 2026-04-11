@@ -90,7 +90,7 @@ internal class NativeMessageSender(
             }
         }
 
-    private fun resolveRecipientIdentity(destinationHash: ByteArray): NativeIdentity {
+    private suspend fun resolveRecipientIdentity(destinationHash: ByteArray): NativeIdentity {
         var recipientIdentity =
             NativeIdentity.recall(destinationHash)
                 ?: NativeIdentity.recallByIdentityHash(destinationHash)

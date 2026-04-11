@@ -278,6 +278,39 @@ class NativeReticulumProtocol(
 
     // ==================== Phase 1: Initialization ====================
 
+    private fun initializeRouter(config: ReticulumConfig): NativeIdentity {
+        val identity =
+            if (config.identityFilePath != null) {
+                NativeIdentity.fromFile(config.identityFilePath!!) ?: NativeIdentity.create()
+            } else {
+                NativeIdentity.create()
+            }
+        deliveryIdentity = identity
+
+        router =
+            LXMRouter(
+                identity = identity,
+                storagePath = config.storagePath,
+            )
+
+        deliveryDestination =
+            router!!.registerDeliveryIdentity(
+                identity = identity,
+                displayName = config.displayName,
+            )
+
+        router!!.registerDeliveryCallback { message ->
+            handleIncomingMessage(message)
+        }
+
+        router!!.registerFailedDeliveryCallback { message ->
+            val hash = message.hash?.joinToString("") { "%02x".format(it) } ?: return@registerFailedDeliveryCallback
+            _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
+        }
+
+        return identity
+    }
+
     private fun initializePersistentStores(configDir: String) {
         if (reticulumDatabase != null) return
 
@@ -379,40 +412,7 @@ class NativeReticulumProtocol(
                         enableTransport = config.enableTransport,
                     )
 
-                // Create LXMF router
-                val identity =
-                    if (config.identityFilePath != null) {
-                        NativeIdentity
-                            .fromFile(config.identityFilePath!!) ?: NativeIdentity
-                            .create()
-                    } else {
-                        NativeIdentity.create()
-                    }
-                deliveryIdentity = identity
-
-                router =
-                    LXMRouter(
-                        identity = identity,
-                        storagePath = config.storagePath,
-                    )
-
-                // Register delivery destination for receiving messages
-                val displayName = config.displayName
-                deliveryDestination =
-                    router!!.registerDeliveryIdentity(
-                        identity = identity,
-                        displayName = displayName,
-                    )
-
-                // Register delivery callback (Phase 1: read path)
-                router!!.registerDeliveryCallback { message ->
-                    handleIncomingMessage(message)
-                }
-
-                router!!.registerFailedDeliveryCallback { message ->
-                    val hash = message.hash?.joinToString("") { "%02x".format(it) } ?: return@registerFailedDeliveryCallback
-                    _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
-                }
+                val identity = initializeRouter(config)
 
                 // Create and register network interfaces from config
                 NativeInterfaceFactory.appContext = appContext

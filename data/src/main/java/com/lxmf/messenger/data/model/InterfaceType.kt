@@ -30,7 +30,7 @@ enum class InterfaceType(
                 name.contains("autointerface") || name.contains("auto discovery") -> AUTO_INTERFACE
                 name.contains("tcpclient") || name.contains("tcpinterface") || name.contains("tcpserver") || name.contains("backbone") -> TCP_CLIENT
                 name.contains("rnode") -> RNODE
-                name.contains("ble") || name.contains("androidble") -> ANDROID_BLE
+                name.contains("ble") || name.contains("bluetooth") || name.contains("androidble") -> ANDROID_BLE
                 else -> UNKNOWN
             }
         }

@@ -39,7 +39,7 @@ complexity:
     ignoreAnnotated: ['Composable']
   LargeClass:
     active: true
-    threshold: 2000
+    threshold: 2000 # NativeReticulumProtocol: 85 override methods from ReticulumProtocol interface
     excludes: ['**/test/**', '**/androidTest/**']
   LongMethod:
     active: true

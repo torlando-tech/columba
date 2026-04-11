@@ -41,6 +41,20 @@ include(":detekt-rules")
 include(":screenshot-tests")
 
 // Native Reticulum/LXMF Kotlin implementations (Phase 0: migration from Python/Chaquopy)
+val reticulumKtModule = file("reticulum-kt/rns-core/build.gradle.kts")
+require(reticulumKtModule.exists()) {
+    """
+    |reticulum-kt submodule not populated. Run:
+    |  git submodule update --init --recursive
+    """.trimMargin()
+}
+val lxmfKtModule = file("lxmf-kt/lxmf-core/build.gradle.kts")
+require(lxmfKtModule.exists()) {
+    """
+    |lxmf-kt submodule not populated. Run:
+    |  git submodule update --init --recursive
+    """.trimMargin()
+}
 includeBuild("reticulum-kt") {
     dependencySubstitution {
         substitute(module("network.reticulum:rns-core")).using(project(":rns-core"))

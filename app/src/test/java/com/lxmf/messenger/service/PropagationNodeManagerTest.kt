@@ -7,7 +7,7 @@ import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.PropagationState
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -65,7 +65,7 @@ class PropagationNodeManagerTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var announceRepository: AnnounceRepository
-    private lateinit var reticulumProtocol: ServiceReticulumProtocol
+    private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
@@ -97,6 +97,7 @@ class PropagationNodeManagerTest {
 
         // Mock propagationStateFlow for sync completion observation
         every { reticulumProtocol.propagationStateFlow } returns propagationStateFlow
+        coEvery { reticulumProtocol.getPropagationState() } returns Result.success(PropagationState.IDLE)
 
         // Default settings mocks
         coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true

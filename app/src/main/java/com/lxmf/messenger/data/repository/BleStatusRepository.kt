@@ -8,11 +8,9 @@ import com.lxmf.messenger.data.model.BleConnectionsState
 import com.lxmf.messenger.data.model.ConnectionType
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import org.json.JSONArray
@@ -45,17 +43,12 @@ class BleStatusRepository
          * @return Flow emitting BleConnectionsState
          */
         fun getConnectedPeersFlow(): Flow<BleConnectionsState> {
-            // Get the event-driven flow from ServiceReticulumProtocol
+            // Get the event-driven flow from ReticulumProtocol
             val connectionEventsFlow =
-                if (reticulumProtocol is ServiceReticulumProtocol) {
-                    (reticulumProtocol as ServiceReticulumProtocol)
-                        .bleConnectionsFlow
-                        .onStart { emit("[]") } // Initial empty state
-                        .map { json -> parseConnectionsJson(json) }
-                } else {
-                    // Fallback for non-service protocol (unlikely in practice)
-                    flow { emit(emptyList<BleConnectionInfo>()) }
-                }
+                reticulumProtocol
+                    .bleConnectionsFlow
+                    .onStart { emit("[]") } // Initial empty state
+                    .map { json -> parseConnectionsJson(json) }
 
             return combine(
                 bleBridge.adapterState,
@@ -149,16 +142,11 @@ class BleStatusRepository
          *
          * @return List of BleConnectionInfo for all connected peers
          */
-        fun getConnectedPeers(): List<BleConnectionInfo> {
-            return try {
+        fun getConnectedPeers(): List<BleConnectionInfo> =
+            try {
                 // Get connection details from service via IPC
-                if (reticulumProtocol !is ServiceReticulumProtocol) {
-                    Log.w(TAG, "ReticulumProtocol is not ServiceReticulumProtocol, cannot get BLE connections")
-                    return emptyList()
-                }
-
                 Log.d(TAG, "Calling service.getBleConnectionDetails()")
-                val jsonString = (reticulumProtocol as ServiceReticulumProtocol).getBleConnectionDetails()
+                val jsonString = reticulumProtocol.getBleConnectionDetails()
                 Log.d(TAG, "Received JSON: $jsonString")
 
                 // Parse JSON array
@@ -216,7 +204,6 @@ class BleStatusRepository
                 Log.e(TAG, "Error getting connected peers", e)
                 emptyList()
             }
-        }
 
         /**
          * Get the total count of connected peers.

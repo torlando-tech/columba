@@ -104,7 +104,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -148,9 +147,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -182,6 +178,7 @@ import com.lxmf.messenger.ui.model.CodecProfile
 import com.lxmf.messenger.ui.model.LocationSharingState
 import com.lxmf.messenger.ui.theme.MeshConnected
 import com.lxmf.messenger.ui.theme.MeshOffline
+import com.lxmf.messenger.ui.util.rememberLifecycleTickerMillis
 import com.lxmf.messenger.util.AnimatedImageLoader
 import com.lxmf.messenger.util.FileAttachment
 import com.lxmf.messenger.util.FileUtils
@@ -541,29 +538,9 @@ fun MessagingScreen(
         }
     }
 
-    // Refresh timestamps when returning from background
-    // This ensures relative times like "Just now" update correctly after the app was paused
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer =
-            LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    viewModel.refreshTimestamps()
-                }
-            }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    // Periodically refresh timestamps while the conversation is open
-    // This ensures relative times like "Just now" update to "1 min ago" etc.
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000L) // Refresh every 30 seconds
-            viewModel.refreshTimestamps()
-        }
+    val timestampTick = rememberLifecycleTickerMillis(periodMs = 30_000L)
+    LaunchedEffect(timestampTick) {
+        viewModel.refreshTimestamps()
     }
 
     // Image picker launcher - uses adaptive compression with warning dialog

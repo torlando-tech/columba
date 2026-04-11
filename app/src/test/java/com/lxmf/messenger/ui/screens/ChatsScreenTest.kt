@@ -1012,8 +1012,11 @@ class ChatsScreenTest {
             )
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.isSyncing } returns MutableStateFlow(isSyncing)
+        every { mockViewModel.syncProgress } returns MutableStateFlow(com.lxmf.messenger.service.SyncProgress.Idle)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()
+        every { mockViewModel.contactToggleResult } returns MutableSharedFlow()
         every { mockViewModel.draftsMap } returns MutableStateFlow(emptyMap())
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
 
         // Default: contacts are not saved
         every { mockViewModel.isContactSaved(any()) } returns MutableStateFlow(false)

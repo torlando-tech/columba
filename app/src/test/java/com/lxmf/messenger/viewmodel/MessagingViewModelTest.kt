@@ -19,7 +19,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryStatusUpdate
 import com.lxmf.messenger.reticulum.protocol.MessageReceipt
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.service.ActiveConversationManager
 import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.IdentityResolutionManager
@@ -77,7 +77,7 @@ class MessagingViewModelTest {
     private lateinit var testDispatcher: TestDispatcher
 
     private lateinit var applicationContext: Context
-    private lateinit var reticulumProtocol: ServiceReticulumProtocol
+    private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
@@ -170,6 +170,7 @@ class MessagingViewModelTest {
         // Mock default behaviors
         coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
         every { reticulumProtocol.setConversationActive(any()) } just Runs
+        coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.getPeerPublicKey(any()) } returns null
         coEvery { conversationRepository.markConversationAsRead(any()) } just Runs
 
@@ -189,6 +190,7 @@ class MessagingViewModelTest {
 
         // Default: no announce info
         every { announceRepository.getAnnounceFlow(any()) } returns flowOf(null)
+        coEvery { announceRepository.getAnnounce(any()) } returns null
 
         // Default: no reply preview
         coEvery { conversationRepository.getReplyPreview(any(), any()) } returns null
@@ -522,7 +524,7 @@ class MessagingViewModelTest {
             // Clear existing mocks and create new ones that fail identity loading
             clearAllMocks()
 
-            val failingProtocol: ServiceReticulumProtocol = mockk()
+            val failingProtocol: ReticulumProtocol = mockk()
             coEvery { failingProtocol.getLxmfIdentity() } returns Result.failure(Exception("No identity"))
             every { failingProtocol.setConversationActive(any()) } just Runs
             every { failingProtocol.observeDeliveryStatus() } returns flowOf()
@@ -4656,7 +4658,7 @@ class MessagingViewModelTest {
             // Mock settings to return current limit
             coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
 
-            // Mock protocol as ServiceReticulumProtocol
+            // Mock protocol as NativeReticulumProtocol
             every { reticulumProtocol.setIncomingMessageSizeLimit(any()) } just Runs
 
             // Mock sync completion - immediate return

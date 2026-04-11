@@ -8,7 +8,6 @@ import com.lxmf.messenger.micron.MicronParser
 import com.lxmf.messenger.nomadnet.NomadNetPageCache
 import com.lxmf.messenger.nomadnet.PartialManager
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -129,24 +128,22 @@ class NomadNetBrowserViewModel
         private var fetchEpoch = 0
 
         @Volatile
-        private var statusPollingJob: kotlinx.coroutines.Job? = null
+        private var statusCollectionJob: kotlinx.coroutines.Job? = null
 
-        private val partialManager: PartialManager? by lazy {
-            (reticulumProtocol as? ServiceReticulumProtocol)?.let { protocol ->
-                PartialManager(
-                    protocol = protocol,
-                    scope = viewModelScope,
-                    currentNodeHash = { currentNodeHash },
-                    formFields = { _formFields.value },
-                )
-            }
+        @Volatile
+        private var progressCollectionJob: kotlinx.coroutines.Job? = null
+
+        private val partialManager: PartialManager by lazy {
+            PartialManager(
+                protocol = reticulumProtocol,
+                scope = viewModelScope,
+                currentNodeHash = { currentNodeHash },
+                formFields = { _formFields.value },
+            )
         }
 
-        private val emptyPartialStates: StateFlow<Map<String, PartialManager.PartialState>> =
-            MutableStateFlow(emptyMap())
-
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
-            get() = partialManager?.states ?: emptyPartialStates
+            get() = partialManager.states
 
         /** Returns "nodeHash:/path" format for display in the URL bar. */
         fun getCurrentUrl(): String? {
@@ -200,7 +197,7 @@ class NomadNetBrowserViewModel
             destinationHash: String,
             path: String = DEFAULT_PATH,
         ) {
-            partialManager?.clear()
+            partialManager.clear()
             if (destinationHash != currentNodeHash) {
                 _isIdentified.value = false
             }
@@ -211,7 +208,8 @@ class NomadNetBrowserViewModel
             val cached = pageCache.get(destinationHash, path)
             if (cached != null) {
                 fetchEpoch++ // Invalidate any in-flight request
-                stopStatusPolling()
+                stopStatusCollection()
+                stopProgressCollection()
                 val document = MicronParser.parse(cached)
                 emitPageLoaded(document, path, destinationHash)
                 return
@@ -227,7 +225,7 @@ class NomadNetBrowserViewModel
             // Handle partial reload links: p:<pid> or p:<pid1>|<pid2>
             if (destination.startsWith("p:")) {
                 val pids = destination.substringAfter("p:").split("|")
-                pids.forEach { partialManager?.reloadPartial(it) }
+                pids.forEach { partialManager.reloadPartial(it) }
                 return
             }
 
@@ -241,7 +239,7 @@ class NomadNetBrowserViewModel
             // Save current page to history (with document for instant back-nav)
             pushCurrentPageToHistory()
 
-            partialManager?.clear()
+            partialManager.clear()
 
             // Collect form field values for submission.
             // NomadNet link fields can be:
@@ -297,7 +295,8 @@ class NomadNetBrowserViewModel
                 val cached = pageCache.get(nodeHash, path)
                 if (cached != null) {
                     fetchEpoch++ // Invalidate any in-flight request
-                    stopStatusPolling()
+                    stopStatusCollection()
+                    stopProgressCollection()
                     currentNodeHash = nodeHash
                     val document = MicronParser.parse(cached)
                     emitPageLoaded(document, path, nodeHash)
@@ -313,30 +312,23 @@ class NomadNetBrowserViewModel
             formDataJson: String,
         ) {
             val epoch = ++fetchEpoch
+            stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
             _browserState.value = BrowserState.Loading("Requesting page...")
-            startStatusPolling(epoch)
+            startStatusCollection(epoch)
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                    if (protocol == null) {
-                        stopStatusPolling(epoch)
-                        if (fetchEpoch != epoch) return@launch
-                        _browserState.value = BrowserState.Error("Service not available")
-                        return@launch
-                    }
-
                     val result =
-                        protocol.requestNomadnetPage(
+                        reticulumProtocol.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             formDataJson = formDataJson,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
 
-                    stopStatusPolling(epoch)
+                    stopStatusCollection(epoch)
 
                     if (fetchEpoch != epoch) return@launch
 
@@ -354,7 +346,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
-                    stopStatusPolling(epoch)
+                    stopStatusCollection(epoch)
                     if (fetchEpoch != epoch) return@launch
                     Log.e(TAG, "Error navigating", e)
                     _browserState.value = BrowserState.Error(e.message ?: "Unknown error")
@@ -367,40 +359,19 @@ class NomadNetBrowserViewModel
             path: String,
         ) {
             val downloadEpoch = ++fetchEpoch
+            stopStatusCollection()
+            startProgressCollection(downloadEpoch)
             _downloadState.value = DownloadState(isActive = true, fileName = path.substringAfterLast("/"))
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                    if (protocol == null) {
-                        _downloadState.update { it.copy(isActive = false, error = "Service not available") }
-                        return@launch
-                    }
-
-                    // Poll progress in a separate coroutine
-                    val progressJob =
-                        launch {
-                            try {
-                                while (fetchEpoch == downloadEpoch) {
-                                    kotlinx.coroutines.delay(300)
-                                    if (fetchEpoch != downloadEpoch) break
-                                    val progress = protocol.getNomadnetDownloadProgress()
-                                    if (progress >= 0f) {
-                                        _downloadState.update { it.copy(progress = progress) }
-                                    }
-                                }
-                            } catch (_: kotlinx.coroutines.CancellationException) {
-                                // Normal shutdown
-                            }
-                        }
-
                     val result =
-                        protocol.requestNomadnetPage(
+                        reticulumProtocol.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS * 2,
                         )
 
-                    progressJob.cancel()
+                    stopProgressCollection(downloadEpoch)
 
                     // If user cancelled while download was in progress, don't update state
                     if (fetchEpoch != downloadEpoch) return@launch
@@ -431,6 +402,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
+                    stopProgressCollection(downloadEpoch)
                     Log.e(TAG, "Error downloading file", e)
                     _downloadState.update {
                         it.copy(isActive = false, error = e.message ?: "Download failed")
@@ -441,10 +413,11 @@ class NomadNetBrowserViewModel
 
         fun cancelDownload() {
             fetchEpoch++
+            stopProgressCollection()
             _downloadState.value = DownloadState()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    (reticulumProtocol as? ServiceReticulumProtocol)?.cancelNomadnetPageRequest()
+                    reticulumProtocol.cancelNomadnetPageRequest()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error cancelling download", e)
                 }
@@ -460,9 +433,10 @@ class NomadNetBrowserViewModel
 
             // Invalidate any in-flight request so its result doesn't overwrite the page we're navigating back to
             fetchEpoch++
-            stopStatusPolling()
+            stopStatusCollection()
+            stopProgressCollection()
 
-            partialManager?.clear()
+            partialManager.clear()
             val entry = history.removeAt(history.lastIndex)
             _canGoBack.value = history.isNotEmpty()
             currentNodeHash = entry.nodeHash
@@ -476,7 +450,7 @@ class NomadNetBrowserViewModel
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {
                 _isPullRefreshing.value = true
-                partialManager?.clear()
+                partialManager.clear()
                 // Bypass cache read, but still cache the fresh response
                 fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
             }
@@ -496,14 +470,15 @@ class NomadNetBrowserViewModel
 
         fun cancelLoading() {
             val epoch = ++fetchEpoch
-            stopStatusPolling()
+            stopStatusCollection()
+            stopProgressCollection()
             _browserState.value = BrowserState.Error("Cancelled")
             _isPullRefreshing.value = false
             viewModelScope.launch(Dispatchers.IO) {
                 // Only send cancel if no new fetch has started since we were called
                 if (fetchEpoch == epoch) {
                     try {
-                        (reticulumProtocol as? ServiceReticulumProtocol)?.cancelNomadnetPageRequest()
+                        reticulumProtocol.cancelNomadnetPageRequest()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error cancelling", e)
                     }
@@ -530,10 +505,7 @@ class NomadNetBrowserViewModel
             _identifyInProgress.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val protocol =
-                        reticulumProtocol as? ServiceReticulumProtocol
-                            ?: error("Service not available")
-                    protocol.identifyNomadnetLink(nodeHash).fold(
+                    reticulumProtocol.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
                             _isIdentified.value = true
                             if (!alreadyIdentified) refresh()
@@ -550,14 +522,14 @@ class NomadNetBrowserViewModel
 
         override fun onCleared() {
             super.onCleared()
-            stopStatusPolling()
+            stopStatusCollection()
+            stopProgressCollection()
             // Cancel any in-flight Python page request so the IO thread isn't blocked
             // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
             // Use NonCancellable because viewModelScope is already cancelled at this point.
-            val protocol = reticulumProtocol as? ServiceReticulumProtocol ?: return
             CoroutineScope(Dispatchers.IO + NonCancellable).launch {
                 try {
-                    protocol.cancelNomadnetPageRequest()
+                    reticulumProtocol.cancelNomadnetPageRequest()
                 } catch (_: Exception) {
                     // Best-effort cancellation — service may already be unbound
                 }
@@ -599,42 +571,72 @@ class NomadNetBrowserViewModel
                     path = path,
                     nodeHash = nodeHash,
                 )
-            partialManager?.detectAndLoad(document)
+            partialManager.detectAndLoad(document)
         }
 
+        private fun formatNomadnetStatus(status: String): String =
+            when (status) {
+                "idle" -> "Requesting page..."
+                "connecting" -> "Connecting..."
+                "looking up path" -> "Looking up path..."
+                "establishing link" -> "Establishing link..."
+                "requesting page" -> "Requesting page..."
+                "downloading" -> "Downloading..."
+                "complete" -> "Finishing..."
+                "failed" -> "Request failed"
+                "cancelled" -> "Cancelled"
+                else -> status.replaceFirstChar { it.uppercase() }
+            }
+
         /**
-         * Start polling Python for request phase status ("Looking up path...", etc.).
-         * Runs on Dispatchers.IO in viewModelScope. Automatically stops when fetchEpoch changes
-         * or the coroutine is cancelled.
+         * Start collecting NomadNet request status updates from the protocol.
          */
-        private fun startStatusPolling(epoch: Int) {
-            statusPollingJob?.cancel()
-            val protocol = reticulumProtocol as? ServiceReticulumProtocol ?: return
-            statusPollingJob =
+        private fun startStatusCollection(epoch: Int) {
+            statusCollectionJob?.cancel()
+            statusCollectionJob =
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        while (fetchEpoch == epoch) {
-                            kotlinx.coroutines.delay(200)
-                            if (fetchEpoch != epoch) break
-                            val status = protocol.getNomadnetRequestStatus()
+                        reticulumProtocol.nomadnetRequestStatusFlow.collect { status ->
+                            if (fetchEpoch != epoch) return@collect
                             if (status.isNotEmpty()) {
-                                _browserState.value = BrowserState.Loading(status)
+                                _browserState.value = BrowserState.Loading(formatNomadnetStatus(status))
                             }
                         }
                     } catch (_: kotlinx.coroutines.CancellationException) {
                         // Normal shutdown
                     } catch (e: Exception) {
-                        Log.d(TAG, "Status polling stopped: ${e.message}")
+                        Log.d(TAG, "Status collection stopped: ${e.message}")
                     }
                 }
         }
 
-        private fun stopStatusPolling(epoch: Int? = null) {
-            // If epoch is provided, only stop if it still matches (prevents
-            // a stale IO coroutine from killing a newer navigation's poller)
+        private fun stopStatusCollection(epoch: Int? = null) {
             if (epoch != null && fetchEpoch != epoch) return
-            statusPollingJob?.cancel()
-            statusPollingJob = null
+            statusCollectionJob?.cancel()
+            statusCollectionJob = null
+        }
+
+        private fun startProgressCollection(epoch: Int) {
+            progressCollectionJob?.cancel()
+            progressCollectionJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        reticulumProtocol.nomadnetDownloadProgressFlow.collect { progress ->
+                            if (fetchEpoch != epoch) return@collect
+                            _downloadState.update { it.copy(progress = progress) }
+                        }
+                    } catch (_: kotlinx.coroutines.CancellationException) {
+                        // Normal shutdown
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Progress collection stopped: ${e.message}")
+                    }
+                }
+        }
+
+        private fun stopProgressCollection(epoch: Int? = null) {
+            if (epoch != null && fetchEpoch != epoch) return
+            progressCollectionJob?.cancel()
+            progressCollectionJob = null
         }
 
         /**
@@ -646,31 +648,23 @@ class NomadNetBrowserViewModel
             cacheResponse: Boolean,
         ) {
             val epoch = ++fetchEpoch
+            stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
             _browserState.value = BrowserState.Loading("Requesting page...")
-            startStatusPolling(epoch)
+            startStatusCollection(epoch)
 
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val protocol = reticulumProtocol as? ServiceReticulumProtocol
-                    if (protocol == null) {
-                        stopStatusPolling(epoch)
-                        if (fetchEpoch != epoch) return@launch
-                        _isPullRefreshing.value = false
-                        _browserState.value = BrowserState.Error("Service not available")
-                        return@launch
-                    }
-
                     val result =
-                        protocol.requestNomadnetPage(
+                        reticulumProtocol.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,
                         )
 
-                    stopStatusPolling(epoch)
+                    stopStatusCollection(epoch)
 
                     // If user navigated away (back, new link) while we were loading,
                     // discard this stale result to avoid overwriting the current page
@@ -710,7 +704,7 @@ class NomadNetBrowserViewModel
                         },
                     )
                 } catch (e: Exception) {
-                    stopStatusPolling(epoch)
+                    stopStatusCollection(epoch)
                     if (fetchEpoch != epoch) return@launch
                     _isPullRefreshing.value = false
                     Log.e(TAG, "Error loading page", e)

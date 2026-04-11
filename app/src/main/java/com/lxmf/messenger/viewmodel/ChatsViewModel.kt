@@ -3,6 +3,7 @@ package com.lxmf.messenger.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lxmf.messenger.data.repository.AnnounceRepository
 import com.lxmf.messenger.data.repository.BlockedPeerRepository
 import com.lxmf.messenger.data.repository.ContactRepository
 import com.lxmf.messenger.data.repository.Conversation
@@ -15,10 +16,12 @@ import com.lxmf.messenger.service.SyncProgress
 import com.lxmf.messenger.service.SyncResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -41,6 +44,7 @@ class ChatsViewModel
     constructor(
         private val conversationRepository: ConversationRepository,
         private val contactRepository: ContactRepository,
+        private val announceRepository: AnnounceRepository,
         private val blockedPeerRepository: BlockedPeerRepository,
         private val reticulumProtocol: ReticulumProtocol,
         private val propagationNodeManager: PropagationNodeManager,
@@ -76,6 +80,9 @@ class ChatsViewModel
 
         // Cache for contact saved state flows to prevent flickering on recomposition
         private val contactSavedCache = ConcurrentHashMap<String, StateFlow<Boolean>>()
+
+        private val _contactToggleResult = MutableSharedFlow<ContactToggleResult>()
+        val contactToggleResult: SharedFlow<ContactToggleResult> = _contactToggleResult.asSharedFlow()
 
         // Draft texts keyed by peerHash - for showing "Draft:" in conversation list
         val draftsMap: StateFlow<Map<String, String>> =
@@ -143,29 +150,42 @@ class ChatsViewModel
         fun saveToContacts(conversation: Conversation) {
             viewModelScope.launch {
                 try {
-                    // Get public key from conversation or fallback to peer_identities table
-                    val publicKey =
-                        conversation.peerPublicKey
-                            ?: conversationRepository.getPeerPublicKey(conversation.peerHash)
+                    val publicKey = resolvePeerPublicKey(conversation)
 
                     if (publicKey == null) {
                         Log.e(TAG, "Cannot save to contacts: Public key not available for ${conversation.peerHash}")
-                        // TODO: Emit error state for UI to show error message
+                        _contactToggleResult.emit(
+                            ContactToggleResult.Error("Identity not available - peer hasn't announced"),
+                        )
                         return@launch
                     }
 
-                    // Use addContactFromConversation which uses the announce peerName via COALESCE
-                    contactRepository.addContactFromConversation(
-                        destinationHash = conversation.peerHash,
-                        publicKey = publicKey,
+                    val result =
+                        contactRepository.addContactFromConversation(
+                            destinationHash = conversation.peerHash,
+                            publicKey = publicKey,
+                        )
+
+                    result.fold(
+                        onSuccess = {
+                            Log.d(TAG, "Saved ${conversation.peerHash.take(16)} to contacts")
+                            viewModelScope.launch(Dispatchers.IO) {
+                                identityResolutionManager.requestPathForContact(conversation.peerHash)
+                            }
+                            _contactToggleResult.emit(ContactToggleResult.Added)
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Failed to save ${conversation.peerHash.take(16)} to contacts", error)
+                            _contactToggleResult.emit(
+                                ContactToggleResult.Error(error.message ?: "Failed to save contact"),
+                            )
+                        },
                     )
-                    Log.d(TAG, "Saved ${conversation.peerHash.take(16)} to contacts")
-                    // Request path for the newly saved contact
-                    viewModelScope.launch(Dispatchers.IO) {
-                        identityResolutionManager.requestPathForContact(conversation.peerHash)
-                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving to contacts", e)
+                    _contactToggleResult.emit(
+                        ContactToggleResult.Error(e.message ?: "Failed to save contact"),
+                    )
                 }
             }
         }
@@ -178,8 +198,12 @@ class ChatsViewModel
                 try {
                     contactRepository.deleteContact(peerHash)
                     Log.d(TAG, "Removed $peerHash from contacts")
+                    _contactToggleResult.emit(ContactToggleResult.Removed)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error removing from contacts", e)
+                    _contactToggleResult.emit(
+                        ContactToggleResult.Error(e.message ?: "Failed to remove contact"),
+                    )
                 }
             }
         }
@@ -210,6 +234,12 @@ class ChatsViewModel
                 }
             }
         }
+
+        private suspend fun resolvePeerPublicKey(conversation: Conversation): ByteArray? =
+            conversation.peerPublicKey
+                ?: conversationRepository.getConversation(conversation.peerHash)?.peerPublicKey
+                ?: conversationRepository.getPeerPublicKey(conversation.peerHash)
+                ?: announceRepository.getAnnounce(conversation.peerHash)?.publicKey
 
         /**
          * Check if a peer is saved as a contact.

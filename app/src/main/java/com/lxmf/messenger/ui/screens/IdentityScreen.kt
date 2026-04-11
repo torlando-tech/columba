@@ -78,13 +78,13 @@ import com.lxmf.messenger.ui.components.BluetoothPermissionController
 import com.lxmf.messenger.ui.components.QrCodeImage
 import com.lxmf.messenger.ui.components.ServiceRestartBanner
 import com.lxmf.messenger.ui.components.rememberBluetoothPermissionController
+import com.lxmf.messenger.ui.util.rememberLifecycleTickerMillis
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.viewmodel.BleConnectionsUiState
 import com.lxmf.messenger.viewmodel.DebugInfo
 import com.lxmf.messenger.viewmodel.DebugViewModel
 import com.lxmf.messenger.viewmodel.InterfaceInfo
 import com.lxmf.messenger.viewmodel.TestAnnounceResult
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -333,14 +333,10 @@ fun ReticulumInfoCard(
     debugInfo: DebugInfo,
     onRefresh: (() -> Unit)? = null,
 ) {
-    // Auto-refresh every second while visible (for live heartbeat updates)
-    // LaunchedEffect auto-cancels when composable leaves composition
     if (onRefresh != null) {
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            while (true) {
-                kotlinx.coroutines.delay(1000)
-                onRefresh()
-            }
+        val refreshTick = rememberLifecycleTickerMillis(periodMs = 1_000L)
+        androidx.compose.runtime.LaunchedEffect(refreshTick) {
+            onRefresh()
         }
     }
 

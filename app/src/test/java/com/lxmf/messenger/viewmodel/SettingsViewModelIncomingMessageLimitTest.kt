@@ -9,7 +9,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.service.LocationSharingManager
@@ -97,7 +96,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         settingsRepository = mockk()
         identityRepository = mockk()
-        reticulumProtocol = mockk<ServiceReticulumProtocol>()
+        reticulumProtocol = mockk<ReticulumProtocol>()
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
@@ -206,7 +205,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         // Mock methods called during setIncomingMessageSizeLimit
         coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
         coEvery { settingsRepository.saveMapMarkerDeclutterEnabled(any()) } just Runs
-        every { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(any()) } just Runs
+        every { reticulumProtocol.setIncomingMessageSizeLimit(any()) } just Runs
     }
 
     @After
@@ -282,7 +281,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
-            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(25600) }
+            verify { reticulumProtocol.setIncomingMessageSizeLimit(25600) }
         }
 
     @Test
@@ -300,7 +299,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(1024) }
-            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(1024) }
+            verify { reticulumProtocol.setIncomingMessageSizeLimit(1024) }
         }
 
     @Test
@@ -318,7 +317,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(5120) }
-            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(5120) }
+            verify { reticulumProtocol.setIncomingMessageSizeLimit(5120) }
         }
 
     @Test
@@ -336,7 +335,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(131072) }
-            verify { (reticulumProtocol as ServiceReticulumProtocol).setIncomingMessageSizeLimit(131072) }
+            verify { reticulumProtocol.setIncomingMessageSizeLimit(131072) }
         }
 
     // ========== State Update Tests ==========

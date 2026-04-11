@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -25,12 +26,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,35 +43,49 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.util.BatteryOptimizationManager
-import kotlinx.coroutines.delay
 
 @Composable
 fun BatteryOptimizationCard(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    batteryProfile: BatteryProfile,
+    onBatteryProfileChange: (BatteryProfile) -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var isExempted by remember { mutableStateOf(false) }
     var isCheckingStatus by remember { mutableStateOf(true) }
 
-    // Check exemption status on initial load and periodically (every 3 seconds)
-    LaunchedEffect(Unit) {
-        // Initial check with loading indicator
-        delay(500)
+    fun refreshStatus() {
         isExempted = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
         isCheckingStatus = false
+    }
 
-        // Continue checking in background without showing loading spinner
-        while (true) {
-            delay(3000)
-            isExempted = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
+    LaunchedEffect(context) {
+        refreshStatus()
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    refreshStatus()
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    // Dynamic colors based on exemption status
     val containerColor =
         if (isExempted) {
             MaterialTheme.colorScheme.secondaryContainer
@@ -87,10 +105,7 @@ fun BatteryOptimizationCard(
                 .fillMaxWidth()
                 .clickable { onExpandedChange(!isExpanded) },
         shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = containerColor,
-            ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Column(
             modifier =
@@ -99,7 +114,6 @@ fun BatteryOptimizationCard(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Header row (always visible)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -115,41 +129,90 @@ fun BatteryOptimizationCard(
                         contentDescription = null,
                         tint = contentColor,
                     )
-                    Text(
-                        text = "Background Service Protection",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor,
-                    )
+                    Column {
+                        Text(
+                            text = "Battery & Background",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor,
+                        )
+                        Text(
+                            text = batteryProfile.displayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor,
+                        )
+                    }
                 }
 
-                // Chevron indicator
                 Icon(
-                    imageVector =
-                        if (isExpanded) {
-                            Icons.Default.KeyboardArrowUp
-                        } else {
-                            Icons.Default.KeyboardArrowDown
-                        },
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     tint = contentColor,
                 )
             }
 
-            // Expanded content with animation
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = expandVertically(animationSpec = tween(durationMillis = 300)),
                 exit = shrinkVertically(animationSpec = tween(durationMillis = 300)),
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Choose how aggressively Columba should run native Reticulum in the background. Changes apply immediately.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = contentColor,
+                    )
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)),
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            BatteryProfile.entries.forEach { profile ->
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .selectable(
+                                                selected = batteryProfile == profile,
+                                                onClick = { onBatteryProfileChange(profile) },
+                                                role = Role.RadioButton,
+                                            ).padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    RadioButton(
+                                        selected = batteryProfile == profile,
+                                        onClick = null,
+                                    )
+                                    Column(
+                                        modifier =
+                                            Modifier
+                                                .padding(start = 16.dp)
+                                                .weight(1f),
+                                    ) {
+                                        Text(
+                                            text = profile.displayName,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = contentColor,
+                                        )
+                                        Text(
+                                            text = profile.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = contentColor.copy(alpha = 0.9f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
+
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (isExempted) {
                         Text(
-                            text = "Battery optimization exemption granted. Columba can run reliably in the background.",
+                            text = "Battery optimization exemption granted. Columba can run more reliably in the background during deep idle.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -168,8 +231,9 @@ fun BatteryOptimizationCard(
                     } else {
                         Text(
                             text =
-                                "Battery optimization is enabled. Android may kill the background " +
-                                    "service during Deep Doze mode, causing gaps in message delivery.",
+                                "Android battery optimization is still enabled. The battery profile above reduces " +
+                                    "background work, but Android may still delay or kill background networking " +
+                                    "unless Columba is exempted.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
@@ -179,14 +243,10 @@ fun BatteryOptimizationCard(
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                                     BatteryOptimizationManager.recordPromptShown(context)
                                     BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
-                                    // Status will auto-refresh within 3 seconds
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                ),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         ) {
                             Text("Request Exemption")
                         }

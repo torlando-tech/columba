@@ -40,30 +40,27 @@ include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")
 
-// Native Reticulum/LXMF Kotlin implementations (Phase 0: migration from Python/Chaquopy)
-val reticulumKtModule = file("reticulum-kt/rns-core/build.gradle.kts")
-require(reticulumKtModule.exists()) {
-    """
-    |reticulum-kt submodule not populated. Run:
-    |  git submodule update --init --recursive
-    """.trimMargin()
+// Native Reticulum/LXMF Kotlin implementations
+val reticulumKtPopulated = file("reticulum-kt/rns-core/build.gradle.kts").exists()
+val lxmfKtPopulated = file("lxmf-kt/lxmf-core/build.gradle.kts").exists()
+
+if (!reticulumKtPopulated || !lxmfKtPopulated) {
+    logger.warn("Submodules not populated — run: git submodule update --init --recursive")
 }
-val lxmfKtModule = file("lxmf-kt/lxmf-core/build.gradle.kts")
-require(lxmfKtModule.exists()) {
-    """
-    |lxmf-kt submodule not populated. Run:
-    |  git submodule update --init --recursive
-    """.trimMargin()
-}
-includeBuild("reticulum-kt") {
-    dependencySubstitution {
-        substitute(module("network.reticulum:rns-core")).using(project(":rns-core"))
-        substitute(module("network.reticulum:rns-interfaces")).using(project(":rns-interfaces"))
-        substitute(module("network.reticulum:rns-android")).using(project(":rns-android"))
+
+if (reticulumKtPopulated) {
+    includeBuild("reticulum-kt") {
+        dependencySubstitution {
+            substitute(module("network.reticulum:rns-core")).using(project(":rns-core"))
+            substitute(module("network.reticulum:rns-interfaces")).using(project(":rns-interfaces"))
+            substitute(module("network.reticulum:rns-android")).using(project(":rns-android"))
+        }
     }
 }
-includeBuild("lxmf-kt") {
-    dependencySubstitution {
-        substitute(module("network.reticulum.lxmf:lxmf-core")).using(project(":lxmf-core"))
+if (lxmfKtPopulated) {
+    includeBuild("lxmf-kt") {
+        dependencySubstitution {
+            substitute(module("network.reticulum.lxmf:lxmf-core")).using(project(":lxmf-core"))
+        }
     }
 }

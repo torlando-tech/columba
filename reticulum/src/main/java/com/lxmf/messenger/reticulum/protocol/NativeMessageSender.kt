@@ -100,7 +100,7 @@ internal class NativeMessageSender(
             Transport.requestPath(destinationHash)
             val deadline = System.currentTimeMillis() + 10_000
             while (recipientIdentity == null && System.currentTimeMillis() < deadline) {
-                Thread.sleep(250)
+                kotlinx.coroutines.delay(250)
                 recipientIdentity = NativeIdentity.recall(destinationHash)
                     ?: NativeIdentity.recallByIdentityHash(destinationHash)
             }

@@ -15,6 +15,7 @@ internal class NativeMessageSender(
     private val deliveryIdentityProvider: () -> NativeIdentity?,
     private val deliveryDestinationProvider: () -> NativeDestination?,
     private val deliveryStatusFlow: MutableSharedFlow<DeliveryStatusUpdate>,
+    private val scopeProvider: () -> kotlinx.coroutines.CoroutineScope,
 ) {
     companion object {
         private const val TAG = "NativeReticulumProtocol"
@@ -192,7 +193,7 @@ internal class NativeMessageSender(
                 msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
                 msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
                 msg.deliveryAttempts = 0
-                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                scopeProvider().launch(Dispatchers.IO) {
                     router.handleOutbound(msg)
                 }
                 return@failedCallback

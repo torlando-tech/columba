@@ -241,6 +241,7 @@ class NativeReticulumProtocol(
             deliveryIdentityProvider = { deliveryIdentity },
             deliveryDestinationProvider = { deliveryDestination },
             deliveryStatusFlow = _deliveryStatus,
+            scopeProvider = { scope },
         )
     }
 

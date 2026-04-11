@@ -76,7 +76,7 @@ internal class NativeNomadNetHandler(
             }
         }
 
-    private fun resolveNodeIdentity(
+    private suspend fun resolveNodeIdentity(
         destinationHash: String,
         destBytes: ByteArray,
     ): NativeIdentity {
@@ -106,7 +106,7 @@ internal class NativeNomadNetHandler(
         return nodeIdentity
     }
 
-    private fun resolveOrEstablishLink(
+    private suspend fun resolveOrEstablishLink(
         destinationHash: String,
         nodeIdentity: NativeIdentity,
         destBytes: ByteArray,
@@ -127,7 +127,7 @@ internal class NativeNomadNetHandler(
         return Pair(link, reusedActiveLink)
     }
 
-    private fun establishNomadnetLink(
+    private suspend fun establishNomadnetLink(
         nodeIdentity: NativeIdentity,
         destBytes: ByteArray,
         timeoutSeconds: Float,
@@ -165,7 +165,7 @@ internal class NativeNomadNetHandler(
         return established ?: error("Failed to establish link to node")
     }
 
-    private fun retryLinkEstablishment(
+    private suspend fun retryLinkEstablishment(
         nodeDest: NativeDestination,
         destBytes: ByteArray,
         linkTimeout: Long,

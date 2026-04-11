@@ -117,6 +117,9 @@ fun AboutCard(
                 if (systemInfo.bleReticulumVersion != null) {
                     InfoRow("BLE-Reticulum", systemInfo.bleReticulumVersion)
                 }
+                if (systemInfo.lxstVersion != null) {
+                    InfoRow("LXST", systemInfo.lxstVersion)
+                }
             }
 
             HorizontalDivider()

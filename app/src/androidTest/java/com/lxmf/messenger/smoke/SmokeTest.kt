@@ -85,7 +85,7 @@ class SmokeTest {
         assertNotNull("App context should not be null", context)
         assertTrue(
             "Package name should be correct",
-            context.packageName == "com.lxmf.messenger",
+            context.packageName == "network.columba.app",
         )
         println("SmokeTest: App context verified - ${context.packageName}")
     }

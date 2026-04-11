@@ -31,24 +31,18 @@ class ServiceStateTest {
     }
 
     @Test
-    fun `initial wrapper is null`() {
-        assertNull(state.wrapper)
-    }
-
-    @Test
     fun `initial conversation active is false`() {
         assertFalse(state.isConversationActive.get())
     }
 
     @Test
-    fun `isInitialized returns false when wrapper is null`() {
+    fun `isInitialized returns true when status is READY`() {
         state.networkStatus.set("READY")
-        assertFalse(state.isInitialized())
+        assertTrue(state.isInitialized())
     }
 
     @Test
     fun `isInitialized returns false when status is not READY`() {
-        // Cannot set a real PyObject in unit tests, but we can test the status check
         state.networkStatus.set("INITIALIZING")
         assertFalse(state.isInitialized())
     }
@@ -93,7 +87,6 @@ class ServiceStateTest {
         // Verify state is cleared
         assertEquals("SHUTDOWN", state.networkStatus.get())
         assertFalse(state.isConversationActive.get())
-        assertNull(state.wrapper)
         assertNull(state.pollingJob)
         assertNull(state.shutdownJob)
 
@@ -130,38 +123,9 @@ class ServiceStateTest {
         assertFalse(state.isConversationActive.get())
     }
 
-    // ================================================================
-    // Python shutdown kill switch tests (SIGSEGV prevention)
-    // ================================================================
-
     @Test
     fun `isPythonShutdownStarted is initially false`() {
         assertFalse(state.isPythonShutdownStarted.get())
-    }
-
-    @Test
-    fun `isPythonCallSafe returns false when wrapper is null`() {
-        // Default state: shutdown=false, wrapper=null
-        assertFalse(state.isPythonCallSafe())
-    }
-
-    @Test
-    fun `isPythonCallSafe returns true when wrapper set and shutdown not started`() {
-        state.wrapper = io.mockk.mockk()
-        assertTrue(state.isPythonCallSafe())
-    }
-
-    @Test
-    fun `isPythonCallSafe returns false when shutdown started even with wrapper set`() {
-        state.wrapper = io.mockk.mockk()
-        state.isPythonShutdownStarted.set(true)
-        assertFalse(state.isPythonCallSafe())
-    }
-
-    @Test
-    fun `isPythonCallSafe returns false when both shutdown and wrapper null`() {
-        state.isPythonShutdownStarted.set(true)
-        assertFalse(state.isPythonCallSafe())
     }
 
     @Test

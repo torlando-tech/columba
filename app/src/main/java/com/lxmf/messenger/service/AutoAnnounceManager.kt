@@ -5,7 +5,6 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -125,24 +124,19 @@ class AutoAnnounceManager
             // The loop will be cancelled and restarted if settings change
             while (true) {
                 try {
-                    // Only perform announce if using ServiceReticulumProtocol
-                    if (reticulumProtocol is ServiceReticulumProtocol) {
-                        // Perform announce
-                        val effectiveDisplayName = displayName ?: "Anonymous Peer"
-                        Log.d(TAG, "Triggering auto-announce...")
+                    // Perform announce
+                    val effectiveDisplayName = displayName ?: "Anonymous Peer"
+                    Log.d(TAG, "Triggering auto-announce...")
 
-                        val result = reticulumProtocol.triggerAutoAnnounce(effectiveDisplayName)
+                    val result = reticulumProtocol.triggerAutoAnnounce(effectiveDisplayName)
 
-                        if (result.isSuccess) {
-                            // Update last announce timestamp
-                            val timestamp = System.currentTimeMillis()
-                            settingsRepository.saveLastAutoAnnounceTime(timestamp)
-                            Log.d(TAG, "Auto-announce successful")
-                        } else {
-                            Log.e(TAG, "Auto-announce failed: ${result.exceptionOrNull()?.message}")
-                        }
+                    if (result.isSuccess) {
+                        // Update last announce timestamp
+                        val timestamp = System.currentTimeMillis()
+                        settingsRepository.saveLastAutoAnnounceTime(timestamp)
+                        Log.d(TAG, "Auto-announce successful")
                     } else {
-                        Log.w(TAG, "Auto-announce skipped: ReticulumProtocol is not ServiceReticulumProtocol")
+                        Log.e(TAG, "Auto-announce failed: ${result.exceptionOrNull()?.message}")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error during auto-announce", e)

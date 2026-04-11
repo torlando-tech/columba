@@ -11,15 +11,14 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.LocationTelemetry
 import com.lxmf.messenger.di.ApplicationScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.ui.model.SharingDuration
+import com.lxmf.messenger.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -284,15 +283,9 @@ class LocationSharingManager
          */
         private fun sendCeaseMessage(recipientHash: String) {
             scope.launch {
-                val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-                if (serviceProtocol == null) {
-                    Log.e(TAG, "Cannot send cease message: ReticulumProtocol is not ServiceReticulumProtocol")
-                    return@launch
-                }
-
                 val sourceIdentity =
                     try {
-                        serviceProtocol.getLxmfIdentity().getOrNull()
+                        reticulumProtocol.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity for cease message", e)
                         null
@@ -433,15 +426,9 @@ class LocationSharingManager
 
             scope.launch {
                 // Get LXMF identity from the protocol
-                val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-                if (serviceProtocol == null) {
-                    Log.e(TAG, "ReticulumProtocol is not ServiceReticulumProtocol")
-                    return@launch
-                }
-
                 val sourceIdentity =
                     try {
-                        serviceProtocol.getLxmfIdentity().getOrNull()
+                        reticulumProtocol.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity", e)
                         null
@@ -539,15 +526,8 @@ class LocationSharingManager
         }
 
         private fun startListeningForLocationTelemetry() {
-            // Cast to ServiceReticulumProtocol to access the locationTelemetryFlow
-            val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-            if (serviceProtocol == null) {
-                Log.w(TAG, "ReticulumProtocol is not ServiceReticulumProtocol, cannot listen for location")
-                return
-            }
-
             scope.launch {
-                serviceProtocol.locationTelemetryFlow.collect { locationJson ->
+                reticulumProtocol.locationTelemetryFlow.collect { locationJson ->
                     handleReceivedLocation(locationJson)
                 }
             }

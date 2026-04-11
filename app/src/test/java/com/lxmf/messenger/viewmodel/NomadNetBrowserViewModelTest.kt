@@ -5,7 +5,7 @@ package com.lxmf.messenger.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.lxmf.messenger.nomadnet.NomadNetPageCache
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -42,7 +42,7 @@ class NomadNetBrowserViewModelTest {
     val instantExecutorRule = InstantTaskExecutorRule()
 
     private val testDispatcher = UnconfinedTestDispatcher()
-    private lateinit var protocol: ServiceReticulumProtocol
+    private lateinit var protocol: ReticulumProtocol
     private lateinit var pageCache: NomadNetPageCache
     private lateinit var viewModel: NomadNetBrowserViewModel
 
@@ -91,7 +91,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(nodeHash, "/page/index.mu") } returns null
             coEvery { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", null, any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -165,7 +165,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/other.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/other.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -200,7 +200,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -267,7 +267,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(">Second Page", "/page/second.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(">Second Page", "/page/second.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -294,7 +294,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/two.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/two.mu"))
 
             // Page 1
             viewModel.loadPage(nodeHash)
@@ -305,7 +305,7 @@ class NomadNetBrowserViewModelTest {
             advanceUntilIdle()
 
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/three.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/three.mu"))
 
             // Page 3
             viewModel.navigateToLink("/page/three.mu", emptyList())
@@ -327,7 +327,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -400,7 +400,7 @@ class NomadNetBrowserViewModelTest {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -438,7 +438,7 @@ class NomadNetBrowserViewModelTest {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/index.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -664,7 +664,7 @@ class NomadNetBrowserViewModelTest {
 
             // Now make the retry succeed
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/about.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/about.mu"))
 
             viewModel.retry()
             advanceUntilIdle()
@@ -695,7 +695,7 @@ class NomadNetBrowserViewModelTest {
 
             // Retry should resubmit the form data
             coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
-                Result.success(ServiceReticulumProtocol.NomadnetPageResult(simplePage, "/page/login.mu"))
+                Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/login.mu"))
 
             viewModel.retry()
             advanceUntilIdle()

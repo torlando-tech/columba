@@ -51,13 +51,20 @@ class LockManager(
     fun acquireAll() {
         synchronized(lockMutex) {
             try {
-                acquireMulticastLock()
+                if (!skipMulticastLock) acquireMulticastLock()
                 acquireWakeLock()
             } catch (e: Exception) {
                 Log.e(TAG, "Error acquiring locks", e)
             }
         }
     }
+
+    /**
+     * When true, acquireAll() skips the multicast lock.
+     * Set by the native stack (NativeInterfaceFactory manages it per-AutoInterface).
+     * The Python stack leaves this false so the lock is acquired unconditionally.
+     */
+    var skipMulticastLock: Boolean = false
 
     /**
      * Release all held locks.

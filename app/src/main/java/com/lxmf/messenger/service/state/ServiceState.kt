@@ -1,6 +1,5 @@
 package com.lxmf.messenger.service.state
 
-import com.chaquo.python.PyObject
 import kotlinx.coroutines.Job
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -30,15 +29,6 @@ class ServiceState {
      *
      * Incremented on each new initialization cycle. Async shutdown jobs check this
      * to avoid overwriting status if a new initialization started while they were running.
-     *
-     * Example:
-     * 1. Generation 1: initialize() starts
-     * 2. User triggers shutdown()
-     * 3. Shutdown job starts (captures generation 1)
-     * 4. User immediately calls initialize() again
-     * 5. Generation increments to 2
-     * 6. New initialize() starts
-     * 7. Old shutdown job completes, checks generation (1 != 2), skips status update
      */
     val initializationGeneration = AtomicInteger(0)
 
@@ -49,10 +39,7 @@ class ServiceState {
     val isConversationActive = AtomicBoolean(false)
 
     /**
-     * Kill switch to prevent Python JNI calls during/after interpreter teardown.
-     *
-     * Set BEFORE any Python shutdown begins. Checked BEFORE every Chaquopy JNI call.
-     * Prevents SIGSEGV in PyGILState_Ensure when CPython is tearing down.
+     * Kill switch to prevent calls during/after interpreter teardown.
      *
      * AtomicBoolean.get() compiles to a single volatile read (~1ns) — negligible
      * even on the audio hot path.
@@ -61,13 +48,6 @@ class ServiceState {
      * a new initialization cycle confirms the previous shutdown completed.
      */
     val isPythonShutdownStarted = AtomicBoolean(false)
-
-    /**
-     * Python wrapper instance reference.
-     * Nullable - null when service is not initialized.
-     */
-    @Volatile
-    var wrapper: PyObject? = null
 
     /**
      * Active announce polling coroutine job.
@@ -95,26 +75,17 @@ class ServiceState {
     fun isCurrentGeneration(gen: Int): Boolean = initializationGeneration.get() == gen
 
     /**
-     * Check if it's safe to make a Python JNI call.
-     * Returns true only if shutdown hasn't started AND wrapper is available.
-     */
-    fun isPythonCallSafe(): Boolean = !isPythonShutdownStarted.get() && wrapper != null
-
-    /**
      * Clear the shutdown flag after a previous shutdown has fully completed
      * and a new initialization cycle is beginning.
-     *
-     * Must only be called from [PythonWrapperManager.initialize] after joining
-     * the pending shutdown job.
      */
     fun clearShutdownFlag() {
         isPythonShutdownStarted.set(false)
     }
 
     /**
-     * Check if the wrapper is initialized and network is ready.
+     * Check if the service network is ready.
      */
-    fun isInitialized(): Boolean = wrapper != null && networkStatus.get() == "READY"
+    fun isInitialized(): Boolean = networkStatus.get() == "READY"
 
     /**
      * Reset all state to initial values.
@@ -123,11 +94,9 @@ class ServiceState {
     fun reset() {
         networkStatus.set("SHUTDOWN")
         isConversationActive.set(false)
-        wrapper = null
         pollingJob = null
         shutdownJob = null
         // Note: initializationGeneration is NOT reset to preserve race condition protection
         // Note: isPythonShutdownStarted is NOT reset here — only by clearShutdownFlag()
-        // after a new initialization confirms the previous shutdown completed
     }
 }

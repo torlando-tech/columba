@@ -233,6 +233,11 @@ class InterfaceManagementViewModel
          */
         private fun parseAndUpdateInterfaceStatus(statusJson: String) {
             try {
+                // When debugInfoFlow is providing full snapshots (transportInterfaces populated),
+                // skip lightweight status-only updates to avoid divergence between online status
+                // and the transport interface list (which includes spawned peer counts).
+                if (_state.value.transportInterfaces.isNotEmpty()) return
+
                 val json = JSONObject(statusJson)
                 val statusMap = mutableMapOf<String, Boolean>()
                 json.keys().forEach { name ->
@@ -1032,22 +1037,23 @@ class InterfaceManagementViewModel
          * Hot-reload interfaces on the native stack without restarting Reticulum.
          * Reads current enabled interfaces from the DB and syncs them to NativeInterfaceFactory.
          */
+        private var syncJob: kotlinx.coroutines.Job? = null
+
         private fun syncNativeInterfaces() {
-            viewModelScope.launch {
-                try {
-                    // Read fresh from DB Flow (state may lag behind the Room write)
-                    val configs = interfaceRepository.enabledInterfaces.first()
-                    reticulumProtocol.reloadInterfaces(configs)
-                    // Refresh status after reload — twice because spawned peers
-                    // (AutoInterface discovery) take a few seconds to appear
-                    kotlinx.coroutines.delay(1000)
-                    fetchInterfaceStatus()
-                    kotlinx.coroutines.delay(4000)
-                    fetchInterfaceStatus()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to sync native interfaces: ${e.message}", e)
+            syncJob?.cancel()
+            syncJob =
+                viewModelScope.launch(ioDispatcher) {
+                    try {
+                        val configs = interfaceRepository.enabledInterfaces.first()
+                        reticulumProtocol.reloadInterfaces(configs)
+                        kotlinx.coroutines.delay(1000)
+                        fetchInterfaceStatus()
+                        kotlinx.coroutines.delay(4000)
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to sync native interfaces: ${e.message}", e)
+                    }
                 }
-            }
         }
 
         fun applyChanges() {

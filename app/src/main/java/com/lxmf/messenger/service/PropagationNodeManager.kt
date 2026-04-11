@@ -211,6 +211,10 @@ class PropagationNodeManager
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+        private val syncFinalized =
+            java.util.concurrent.atomic
+                .AtomicBoolean(false)
+
         private val _lastSyncTimestamp = MutableStateFlow<Long?>(null)
         val lastSyncTimestamp: StateFlow<Long?> = _lastSyncTimestamp.asStateFlow()
 
@@ -421,6 +425,7 @@ class PropagationNodeManager
                         return
                     }
                     state.stateName == "failed" || state.stateName == "no_link" || state.stateName == "no_path" -> {
+                        if (!syncFinalized.compareAndSet(false, true)) return
                         timeoutJob.cancel()
                         _isSyncing.value = false
                         _syncProgress.value = SyncProgress.Idle
@@ -438,6 +443,7 @@ class PropagationNodeManager
          * Handle successful sync completion.
          */
         private suspend fun handleSyncComplete(messagesReceived: Int) {
+            if (!syncFinalized.compareAndSet(false, true)) return
             if (_isSyncing.value) {
                 Log.d(TAG, "Sync complete: $messagesReceived messages received (manual=$_isManualSync)")
                 _isSyncing.value = false
@@ -771,6 +777,7 @@ class PropagationNodeManager
             }
 
             Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
+            syncFinalized.set(false)
             _isSyncing.value = true
             _syncProgress.value = SyncProgress.Starting
 

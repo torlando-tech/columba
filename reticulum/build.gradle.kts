@@ -4,7 +4,7 @@ plugins {
     kotlin("plugin.parcelize")
     kotlin("plugin.serialization")
     id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
+
 }
 
 android {
@@ -45,13 +45,6 @@ android {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        buildPython("python3.11")
-    }
-}
-
 dependencies {
     // LXST module (telephony, codecs, audio pipeline)
     api("tech.torlando:lxst")
@@ -71,8 +64,17 @@ dependencies {
     // MessagePack
     implementation(libs.msgpack)
 
+    // Native Reticulum/LXMF Kotlin stack (migration from Python/Chaquopy)
+    api("network.reticulum:rns-core")
+    api("network.reticulum:rns-interfaces")
+    api("network.reticulum:rns-android")
+    api("network.reticulum.lxmf:lxmf-core")
+
     // Serialization (for firmware manifest JSON parsing)
     implementation(libs.serialization.json)
+
+    // Room runtime (needed for native process access to Reticulum Room stores)
+    implementation(libs.room)
 
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
     implementation("io.sentry:sentry-android:8.31.0")

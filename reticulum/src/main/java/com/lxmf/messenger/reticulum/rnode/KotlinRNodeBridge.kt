@@ -18,7 +18,6 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
-import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,21 +88,12 @@ interface RNodeOnlineStatusListener {
  *
  * This bridge provides serial communication with RNode devices over both
  * Bluetooth Classic (SPP/RFCOMM) and Bluetooth Low Energy (BLE GATT).
- * It exposes a simple byte-level API that can be called from Python via Chaquopy.
  *
  * Key features:
  * - Dual-mode: Bluetooth Classic (SPP) and BLE (Nordic UART Service)
  * - Thread-safe read/write operations
  * - Non-blocking read with internal buffer
  * - Automatic device enumeration (filters for "RNode *" devices)
- * - Python callback for received data
- *
- * Usage from Python:
- *   bridge = get_kotlin_rnode_bridge()
- *   bridge.connect("RNode 5A3F", "classic")  # or "ble"
- *   bridge.write(bytes([0xC0, 0x00, ...]))  # KISS frame
- *   data = bridge.read()  # Non-blocking
- *   bridge.disconnect()
  *
  * @property context Application context for Bluetooth access
  */
@@ -221,50 +211,11 @@ class KotlinRNodeBridge(
     private val bleWriteStatus = AtomicInteger(BluetoothGatt.GATT_SUCCESS)
     private val bleWriteLock = Object()
 
-    // Python callbacks
-    @Volatile
-    private var onDataReceived: PyObject? = null
-
-    @Volatile
-    private var onConnectionStateChanged: PyObject? = null
-
-    @Volatile
-    private var onErrorReceived: PyObject? = null
-
     // Kotlin error listeners (for UI notification)
     private val errorListeners = mutableListOf<RNodeErrorListener>()
 
     // Kotlin online status listeners (for UI notification)
     private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
-
-    /**
-     * Set callback for received data.
-     * Called on background thread when data arrives from RNode.
-     *
-     * @param callback Python callable: callback(data: bytes)
-     */
-    fun setOnDataReceived(callback: PyObject) {
-        onDataReceived = callback
-    }
-
-    /**
-     * Set callback for connection state changes.
-     *
-     * @param callback Python callable: callback(connected: bool, device_name: str)
-     */
-    fun setOnConnectionStateChanged(callback: PyObject) {
-        onConnectionStateChanged = callback
-    }
-
-    /**
-     * Set callback for RNode error events.
-     * Called when RNode reports an error (e.g., invalid configuration).
-     *
-     * @param callback Python callable: callback(error_code: int, error_message: str)
-     */
-    fun setOnErrorReceived(callback: PyObject) {
-        onErrorReceived = callback
-    }
 
     /**
      * Register a Kotlin listener for RNode error events.
@@ -292,8 +243,7 @@ class KotlinRNodeBridge(
     }
 
     /**
-     * Notify error callbacks (both Python and Kotlin).
-     * Called from Python via the bridge to surface errors to Kotlin layer.
+     * Notify error callbacks.
      *
      * @param errorCode The error code from RNode
      * @param errorMessage Human-readable error message
@@ -303,9 +253,6 @@ class KotlinRNodeBridge(
         errorMessage: String,
     ) {
         Log.w(TAG, "RNode error ($errorCode): $errorMessage")
-
-        // Notify Python callback if set
-        onErrorReceived?.callAttr("__call__", errorCode, errorMessage)
 
         // Notify Kotlin listeners
         synchronized(errorListeners) {
@@ -346,7 +293,6 @@ class KotlinRNodeBridge(
 
     /**
      * Notify online status change callbacks.
-     * Called from Python via the bridge when RNode online status changes.
      * This enables event-driven UI updates for network interfaces display.
      *
      * @param isOnline True if RNode is now online, false if offline
@@ -509,9 +455,6 @@ class KotlinRNodeBridge(
             // Start read thread
             startClassicReadThread()
 
-            // Notify Python
-            onConnectionStateChanged?.callAttr("__call__", true, deviceName)
-
             true
         } catch (e: IOException) {
             Log.e(TAG, "Failed to connect to $deviceName via Classic", e)
@@ -618,9 +561,6 @@ class KotlinRNodeBridge(
             isConnected.set(true)
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
-
-            // Notify Python
-            onConnectionStateChanged?.callAttr("__call__", true, deviceName)
 
             true
         } catch (e: Exception) {
@@ -797,9 +737,6 @@ class KotlinRNodeBridge(
                         for (byte in data) {
                             readBuffer.offer(byte)
                         }
-
-                        // Notify Python callback
-                        onDataReceived?.callAttr("__call__", data)
                     }
                 }
             }
@@ -889,9 +826,6 @@ class KotlinRNodeBridge(
         readBuffer.clear()
 
         Log.i(TAG, "Disconnected from $deviceName")
-
-        // Notify Python
-        onConnectionStateChanged?.callAttr("__call__", false, deviceName.orEmpty())
     }
 
     /**
@@ -1048,7 +982,7 @@ class KotlinRNodeBridge(
     }
 
     /**
-     * Synchronous write for simpler Python integration.
+     * Synchronous (blocking) write.
      * Blocks until write completes.
      *
      * @param data Bytes to write
@@ -1264,12 +1198,6 @@ class KotlinRNodeBridge(
                                 for (i in 0 until bytesRead) {
                                     readBuffer.offer(buffer[i])
                                 }
-
-                                // Notify Python callback
-                                onDataReceived?.let { callback ->
-                                    val data = buffer.copyOf(bytesRead)
-                                    callback.callAttr("__call__", data)
-                                }
                             } else if (bytesRead == -1) {
                                 // End of stream - connection closed
                                 Log.i(TAG, "End of stream - connection closed by remote")
@@ -1315,8 +1243,6 @@ class KotlinRNodeBridge(
             connectionMode = null
             connectedDeviceName = null
             readBuffer.clear()
-
-            onConnectionStateChanged?.callAttr("__call__", false, deviceName.orEmpty())
         }
     }
 

@@ -409,35 +409,42 @@ class PropagationNodeManager
         private suspend fun pollForSyncCompletion(timeoutJob: kotlinx.coroutines.Job) {
             val pollInterval = 500L
             val maxPolls = 120 // 60 seconds max
+            var done = false
             for (i in 0 until maxPolls) {
+                if (done || !_isSyncing.value) return
                 kotlinx.coroutines.delay(pollInterval)
-                if (!_isSyncing.value) return // already handled
 
-                val stateResult = reticulumProtocol.getPropagationState()
-                val state = stateResult.getOrNull() ?: continue
-
-                _syncProgress.value = SyncProgress.InProgress(state.stateName, state.progress)
-
-                when {
-                    state.stateName == "complete" -> {
-                        timeoutJob.cancel()
-                        handleSyncComplete(state.messagesReceived)
-                        return
-                    }
-                    state.stateName == "failed" || state.stateName == "no_link" || state.stateName == "no_path" -> {
-                        if (!syncFinalized.compareAndSet(false, true)) return
-                        timeoutJob.cancel()
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
-                        if (_isManualSync) {
-                            _manualSyncResult.emit(SyncResult.Error("Sync failed: ${state.stateName}"))
-                            _isManualSync = false
-                        }
-                        return
-                    }
+                val state = reticulumProtocol.getPropagationState().getOrNull()
+                if (state != null) {
+                    _syncProgress.value = SyncProgress.InProgress(state.stateName, state.progress)
+                    done = handlePollResult(state, timeoutJob)
                 }
             }
         }
+
+        private suspend fun handlePollResult(
+            state: com.lxmf.messenger.reticulum.protocol.ReticulumProtocol.PropagationState,
+            timeoutJob: kotlinx.coroutines.Job,
+        ): Boolean =
+            when {
+                state.stateName == "complete" -> {
+                    timeoutJob.cancel()
+                    handleSyncComplete(state.messagesReceived)
+                    true
+                }
+                state.stateName in listOf("failed", "no_link", "no_path") -> {
+                    if (!syncFinalized.compareAndSet(false, true)) return true
+                    timeoutJob.cancel()
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
+                    if (_isManualSync) {
+                        _manualSyncResult.emit(SyncResult.Error("Sync failed: ${state.stateName}"))
+                        _isManualSync = false
+                    }
+                    true
+                }
+                else -> false
+            }
 
         /**
          * Handle successful sync completion.

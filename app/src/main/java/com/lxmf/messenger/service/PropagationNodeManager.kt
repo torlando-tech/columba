@@ -846,6 +846,7 @@ class PropagationNodeManager
             }
 
             Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
+            syncFinalized.set(false)
             _isSyncing.value = true
             _isManualSync = !silent
             _syncProgress.value = SyncProgress.Starting

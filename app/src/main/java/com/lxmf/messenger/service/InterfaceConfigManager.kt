@@ -15,7 +15,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.LogLevel
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
@@ -111,19 +110,17 @@ class InterfaceConfigManager
                     // send ACTION_STOP to trigger System.exit(0) for clean JVM shutdown hooks.
                     Log.d(TAG, "Step 4: Shutting down ReticulumService process...")
                     val reticulumProcessName = "${context.packageName}:reticulum"
-                    if (reticulumProtocol is ServiceReticulumProtocol) {
+                    try {
                         try {
-                            try {
-                                withTimeout(2000L) {
-                                    reticulumProtocol.shutdown().getOrNull()
-                                }
-                            } catch (e: TimeoutCancellationException) {
-                                Log.w(TAG, "Shutdown timed out after 2s, proceeding with unbind", e)
+                            withTimeout(2000L) {
+                                reticulumProtocol.shutdown().getOrNull()
                             }
-                            reticulumProtocol.unbindService()
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error during service shutdown", e)
+                        } catch (e: TimeoutCancellationException) {
+                            Log.w(TAG, "Shutdown timed out after 2s, proceeding with unbind", e)
                         }
+                        reticulumProtocol.unbindService()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error during service shutdown", e)
                     }
 
                     // Send ACTION_STOP to let the service shut down gracefully.
@@ -207,11 +204,9 @@ class InterfaceConfigManager
 
                     // Step 8: Bind to the new service
                     Log.d(TAG, "Step 8: Binding to new service instance...")
-                    if (reticulumProtocol is ServiceReticulumProtocol) {
-                        reticulumProtocol.bindService()
-                        // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
-                        // No more arbitrary delay needed - service notifies when ready for IPC calls
-                    }
+                    reticulumProtocol.bindService()
+                    // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
+                    // No more arbitrary delay needed - service notifies when ready for IPC calls
                     Log.d(TAG, "✓ Bound to new service and ready for IPC")
 
                     // Step 9: Initialize Reticulum with new config
@@ -246,6 +241,10 @@ class InterfaceConfigManager
                     val transportNodeEnabled = settingsRepository.getTransportNodeEnabled()
                     Log.d(TAG, "Transport node enabled: $transportNodeEnabled")
 
+                    // Load battery profile
+                    val batteryProfile = settingsRepository.getBatteryProfile()
+                    Log.d(TAG, "Battery profile: $batteryProfile")
+
                     // Load discovery settings
                     val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
@@ -264,6 +263,7 @@ class InterfaceConfigManager
                             displayName = displayName,
                             logLevel = LogLevel.DEBUG,
                             allowAnonymous = false,
+                            batteryProfile = batteryProfile,
                             preferOwnInstance = preferOwnInstance,
                             rpcKey = rpcKey,
                             enableTransport = transportNodeEnabled,
@@ -374,12 +374,7 @@ class InterfaceConfigManager
          *
          * @return RSSI in dBm, or -100 if not connected or not available
          */
-        fun getRNodeRssi(): Int =
-            if (reticulumProtocol is ServiceReticulumProtocol) {
-                reticulumProtocol.getRNodeRssi()
-            } else {
-                -100
-            }
+        fun getRNodeRssi(): Int = reticulumProtocol.getRNodeRssi()
 
         /**
          * Generic batched restoration to prevent OOM when loading large tables across the
@@ -446,7 +441,6 @@ class InterfaceConfigManager
         }
 
         private suspend fun restorePeerIdentitiesInBatches() {
-            if (reticulumProtocol !is ServiceReticulumProtocol) return
             restoreInBatches(
                 label = "peer identities",
                 fetchBatch = { limit, offset -> conversationRepository.getPeerIdentitiesBatch(limit, offset) },
@@ -455,7 +449,6 @@ class InterfaceConfigManager
         }
 
         private suspend fun restoreAnnounceIdentitiesInBatches() {
-            if (reticulumProtocol !is ServiceReticulumProtocol) return
             restoreInBatches(
                 label = "announce identities",
                 fetchBatch = { limit, offset -> database.announceDao().getAnnouncesBatch(limit, offset) },

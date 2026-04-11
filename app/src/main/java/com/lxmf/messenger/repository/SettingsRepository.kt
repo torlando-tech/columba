@@ -20,6 +20,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lxmf.messenger.data.model.ImageCompressionPreset
 import com.lxmf.messenger.data.repository.CustomThemeRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import com.lxmf.messenger.ui.theme.AppTheme
 import com.lxmf.messenger.ui.theme.CustomTheme
@@ -104,6 +105,7 @@ class SettingsRepository
 
             // Transport node preferences
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
+            val BATTERY_PROFILE = stringPreferencesKey("battery_profile")
 
             // RNS 1.1.x Interface Discovery preferences
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
@@ -1018,6 +1020,34 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the user-selected battery/performance profile.
+         * Defaults to BALANCED if not set.
+         */
+        val batteryProfileFlow: Flow<BatteryProfile> =
+            context.dataStore.data
+                .map { preferences ->
+                    BatteryProfile.fromName(preferences[PreferencesKeys.BATTERY_PROFILE])
+                }.distinctUntilChanged()
+
+        /**
+         * Get the battery/performance profile (non-flow).
+         */
+        suspend fun getBatteryProfile(): BatteryProfile =
+            context.dataStore.data
+                .map { preferences ->
+                    BatteryProfile.fromName(preferences[PreferencesKeys.BATTERY_PROFILE])
+                }.first()
+
+        /**
+         * Save the battery/performance profile.
+         */
+        suspend fun saveBatteryProfile(profile: BatteryProfile) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.BATTERY_PROFILE] = profile.name
             }
         }
 

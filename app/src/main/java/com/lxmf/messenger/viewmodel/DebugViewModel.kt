@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.util.IdentityQrCodeUtils
 import com.lxmf.messenger.util.generateDefaultDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -146,24 +145,19 @@ class DebugViewModel
          */
         private fun observeDebugInfo() {
             viewModelScope.launch {
-                if (reticulumProtocol is ServiceReticulumProtocol) {
-                    // Event-driven: collect debug info from service callbacks
-                    (reticulumProtocol as ServiceReticulumProtocol)
-                        .debugInfoFlow
-                        .onStart {
-                            // Trigger initial fetch to get data before first event
-                            fetchDebugInfo()
-                        }.collect { debugInfoJson ->
-                            try {
-                                parseAndUpdateDebugInfo(debugInfoJson)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing debug info from event", e)
-                            }
+                // Event-driven: collect debug info from service callbacks
+                reticulumProtocol
+                    .debugInfoFlow
+                    .onStart {
+                        // Trigger initial fetch to get data before first event
+                        fetchDebugInfo()
+                    }.collect { debugInfoJson ->
+                        try {
+                            parseAndUpdateDebugInfo(debugInfoJson)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error parsing debug info from event", e)
                         }
-                } else {
-                    // Fallback for non-service protocol: just fetch once
-                    fetchDebugInfo()
-                }
+                    }
             }
         }
 
@@ -406,12 +400,10 @@ class DebugViewModel
 
             // Get LXMF identity from the service (this is the router's identity)
             try {
-                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                    val lxmfIdentity = reticulumProtocol.getLxmfIdentity().getOrThrow()
-                    cachedIdentity = lxmfIdentity
-                    Log.d(TAG, "Successfully retrieved LXMF identity from service")
-                    return lxmfIdentity
-                }
+                val lxmfIdentity = reticulumProtocol.getLxmfIdentity().getOrThrow()
+                cachedIdentity = lxmfIdentity
+                Log.d(TAG, "Successfully retrieved LXMF identity from service")
+                return lxmfIdentity
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting LXMF identity: ${e.message}", e)
             }
@@ -438,12 +430,10 @@ class DebugViewModel
 
             // Get LXMF destination from service (already registered by router)
             try {
-                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                    val destination = reticulumProtocol.getLxmfDestination().getOrThrow()
-                    cachedDestination = destination
-                    Log.d(TAG, "Successfully retrieved LXMF destination from service")
-                    return destination
-                }
+                val destination = reticulumProtocol.getLxmfDestination().getOrThrow()
+                cachedDestination = destination
+                Log.d(TAG, "Successfully retrieved LXMF destination from service")
+                return destination
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting LXMF destination: ${e.message}", e)
             }
@@ -548,10 +538,7 @@ class DebugViewModel
                     _networkStatus.value = "SHUTDOWN"
 
                     // Unbind FIRST to prevent auto-rebind if service process crashes
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        (reticulumProtocol as com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol)
-                            .unbindService()
-                    }
+                    reticulumProtocol.unbindService()
 
                     // Send ACTION_STOP to stop the foreground service and remove notification
                     val stopIntent =

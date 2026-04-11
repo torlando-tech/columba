@@ -10,7 +10,6 @@ import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.FailedInterface
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -20,14 +19,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,7 +37,7 @@ import org.junit.Test
  * Unit tests for DebugViewModel's event-driven debug info updates.
  *
  * Tests that the ViewModel correctly:
- * - Observes debugInfoFlow from ServiceReticulumProtocol
+ * - Observes debugInfoFlow from NativeReticulumProtocol
  * - Parses debug info JSON and updates state
  * - Handles malformed JSON gracefully
  */
@@ -51,7 +48,7 @@ class DebugViewModelEventDrivenTest {
     @Suppress("NoRelaxedMocks") // Android Context with many system service methods
     private val mockContext: android.content.Context = mockk(relaxed = true)
 
-    private lateinit var mockProtocol: ServiceReticulumProtocol
+    private lateinit var mockProtocol: ReticulumProtocol
     private lateinit var mockSettingsRepo: SettingsRepository
     private lateinit var mockIdentityRepo: IdentityRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
@@ -226,7 +223,7 @@ class DebugViewModelEventDrivenTest {
     @Test
     fun `observeDebugInfo falls back to fetchDebugInfo for non-ServiceProtocol`() =
         runTest {
-            // Given - use a non-ServiceReticulumProtocol mock
+            // Given - use a non-NativeReticulumProtocol mock
             // Protocol with many methods - relaxed mock is appropriate
             @Suppress("NoRelaxedMocks")
             val nonServiceProtocol = mockk<ReticulumProtocol>(relaxed = true)
@@ -493,14 +490,7 @@ class DebugViewModelEventDrivenTest {
                 }
                 """.trimIndent()
             debugInfoFlow.emit(debugJson)
-            advanceUntilIdle()
-
-            // parseAndUpdateDebugInfo uses withContext(Dispatchers.IO) which schedules on
-            // the real IO pool, so advanceUntilIdle() alone isn't enough. Wait for the
-            // state to reflect the emitted debug info before proceeding to SHUTDOWN.
-            withTimeout(2000) {
-                viewModel.debugInfo.first { it.initialized }
-            }
+            testScheduler.advanceUntilIdle()
 
             // When - network status changes to SHUTDOWN
             networkStatusFlow.value = NetworkStatus.SHUTDOWN

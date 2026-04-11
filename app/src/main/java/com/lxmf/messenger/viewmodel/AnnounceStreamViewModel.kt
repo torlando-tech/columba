@@ -14,7 +14,6 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.model.NodeType
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -448,33 +447,21 @@ class AnnounceStreamViewModel
                     // Get display name from active identity
                     val displayName = identityRepository.getActiveIdentitySync()?.displayName ?: "Unknown"
 
-                    // Trigger announce if using ServiceReticulumProtocol
-                    val protocol = reticulumProtocol
-                    if (protocol is ServiceReticulumProtocol) {
-                        val result = protocol.triggerAutoAnnounce(displayName)
+                    val result = reticulumProtocol.triggerAutoAnnounce(displayName)
 
-                        if (result.isSuccess) {
-                            _isAnnouncing.value = false
-                            _announceSuccess.value = true
-                            Log.d(TAG, "Manual announce successful")
-
-                            // Auto-dismiss success message after 3 seconds
-                            delay(3000)
-                            clearAnnounceStatus()
-                        } else {
-                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                            _isAnnouncing.value = false
-                            _announceError.value = error
-                            Log.e(TAG, "Manual announce failed: $error")
-
-                            // Auto-dismiss error message after 5 seconds
-                            delay(5000)
-                            clearAnnounceStatus()
-                        }
-                    } else {
+                    if (result.isSuccess) {
                         _isAnnouncing.value = false
-                        _announceError.value = "Service not available"
-                        Log.w(TAG, "Manual announce skipped: ReticulumProtocol is not ServiceReticulumProtocol")
+                        _announceSuccess.value = true
+                        Log.d(TAG, "Manual announce successful")
+
+                        // Auto-dismiss success message after 3 seconds
+                        delay(3000)
+                        clearAnnounceStatus()
+                    } else {
+                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        _isAnnouncing.value = false
+                        _announceError.value = error
+                        Log.e(TAG, "Manual announce failed: $error")
 
                         // Auto-dismiss error message after 5 seconds
                         delay(5000)

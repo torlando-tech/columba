@@ -36,6 +36,8 @@ class ReticulumService : Service() {
         const val ACTION_START = "com.lxmf.messenger.service.START"
         const val ACTION_STOP = "com.lxmf.messenger.service.STOP"
         const val ACTION_RESTART_BLE = "com.lxmf.messenger.RESTART_BLE"
+        const val ACTION_UPDATE_NOTIFICATION = "com.lxmf.messenger.service.UPDATE_NOTIFICATION"
+        const val EXTRA_NETWORK_STATUS = "network_status"
     }
 
     // Coroutine scope for background tasks
@@ -59,10 +61,6 @@ class ReticulumService : Service() {
             ServiceModule.createManagers(
                 context = this,
                 scope = serviceScope,
-                onStaleHeartbeat = {
-                    Log.e(TAG, "Python heartbeat stale - triggering service restart")
-                    triggerServiceRestart()
-                },
                 onNetworkChanged = {
                     // Trigger AutoInterface hot-add + LXMF announce when network changes.
                     // CRITICAL: Run in coroutine scope to avoid blocking the ConnectivityManager
@@ -109,7 +107,8 @@ class ReticulumService : Service() {
         Log.d(TAG, "Foreground service started in onCreate")
 
         // CRITICAL: Acquire wake lock early to prevent CPU sleep during initialization
-        // Previously this was only acquired after Python init, leaving a vulnerable window
+        // Native stack manages multicast lock per-AutoInterface for battery savings.
+        managers.lockManager.skipMulticastLock = true
         managers.lockManager.acquireAll()
         Log.d(TAG, "Wake locks acquired in onCreate")
 
@@ -119,12 +118,7 @@ class ReticulumService : Service() {
         // Create binder with callbacks
         binder =
             ServiceModule.createBinder(
-                context = this,
                 managers = managers,
-                scope = serviceScope,
-                onInitialized = {
-                    Log.d(TAG, "Reticulum initialization complete")
-                },
                 onShutdown = {
                     Log.d(TAG, "Reticulum shutdown complete")
                 },
@@ -147,20 +141,21 @@ class ReticulumService : Service() {
         val isUserShutdown =
             getSharedPreferences("columba_prefs", MODE_PRIVATE)
                 .getBoolean("is_user_shutdown", false)
-        if (isUserShutdown && intent?.action != ACTION_STOP && intent?.action != ACTION_START) {
-            Log.i(TAG, "User shutdown flag set - stopping service instead of restarting")
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val isUserShutdownRestart = isUserShutdown && intent?.action != ACTION_STOP && intent?.action != ACTION_START
 
         // CRITICAL: Always return START_STICKY to ensure Android restarts the service if killed.
         // Previously returned START_NOT_STICKY when managers weren't initialized, which meant
         // the service wouldn't restart after being killed during the initialization race window.
-        if (!::managers.isInitialized || !::binder.isInitialized) {
+        val notInitialized = !::managers.isInitialized || !::binder.isInitialized
+
+        if (isUserShutdownRestart || notInitialized) {
+            if (isUserShutdownRestart) {
+                Log.i(TAG, "User shutdown flag set - stopping service instead of restarting")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
             Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
-            // Service will be properly initialized when onCreate completes
-            // The foreground notification is already started in onCreate
             return START_STICKY
         }
 
@@ -211,6 +206,13 @@ class ReticulumService : Service() {
             ACTION_RESTART_BLE -> {
                 // Restart BLE interface after permissions granted
                 handleRestartBle(intent)
+            }
+            ACTION_UPDATE_NOTIFICATION -> {
+                val status = intent.getStringExtra(EXTRA_NETWORK_STATUS)
+                if (status != null) {
+                    managers.state.networkStatus.set(status)
+                    managers.notificationManager.updateNotification(status)
+                }
             }
         }
 
@@ -271,8 +273,6 @@ class ReticulumService : Service() {
         if (::managers.isInitialized) {
             managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
-            managers.healthCheckManager.stop()
-            managers.eventHandler.stopAll()
             managers.lockManager.releaseAll()
             managers.broadcaster.kill()
             // Safety net: stop BLE if not already stopped by ACTION_STOP
@@ -291,35 +291,6 @@ class ReticulumService : Service() {
             // This ensures service comes back up even if Android delays START_STICKY restart
             scheduleServiceRestart()
         }
-    }
-
-    /**
-     * Trigger service restart via shutdown and restart.
-     * Called when Python heartbeat becomes stale (process may be hung).
-     */
-    private fun triggerServiceRestart() {
-        Log.w(TAG, "Triggering service restart due to stale heartbeat")
-
-        // Set kill switch before shutdown to prevent SIGSEGV during teardown
-        if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
-
-        // Stop BLE immediately before process exit
-        if (::managers.isInitialized) {
-            try {
-                managers.bleCoordinator.stopImmediate()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error during BLE immediate shutdown in restart", e)
-            }
-        }
-
-        // Clean up current state
-        if (::binder.isInitialized) {
-            binder.shutdown()
-        }
-
-        // Force process restart to get a clean Python environment
-        scheduleServiceRestart()
-        System.exit(1) // Non-zero exit to indicate abnormal termination
     }
 
     /**

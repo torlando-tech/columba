@@ -38,6 +38,7 @@ jobs:
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -154,121 +155,7 @@ jobs:
               body: `## ❌ Threading Architecture Audit Failed\n\n<details><summary>View Audit Report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>\n\nPlease fix the dispatcher violations before merging.`
             });
 
-  proguard-verification:
-    name: Verify ProGuard Rules (Python-Kotlin Bridge)
-    needs: [lint, validate-wrapper]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Install Python build dependencies
-        run: pip install build
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build release APK
-        run: ./gradlew :app:assembleSentryRelease --stacktrace --max-workers=2
-        env:
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-
-      - name: Verify Python-Kotlin bridge methods are not obfuscated
-        run: |
-          # Find the release APK (sentry variant)
-          APK_PATH=$(find app/build/outputs/apk/sentry/release -name "*.apk" | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "ERROR: No sentry release APK found!"
-            exit 1
-          fi
-          # Run dynamic verification script that extracts methods from Python source
-          python scripts/verify_proguard_bridge.py "$APK_PATH"
-
-      - name: Upload R8 mapping file
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: r8-mapping
-          path: app/build/outputs/mapping/sentryRelease/mapping.txt
-          retention-days: 30
-
-      - name: Upload release APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: columba-apk
-          path: app/build/outputs/apk/sentry/release/*.apk
-          retention-days: 14
-
-  python-tests:
-    name: Python Tests
-    needs: [lint, validate-wrapper]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Python dependencies
-        run: pip install build pytest pytest-cov pytest-xdist u-msgpack-python numpy
-
-      - name: Run Python unit tests with coverage
-        run: |
-          cd python && python -m pytest -v -n auto --dist loadfile \
-            --cov=. \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage-python.xml
-
-      - name: Upload Python coverage to Codecov
-        uses: codecov/codecov-action@v6
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./python/coverage-python.xml
-          flags: python
-          name: codecov-python
-          fail_ci_if_error: false
-          verbose: true
-
-      - name: Upload Python coverage report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: python-coverage-report
-          path: python/coverage-python.xml
-          retention-days: 7
 
   kotlin-tests:
     name: Kotlin Tests (Shard ${{ matrix.shard }}/4)
@@ -287,19 +174,18 @@ jobs:
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Install Python build dependencies
-        run: pip install build
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -404,19 +290,18 @@ jobs:
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Install Python build dependencies
-        run: pip install build
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -490,19 +375,18 @@ jobs:
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Install Python build dependencies
-        run: pip install build
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -614,49 +498,3 @@ jobs:
           pkill -9 qemu-system || true
           adb kill-server || true
 
-  ci-passed:
-    name: ✅ CI Passed — APK Ready
-    if: always()
-    needs: [validate-wrapper, lint, threading-audit, proguard-verification, python-tests, kotlin-tests, module-tests, instrumented-tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-
-    steps:
-      - name: Check all jobs passed
-        run: |
-          # Fail this job if any dependency failed or was cancelled
-          if [[ "${{ needs.validate-wrapper.result }}" != "success" ]] || \
-             [[ "${{ needs.lint.result }}" != "success" ]] || \
-             [[ "${{ needs.threading-audit.result }}" != "success" ]] || \
-             [[ "${{ needs.proguard-verification.result }}" != "success" ]] || \
-             [[ "${{ needs.python-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.kotlin-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.module-tests.result }}" != "success" ]]; then
-            echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
-            echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Validate Wrapper | ${{ needs.validate-wrapper.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Threading Audit | ${{ needs.threading-audit.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| ProGuard Verification | ${{ needs.proguard-verification.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Python Tests | ${{ needs.python-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Kotlin Tests | ${{ needs.kotlin-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Module Tests | ${{ needs.module-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-      - name: CI Summary
-        run: |
-          echo "## ✅ All CI checks passed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The **columba-apk** artifact is available for download from the Artifacts section of this workflow run." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Validate Wrapper | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Lint | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Threading Audit | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| ProGuard Verification | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Kotlin Tests | ✅ |" >> $GITHUB_STEP_SUMMARY

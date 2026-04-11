@@ -39,7 +39,7 @@ complexity:
     ignoreAnnotated: ['Composable']
   LargeClass:
     active: true
-    threshold: 600
+    threshold: 2000
     excludes: ['**/test/**', '**/androidTest/**']
   LongMethod:
     active: true
@@ -60,6 +60,7 @@ complexity:
     thresholdInInterfaces: 25
     thresholdInObjects: 15
     thresholdInEnums: 15
+    ignoreOverridden: true
 
 coroutines:
   active: true

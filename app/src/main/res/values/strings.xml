@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Columba</string>
+    <string name="app_name">Columba Native</string>
 
     <!-- Incoming call screen -->
     <string name="incoming_voice_call">Incoming Voice Call</string>

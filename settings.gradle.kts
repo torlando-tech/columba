@@ -39,3 +39,17 @@ include(":micron")
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")
+
+// Native Reticulum/LXMF Kotlin implementations (Phase 0: migration from Python/Chaquopy)
+includeBuild("reticulum-kt") {
+    dependencySubstitution {
+        substitute(module("network.reticulum:rns-core")).using(project(":rns-core"))
+        substitute(module("network.reticulum:rns-interfaces")).using(project(":rns-interfaces"))
+        substitute(module("network.reticulum:rns-android")).using(project(":rns-android"))
+    }
+}
+includeBuild("lxmf-kt") {
+    dependencySubstitution {
+        substitute(module("network.reticulum.lxmf:lxmf-core")).using(project(":lxmf-core"))
+    }
+}

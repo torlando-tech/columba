@@ -13,16 +13,9 @@
 # Keep Room entities
 -keep class com.lxmf.messenger.data.local.entities.** { *; }
 
-# Keep Chaquopy Python infrastructure
--keep class com.chaquo.python.** { *; }
--keepclassmembers class com.chaquo.python.** { *; }
-
-# Preserve attributes needed for Python reflection and debugging
+# Preserve attributes needed for debugging
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
-
-# Don't warn about Chaquopy's internal dependencies
--dontwarn com.chaquo.python.**
 
 # ===== AIDL Interface Protection (CRITICAL) =====
 # AIDL-generated classes must not be obfuscated or removed
@@ -43,18 +36,6 @@
 -keep class android.os.RemoteCallbackList { *; }
 -keep class android.os.IBinder { *; }
 
-# ===== Chaquopy Reflection Support =====
-# PyObject.toJava() uses reflection and needs complete type information
--keepattributes Signature
--keepattributes Exceptions
--keepattributes InnerClasses
--keepattributes EnclosingMethod
-
-# Keep classes used with PyObject.toJava()
--keepclassmembers class * {
-    *** toJava(...);
-}
-
 # ===== Native Methods (JNI) =====
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
@@ -71,24 +52,6 @@
 # ===== Reticulum Protocol Bridge Classes =====
 # These classes bridge between Kotlin and Python
 -keep class com.lxmf.messenger.reticulum.protocol.** { *; }
-
-# ===== Python-Kotlin Bridge Classes (CRITICAL) =====
-# Any class ending in "Bridge" may be called from Python via Chaquopy.
-# Python uses reflection to call methods by name, so these classes and their
-# methods MUST NOT be obfuscated. R8 would otherwise rename them, causing
-# runtime errors like "'h' object has no attribute 'onIncomingCall'".
-#
-# This generic pattern automatically protects:
-#   - KotlinReticulumBridge (announce callbacks)
-#   - KotlinBLEBridge (Bluetooth LE interface)
-#   - KotlinRNodeBridge (RNode LoRa interface)
-#   - KotlinAudioBridge (LXST audio streaming)
-#   - CallBridge (LXST voice call state)
-#   - Any future *Bridge classes
-#
-# Convention: Name any Python-callable Kotlin class with "Bridge" suffix.
--keep class com.lxmf.messenger.**.*Bridge { *; }
--keepclassmembers class com.lxmf.messenger.**.*Bridge { *; }
 
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations

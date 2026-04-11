@@ -607,14 +607,23 @@ class KotlinUSBBridge(
             usbManager.openDevice(device)
                 ?: error("Cannot open USB device ${device.deviceId}")
 
-        port.open(connection)
-        port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
-
         try {
-            port.dtr = true
-            port.rts = true
-        } catch (e: UnsupportedOperationException) {
-            Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
+            port.open(connection)
+            port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
+
+            try {
+                port.dtr = true
+                port.rts = true
+            } catch (e: UnsupportedOperationException) {
+                Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
+            }
+        } catch (e: Exception) {
+            try {
+                port.close()
+            } catch (_: Exception) {
+            }
+            connection.close()
+            throw e
         }
 
         // Piped streams bridge the SerialInputOutputManager's callback-based reads

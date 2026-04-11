@@ -89,7 +89,7 @@ internal class NativeNomadNetHandler(
             val pathDeadline = System.currentTimeMillis() + 15_000
             while (nodeIdentity == null && System.currentTimeMillis() < pathDeadline) {
                 if (nomadnetCancelled) throw java.util.concurrent.CancellationException("Cancelled")
-                Thread.sleep(250)
+                kotlinx.coroutines.delay(250)
                 nodeIdentity = NativeIdentity.recall(destBytes)
             }
             if (nodeIdentity == null) {

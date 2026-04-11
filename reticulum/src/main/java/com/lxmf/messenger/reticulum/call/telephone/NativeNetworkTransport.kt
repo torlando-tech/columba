@@ -134,9 +134,6 @@ class NativeNetworkTransport : NetworkTransport {
                 establishedCallback = { l ->
                     Log.i(TAG, "Link established: rtt=${l.rtt}ms")
                 },
-                closedCallback = { l ->
-                    handleLinkClosed(link = l, reason = l.teardownReason, logPrefix = "Link")
-                },
             )
 
         activeLink = link

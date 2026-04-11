@@ -311,12 +311,14 @@ class BluetoothLeConnection(
             ) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     Log.e(TAG, "Service discovery failed: $status")
+                    bleServicesDiscovered = true // unblock connect loop
                     return
                 }
 
                 val nusService = gatt.getService(NUS_SERVICE_UUID)
                 if (nusService == null) {
                     Log.e(TAG, "Nordic UART Service not found")
+                    bleServicesDiscovered = true // unblock connect loop
                     return
                 }
 
@@ -327,6 +329,7 @@ class BluetoothLeConnection(
 
                 if (rxChar == null || txChar == null) {
                     Log.e(TAG, "NUS characteristics not found")
+                    bleServicesDiscovered = true // unblock connect loop
                     return
                 }
 

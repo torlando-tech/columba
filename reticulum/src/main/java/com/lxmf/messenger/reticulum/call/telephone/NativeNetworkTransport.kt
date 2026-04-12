@@ -30,7 +30,6 @@ class NativeNetworkTransport : NetworkTransport {
         private const val TAG = "NativeNetworkTransport"
         private const val LXST_APP_NAME = "lxst"
         private const val LXST_ASPECT = "telephony"
-        private const val EXTENDED_SIGNAL_PREFIX: Byte = 0xFE.toByte()
     }
 
     private var activeLink: Link? = null
@@ -188,30 +187,29 @@ class NativeNetworkTransport : NetworkTransport {
     override fun sendPacket(encodedFrame: ByteArray) {
         val link = activeLink ?: return
         if (link.status != LinkConstants.ACTIVE) return
-        // Fire-and-forget: no proof needed for real-time audio
-        link.send(encodedFrame)
+        // Wrap audio in msgpack {FIELD_FRAMES(1): binary} for Python interop
+        val packer =
+            org.msgpack.core.MessagePack
+                .newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packInt(0x01) // FIELD_FRAMES
+        packer.packBinaryHeader(encodedFrame.size)
+        packer.writePayload(encodedFrame)
+        link.send(packer.toByteArray())
     }
 
     override fun sendSignal(signal: Int) {
         val link = activeLink ?: return
         if (link.status != LinkConstants.ACTIVE) return
-
-        val payload =
-            if (signal <= 0xFF) {
-                // Legacy one-byte control signal (status codes 0x00..0x06).
-                byteArrayOf(signal.toByte())
-            } else {
-                // Extended signal framing for LXST profile negotiation.
-                // Needed because profile signals are PREFERRED_PROFILE (0xFF) + profileId,
-                // e.g. 0x10F for ULBW, which does not fit in a single byte.
-                byteArrayOf(
-                    EXTENDED_SIGNAL_PREFIX,
-                    ((signal ushr 8) and 0xFF).toByte(),
-                    (signal and 0xFF).toByte(),
-                )
-            }
-
-        link.send(payload)
+        // Wrap signal in msgpack {FIELD_SIGNALLING(0): [signal]} for Python interop
+        val packer =
+            org.msgpack.core.MessagePack
+                .newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packInt(0x00) // FIELD_SIGNALLING
+        packer.packArrayHeader(1)
+        packer.packInt(signal)
+        link.send(packer.toByteArray())
     }
 
     override fun setPacketCallback(callback: (ByteArray) -> Unit) {
@@ -245,32 +243,50 @@ class NativeNetworkTransport : NetworkTransport {
     private fun handleIncomingPacket(data: ByteArray) {
         if (data.isEmpty()) return
 
-        val signal =
-            when {
-                data.size == 1 -> data[0].toInt() and 0xFF
-                data.size == 3 && data[0] == EXTENDED_SIGNAL_PREFIX -> {
-                    ((data[1].toInt() and 0xFF) shl 8) or (data[2].toInt() and 0xFF)
-                }
-                else -> null
+        // Python LXST sends data as msgpack maps:
+        //   {0: [signal_value, ...]} for signals (FIELD_SIGNALLING=0x00)
+        //   {1: binary_audio}        for audio frames (FIELD_FRAMES=0x01)
+        // Also handle raw 1-byte signals for Kotlin↔Kotlin calls.
+        val unpacked =
+            try {
+                org.msgpack.core.MessagePack
+                    .newDefaultUnpacker(data)
+                    .unpackValue()
+            } catch (_: Exception) {
+                null
             }
 
-        if (signal != null) {
-            Log.d(TAG, "Inbound signal 0x${signal.toString(16)}")
-            // STATUS_AVAILABLE (0x03) from callee means we should identify ourselves.
-            // Mirrors Python call_manager.__packet_received STATUS_AVAILABLE handler.
-            if (signal == 0x03 /* STATUS_AVAILABLE */) {
-                val link = activeLink
-                val identity = localIdentity
-                if (link != null && identity != null) {
-                    Log.d(TAG, "Remote available, identifying...")
-                    link.identify(identity)
-                } else {
-                    Log.w(TAG, "Received STATUS_AVAILABLE but activeLink or localIdentity was null")
+        if (unpacked != null && unpacked.isMapValue) {
+            val map = unpacked.asMapValue().map()
+            val signallingKey =
+                org.msgpack.value.ValueFactory
+                    .newInteger(0x00)
+            val framesKey =
+                org.msgpack.value.ValueFactory
+                    .newInteger(0x01)
+
+            val signalling = map[signallingKey]
+            val frames = map[framesKey]
+
+            if (signalling != null && signalling.isArrayValue) {
+                for (sig in signalling.asArrayValue()) {
+                    val signal = sig.asIntegerValue().toInt()
+                    Log.d(TAG, "Inbound signal 0x${signal.toString(16)}")
+                    // Note: we identify proactively after link establishment
+                    // (see establishLinkToIdentity), so no need to re-identify
+                    // on STATUS_AVAILABLE. Double-identify confuses Python Sideband.
+                    signalCallback?.invoke(signal)
                 }
             }
+
+            if (frames != null && frames.isBinaryValue) {
+                packetCallback?.invoke(frames.asBinaryValue().asByteArray())
+            }
+        } else if (data.size == 1) {
+            val signal = data[0].toInt() and 0xFF
+            Log.d(TAG, "Inbound raw signal 0x${signal.toString(16)}")
             signalCallback?.invoke(signal)
         } else {
-            // Multi-byte packet = encoded audio
             packetCallback?.invoke(data)
         }
     }

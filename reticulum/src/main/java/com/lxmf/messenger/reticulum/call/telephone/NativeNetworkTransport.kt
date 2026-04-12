@@ -30,7 +30,6 @@ class NativeNetworkTransport : NetworkTransport {
         private const val TAG = "NativeNetworkTransport"
         private const val LXST_APP_NAME = "lxst"
         private const val LXST_ASPECT = "telephony"
-        private const val EXTENDED_SIGNAL_PREFIX: Byte = 0xFE.toByte()
     }
 
     private var activeLink: Link? = null

@@ -247,7 +247,7 @@ class NativeReticulumProtocol(
 
     private val telemetryHandler by lazy {
         NativeTelemetryHandler(
-            scope = scope,
+            scopeProvider = { scope },
             locationTelemetryFlow = _locationTelemetryFlow,
             deliveryIdentityProvider = { deliveryIdentity },
             sendMessageFn = { destHash, content, method, extraFields ->

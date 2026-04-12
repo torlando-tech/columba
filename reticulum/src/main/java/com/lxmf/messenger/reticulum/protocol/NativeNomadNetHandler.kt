@@ -177,7 +177,7 @@ internal class NativeNomadNetHandler(
         val retryDeadline = System.currentTimeMillis() + maxOf(20_000L, (timeoutSeconds * 1000).toLong())
         while (!Transport.hasPath(destBytes) && System.currentTimeMillis() < retryDeadline) {
             if (nomadnetCancelled) throw java.util.concurrent.CancellationException("Cancelled")
-            Thread.sleep(250)
+            kotlinx.coroutines.delay(250)
         }
         if (!Transport.hasPath(destBytes)) return null
 

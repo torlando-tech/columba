@@ -11,7 +11,7 @@ import org.msgpack.core.MessagePack
 import java.nio.ByteBuffer
 
 internal class NativeTelemetryHandler(
-    private val scope: CoroutineScope,
+    private val scopeProvider: () -> CoroutineScope,
     private val locationTelemetryFlow: MutableSharedFlow<String>,
     private val deliveryIdentityProvider: () -> NativeIdentity?,
     private val sendMessageFn: suspend (ByteArray, String, DeliveryMethod, Map<Int, Any>?) -> Unit,
@@ -176,7 +176,7 @@ internal class NativeTelemetryHandler(
                 }
 
         Log.d(TAG, "Responding to telemetry request from $senderHex with ${entriesToSend.size} entries")
-        scope.launch {
+        scopeProvider().launch {
             try {
                 if (deliveryIdentityProvider() == null) return@launch
 

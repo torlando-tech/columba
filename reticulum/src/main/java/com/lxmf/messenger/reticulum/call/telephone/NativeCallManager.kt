@@ -313,6 +313,19 @@ class NativeCallManager(
 
     fun shutdown() {
         Log.i(TAG, "Shutting down NativeCallManager")
+        // Hang up first, while the link is still alive, so Telephone can run
+        // its hangup signalling and release audio hardware (mic/speaker, ring
+        // tones, mixers). Tearing down the transport link before hangup would
+        // suppress STATUS_HANGUP and leave audio resources held until the next
+        // setup(), causing mic/speaker conflicts on identity switch or config
+        // change.
+        if (::telephone.isInitialized && telephone.isCallActive()) {
+            try {
+                telephone.hangup()
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error hanging up active call on shutdown: ${e.message}")
+            }
+        }
         callCoordinator.setCallManager(null)
         telephonyDestination = null
         // Tear down any active call link so NativeNetworkTransport.activeLink is

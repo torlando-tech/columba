@@ -262,8 +262,10 @@ fun DiscoveredInterfacesScreen(
                             items(
                                 state.interfaces,
                                 key = { iface ->
-                                    // networkId + endpoint + lastHeard timestamp for stable uniqueness across sorts
-                                    "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:${iface.lastHeard}"
+                                    // discoveryHash (hex SHA256 of transportId + name) is stable across re-announces;
+                                    // fall back to an endpoint-based composite for announces that don't carry one.
+                                    iface.discoveryHash
+                                        ?: "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}"
                                 },
                             ) { iface ->
                                 val reachableHost = iface.reachableOn

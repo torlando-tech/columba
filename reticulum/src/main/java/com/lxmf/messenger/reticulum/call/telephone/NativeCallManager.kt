@@ -195,11 +195,11 @@ class NativeCallManager(
      * If the line is already busy, sends STATUS_BUSY and tears down the link.
      */
     private fun onInboundLinkEstablished(link: Link) {
-        Log.i(TAG, "Inbound call link arrived")
+        Log.i(TAG, "Inbound call link arrived (status=${link.status})")
 
         if (telephone.isCallActive()) {
             Log.w(TAG, "Line busy — signalling busy and rejecting inbound link")
-            link.send(byteArrayOf(Signalling.STATUS_BUSY.toByte()))
+            link.send(packSignal(Signalling.STATUS_BUSY))
             link.teardown()
             return
         }
@@ -216,8 +216,31 @@ class NativeCallManager(
             Log.d(TAG, "Inbound call link closed before identification: reason=${l.teardownReason}")
         }
 
-        // Tell the caller we're reachable so they call link.identify()
-        link.send(byteArrayOf(Signalling.STATUS_AVAILABLE.toByte()))
+        // reticulum-kt fires the Destination-level "link established" callback as soon as the
+        // LINKREQUEST is validated — before the RTT packet has activated the link. At that
+        // point link.status == HANDSHAKE and link.send() silently returns false. Python RNS
+        // only invokes the owner callback once status becomes ACTIVE (RNS/Link.py rtt_packet).
+        // Use the Link-level callback, which fires from rttPacket() after status = ACTIVE,
+        // so STATUS_AVAILABLE actually reaches the caller.
+        link.setLinkEstablishedCallback { activeLink ->
+            activeLink.send(packSignal(Signalling.STATUS_AVAILABLE))
+            Log.d(TAG, "Sent STATUS_AVAILABLE to caller on active inbound link")
+        }
+    }
+
+    /**
+     * Pack a signal as msgpack {FIELD_SIGNALLING(0): [signal]} for Python LXST interop.
+     * Python sends signals via Channel with this wire format; raw bytes are not recognized.
+     */
+    private fun packSignal(signal: Int): ByteArray {
+        val packer =
+            org.msgpack.core.MessagePack
+                .newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packInt(0x00) // FIELD_SIGNALLING
+        packer.packArrayHeader(1)
+        packer.packInt(signal)
+        return packer.toByteArray()
     }
 
     /**
@@ -235,7 +258,7 @@ class NativeCallManager(
 
         if (telephone.isCallActive()) {
             Log.w(TAG, "Line became busy after identify — signalling busy")
-            link.send(byteArrayOf(Signalling.STATUS_BUSY.toByte()))
+            link.send(packSignal(Signalling.STATUS_BUSY))
             link.teardown()
             return
         }

@@ -315,6 +315,13 @@ class NativeCallManager(
         Log.i(TAG, "Shutting down NativeCallManager")
         callCoordinator.setCallManager(null)
         telephonyDestination = null
+        // Tear down any active call link so NativeNetworkTransport.activeLink is
+        // cleared — otherwise a subsequent setup() would see a stale closed link.
+        try {
+            transport.teardownLink()
+        } catch (e: Exception) {
+            Log.w(TAG, "Ignored error tearing down call transport on shutdown: ${e.message}")
+        }
         scope.cancel()
     }
 }

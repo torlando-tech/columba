@@ -464,6 +464,9 @@ class NativeReticulumProtocol(
                 batteryMonitor = null
                 systemPowerSaveEnabled = false
                 closePersistentStores()
+                // Cancel the scope we created at the top of initialize() so any
+                // coroutines launched before the failure don't leak across retries.
+                scope.cancel()
                 _networkStatus.value = NetworkStatus.ERROR(e.message ?: "Unknown error")
             }
         }

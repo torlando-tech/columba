@@ -463,6 +463,21 @@ class NativeReticulumProtocol(
                 batteryMonitor?.stop()
                 batteryMonitor = null
                 systemPowerSaveEnabled = false
+                // Tear down anything that may have been brought up before the
+                // failure point: interfaces registered by NativeInterfaceFactory
+                // and the Reticulum Transport itself. Without this, a retry
+                // would call Reticulum.start() on an already-running instance
+                // and inherit stale interface state.
+                try {
+                    NativeInterfaceFactory.shutdownAll()
+                } catch (cleanupError: Exception) {
+                    Log.w(TAG, "Error shutting down interfaces during init failure cleanup", cleanupError)
+                }
+                try {
+                    Reticulum.stop()
+                } catch (cleanupError: Exception) {
+                    Log.w(TAG, "Error stopping Reticulum during init failure cleanup", cleanupError)
+                }
                 closePersistentStores()
                 // Cancel the scope we created at the top of initialize() so any
                 // coroutines launched before the failure don't leak across retries.

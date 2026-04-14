@@ -17,9 +17,10 @@ enum class InterfaceType(
         /**
          * Parse interface type from the interface name string.
          * Interface names follow patterns like:
-         * - "AutoInterface[Local]" or "AutoInterface[fe80::...]"
-         * - "TCPInterface[192.168.1.100:4965]" or "TCPClientInterface[...]"
-         * - Names containing "BLE" or "Bluetooth"
+         * - "AutoInterface[Local]", "AutoInterface[fe80::...]", or "Auto Discovery"
+         * - "TCPInterface[192.168.1.100:4965]", "TCPClientInterface[...]",
+         *   "TCPServerInterface[...]", or Backbone
+         * - "BLE", "Bluetooth", or "AndroidBLE"
          * - Names containing "RNode"
          */
         fun fromInterfaceName(interfaceName: String?): InterfaceType {

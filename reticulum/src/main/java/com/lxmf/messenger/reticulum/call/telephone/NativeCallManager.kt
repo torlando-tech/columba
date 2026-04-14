@@ -195,7 +195,7 @@ class NativeCallManager(
      * If the line is already busy, sends STATUS_BUSY and tears down the link.
      */
     private fun onInboundLinkEstablished(link: Link) {
-        Log.i(TAG, "Inbound call link arrived (status=${link.status})")
+        Log.i(TAG, "Inbound call link arrived")
 
         if (telephone.isCallActive()) {
             Log.w(TAG, "Line busy — signalling busy and rejecting inbound link")
@@ -211,21 +211,12 @@ class NativeCallManager(
             onCallerIdentified(identifiedLink, identity)
         }
 
-        // Handle link closed before identification (caller gave up or error)
         link.setLinkClosedCallback { l ->
             Log.d(TAG, "Inbound call link closed before identification: reason=${l.teardownReason}")
         }
 
-        // reticulum-kt fires the Destination-level "link established" callback as soon as the
-        // LINKREQUEST is validated — before the RTT packet has activated the link. At that
-        // point link.status == HANDSHAKE and link.send() silently returns false. Python RNS
-        // only invokes the owner callback once status becomes ACTIVE (RNS/Link.py rtt_packet).
-        // Use the Link-level callback, which fires from rttPacket() after status = ACTIVE,
-        // so STATUS_AVAILABLE actually reaches the caller.
-        link.setLinkEstablishedCallback { activeLink ->
-            activeLink.send(packSignal(Signalling.STATUS_AVAILABLE))
-            Log.d(TAG, "Sent STATUS_AVAILABLE to caller on active inbound link")
-        }
+        // Tell the caller we're reachable so they call link.identify().
+        link.send(packSignal(Signalling.STATUS_AVAILABLE))
     }
 
     /**

@@ -1495,4 +1495,77 @@ class TcpClientWizardViewModelTest {
                 assertFalse(finalState.isSaving)
             }
         }
+
+    // ========== IFAC auto-population from discovery ==========
+
+    @Test
+    fun `setInitialValues populates networkName and passphrase when IFAC provided`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem() // initial
+
+                viewModel.setInitialValues(
+                    host = "mesh.example.com",
+                    port = 4242,
+                    name = "From Discovery",
+                    ifacNetname = "private-net",
+                    ifacNetkey = "super-secret",
+                )
+                advanceUntilIdle()
+
+                val state = expectMostRecentItem()
+                assertEquals("private-net", state.networkName)
+                assertEquals("super-secret", state.passphrase)
+                assertEquals("From Discovery", state.interfaceName)
+                assertEquals("mesh.example.com", state.targetHost)
+            }
+        }
+
+    @Test
+    fun `setInitialValues leaves IFAC fields empty when omitted`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem()
+
+                viewModel.setInitialValues(host = "10.0.0.1", port = 4242, name = "No IFAC")
+                advanceUntilIdle()
+
+                val state = expectMostRecentItem()
+                assertEquals("", state.networkName)
+                assertEquals("", state.passphrase)
+            }
+        }
+
+    @Test
+    fun `setNetworkName and setPassphrase update state`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem()
+
+                viewModel.setNetworkName("manual-net")
+                advanceUntilIdle()
+                assertEquals("manual-net", awaitItem().networkName)
+
+                viewModel.setPassphrase("manual-pass")
+                advanceUntilIdle()
+                assertEquals("manual-pass", awaitItem().passphrase)
+            }
+        }
+
+    @Test
+    fun `togglePassphraseVisibility flips flag`() =
+        runTest {
+            viewModel.state.test {
+                awaitItem()
+                assertFalse(viewModel.state.value.passphraseVisible)
+
+                viewModel.togglePassphraseVisibility()
+                advanceUntilIdle()
+                assertTrue(awaitItem().passphraseVisible)
+
+                viewModel.togglePassphraseVisibility()
+                advanceUntilIdle()
+                assertFalse(awaitItem().passphraseVisible)
+            }
+        }
 }

@@ -248,11 +248,13 @@ class InterfaceConfigManager
                     // Load discovery settings
                     val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
-                    // Coerce -1 (never configured sentinel) to 0 for Python layer
+                    // Coerce -1 (never configured sentinel) to 0
                     val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
+                    val autoconnectIfacOnly = settingsRepository.getAutoconnectIfacOnly()
                     Log.d(
                         TAG,
-                        "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount (saved=$savedAutoconnect)",
+                        "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount " +
+                            "(saved=$savedAutoconnect), ifacOnly=$autoconnectIfacOnly",
                     )
 
                     val config =
@@ -269,6 +271,7 @@ class InterfaceConfigManager
                             enableTransport = transportNodeEnabled,
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
+                            autoconnectIfacOnly = autoconnectIfacOnly,
                         )
 
                     reticulumProtocol

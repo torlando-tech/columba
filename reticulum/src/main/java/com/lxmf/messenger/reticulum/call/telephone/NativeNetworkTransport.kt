@@ -32,10 +32,17 @@ class NativeNetworkTransport : NetworkTransport {
         private const val LXST_ASPECT = "telephony"
     }
 
-    private var activeLink: Link? = null
-    private var packetCallback: ((ByteArray) -> Unit)? = null
-    private var signalCallback: ((Int) -> Unit)? = null
-    private var locallyClosingLink: Link? = null
+    // These fields are written from both coroutines (call lifecycle) and
+    // Reticulum library callbacks (link established/closed, inbound packets)
+    // running on different threads. Mark @Volatile so sendPacket / sendSignal /
+    // handleLinkClosed observe the latest writes under the JVM memory model.
+    @Volatile private var activeLink: Link? = null
+
+    @Volatile private var packetCallback: ((ByteArray) -> Unit)? = null
+
+    @Volatile private var signalCallback: ((Int) -> Unit)? = null
+
+    @Volatile private var locallyClosingLink: Link? = null
 
     /**
      * Local identity used to identify ourselves to the remote peer.
@@ -44,7 +51,7 @@ class NativeNetworkTransport : NetworkTransport {
      * callee (outgoing call path), we call [Link.identify] to send our identity.
      * This mirrors Python call_manager.__packet_received's STATUS_AVAILABLE handler.
      */
-    private var localIdentity: Identity? = null
+    @Volatile private var localIdentity: Identity? = null
 
     fun setLocalIdentity(identity: Identity) {
         localIdentity = identity

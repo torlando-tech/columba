@@ -7109,6 +7109,8 @@ class ReticulumWrapper:
                             'type': iface_info.get('type', 'Unknown'),
                             'transport_id': transport_id,
                             'network_id': network_id,
+                            'network_name': iface_info.get('ifac_netname'),
+                            'passphrase': iface_info.get('ifac_netkey'),
 
                             # Status information
                             'status': iface_info.get('status', 'unknown'),

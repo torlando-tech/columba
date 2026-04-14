@@ -326,8 +326,18 @@ class SosTriggerDetector
         }
 
         /**
-         * Shake detection: the net acceleration must exceed [shakeSensitivity] * GRAVITY
-         * for a cumulative [SHAKE_DURATION_MS] within a [SHAKE_WINDOW_MS] sliding window.
+         * Shake detection: the net acceleration must exceed a threshold derived from
+         * [shakeSensitivity] for a cumulative [SHAKE_DURATION_MS] within a
+         * [SHAKE_WINDOW_MS] sliding window.
+         *
+         * Threshold mapping (net acceleration, gravity-subtracted):
+         *   sensitivity  1.0x → ~1.0g   (easy, catches vigorous shaking)
+         *   sensitivity  2.5x → ~1.75g  (moderate, default range)
+         *   sensitivity  5.0x → ~3.0g   (hard, needs deliberate strong shake)
+         *
+         * The previous linear mapping (`sensitivity * GRAVITY`) put 4.0x at ~4g net,
+         * which is essentially unreachable for a sustained 500ms human shake —
+         * making the upper half of the slider unusable.
          *
          * The accumulator only advances while consecutive samples stay above threshold.
          * A dip below threshold breaks the continuous chain immediately (so the duration
@@ -342,7 +352,8 @@ class SosTriggerDetector
         ) {
             if (now - lastShakeTriggerTime < SHAKE_COOLDOWN_MS) return
 
-            val threshold = shakeSensitivity * SensorManager.GRAVITY_EARTH
+            // Map 1.0x..5.0x slider onto 1.0g..3.0g net threshold (see KDoc).
+            val threshold = (0.5f + shakeSensitivity * 0.5f) * SensorManager.GRAVITY_EARTH
 
             if (netAcceleration > threshold) {
                 // Gap since last above-threshold sample is too long → accumulated run is stale.

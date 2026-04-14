@@ -274,12 +274,15 @@ class SosTriggerDetectorTest {
 
     // ========== Shake Detection ==========
 
+    /** Mirrors the detector's threshold formula: (0.5 + sensitivity * 0.5) * g. */
+    private fun shakeThreshold(sensitivity: Float) = (0.5f + sensitivity * 0.5f) * 9.81f
+
     @Test
     fun `brief shake below duration does not trigger`() {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f // ~24.5 m/s²
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Above threshold for only 200ms (< SHAKE_DURATION_MS of 500ms)
@@ -298,7 +301,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Sustained above threshold for 600ms (> SHAKE_DURATION_MS of 500ms)
@@ -316,7 +319,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Acceleration below threshold for a long time
@@ -333,7 +336,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Above threshold but window exceeds SHAKE_WINDOW_MS (1000ms)
@@ -356,7 +359,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Shake for 300ms
@@ -383,7 +386,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // First trigger
@@ -409,7 +412,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // First trigger
@@ -434,7 +437,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 1.0f // Low sensitivity → lower threshold
 
-        val threshold = 1.0f * 9.81f // ~9.81 m/s²
+        val threshold = shakeThreshold(1.0f)
         val t = 10_000L
 
         // This acceleration is above low threshold but would be below 2.5x threshold
@@ -459,7 +462,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 4.0f
 
-        val threshold = 4.0f * 9.81f
+        val threshold = shakeThreshold(4.0f)
         val t = 10_000L
         val spikeDuration = 30L
         val interSpikeGap = 150L
@@ -489,7 +492,7 @@ class SosTriggerDetectorTest {
         detector.activeModes = setOf(SosTriggerMode.SHAKE)
         detector.shakeSensitivity = 2.5f
 
-        val threshold = 2.5f * 9.81f
+        val threshold = shakeThreshold(2.5f)
         val t = 10_000L
 
         // Accumulate 400ms of shake
